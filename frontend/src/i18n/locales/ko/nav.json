@@ -51,7 +51,9 @@
     "userManagement": "사용자 관리",
     "loginHistory": "로그인 이력",
     "about": "About",
-    "logout": "로그아웃"
+    "logout": "로그아웃",
+    "noEmail": "이메일 미설정",
+    "adminBadge": "관리자"
   },
   "about": {
     "title": "About",

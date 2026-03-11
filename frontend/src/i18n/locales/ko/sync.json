@@ -127,7 +127,21 @@
     "noHistory": "보정 이력이 없습니다",
     "startedAt": "시작 시간",
     "completedAt": "완료 시간",
-    "dailySync": "일일 동기화"
+    "dailySync": "일일 동기화",
+    "historyTitle": "자동 조정 기록",
+    "noHistory_msg": "자동 조정 기록이 없습니다.",
+    "trigger": "트리거",
+    "manual": "수동",
+    "added": "추가",
+    "elapsedTime": "소요시간",
+    "detailTitle": "자동 조정 상세 정보 #{{id}}",
+    "addedCerts": "추가된 인증서",
+    "operationLogs": "작업 로그",
+    "noLogs": "작업 로그가 없습니다.",
+    "errorMessage": "에러 메시지",
+    "logType": "타입",
+    "secondsUnit": "초",
+    "minutesSeconds": "{{min}}분 {{sec}}초"
   },
   "revalidation": {
     "title": "DSC 만료 상태 재검증",

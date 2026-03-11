@@ -58,6 +58,18 @@ interface CheckUpdateResult {
   new_versions: IcaoVersion[];
 }
 
+function getCollectionFullName(t: (key: string) => string, collectionType: string): string {
+  if (collectionType === 'DSC_CRL') return t('icao:statusPage.collectionFull.DSC_CRL');
+  if (collectionType === 'DSC_NC') return t('icao:statusPage.collectionFull.DSC_NC');
+  return t('icao:statusPage.collectionFull.MASTER_LIST');
+}
+
+function getCollectionShortName(t: (key: string) => string, collectionType: string): string {
+  if (collectionType === 'DSC_CRL') return t('icao:statusPage.collectionShort.DSC_CRL');
+  if (collectionType === 'DSC_NC') return t('icao:statusPage.collectionShort.DSC_NC');
+  return t('icao:statusPage.collectionShort.MASTER_LIST');
+}
+
 export default function IcaoStatus() {
   const { t } = useTranslation(['icao', 'common']);
   const [versionHistory, setVersionHistory] = useState<IcaoVersion[]>([]);
@@ -124,7 +136,7 @@ export default function IcaoStatus() {
       // Refresh page data with the latest results
       await Promise.all([fetchVersionStatus(), fetchVersionHistory()]);
     } catch (err) {
-      setCheckResult({ success: false, message: '네트워크 오류: 업데이트 확인에 실패했습니다.', new_version_count: 0, new_versions: [] });
+      setCheckResult({ success: false, message: t('icao:statusPage.networkError'), new_version_count: 0, new_versions: [] });
       if (import.meta.env.DEV) console.error('Check updates error:', err);
     } finally {
       setChecking(false);
@@ -140,15 +152,15 @@ export default function IcaoStatus() {
             <Globe className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD 버전 동기화</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('icao:statusPage.pageTitle')}</h1>
             <div className="flex items-center gap-3">
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                ICAO PKD 포털의 버전 업데이트를 모니터링합니다.
+                {t('icao:statusPage.pageSubtitle')}
               </p>
               {lastCheckedAt && (
                 <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                   <Clock className="w-3 h-3" />
-                  마지막 확인: {formatDateTime(lastCheckedAt)}
+                  {t('icao:statusPage.lastChecked', { time: formatDateTime(lastCheckedAt) })}
                 </span>
               )}
             </div>
@@ -161,7 +173,7 @@ export default function IcaoStatus() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={cn('w-4 h-4', checking && 'animate-spin')} />
-              {checking ? t('sync.dashboard.checking') : t('icao.checkUpdates')}
+              {checking ? t('icao:checking') : t('icao:checkUpdates')}
             </button>
             <button
               onClick={fetchDashboardData}
@@ -185,7 +197,7 @@ export default function IcaoStatus() {
             <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div>
-                <h3 className="font-semibold text-red-900 dark:text-red-300">{ t('sync:dashboard.error') }</h3>
+                <h3 className="font-semibold text-red-900 dark:text-red-300">{t('common:error')}</h3>
                 <p className="text-red-700 dark:text-red-400">{error}</p>
               </div>
             </div>
@@ -194,7 +206,7 @@ export default function IcaoStatus() {
           {/* Version Status Overview */}
           {versionStatus.length > 0 && (
             <div className="mb-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 상태 개요</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('icao:statusPage.versionOverview')}</h2>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {versionStatus.map((status) => (
                   <div
@@ -211,11 +223,7 @@ export default function IcaoStatus() {
                     <div className="flex items-start justify-between mb-4">
                       <div>
                         <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
-                          {status.collection_type === 'DSC_CRL'
-                            ? 'DSC/CRL Collection'
-                            : status.collection_type === 'DSC_NC'
-                            ? 'DSC_NC (Non-Conformant)'
-                            : 'CSCA Master List'}
+                          {getCollectionFullName(t, status.collection_type)}
                         </h3>
                       </div>
                       {status.status === 'DETECTION_STALE' ? (
@@ -242,22 +250,24 @@ export default function IcaoStatus() {
                               : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
                           )}
                         >
-                          {status.status === 'UPDATE_NEEDED' ? '업데이트 필요'
-                            : status.status === 'DETECTION_STALE' ? '감지 갱신 필요'
-                            : t('icao.upToDate')}
+                          {status.status === 'UPDATE_NEEDED'
+                            ? t('icao:statusPage.updateNeeded')
+                            : status.status === 'DETECTION_STALE'
+                            ? t('icao:statusPage.detectionStale')
+                            : t('icao:upToDate')}
                         </span>
                       </div>
 
                       {/* Version Comparison */}
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">감지된 버전</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{t('icao:statusPage.detectedVersion')}</span>
                           <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
                             {status.detected_version.toString().padStart(6, '0')}
                           </span>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">업로드된 버전</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{t('icao:statusPage.uploadedVersion')}</span>
                           <span className={cn(
                             "text-lg font-bold",
                             status.uploaded_version === 0
@@ -271,7 +281,7 @@ export default function IcaoStatus() {
                         </div>
                         {status.version_diff > 0 && (
                           <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">버전 차이</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">{t('icao:statusPage.versionDiff')}</span>
                             <span className="text-base font-bold text-orange-600 dark:text-orange-400">
                               +{status.version_diff}
                             </span>
@@ -284,7 +294,7 @@ export default function IcaoStatus() {
                         <p className="text-sm text-gray-600 dark:text-gray-400">{status.status_message}</p>
                         {status.upload_timestamp !== 'N/A' && (
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            마지막 업로드: {formatDateTime(status.upload_timestamp)}
+                            {t('icao:statusPage.lastUpload', { time: formatDateTime(status.upload_timestamp) })}
                           </p>
                         )}
                       </div>
@@ -299,14 +309,14 @@ export default function IcaoStatus() {
                             className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                           >
                             <Download className="w-4 h-4" />
-                            ICAO 포털에서 다운로드
+                            {t('icao:statusPage.downloadFromIcao')}
                           </a>
                         </div>
                       )}
                       {status.status === 'DETECTION_STALE' && (
                         <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                           <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                            업로드된 버전이 감지된 버전보다 높습니다. "업데이트 확인" 버튼을 클릭하여 ICAO 포털의 최신 버전을 다시 감지하세요.
+                            {t('icao:statusPage.staleMessage')}
                           </p>
                         </div>
                       )}
@@ -319,26 +329,26 @@ export default function IcaoStatus() {
 
           {/* Version History Table */}
           <div className="mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 감지 이력</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('icao:statusPage.detectionHistory')}</h2>
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-slate-100 dark:bg-gray-700">
                     <tr>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                        Collection
+                        {t('icao:statusPage.table.collection')}
                       </th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                        File Name
+                        {t('icao:statusPage.table.fileName')}
                       </th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                        Version
+                        {t('icao:statusPage.table.version')}
                       </th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                        Status
+                        {t('icao:statusPage.table.status')}
                       </th>
                       <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                        Detected At
+                        {t('icao:statusPage.table.detectedAt')}
                       </th>
                     </tr>
                   </thead>
@@ -346,7 +356,7 @@ export default function IcaoStatus() {
                     {versionHistory.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="px-3 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
-                          버전 이력이 없습니다
+                          {t('icao:statusPage.noHistory')}
                         </td>
                       </tr>
                     ) : (
@@ -354,11 +364,7 @@ export default function IcaoStatus() {
                         <tr key={version.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <span className="text-xs font-medium text-gray-900 dark:text-white">
-                              {version.collection_type === 'DSC_CRL'
-                                ? 'DSC/CRL'
-                                : version.collection_type === 'DSC_NC'
-                                ? 'DSC_NC'
-                                : 'Master List'}
+                              {getCollectionShortName(t, version.collection_type)}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
@@ -405,26 +411,26 @@ export default function IcaoStatus() {
 
           {/* Info Section */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
-            <h3 className="text-base font-semibold text-blue-900 dark:text-blue-300 mb-3">ICAO Auto Sync 정보</h3>
+            <h3 className="text-base font-semibold text-blue-900 dark:text-blue-300 mb-3">{t('icao:statusPage.autoSyncInfo')}</h3>
             <div className="text-sm text-blue-800 dark:text-blue-300 space-y-3">
               <p>
-                이 시스템은 ICAO PKD 포털을 자동으로 모니터링하여 새로운 인증서 버전을 감지합니다.
-                새 버전이 감지되면 관리자에게 알림을 보내며, 수동으로 다운로드 및 가져오기를 수행해야 합니다.
+                {t('icao:statusPage.autoSyncDesc')}
+                {' '}
+                {t('icao:statusPage.autoSyncManual')}
               </p>
               <div>
-                <h4 className="font-semibold mb-2">상태 수명주기:</h4>
+                <h4 className="font-semibold mb-2">{t('icao:statusPage.lifecycleTitle')}</h4>
                 <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li><strong>DETECTED</strong>: ICAO 포털에서 새 버전 발견</li>
-                  <li><strong>NOTIFIED</strong>: 관리자에게 알림 전송 완료</li>
-                  <li><strong>DOWNLOADED</strong>: 포털에서 파일 다운로드 완료</li>
-                  <li><strong>IMPORTED</strong>: SPKD로 가져오기 성공</li>
-                  <li><strong>FAILED</strong>: 가져오기 실패 (오류 메시지 확인)</li>
+                  <li><strong>DETECTED</strong>: {t('icao:statusPage.lifecycleDetected')}</li>
+                  <li><strong>NOTIFIED</strong>: {t('icao:statusPage.lifecycleNotified')}</li>
+                  <li><strong>DOWNLOADED</strong>: {t('icao:statusPage.lifecycleDownloaded')}</li>
+                  <li><strong>IMPORTED</strong>: {t('icao:statusPage.lifecycleImported')}</li>
+                  <li><strong>FAILED</strong>: {t('icao:statusPage.lifecycleFailed')}</li>
                 </ul>
               </div>
               <div className="pt-3 border-t border-blue-300 dark:border-blue-700">
                 <p className="text-xs">
-                  <strong>참고</strong>: 현재 구현은 Tier 1 (수동 다운로드)입니다.
-                  ICAO 이용 약관 준수를 위해 자동 다운로드 기능은 활성화되지 않았습니다.
+                  <strong>{t('icao:statusPage.noteLabel')}</strong>: {t('icao:statusPage.tier1Note')}
                 </p>
               </div>
             </div>
@@ -434,7 +440,7 @@ export default function IcaoStatus() {
 
       {/* Check Update Result Dialog */}
       {checkResult && (
-        <Dialog isOpen={true} onClose={() => setCheckResult(null)} title="업데이트 확인 결과" size="lg">
+        <Dialog isOpen={true} onClose={() => setCheckResult(null)} title={t('icao:statusPage.checkResultTitle')} size="lg">
           <div className="space-y-4">
             {/* Status Banner */}
             {(() => {
@@ -476,12 +482,12 @@ export default function IcaoStatus() {
                 : "text-green-700 dark:text-green-400";
 
               const title = !checkResult.success
-                ? '확인 실패'
+                ? t('icao:statusPage.checkFailed')
                 : isNewDetected
-                ? `${checkResult.new_version_count}개의 신규 버전이 감지되었습니다`
+                ? t('icao:statusPage.newVersionsDetectedTitle', { num: checkResult.new_version_count })
                 : hasPending
-                ? `${pendingCount}개의 미업로드 버전이 있습니다`
-                : '시스템이 최신 상태입니다';
+                ? t('icao:statusPage.pendingVersionsTitle', { num: pendingCount })
+                : t('icao:statusPage.systemUpToDate');
 
               return (
                 <div className={cn("flex items-center gap-3 p-4 rounded-xl border", bannerColor)}>
@@ -508,7 +514,7 @@ export default function IcaoStatus() {
             {/* New Versions Detail */}
             {checkResult.new_version_count > 0 && (
               <div className="space-y-3">
-                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">감지된 신규 버전</h4>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{t('icao:statusPage.detectedNewVersions')}</h4>
                 <div className="space-y-2">
                   {checkResult.new_versions.map((v, i) => (
                     <div key={v.id ?? i} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
@@ -518,7 +524,7 @@ export default function IcaoStatus() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {v.collection_type === 'DSC_CRL' ? 'DSC/CRL' : v.collection_type === 'DSC_NC' ? 'DSC_NC' : 'Master List'}
+                            {getCollectionShortName(t, v.collection_type)}
                           </span>
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
                             {v.status}
@@ -544,7 +550,7 @@ export default function IcaoStatus() {
               <div className="text-center py-4">
                 <Globe className="w-10 h-10 text-green-400 dark:text-green-500 mx-auto mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  ICAO PKD 포털과 로컬 시스템의 버전이 동일합니다.
+                  {t('icao:statusPage.versionsInSync')}
                 </p>
               </div>
             )}
@@ -554,7 +560,7 @@ export default function IcaoStatus() {
               <div className="text-center py-4">
                 <Download className="w-10 h-10 text-yellow-400 dark:text-yellow-500 mx-auto mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  ICAO 포털에서 신규 버전은 없지만, 감지된 버전 중 아직 업로드되지 않은 파일이 있습니다.
+                  {t('icao:statusPage.pendingUploadsDesc')}
                 </p>
                 <a
                   href="https://pkddownloadsg.icao.int/"
@@ -563,7 +569,7 @@ export default function IcaoStatus() {
                   className="inline-flex items-center gap-2 mt-3 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   <Download className="w-4 h-4" />
-                  ICAO 포털에서 다운로드
+                  {t('icao:statusPage.downloadFromIcao')}
                 </a>
               </div>
             )}
@@ -574,7 +580,7 @@ export default function IcaoStatus() {
                 onClick={() => setCheckResult(null)}
                 className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-xl transition-all duration-200 shadow-sm"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>

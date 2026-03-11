@@ -173,6 +173,7 @@ function buildDlStructureTree(preview: CertificatePreviewResult): TreeNode[] {
 // ============================================================================
 
 function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePreviewItem; index: number; deviations?: DeviationPreviewItem[] }) {
+  const { t } = useTranslation(['upload', 'common', 'certificate']);
   const [expanded, setExpanded] = useState(index === 0);
   const [activeTab, setActiveTab] = useState<'general' | 'details' | 'doc9303'>('general');
 
@@ -208,12 +209,12 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
             <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[280px]" title={cert.subjectDn}>{cert.subjectDn}</span>
             {cert.isExpired && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
-                <XCircle className="w-3 h-3" /> Expired
+                <XCircle className="w-3 h-3" /> {t('upload:certUpload.card.expired')}
               </span>
             )}
             {deviations.length > 0 && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                <AlertTriangle className="w-3 h-3" /> Deviation
+                <AlertTriangle className="w-3 h-3" /> {t('upload:certUpload.card.deviation')}
               </span>
             )}
             {cert.doc9303Checklist && (
@@ -237,10 +238,10 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
       {expanded && (
         <div className="border-t border-gray-200 dark:border-gray-700">
           <div className="border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-700/30 flex">
-            <button onClick={() => setActiveTab('general')} className={tabClass(activeTab === 'general')}>General</button>
-            <button onClick={() => setActiveTab('details')} className={tabClass(activeTab === 'details')}>Details</button>
+            <button onClick={() => setActiveTab('general')} className={tabClass(activeTab === 'general')}>{t('upload:certUpload.card.general')}</button>
+            <button onClick={() => setActiveTab('details')} className={tabClass(activeTab === 'details')}>{t('upload:certUpload.card.details')}</button>
             {cert.doc9303Checklist && (
-              <button onClick={() => setActiveTab('doc9303')} className={tabClass(activeTab === 'doc9303')}>Doc 9303</button>
+              <button onClick={() => setActiveTab('doc9303')} className={tabClass(activeTab === 'doc9303')}>{t('upload:certUpload.card.doc9303')}</button>
             )}
           </div>
 
@@ -248,48 +249,48 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Subject</h4>
+                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('upload:certUpload.card.subject')}</h4>
                   <div className="space-y-1">
-                    <InfoRow label="DN" value={cert.subjectDn} mono />
-                    <InfoRow label="Country" value={cert.countryCode} />
-                    <InfoRow label="Serial" value={cert.serialNumber} mono />
+                    <InfoRow label={t('upload:certUpload.card.dn')} value={cert.subjectDn} mono />
+                    <InfoRow label={t('upload:certUpload.card.country')} value={cert.countryCode} />
+                    <InfoRow label={t('upload:certUpload.card.serial')} value={cert.serialNumber} mono />
                   </div>
                 </div>
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Issuer</h4>
+                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('upload:certUpload.card.issuer')}</h4>
                   <div className="space-y-1">
-                    <InfoRow label="DN" value={cert.issuerDn} mono />
-                    {cert.isSelfSigned && <InfoRow label="Type" value="Self-Signed" />}
+                    <InfoRow label={t('upload:certUpload.card.dn')} value={cert.issuerDn} mono />
+                    {cert.isSelfSigned && <InfoRow label={t('upload:certUpload.card.type')} value={t('upload:certUpload.card.selfSigned')} />}
                   </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Validity</h4>
+                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('upload:certUpload.card.validity')}</h4>
                   <div className="space-y-1">
-                    <InfoRow label="From" value={cert.notBefore} />
-                    <InfoRow label="To" value={cert.notAfter} className={cert.isExpired ? 'text-red-600 dark:text-red-400 font-semibold' : ''} />
+                    <InfoRow label={t('upload:certUpload.card.from')} value={cert.notBefore} />
+                    <InfoRow label={t('upload:certUpload.card.to')} value={cert.notAfter} className={cert.isExpired ? 'text-red-600 dark:text-red-400 font-semibold' : ''} />
                   </div>
                 </div>
                 <div>
-                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Algorithm</h4>
+                  <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('upload:certUpload.card.algorithm')}</h4>
                   <div className="space-y-1">
-                    <InfoRow label="Public Key" value={`${cert.publicKeyAlgorithm}${cert.keySize > 0 ? ` ${cert.keySize}` : ''}`} />
-                    <InfoRow label="Signature" value={cert.signatureAlgorithm} />
+                    <InfoRow label={t('upload:certUpload.card.publicKey')} value={`${cert.publicKeyAlgorithm}${cert.keySize > 0 ? ` ${cert.keySize}` : ''}`} />
+                    <InfoRow label={t('upload:certUpload.card.signature')} value={cert.signatureAlgorithm} />
                   </div>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">Fingerprint</h4>
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1.5">{t('upload:certUpload.card.fingerprint')}</h4>
                 <InfoRow label="SHA-256" value={cert.fingerprintSha256 || '-'} mono />
               </div>
 
               {deviations.length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1.5 flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Deviation ({deviations.length})
+                    <AlertTriangle className="w-3.5 h-3.5" /> {t('upload:certUpload.card.deviationCount', { num: deviations.length })}
                   </h4>
                   {deviations.map((dev, di) => (
                     <div key={di} className="p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 mt-1">
@@ -336,7 +337,7 @@ function InfoRow({ label, value, mono, className }: { label: string; value: stri
 // ============================================================================
 
 export default function CertificateUpload() {
-  const { t } = useTranslation(['upload', 'common']);
+  const { t } = useTranslation(['upload', 'common', 'certificate']);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -365,7 +366,7 @@ export default function CertificateUpload() {
 
   const handleFileSelect = useCallback((file: File) => {
     if (!isValidFile(file)) {
-      setErrorMessage('지원하지 않는 파일 형식입니다. LDIF/Master List은 파일 업로드 페이지를 이용하세요.');
+      setErrorMessage(`${t('upload:certUpload.unsupportedFormat')}. ${t('upload:certUpload.useLdifUploadPage')}`);
       return;
     }
     setSelectedFile(file);
@@ -395,14 +396,14 @@ export default function CertificateUpload() {
         setPreviewResult(data);
         setPageState('PREVIEW_READY');
       } else {
-        setErrorMessage(data.errorMessage || '파일 파싱에 실패했습니다.');
+        setErrorMessage(data.errorMessage || t('upload:certUpload.previewError'));
         setPageState('PREVIEW_ERROR');
       }
     } catch (error: unknown) {
       if (axios.isAxiosError(error) && error.response?.data) {
-        setErrorMessage(error.response.data.errorMessage || error.response.data.message || '파일 파싱에 실패했습니다.');
+        setErrorMessage(error.response.data.errorMessage || error.response.data.message || t('upload:certUpload.previewError'));
       } else {
-        setErrorMessage('서버 연결에 실패했습니다.');
+        setErrorMessage(t('upload:certUpload.serverConnectionFailed'));
       }
       setPageState('PREVIEW_ERROR');
     }
@@ -421,17 +422,17 @@ export default function CertificateUpload() {
         setPageState('COMPLETED');
         setShowResultDialog(true);
       } else {
-        throw new Error(result.errorMessage || result.message || '업로드에 실패했습니다.');
+        throw new Error(result.errorMessage || result.message || t('upload:certUpload.uploadFailed'));
       }
     } catch (error: unknown) {
       if (axios.isAxiosError(error) && error.response?.status === 409) {
-        setErrorMessage('이미 업로드된 파일입니다 (중복 파일 감지).');
+        setErrorMessage(t('upload:certUpload.duplicateFileDetected'));
       } else if (axios.isAxiosError(error) && error.response?.data) {
-        setErrorMessage(error.response.data.message || error.response.data.error || '업로드에 실패했습니다.');
+        setErrorMessage(error.response.data.message || error.response.data.error || t('upload:certUpload.uploadFailed'));
       } else if (error instanceof Error) {
         setErrorMessage(error.message);
       } else {
-        setErrorMessage('서버 연결에 실패했습니다.');
+        setErrorMessage(t('upload:certUpload.serverConnectionFailed'));
       }
       setPageState('FAILED');
     }
@@ -466,9 +467,9 @@ export default function CertificateUpload() {
           <Shield className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('certUpload.title')}</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('upload:certUpload.title')}</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            개별 인증서 파일을 미리보기 후 DB + LDAP에 저장합니다 (PEM, DER, P7B, DL, CRL)
+            {t('upload:certUpload.subtitle')}
           </p>
         </div>
       </div>
@@ -479,9 +480,9 @@ export default function CertificateUpload() {
           <div className="max-w-4xl mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('pa.verify.cscaNotRegistered')}</p>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('upload:certUpload.cscaNotRegisteredTitle')}</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                Trust Chain 검증을 위해 먼저 CSCA가 포함된 LDIF 또는 Master List를 업로드해 주세요.
+                {t('upload:certUpload.cscaTrustChainHint')}
               </p>
             </div>
           </div>
@@ -489,7 +490,7 @@ export default function CertificateUpload() {
           <div className="max-w-4xl mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
             <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
             <p className="text-xs text-green-700 dark:text-green-400">
-              CSCA <span className="font-semibold">{cscaCount.toLocaleString()}</span>개 등록됨 — 인증서 검증 가능
+              {t('upload:certUpload.cscaRegisteredCount', { num: cscaCount.toLocaleString() })}
             </p>
           </div>
         )
@@ -500,7 +501,7 @@ export default function CertificateUpload() {
         <div className="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
           <div className="flex items-center gap-2.5 mb-3">
             <div className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-xs font-bold text-indigo-600 dark:text-indigo-400">1</div>
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white">파일 선택</h2>
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">{t('upload:certUpload.fileSelect')}</h2>
           </div>
 
           <div
@@ -533,12 +534,12 @@ export default function CertificateUpload() {
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">{selectedFile.name}</span>
                   <span className="text-xs text-gray-400">({formatFileSize(selectedFile.size)})</span>
                 </div>
-                <span className="text-[10px] text-gray-400 ml-2">Click to change</span>
+                <span className="text-[10px] text-gray-400 ml-2">{t('upload:certUpload.clickToChange')}</span>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1.5">
                 <CloudUpload className="w-8 h-8 text-gray-400" />
-                <p className="text-sm text-gray-600 dark:text-gray-300">파일을 드래그하거나 클릭하여 선택</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{t('upload:certUpload.dropzoneText')}</p>
                 <p className="text-[10px] text-gray-400">.pem .crt .der .cer .p7b .dl .dvl .crl</p>
               </div>
             )}
@@ -552,13 +553,13 @@ export default function CertificateUpload() {
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Eye className="w-4 h-4" />
-                {t('upload.certUpload.preview')}
+                {t('upload:certUpload.preview')}
               </button>
             )}
             {pageState === 'PREVIEWING' && (
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">파싱 중...</span>
+                <span className="text-sm">{t('upload:certUpload.parsing')}</span>
               </div>
             )}
           </div>
@@ -571,13 +572,13 @@ export default function CertificateUpload() {
             <div className="px-4 pt-4 pb-0">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-xs font-bold text-blue-600 dark:text-blue-400">2</div>
-                <h2 className="text-sm font-bold text-gray-900 dark:text-white">파싱 결과</h2>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white">{t('upload:certUpload.parseResult')}</h2>
 
                 {/* Summary badges */}
                 <div className="flex items-center gap-2 ml-auto">
                   {previewResult.isDuplicate && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      <AlertTriangle className="w-3 h-3" /> {t('upload.statistics.duplicateCount')}
+                      <AlertTriangle className="w-3 h-3" /> {t('upload:statistics.duplicateCount')}
                     </span>
                   )}
                   {isDl && previewResult.dlSignatureValid !== undefined && (
@@ -587,7 +588,7 @@ export default function CertificateUpload() {
                         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                         : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                     )}>
-                      <Lock className="w-3 h-3" /> {previewResult.dlSignatureValid ? 'Sig Valid' : 'Sig Invalid'}
+                      <Lock className="w-3 h-3" /> {previewResult.dlSignatureValid ? t('upload:certUpload.sigValid') : t('upload:certUpload.sigInvalid')}
                     </span>
                   )}
                   <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
@@ -601,14 +602,14 @@ export default function CertificateUpload() {
                 <button onClick={() => setPreviewTab('certificates')} className={previewTabClass(previewTab === 'certificates')}>
                   <span className="flex items-center gap-1.5">
                     <Key className="w-3.5 h-3.5" />
-                    Certificates ({previewResult.certificates.length})
+                    {t('upload:certUpload.certificatesTab', { num: previewResult.certificates.length })}
                   </span>
                 </button>
                 {isDl && (
                   <button onClick={() => setPreviewTab('dl-structure')} className={previewTabClass(previewTab === 'dl-structure')}>
                     <span className="flex items-center gap-1.5">
                       <FileText className="w-3.5 h-3.5" />
-                      DL Structure
+                      {t('upload:certUpload.dlStructure')}
                     </span>
                   </button>
                 )}
@@ -635,7 +636,7 @@ export default function CertificateUpload() {
                     return <CertificateCard key={cert.fingerprintSha256} cert={cert} index={i} deviations={certDeviations} />;
                   })}
                   {previewResult.certificates.length === 0 && (
-                    <p className="text-sm text-gray-500 text-center py-6">인증서가 없습니다</p>
+                    <p className="text-sm text-gray-500 text-center py-6">{t('upload:certUpload.noCertificates')}</p>
                   )}
                 </div>
               )}
@@ -648,12 +649,12 @@ export default function CertificateUpload() {
               {/* CRL tab */}
               {previewTab === 'crl' && previewResult.crlInfo && (
                 <div className="space-y-2">
-                  <InfoRow label="Issuer" value={previewResult.crlInfo.issuerDn} mono />
-                  <InfoRow label="Country" value={previewResult.crlInfo.countryCode} />
-                  <InfoRow label="This Update" value={previewResult.crlInfo.thisUpdate} />
-                  <InfoRow label="Next Update" value={previewResult.crlInfo.nextUpdate || '-'} />
-                  <InfoRow label="CRL Number" value={previewResult.crlInfo.crlNumber || '-'} mono />
-                  <InfoRow label="Revoked" value={String(previewResult.crlInfo.revokedCount)} />
+                  <InfoRow label={t('upload:certUpload.crl.issuer')} value={previewResult.crlInfo.issuerDn} mono />
+                  <InfoRow label={t('upload:certUpload.crl.country')} value={previewResult.crlInfo.countryCode} />
+                  <InfoRow label={t('upload:certUpload.crl.thisUpdate')} value={previewResult.crlInfo.thisUpdate} />
+                  <InfoRow label={t('upload:certUpload.crl.nextUpdate')} value={previewResult.crlInfo.nextUpdate || '-'} />
+                  <InfoRow label={t('upload:certUpload.crl.crlNumber')} value={previewResult.crlInfo.crlNumber || '-'} mono />
+                  <InfoRow label={t('upload:certUpload.crl.revoked')} value={String(previewResult.crlInfo.revokedCount)} />
                 </div>
               )}
             </div>
@@ -666,7 +667,7 @@ export default function CertificateUpload() {
                     onClick={handleReset}
                     className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm transition-colors"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> {t('common.button.cancel')}
+                    <RotateCcw className="w-3.5 h-3.5" /> {t('common:button.cancel')}
                   </button>
                   <button
                     onClick={handleConfirm}
@@ -678,14 +679,14 @@ export default function CertificateUpload() {
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     )}
                   >
-                    <Database className="w-3.5 h-3.5" /> {t('upload.certUpload.saveToDbAndLdap')}
+                    <Database className="w-3.5 h-3.5" /> {t('upload:certUpload.saveToDbAndLdap')}
                   </button>
                 </div>
               )}
               {pageState === 'CONFIRMING' && (
                 <div className="flex items-center justify-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700 text-blue-600 dark:text-blue-400">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">{t('common.label.saving')}</span>
+                  <span className="text-sm">{t('common:label.saving')}</span>
                 </div>
               )}
             </div>
@@ -697,7 +698,7 @@ export default function CertificateUpload() {
           <div className="rounded-xl bg-white dark:bg-gray-800 shadow p-4">
             <div className="flex items-center gap-2.5 mb-3">
               <div className="w-6 h-6 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-xs font-bold text-green-600 dark:text-green-400">3</div>
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white">저장 완료</h2>
+              <h2 className="text-sm font-bold text-gray-900 dark:text-white">{t('upload:certUpload.saveCompleteTitle')}</h2>
             </div>
 
             <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -717,11 +718,11 @@ export default function CertificateUpload() {
 
             <div className="flex items-center gap-2 mt-3">
               <button onClick={handleReset} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors">
-                <CloudUpload className="w-3.5 h-3.5" /> 새 파일
+                <CloudUpload className="w-3.5 h-3.5" /> {t('upload:certUpload.newFile')}
               </button>
               {uploadResult && (
                 <button onClick={() => setShowResultDialog(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-xs transition-colors">
-                  <Eye className="w-3.5 h-3.5" /> {t('certificate.search.viewDetail')}
+                  <Eye className="w-3.5 h-3.5" /> {t('certificate:search.viewDetail')}
                 </button>
               )}
             </div>
@@ -735,18 +736,18 @@ export default function CertificateUpload() {
               <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-red-800 dark:text-red-300">
-                  {pageState === 'PREVIEW_ERROR' ? t('upload.fileUpload.parseFailed') : '저장 실패'}
+                  {pageState === 'PREVIEW_ERROR' ? t('upload:certUpload.previewError') : t('upload:certUpload.saveError')}
                 </p>
                 <p className="mt-0.5 text-xs text-red-700 dark:text-red-400">{errorMessage}</p>
               </div>
             </div>
             <div className="mt-3 flex gap-2">
               <button onClick={handleReset} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors">
-                <RotateCcw className="w-3.5 h-3.5" /> 다시 시도
+                <RotateCcw className="w-3.5 h-3.5" /> {t('upload:certUpload.retryAction')}
               </button>
               {pageState === 'FAILED' && previewResult && (
                 <button onClick={handleConfirm} className="flex items-center gap-1.5 px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-xs transition-colors">
-                  <Database className="w-3.5 h-3.5" /> 저장 재시도
+                  <Database className="w-3.5 h-3.5" /> {t('upload:certUpload.retrySave')}
                 </button>
               )}
             </div>
@@ -759,7 +760,7 @@ export default function CertificateUpload() {
         <Dialog
           isOpen={showResultDialog}
           onClose={() => setShowResultDialog(false)}
-          title="인증서 업로드 완료"
+          title={t('upload:certUpload.uploadCompleteTitle')}
           size="2xl"
         >
           <div className="space-y-4">
@@ -770,10 +771,10 @@ export default function CertificateUpload() {
                 <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" />
                 <div>
                   <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
-                    이미 등록된 인증서입니다.
+                    {t('upload:certUpload.allDuplicateMsg')}
                   </span>
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-                    {uploadResult.duplicateCount}건 모두 기존에 저장된 인증서와 동일합니다.
+                    {t('upload:certUpload.allDuplicateDetail', { num: uploadResult.duplicateCount })}
                   </p>
                 </div>
                 <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
@@ -786,7 +787,7 @@ export default function CertificateUpload() {
                 <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
                   <span className="text-sm font-medium text-green-800 dark:text-green-300">
-                    인증서 저장이 완료되었습니다.
+                    {t('upload:certUpload.saveCompleteMsg')}
                   </span>
                   <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                     {new Date().toLocaleString('ko-KR')}
@@ -796,7 +797,7 @@ export default function CertificateUpload() {
                   <div className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
                     <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
                     <span className="text-sm text-orange-700 dark:text-orange-300">
-                      {uploadResult.duplicateCount}건은 이미 등록된 인증서입니다.
+                      {t('upload:certUpload.partialDuplicateMsg', { num: uploadResult.duplicateCount })}
                     </span>
                   </div>
                 )}
@@ -807,7 +808,7 @@ export default function CertificateUpload() {
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-gray-500" />
-                {t('upload.detail.fileInfo')}
+                {t('upload:detail.fileInfo')}
               </h4>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div>
@@ -848,9 +849,9 @@ export default function CertificateUpload() {
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                 <Shield className="w-4 h-4 text-indigo-500" />
-                인증서 처리 결과
+                {t('upload:certUpload.certProcessResult')}
                 <span className="ml-auto text-base font-bold text-gray-900 dark:text-white">
-                  {uploadResult.certificateCount}건
+                  {t('upload:certUpload.countSuffix', { num: uploadResult.certificateCount })}
                 </span>
               </h4>
               <div className="grid grid-cols-3 gap-2">
@@ -940,13 +941,13 @@ export default function CertificateUpload() {
                 className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <History className="w-4 h-4" />
-                {t('upload.history.title')}
+                {t('upload:history.title')}
               </button>
               <button
                 onClick={() => setShowResultDialog(false)}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>

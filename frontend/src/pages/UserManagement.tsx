@@ -82,7 +82,7 @@ export function UserManagement() {
       setUsers(rawUsers.map((u: UserData) => ({ ...u, permissions: parsePermissions(u.permissions) })));
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching users:', error);
-      setError('사용자 목록을 불러오는데 실패했습니다.');
+      setError(t('admin:userMgmt.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -92,12 +92,12 @@ export function UserManagement() {
     try {
       setError('');
       await authClient.post('/users', formData);
-      setSuccess('사용자가 생성되었습니다.');
+      setSuccess(t('admin:userMgmt.createSuccess'));
       setShowCreateModal(false);
       fetchUsers();
       resetForm();
     } catch (error: any) {
-      setError(error.response?.data?.message || error.message || '사용자 생성에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || t('admin:userMgmt.createFailed'));
     }
   };
 
@@ -108,12 +108,12 @@ export function UserManagement() {
       setError('');
       const { password, ...updateData } = formData;
       await authClient.put(`/users/${selectedUser.id}`, updateData);
-      setSuccess('사용자 정보가 수정되었습니다.');
+      setSuccess(t('admin:userMgmt.updateSuccess'));
       setShowEditModal(false);
       fetchUsers();
       resetForm();
     } catch (error: any) {
-      setError(error.response?.data?.message || error.message || '사용자 수정에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || t('admin:userMgmt.updateFailed'));
     }
   };
 
@@ -123,12 +123,12 @@ export function UserManagement() {
     try {
       setError('');
       await authClient.delete(`/users/${selectedUser.id}`);
-      setSuccess('사용자가 삭제되었습니다.');
+      setSuccess(t('admin:userMgmt.deleteSuccess'));
       setShowDeleteModal(false);
       fetchUsers();
       setSelectedUser(null);
     } catch (error: any) {
-      setError(error.response?.data?.message || error.message || '사용자 삭제에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || t('admin:userMgmt.deleteFailed'));
     }
   };
 
@@ -139,12 +139,12 @@ export function UserManagement() {
     const isSelf = currentUser?.id === selectedUser.id;
 
     if (isSelf && !passwordData.currentPassword) {
-      setError(t('admin.userManagement.currentPasswordRequired'));
+      setError(t('admin:userMgmt.currentPasswordRequired'));
       return;
     }
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.');
+      setError(t('common:validation.passwordMismatch'));
       return;
     }
 
@@ -155,12 +155,12 @@ export function UserManagement() {
         payload.current_password = passwordData.currentPassword;
       }
       await authClient.put(`/users/${selectedUser.id}/password`, payload);
-      setSuccess('비밀번호가 변경되었습니다.');
+      setSuccess(t('admin:userMgmt.passwordChanged'));
       setShowPasswordModal(false);
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setSelectedUser(null);
     } catch (error: any) {
-      setError(error.response?.data?.message || error.message || t('admin.userManagement.passwordChangeFailed'));
+      setError(error.response?.data?.message || error.message || t('admin:userMgmt.passwordChangeFailed'));
     }
   };
 
@@ -234,10 +234,10 @@ export function UserManagement() {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {t('nav.header.userManagement')}
+              {t('admin:userMgmt.title')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              시스템 사용자 및 권한 관리
+              {t('admin:userMgmt.subtitle')}
             </p>
           </div>
           <button
@@ -245,7 +245,7 @@ export function UserManagement() {
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md hover:shadow-lg"
           >
             <Plus className="w-4 h-4" />
-            사용자 추가
+            {t('admin:userMgmt.addUser')}
           </button>
         </div>
       </div>
@@ -274,19 +274,19 @@ export function UserManagement() {
       {/* Summary Stats + Search */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.totalUsers')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.totalUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{users.length}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-indigo-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.adminUsers')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.adminUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminCount}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.activeUsers')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.activeUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeCount}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
-          <label htmlFor="user-search" className="text-sm text-gray-500 dark:text-gray-400 mb-2 block">검색</label>
+          <label htmlFor="user-search" className="text-sm text-gray-500 dark:text-gray-400 mb-2 block">{t('common:button.search')}</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -295,7 +295,7 @@ export function UserManagement() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="사용자명, 이메일, 이름..."
+              placeholder={t('admin:userMgmt.searchPlaceholder')}
               className="w-full pl-9 pr-4 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
@@ -306,13 +306,13 @@ export function UserManagement() {
       {loading ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center">
           <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">사용자 목록 로딩 중...</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('admin:userMgmt.loadingUsers')}</p>
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center">
           <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">
-            {searchQuery ? t('certificate.search.noResults') : '등록된 사용자가 없습니다.'}
+            {searchQuery ? t('common:table.noResults') : t('admin:userMgmt.noUsers')}
           </p>
         </div>
       ) : (
@@ -340,7 +340,7 @@ export function UserManagement() {
                       {toBool(user.is_admin) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full flex-shrink-0">
                           <Shield className="w-3 h-3" />
-                          {t('admin.userManagement.adminUsers')}
+                          {t('admin:userManagement.adminUsers')}
                         </span>
                       )}
                     </div>
@@ -357,13 +357,13 @@ export function UserManagement() {
                   <div className="flex items-center gap-2 text-sm">
                     <Mail className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <span className="text-gray-600 dark:text-gray-400 truncate">
-                      {user.email || '이메일 미설정'}
+                      {user.email || t('admin:userMgmt.emailNotSet')}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <span className="text-gray-600 dark:text-gray-400">
-                      {formatDateTime(user.last_login_at, '로그인 기록 없음')}
+                      {formatDateTime(user.last_login_at, t('admin:userMgmt.noLoginRecord'))}
                     </span>
                   </div>
                 </div>
@@ -375,13 +375,13 @@ export function UserManagement() {
                       key={perm}
                       className="px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 text-xs rounded-full"
                     >
-                      {AVAILABLE_PERMISSIONS.find(p => p.value === perm)?.label || perm}
+                      {t(AVAILABLE_PERMISSIONS.find(p => p.value === perm)?.label ?? '') || perm}
                     </span>
                   ))}
                   {user.permissions.length === 0 && (
                     toBool(user.is_admin)
-                      ? <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">{t('common.label.allPermissions')}</span>
-                      : <span className="text-xs text-gray-400 dark:text-gray-500 italic">{t('common.label.noPermissions')}</span>
+                      ? <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">{t('common:label.allPermissions')}</span>
+                      : <span className="text-xs text-gray-400 dark:text-gray-500 italic">{t('common:label.noPermissions')}</span>
                   )}
                 </div>
               </div>
@@ -393,21 +393,21 @@ export function UserManagement() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  {t('common.button.edit')}
+                  {t('common:button.edit')}
                 </button>
                 <button
                   onClick={() => openPasswordModal(user)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
                 >
                   <Key className="w-3.5 h-3.5" />
-                  {t('common.label.password')}
+                  {t('common:label.password')}
                 </button>
                 <button
                   onClick={() => openDeleteModal(user)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  {t('common.button.delete')}
+                  {t('common:button.delete')}
                 </button>
               </div>
             </div>
@@ -424,8 +424,8 @@ export function UserManagement() {
                 <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">사용자 추가</h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400">새로운 시스템 사용자 등록</p>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('admin:userMgmt.addUser')}</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('admin:userMgmt.registerNewUser')}</p>
               </div>
             </div>
             <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
@@ -433,7 +433,7 @@ export function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="create-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('common.label.username')} <span className="text-red-500">*</span>
+                    {t('common:label.username')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -443,14 +443,14 @@ export function UserManagement() {
                       type="text"
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      placeholder="영문 소문자, 숫자"
+                      placeholder={t('admin:userMgmt.usernamePlaceholder')}
                       className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="create-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('common.label.password')} <span className="text-red-500">*</span>
+                    {t('common:label.password')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -460,14 +460,14 @@ export function UserManagement() {
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder={t('admin.userManagement.minChars8')}
+                      placeholder={t('admin:userMgmt.minChars8')}
                       className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="create-fullname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('common.label.name')}
+                    {t('common:label.name')}
                   </label>
                   <input
                     id="create-fullname"
@@ -475,13 +475,13 @@ export function UserManagement() {
                     type="text"
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    placeholder="사용자 이름"
+                    placeholder={t('admin:userMgmt.fullNamePlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
                 <div>
                   <label htmlFor="create-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('common.label.email')}
+                    {t('common:label.email')}
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -512,20 +512,20 @@ export function UserManagement() {
                   <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
                 <div>
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">관리자 권한</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">모든 시스템 기능에 대한 전체 접근 권한</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('admin:userMgmt.adminPrivilege')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('admin:userMgmt.adminPrivilegeDesc')}</p>
                 </div>
               </div>
 
               {/* Permissions Grid — grouped by menu section */}
               <div>
                 <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  권한 설정
+                  {t('common:label.permissionSettings')}
                 </span>
                 <div className="space-y-3">
                   {PERMISSION_GROUPS.map((group) => (
                     <div key={group.label}>
-                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">{group.label}</p>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">{t(group.label)}</p>
                       <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
                         {group.permissions.map((perm) => (
                           <label
@@ -545,7 +545,7 @@ export function UserManagement() {
                               onChange={() => togglePermission(perm.value)}
                               className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{perm.label}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{t(perm.label)}</span>
                           </label>
                         ))}
                       </div>
@@ -559,14 +559,14 @@ export function UserManagement() {
                 onClick={() => { setShowCreateModal(false); resetForm(); }}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors text-sm"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleCreateUser}
                 disabled={!formData.username || !formData.password}
                 className="px-5 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
-                사용자 추가
+                {t('admin:userMgmt.addUser')}
               </button>
             </div>
           </div>
@@ -582,7 +582,7 @@ export function UserManagement() {
                 <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('userManagement.editUser')}</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('admin:userManagement.editUser')}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
@@ -590,7 +590,7 @@ export function UserManagement() {
               {/* 3-column grid for basic fields */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor="edit-username" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{ t('admin:operationAudit.username') }</label>
+                  <label htmlFor="edit-username" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.username')}</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
@@ -604,7 +604,7 @@ export function UserManagement() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="edit-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{ t('admin:userManagement.email') }</label>
+                  <label htmlFor="edit-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.email')}</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
@@ -619,14 +619,14 @@ export function UserManagement() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="edit-fullname" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('userManagement.fullName')}</label>
+                  <label htmlFor="edit-fullname" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('admin:userManagement.fullName')}</label>
                   <input
                     id="edit-fullname"
                     name="fullName"
                     type="text"
                     value={formData.full_name}
                     onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                    placeholder="사용자 이름"
+                    placeholder={t('admin:userMgmt.fullNamePlaceholder')}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
@@ -645,17 +645,17 @@ export function UserManagement() {
                   />
                   <div className="w-9 h-5 bg-gray-300 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer dark:bg-gray-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600" />
                 </label>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">관리자 권한</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">— 모든 시스템 기능에 대한 전체 접근 권한</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('admin:userMgmt.adminPrivilege')}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">— {t('admin:userMgmt.adminPrivilegeDesc')}</p>
               </div>
 
               {/* Permissions Grid — compact 3-col, no descriptions */}
               <div>
-                <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('common.label.permissionSettings')}</span>
+                <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('common:label.permissionSettings')}</span>
                 <div className="space-y-2">
                   {PERMISSION_GROUPS.map((group) => (
                     <div key={group.label}>
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{group.label}</p>
+                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{t(group.label)}</p>
                       <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
                         {group.permissions.map((perm) => (
                           <label
@@ -675,7 +675,7 @@ export function UserManagement() {
                               onChange={() => togglePermission(perm.value)}
                               className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{perm.label}</span>
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{t(perm.label)}</span>
                           </label>
                         ))}
                       </div>
@@ -689,13 +689,13 @@ export function UserManagement() {
                 onClick={() => { setShowEditModal(false); resetForm(); }}
                 className="px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleUpdateUser}
                 className="px-5 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md text-sm font-medium"
               >
-                {t('common.button.save')}
+                {t('common:button.save')}
               </button>
             </div>
           </div>
@@ -710,9 +710,9 @@ export function UserManagement() {
               <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                 <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">{t('userManagement.deleteUser')}</h2>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">{t('admin:userManagement.deleteUser')}</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
-                다음 사용자를 삭제하시겠습니까?
+                {t('admin:userMgmt.deleteConfirmQuestion')}
               </p>
               <div className="inline-flex items-center gap-2 mt-2 mb-4 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 rounded-lg">
                 <User className="w-4 h-4 text-gray-500" />
@@ -720,7 +720,7 @@ export function UserManagement() {
                 <span className="text-xs text-gray-500">@{selectedUser.username}</span>
               </div>
               <p className="text-xs text-red-500 dark:text-red-400">
-                이 작업은 되돌릴 수 없습니다.
+                {t('admin:userMgmt.cannotUndo')}
               </p>
             </div>
             <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex gap-2">
@@ -728,13 +728,13 @@ export function UserManagement() {
                 onClick={() => { setShowDeleteModal(false); setSelectedUser(null); }}
                 className="flex-1 px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium border border-gray-200 dark:border-gray-600"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleDeleteUser}
                 className="flex-1 px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
               >
-                {t('common.button.delete')}
+                {t('common:button.delete')}
               </button>
             </div>
           </div>
@@ -750,7 +750,7 @@ export function UserManagement() {
                 <Key className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">{ t('auth:profile.changePassword') }</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('admin:userMgmt.changePassword')}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
@@ -758,7 +758,7 @@ export function UserManagement() {
               {authApi.getStoredUser()?.id === selectedUser.id && (
                 <div>
                   <label htmlFor="pw-current" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    {t('auth.profile.currentPassword')}
+                    {t('admin:userMgmt.currentPassword')}
                   </label>
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -768,7 +768,7 @@ export function UserManagement() {
                       type="password"
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                      placeholder={t('admin.userManagement.currentPasswordInput')}
+                      placeholder={t('admin:userMgmt.currentPasswordInput')}
                       className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     />
                   </div>
@@ -776,7 +776,7 @@ export function UserManagement() {
               )}
               <div>
                 <label htmlFor="pw-new" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  {t('auth.profile.newPassword')}
+                  {t('admin:userMgmt.newPassword')}
                 </label>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -786,14 +786,14 @@ export function UserManagement() {
                     type="password"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    placeholder={t('admin.userManagement.minChars8Input')}
+                    placeholder={t('admin:userMgmt.minChars8Input')}
                     className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                   />
                 </div>
               </div>
               <div>
                 <label htmlFor="pw-confirm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  {t('auth.profile.confirmPassword')}
+                  {t('admin:userMgmt.confirmPassword')}
                 </label>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -803,14 +803,14 @@ export function UserManagement() {
                     type="password"
                     value={passwordData.confirmPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                    placeholder="비밀번호 다시 입력"
+                    placeholder={t('admin:userMgmt.confirmPasswordInput')}
                     className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                   />
                 </div>
                 {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
                   <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />
-                    {t('common.validation.passwordMismatch')}
+                    {t('common:validation.passwordMismatch')}
                   </p>
                 )}
               </div>
@@ -820,14 +820,14 @@ export function UserManagement() {
                 onClick={() => { setShowPasswordModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); setSelectedUser(null); }}
                 className="px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleChangePassword}
                 disabled={!passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword || (authApi.getStoredUser()?.id === selectedUser.id && !passwordData.currentPassword)}
                 className="px-5 py-1.5 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-lg hover:from-purple-600 hover:to-violet-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
-                변경
+                {t('admin:userMgmt.change')}
               </button>
             </div>
           </div>

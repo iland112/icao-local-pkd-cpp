@@ -125,6 +125,30 @@
       "keySize": "키 크기",
       "compliance": "ICAO 준수",
       "validity": "유효기간"
+    },
+    "panel": {
+      "loadError": "포렌식 분석 데이터를 불러올 수 없습니다",
+      "loading": "포렌식 분석 로딩 중...",
+      "noData": "분석 데이터가 없습니다. 전체 분석을 먼저 실행하세요.",
+      "forensicRisk": "포렌식 리스크",
+      "anomalyDetection": "이상 탐지",
+      "structuralViolation": "구조 위반",
+      "issuerDeviation": "발급자 편차",
+      "categoryScores": "10개 카테고리별 점수",
+      "findingsTitle": "발견 사항 ({{num}}건)",
+      "anomalyExplanations": "ML 이상 탐지 설명",
+      "category": {
+        "algorithm": "서명 알고리즘",
+        "keySize": "키 크기",
+        "compliance": "ICAO 준수",
+        "validity": "유효기간",
+        "extensions": "확장 필드",
+        "anomaly": "ML 이상 탐지",
+        "issuerReputation": "발급자 평판",
+        "structuralConsistency": "구조 일관성",
+        "temporalPattern": "시간 패턴",
+        "dnConsistency": "DN 일관성"
+      }
     }
   },
   "issuerProfile": {
@@ -134,12 +158,26 @@
     "complianceRate": "준수율",
     "expiredRate": "만료율",
     "riskScore": "위험 점수",
-    "noData": "발급자 프로파일 데이터가 없습니다"
+    "noData": "발급자 프로파일 데이터가 없습니다",
+    "profileNum": "발급자 프로파일 ({{num}}개)",
+    "tooltipCerts": "인증서: {{num}}개",
+    "tooltipCompliance": "준수율: {{num}}%",
+    "tooltipCountry": "국가: {{num}}",
+    "tooltipRisk": "리스크: {{level}}",
+    "highRiskIssuers": "고위험 발급자"
   },
   "extensionCompliance": {
     "title": "확장 규칙 준수",
     "violations": "규칙 위반",
-    "noViolations": "규칙 위반 사항이 없습니다"
+    "noViolations": "규칙 위반 사항이 없습니다",
+    "ruleViolationsNum": "확장 프로파일 규칙 위반 ({{num}}건)",
+    "noViolations_msg": "확장 프로파일 규칙 위반이 없습니다.",
+    "severity": "심각도",
+    "violation": "위반",
+    "score": "점수",
+    "missingRequired": "필수 누락: {{items}}",
+    "forbiddenViolation": "금지 위반: {{items}}",
+    "keyUsageViolation": "키 사용 위반: {{items}}"
   },
   "analysis": {
     "analysisFailed": "AI 분석 실패",

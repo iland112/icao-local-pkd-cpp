@@ -78,9 +78,9 @@ export function QuickLookupPanel({
             <Search className="w-5 h-5 text-teal-500" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trust Chain 조회</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('pa:quickLookup.title')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              파일 업로드 시 수행된 Trust Chain 검증 결과를 DSC Subject DN 또는 Fingerprint로 조회합니다.
+              {t('pa:quickLookup.description')}
             </p>
           </div>
         </div>
@@ -98,7 +98,7 @@ export function QuickLookupPanel({
               className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
-          <div className="text-center text-xs text-gray-400">또는</div>
+          <div className="text-center text-xs text-gray-400">{t('pa:quickLookup.or')}</div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               SHA-256 Fingerprint
@@ -122,9 +122,9 @@ export function QuickLookupPanel({
             )}
           >
             {quickLookupLoading ? (
-              <><Loader2 className="w-4 h-4 animate-spin" /> 조회 중...</>
+              <><Loader2 className="w-4 h-4 animate-spin" /> {t('pa:quickLookup.searching')}</>
             ) : (
-              <><Search className="w-4 h-4" /> Trust Chain 결과 조회</>
+              <><Search className="w-4 h-4" /> {t('pa:quickLookup.searchButton')}</>
             )}
           </button>
         </div>
@@ -187,7 +187,7 @@ export function QuickLookupPanel({
           <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5 space-y-3">
             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ListChecks className="w-4 h-4 text-teal-500" />
-              검증 상세 결과
+              {t('pa:quickLookup.detailResult')}
             </h3>
 
             {/* Trust Chain */}
@@ -205,7 +205,7 @@ export function QuickLookupPanel({
               </div>
               {quickLookupResult.validation.trustChainPath && (
                 <div className="ml-6 text-gray-600 dark:text-gray-400">
-                  경로: {quickLookupResult.validation.trustChainPath}
+                  {t('pa:quickLookup.path')}: {quickLookupResult.validation.trustChainPath}
                 </div>
               )}
               {quickLookupResult.validation.trustChainMessage && (
@@ -226,7 +226,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.cscaFound
                   ? <CheckCircle className="w-4 h-4 text-green-500" />
                   : <AlertTriangle className="w-4 h-4 text-yellow-500" />}
-                <span className="font-semibold">CSCA 조회</span>
+                <span className="font-semibold">{t('pa:quickLookup.cscaLookup')}</span>
               </div>
               {quickLookupResult.validation.cscaSubjectDn && (
                 <div className="ml-6">
@@ -249,7 +249,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.signatureVerified
                   ? <CheckCircle className="w-4 h-4 text-green-500" />
                   : <XCircle className="w-4 h-4 text-red-500" />}
-                <span className="font-semibold">서명 검증</span>
+                <span className="font-semibold">{t('pa:quickLookup.signatureVerification')}</span>
                 {quickLookupResult.validation.signatureAlgorithm && (
                   <code className="ml-2 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                     {quickLookupResult.validation.signatureAlgorithm}
@@ -299,11 +299,11 @@ export function QuickLookupPanel({
               <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs">
                 <div className="flex items-center gap-2 mb-1.5">
                   <AlertTriangle className="w-4 h-4 text-orange-500" />
-                  <span className="font-semibold text-orange-700 dark:text-orange-300">Non-Conformant (비준수)</span>
+                  <span className="font-semibold text-orange-700 dark:text-orange-300">{t('pa:quickLookup.nonConformant')}</span>
                 </div>
                 {quickLookupResult.validation.pkdConformanceCode && (
                   <div className="ml-6 mb-1">
-                    <span className="text-gray-500">코드: </span>
+                    <span className="text-gray-500">{t('pa:quickLookup.code')}: </span>
                     <code className="font-mono bg-orange-100 dark:bg-orange-800/40 px-1.5 py-0.5 rounded text-orange-700 dark:text-orange-300">
                       {quickLookupResult.validation.pkdConformanceCode}
                     </code>
@@ -311,7 +311,7 @@ export function QuickLookupPanel({
                 )}
                 {quickLookupResult.validation.pkdConformanceText && (
                   <div className="ml-6 mb-1 text-gray-600 dark:text-gray-400">
-                    <span className="text-gray-500">사유: </span>
+                    <span className="text-gray-500">{t('pa:quickLookup.reason')}: </span>
                     {quickLookupResult.validation.pkdConformanceText}
                   </div>
                 )}
@@ -322,7 +322,7 @@ export function QuickLookupPanel({
                 )}
                 {!quickLookupResult.validation.pkdConformanceCode && !quickLookupResult.validation.pkdConformanceText && (
                   <div className="ml-6 text-gray-500">
-                    ICAO PKD에서 Non-Conformant로 분류된 인증서입니다.
+                    {t('pa:quickLookup.nonConformantDesc')}
                   </div>
                 )}
               </div>
@@ -330,7 +330,7 @@ export function QuickLookupPanel({
 
             {/* Certificate Info */}
             <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs space-y-1.5">
-              <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">인증서 정보</div>
+              <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('upload:certUpload.certInfo')}</div>
               {quickLookupResult.validation.subjectDn && (
                 <div className="flex items-start gap-2">
                   <span className="text-gray-500 shrink-0 w-16">Subject:</span>
@@ -357,7 +357,7 @@ export function QuickLookupPanel({
               )}
               {quickLookupResult.validation.validatedAt && (
                 <div className="flex items-start gap-2">
-                  <span className="text-gray-500 shrink-0 w-16">검증일시:</span>
+                  <span className="text-gray-500 shrink-0 w-16">{t('pa:quickLookup.validatedAt')}:</span>
                   <span className="text-gray-600 dark:text-gray-400">{quickLookupResult.validation.validatedAt}</span>
                 </div>
               )}
@@ -368,9 +368,8 @@ export function QuickLookupPanel({
               <div className="flex items-start gap-2">
                 <Zap className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-semibold">간편 검증 모드: </span>
-                  SOD 서명 검증, Data Group 해시 검증은 전체 검증 모드에서만 수행됩니다.
-                  위 결과는 파일 업로드 시 수행된 Trust Chain 검증 결과입니다.
+                  <span className="font-semibold">{t('pa:quickLookup.quickModeLabel')}: </span>
+                  {t('pa:quickLookup.quickModeDesc')}
                 </div>
               </div>
             </div>

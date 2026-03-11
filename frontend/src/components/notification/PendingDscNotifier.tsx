@@ -31,8 +31,8 @@ export function PendingDscNotifier() {
           const diff = current - lastPendingCount.current;
           addNotification({
             type: 'DSC_PENDING_CREATED',
-            title: t('admin.pendingDscNotifier.pendingDscTitle'),
-            message: `신규 DSC ${diff}건이 승인 대기 중입니다. (전체 ${current}건)`,
+            title: t('admin:pendingDscNotify.title'),
+            message: t('admin:pendingDscNotify.message', { num: diff, total: current }),
             data: { pendingCount: current, newCount: diff },
             timestamp: new Date().toISOString(),
           });

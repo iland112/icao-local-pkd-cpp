@@ -67,7 +67,7 @@ export default function ApiClientRequest() {
         setRequestId(res.request_id);
         setSubmitted(true);
       } else {
-        setError(res.message || '요청 제출에 실패했습니다.');
+        setError(res.message || t('admin:apiClientRequest.submitFailedDefault'));
       }
     } catch (err: any) {
       const msg = err?.response?.data?.message || err?.message || t('admin.apiClientRequest.submitError');
@@ -147,7 +147,7 @@ export default function ApiClientRequest() {
                   <Field label={t('admin.apiClient.orgDept')} required value={form.requester_org} onChange={v => updateField('requester_org', v)} placeholder={t('admin.apiClientRequest.orgPlaceholder')} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label="연락처 (전화번호)" value={form.requester_contact_phone || ''} onChange={v => updateField('requester_contact_phone', v)} placeholder="02-1234-5678" />
+                  <Field label={t('admin:apiClientRequest.contactPhone')} value={form.requester_contact_phone || ''} onChange={v => updateField('requester_contact_phone', v)} placeholder="02-1234-5678" />
                   <Field label={t('common:label.email')} required type="email" value={form.requester_contact_email} onChange={v => updateField('requester_contact_email', v)} placeholder="hong@example.go.kr" />
                 </div>
                 <div>

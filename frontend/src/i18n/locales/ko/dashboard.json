@@ -42,6 +42,10 @@
     "dsc": "DSC",
     "dscNc": "DSC_NC",
     "crl": "CRL",
-    "total": "합계"
+    "total": "총계",
+    "detailTitle": "국가별 인증서 상세 통계",
+    "detailSubtitle": "전체 {{num}}개 국가의 인증서 종류별 현황",
+    "selfSigned": "Self-signed (자체 서명)",
+    "linkCert": "Link Certificate (연결 인증서)"
   }
 }

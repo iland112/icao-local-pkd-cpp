@@ -21,12 +21,12 @@ interface InfraHealth {
 
 const SERVICE_ORDER = ['pkd-management', 'pa-service', 'pkd-relay', 'Monitoring', 'ai-analysis'];
 
-const SERVICE_DEFS: Record<string, { label: string; port: number; desc: string }> = {
-  'pkd-management': { label: t('nav.sections.certManagement'), port: 8081, desc: '업로드, 인증서 관리, 인증' },
-  'pa-service': { label: 'PA Service', port: 8082, desc: '여권 Passive Authentication' },
-  'pkd-relay': { label: 'PKD Relay', port: 8083, desc: 'DB-LDAP 동기화' },
-  'Monitoring': { label: 'Monitoring', port: 8084, desc: '시스템 메트릭 수집' },
-  'ai-analysis': { label: 'AI Analysis', port: 8085, desc: 'ML 이상 탐지, 포렌식 분석' },
+const SERVICE_DEFS: Record<string, { labelKey: string; port: number; descKey: string }> = {
+  'pkd-management': { labelKey: 'monitoring:serviceDefs.pkdManagement.label', port: 8081, descKey: 'monitoring:serviceDefs.pkdManagement.desc' },
+  'pa-service': { labelKey: 'monitoring:serviceDefs.paService.label', port: 8082, descKey: 'monitoring:serviceDefs.paService.desc' },
+  'pkd-relay': { labelKey: 'monitoring:serviceDefs.pkdRelay.label', port: 8083, descKey: 'monitoring:serviceDefs.pkdRelay.desc' },
+  'Monitoring': { labelKey: 'monitoring:serviceDefs.monitoring.label', port: 8084, descKey: 'monitoring:serviceDefs.monitoring.desc' },
+  'ai-analysis': { labelKey: 'monitoring:serviceDefs.aiAnalysis.label', port: 8085, descKey: 'monitoring:serviceDefs.aiAnalysis.desc' },
 };
 
 function formatBytes(bytes: number): string {
@@ -125,7 +125,7 @@ export default function MonitoringDashboard() {
     } catch (err) {
       if (signal?.aborted) return;
       if (import.meta.env.DEV) console.error('Failed to fetch monitoring data:', err);
-      setError('모니터링 데이터를 불러오는데 실패했습니다.');
+      setError(t('monitoring:error.fetchFailed'));
     } finally {
       if (!signal?.aborted) setLoading(false);
     }
@@ -159,7 +159,7 @@ export default function MonitoringDashboard() {
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              실시간 시스템 리소스 및 서비스 상태를 모니터링합니다.
+              {t('monitoring:subtitle')}
             </p>
           </div>
           <div className="flex gap-2 items-center">
@@ -186,13 +186,13 @@ export default function MonitoringDashboard() {
         <div className="flex items-center justify-center py-20">
           <div className="text-center">
             <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-            <p className="text-xl text-gray-800 dark:text-white mb-2">모니터링 데이터 로드 실패</p>
-            <p className="text-gray-600 dark:text-gray-400 mb-4">{error || '알 수 없는 오류가 발생했습니다.'}</p>
+            <p className="text-xl text-gray-800 dark:text-white mb-2">{t('monitoring:error.loadFailed')}</p>
+            <p className="text-gray-600 dark:text-gray-400 mb-4">{error || t('monitoring:error.unknown')}</p>
             <button
               onClick={() => fetchData(abortControllerRef.current?.signal)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              다시 시도
+              {t('common:button.retry')}
             </button>
           </div>
         </div>
@@ -215,14 +215,14 @@ export default function MonitoringDashboard() {
                 'font-medium',
                 upCount === totalCount ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'
               )}>
-                서비스 {upCount}/{totalCount} 정상
+                {t('monitoring:summary.serviceStatus', { up: upCount, total: totalCount })}
               </span>
               {infraHealth.map(ih => (
                 <span key={ih.name} className={cn(
                   'font-medium',
                   ih.status === 'UP' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                 )}>
-                  {ih.name} {ih.status === 'UP' ? t('monitoring.status.healthy') : '중단'}
+                  {ih.name} {ih.status === 'UP' ? t('monitoring:status.healthy') : t('monitoring:status.stopped')}
                 </span>
               ))}
             </div>
@@ -243,38 +243,38 @@ export default function MonitoringDashboard() {
               percentage={metrics.cpu.usagePercent}
             />
             <MetricCard
-              title="메모리"
+              title={t('monitoring:metricCard.memory')}
               icon={<MemoryStick className="w-6 h-6 text-green-500" />}
               value={metrics.memory.usagePercent.toFixed(1)}
               unit="%"
               details={[
                 { label: t('common:label.all'), value: `${metrics.memory.totalMb.toLocaleString()} MB` },
-                { label: '사용', value: `${metrics.memory.usedMb.toLocaleString()} MB` },
-                { label: t('common.label.surplus'), value: `${metrics.memory.freeMb.toLocaleString()} MB` },
+                { label: t('monitoring:metricCard.used'), value: `${metrics.memory.usedMb.toLocaleString()} MB` },
+                { label: t('common:label.surplus'), value: `${metrics.memory.freeMb.toLocaleString()} MB` },
               ]}
               percentage={metrics.memory.usagePercent}
             />
             <MetricCard
-              title="디스크"
+              title={t('monitoring:metricCard.disk')}
               icon={<HardDrive className="w-6 h-6 text-purple-500" />}
               value={metrics.disk.usagePercent.toFixed(1)}
               unit="%"
               details={[
                 { label: t('common:label.all'), value: `${metrics.disk.totalGb.toFixed(0)} GB` },
-                { label: '사용', value: `${metrics.disk.usedGb.toFixed(0)} GB` },
-                { label: t('common.label.surplus'), value: `${metrics.disk.freeGb.toFixed(0)} GB` },
+                { label: t('monitoring:metricCard.used'), value: `${metrics.disk.usedGb.toFixed(0)} GB` },
+                { label: t('common:label.surplus'), value: `${metrics.disk.freeGb.toFixed(0)} GB` },
               ]}
               percentage={metrics.disk.usagePercent}
             />
             <MetricCard
-              title="네트워크 I/O"
+              title={t('monitoring:metricCard.networkIO')}
               icon={<Network className="w-6 h-6 text-orange-500" />}
               value={formatBytes(metrics.network.bytesSent + metrics.network.bytesRecv)}
               unit=""
               details={[
-                { label: '송신', value: formatBytes(metrics.network.bytesSent) },
-                { label: '수신', value: formatBytes(metrics.network.bytesRecv) },
-                { label: '패킷', value: `${((metrics.network.packetsSent + metrics.network.packetsRecv) / 1000).toFixed(0)}K` },
+                { label: t('monitoring:metricCard.sent'), value: formatBytes(metrics.network.bytesSent) },
+                { label: t('monitoring:metricCard.received'), value: formatBytes(metrics.network.bytesRecv) },
+                { label: t('monitoring:metricCard.packets'), value: `${((metrics.network.packetsSent + metrics.network.packetsRecv) / 1000).toFixed(0)}K` },
               ]}
               percentage={null}
             />
@@ -360,13 +360,13 @@ export default function MonitoringDashboard() {
             <div className="flex items-center gap-2 mb-4">
               <Server className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">{t('serviceStatus')}</h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">{upCount}/{totalCount} 정상</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">{t('monitoring:summary.serviceStatus', { up: upCount, total: totalCount })}</span>
             </div>
 
             {services.length === 0 ? (
               <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <Activity className="w-12 h-12 mx-auto mb-2 text-gray-400" />
-                <p>서비스 상태를 확인하는 중...</p>
+                <p>{t('monitoring:loading.checkingServices')}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -377,7 +377,7 @@ export default function MonitoringDashboard() {
                 }).map((service) => {
                   const def = SERVICE_DEFS[service.serviceName];
                   return (
-                    <ServiceCard key={service.serviceName} service={service} label={def?.label} port={def?.port} description={def?.desc} />
+                    <ServiceCard key={service.serviceName} service={service} label={def ? t(def.labelKey) : undefined} port={def?.port} description={def ? t(def.descKey) : undefined} />
                   );
                 })}
               </div>
@@ -386,7 +386,7 @@ export default function MonitoringDashboard() {
 
           {/* Timestamp */}
           <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-            메트릭 수집 시간: {formatDateTime(metrics.timestamp)}
+            {t('monitoring:metricsCollectedAt', { time: formatDateTime(metrics.timestamp) })}
           </div>
         </>
       )}
@@ -460,6 +460,7 @@ interface ServiceCardProps {
 }
 
 function ServiceCard({ service, label, port, description }: ServiceCardProps) {
+  const { t } = useTranslation(['monitoring', 'common']);
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'UP':
@@ -521,11 +522,11 @@ function ServiceCard({ service, label, port, description }: ServiceCardProps) {
 
       <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex justify-between">
-          <span>응답 시간:</span>
+          <span>{t('monitoring:serviceCard.responseTime')}:</span>
           <span className="font-medium text-gray-800 dark:text-gray-200">{service.responseTimeMs}ms</span>
         </div>
         <div className="flex justify-between">
-          <span>마지막 체크:</span>
+          <span>{t('monitoring:serviceCard.lastChecked')}:</span>
           <span className="font-medium text-gray-800 dark:text-gray-200">{formatTime(service.checkedAt)}</span>
         </div>
         {service.errorMessage && (

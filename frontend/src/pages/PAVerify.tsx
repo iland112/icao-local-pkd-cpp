@@ -27,6 +27,7 @@ import { VerificationStepsPanel } from '@/components/pa/VerificationStepsPanel';
 import type { VerificationStep, StepStatus } from '@/components/pa/VerificationStepsPanel';
 import { VerificationResultCard } from '@/components/pa/VerificationResultCard';
 import type { DG1ParseResult, DG2ParseResult } from '@/components/pa/VerificationResultCard';
+import type { TFunction } from 'i18next';
 
 interface FileInfo {
   file: File;
@@ -34,15 +35,14 @@ interface FileInfo {
   number?: DataGroupNumber;
 }
 
-// 초기 검증 단계 정의
-const initialSteps: VerificationStep[] = [
-  { id: 1, title: t('pa.verify.step1Title'), description: t('pa.verify.step1Desc'), status: 'pending' },
-  { id: 2, title: t('pa.verify.step2Title'), description: t('pa.verify.step2Desc'), status: 'pending' },
-  { id: 3, title: t('pa.verify.step3Title'), description: t('pa.verify.step3Desc'), status: 'pending' },
-  { id: 4, title: t('pa.verify.step4Title'), description: t('pa.verify.step4Desc'), status: 'pending' },
-  { id: 5, title: t('pa.verify.step5Title'), description: t('pa.verify.step5Desc'), status: 'pending' },
-  { id: 6, title: t('pa.verify.step6Title'), description: t('pa.verify.step6Desc'), status: 'pending' },
-  { id: 7, title: t('pa.verify.step7Title'), description: t('pa.verify.step7Desc'), status: 'pending' },
+const getInitialSteps = (t: TFunction): VerificationStep[] => [
+  { id: 1, title: t('pa:verify.step1Title'), description: t('pa:verify.step1Desc'), status: 'pending' },
+  { id: 2, title: t('pa:verify.step2Title'), description: t('pa:verify.step2Desc'), status: 'pending' },
+  { id: 3, title: t('pa:verify.step3Title'), description: t('pa:verify.step3Desc'), status: 'pending' },
+  { id: 4, title: t('pa:verify.step4Title'), description: t('pa:verify.step4Desc'), status: 'pending' },
+  { id: 5, title: t('pa:verify.step5Title'), description: t('pa:verify.step5Desc'), status: 'pending' },
+  { id: 6, title: t('pa:verify.step6Title'), description: t('pa:verify.step6Desc'), status: 'pending' },
+  { id: 7, title: t('pa:verify.step7Title'), description: t('pa:verify.step7Desc'), status: 'pending' },
 ];
 
 type VerificationMode = 'full' | 'quick';
@@ -75,6 +75,7 @@ export function PAVerify() {
   const [, setSuccessMessage] = useState<string | null>(null);
 
   // Step-based verification progress
+  const initialSteps = getInitialSteps(t);
   const [steps, setSteps] = useState<VerificationStep[]>(initialSteps);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
 
@@ -92,7 +93,6 @@ export function PAVerify() {
   const [, setParsingDg1] = useState(false);
   const [, setParsingDg2] = useState(false);
 
-  // 결과로부터 Step 상태 업데이트
   const updateStepsFromResult = useCallback((response: PAVerificationResponse) => {
     // SOD 미리보기 정보 업데이트 (검증 결과에서 실제 값으로)
     const dgDetails = response.dataGroupValidation?.details || {};
@@ -118,7 +118,7 @@ export function PAVerify() {
       newSteps[0] = {
         ...newSteps[0],
         status: 'success',
-        message: t('pa.verify.sodParseComplete'),
+        message: t('pa:verify.sodParseComplete'),
         details: {
           hashAlgorithm: response.sodSignatureValidation?.hashAlgorithm,
           signatureAlgorithm: response.sodSignatureValidation?.signatureAlgorithm,
@@ -131,7 +131,7 @@ export function PAVerify() {
         newSteps[1] = {
           ...newSteps[1],
           status: 'success',
-          message: t('pa.verify.dscExtractComplete'),
+          message: t('pa:verify.dscExtractComplete'),
           details: {
             subject: response.certificateChainValidation.dscSubject,
             serial: response.certificateChainValidation.dscSerialNumber,
@@ -149,10 +149,10 @@ export function PAVerify() {
           ? 'warning' as StepStatus
           : 'success' as StepStatus;
         const statusMessage = chainValidation.expirationStatus === 'EXPIRED'
-          ? t('pa.verify.trustChainSuccessExpired')
+          ? t('pa:verify.trustChainSuccessExpired')
           : chainValidation.expirationStatus === 'WARNING'
-            ? t('pa.verify.trustChainSuccessExpiring')
-            : t('pa.verify.trustChainSuccess');
+            ? t('pa:verify.trustChainSuccessExpiring')
+            : t('pa:verify.trustChainSuccess');
 
         newSteps[2] = {
           ...newSteps[2],
@@ -179,7 +179,7 @@ export function PAVerify() {
         newSteps[2] = {
           ...newSteps[2],
           status: 'error',
-          message: t('pa.verify.trustChainFailed'),
+          message: t('pa:verify.trustChainFailed'),
           details: {
             error: chainValidation?.validationErrors,
             errorCode: chainValidation?.errorCode,
@@ -201,7 +201,7 @@ export function PAVerify() {
         newSteps[3] = {
           ...newSteps[3],
           status: 'success',
-          message: t('pa.verify.cscaLookupSuccess'),
+          message: t('pa:verify.cscaLookupSuccess'),
           details: {
             dn: response.certificateChainValidation.cscaSubject,
           },
@@ -211,7 +211,7 @@ export function PAVerify() {
         newSteps[3] = {
           ...newSteps[3],
           status: 'error',
-          message: t('pa.verify.cscaLookupFailed'),
+          message: t('pa:verify.cscaLookupFailed'),
           details: {
             error: response.certificateChainValidation?.validationErrors,
             errorCode: response.certificateChainValidation?.errorCode,
@@ -227,7 +227,7 @@ export function PAVerify() {
         newSteps[4] = {
           ...newSteps[4],
           status: 'success',
-          message: t('pa.verify.sodSignatureSuccess'),
+          message: t('pa:verify.sodSignatureSuccess'),
           details: {
             signatureAlgorithm: response.sodSignatureValidation.signatureAlgorithm,
             hashAlgorithm: response.sodSignatureValidation.hashAlgorithm,
@@ -238,7 +238,7 @@ export function PAVerify() {
         newSteps[4] = {
           ...newSteps[4],
           status: 'error',
-          message: t('pa.verify.sodSignatureFailed'),
+          message: t('pa:verify.sodSignatureFailed'),
           details: {
             error: response.sodSignatureValidation?.validationErrors,
             signatureAlgorithm: response.sodSignatureValidation?.signatureAlgorithm,
@@ -255,7 +255,7 @@ export function PAVerify() {
           newSteps[5] = {
             ...newSteps[5],
             status: 'success',
-            message: `✓ 모든 Data Group 해시 검증 성공 (${validGroups}/${totalGroups})`,
+            message: t('pa:verify.dgHashAllSuccess', { valid: validGroups, total: totalGroups }),
             details: { dgDetails: details },
             expanded: true,
           };
@@ -263,7 +263,7 @@ export function PAVerify() {
           newSteps[5] = {
             ...newSteps[5],
             status: 'error',
-            message: `✗ Data Group 해시 검증 실패 (${invalidGroups}/${totalGroups} 실패)`,
+            message: t('pa:verify.dgHashSomeFailed', { invalid: invalidGroups, total: totalGroups }),
             details: { dgDetails: details },
             expanded: true,
           };
@@ -276,7 +276,7 @@ export function PAVerify() {
           newSteps[6] = {
             ...newSteps[6],
             status: 'success',
-            message: t('pa.verify.crlCheckValid'),
+            message: t('pa:verify.crlCheckValid'),
             details: {
               description: response.certificateChainValidation.crlStatusDescription,
               detailedDescription: response.certificateChainValidation.crlStatusDetailedDescription,
@@ -287,7 +287,7 @@ export function PAVerify() {
           newSteps[6] = {
             ...newSteps[6],
             status: 'error',
-            message: t('pa.verify.crlCheckRevoked'),
+            message: t('pa:verify.crlCheckRevoked'),
             details: {
               description: response.certificateChainValidation.crlStatusDescription,
               detailedDescription: response.certificateChainValidation.crlStatusDetailedDescription,
@@ -300,7 +300,7 @@ export function PAVerify() {
         newSteps[6] = {
           ...newSteps[6],
           status: 'warning',
-          message: response.certificateChainValidation?.crlMessage || t('pa.verify.crlNotFound'),
+          message: response.certificateChainValidation?.crlMessage || t('pa:verify.crlNotFound'),
           details: {
             description: response.certificateChainValidation?.crlStatusDescription,
             detailedDescription: response.certificateChainValidation?.crlStatusDetailedDescription,
@@ -315,9 +315,8 @@ export function PAVerify() {
       return newSteps;
     });
 
-    // 모든 단계 펼치기
     setExpandedSteps(new Set([1, 2, 3, 4, 5, 6, 7, 8]));
-  }, []);
+  }, [t]);
 
   // 자동 DG 파싱 함수
   const autoParseDataGroups = useCallback(async () => {
@@ -339,7 +338,7 @@ export function PAVerify() {
         setDg1ParseResult(data as DG1ParseResult);
         if ((data as DG1ParseResult).success) parsedCount++;
       } catch {
-        dg1Result = { success: false, error: t('pa.verify.dg1ParseFailed') };
+        dg1Result = { success: false, error: t('pa:verify.dg1ParseFailed') };
         setDg1ParseResult(dg1Result);
       } finally {
         setParsingDg1(false);
@@ -357,7 +356,7 @@ export function PAVerify() {
         setDg2ParseResult(data as DG2ParseResult);
         if ((data as DG2ParseResult).success) parsedCount++;
       } catch {
-        dg2Result = { success: false, error: t('pa.verify.dg2ParseFailed') };
+        dg2Result = { success: false, error: t('pa:verify.dg2ParseFailed') };
         setDg2ParseResult(dg2Result);
       } finally {
         setParsingDg2(false);
@@ -464,7 +463,7 @@ export function PAVerify() {
         setMrzData(parsed);
       }
     } catch {
-      setErrorMessage(t('pa.verify.mrzParseFailed'));
+      setErrorMessage(t('pa:verify.mrzParseFailed'));
     }
   };
 
@@ -564,13 +563,13 @@ export function PAVerify() {
       if (response.data.success && response.data.data) {
         setResult(response.data.data);
         if (response.data.data.status === 'VALID') {
-          setSuccessMessage(t('pa.verify.paSuccess'));
+          setSuccessMessage(t('pa:verify.paSuccess'));
         }
       } else {
-        throw new Error(response.data.error || t('pa.result.failed'));
+        throw new Error(response.data.error || t('pa:result.failed'));
       }
     } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : t('pa.verify.verificationError'));
+      setErrorMessage(error instanceof Error ? error.message : t('pa:verify.verificationError'));
       // 에러 시 모든 Step을 pending으로 리셋
       setSteps(initialSteps);
     } finally {
@@ -613,7 +612,7 @@ export function PAVerify() {
   // Quick lookup handler
   const handleQuickLookup = async () => {
     if (!quickLookupDn && !quickLookupFingerprint) {
-      setQuickLookupError(t('pa.verify.enterSubjectDnOrFingerprint'));
+      setQuickLookupError(t('pa:verify.enterSubjectDnOrFingerprint'));
       return;
     }
 
@@ -631,12 +630,12 @@ export function PAVerify() {
       setQuickLookupResult(data);
 
       if (!data.success) {
-        setQuickLookupError(data.error || t('admin.pendingDsc.lookupFailed'));
+        setQuickLookupError(data.error || t('pa:verify.lookupFailed'));
       } else if (!data.validation) {
-        setQuickLookupError('해당 인증서의 검증 결과가 없습니다. 파일 업로드를 통해 먼저 Trust Chain 검증을 수행해주세요.');
+        setQuickLookupError(t('pa:verify.noValidationResultHint'));
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : '조회 중 오류가 발생했습니다.';
+      const msg = err instanceof Error ? err.message : t('pa:verify.lookupError');
       setQuickLookupError(msg);
     } finally {
       setQuickLookupLoading(false);
@@ -653,10 +652,10 @@ export function PAVerify() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Passive Authentication 검증
+              {t('pa:verify.pageTitle')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              전자여권 칩 데이터(SOD, Data Groups)를 업로드하여 ICAO 9303 표준에 따른 Passive Authentication을 수행합니다.
+              {t('pa:verify.pageDescription')}
             </p>
           </div>
         </div>
@@ -674,7 +673,7 @@ export function PAVerify() {
           )}
         >
           <ShieldCheck className="w-4 h-4" />
-          {t('pa.dashboard.totalVerifications')}
+          {t('pa:verify.fullVerification')}
         </button>
         <button
           onClick={() => setVerificationMode('quick')}
@@ -686,7 +685,7 @@ export function PAVerify() {
           )}
         >
           <Zap className="w-4 h-4" />
-          간편 검증 (Trust Chain 조회)
+          {t('pa:verify.quickLookup')}
         </button>
       </div>
 
@@ -716,14 +715,14 @@ export function PAVerify() {
                 <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30">
                   <Upload className="w-5 h-5 text-teal-500" />
                 </div>
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('pa.verify.dataFileUpload')}</h2>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('pa:verify.dataFileUpload')}</h2>
               </div>
 
               {/* File Upload */}
               <div className="mb-3">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
                   <FileText className="w-4 h-4 text-blue-500" />
-                  데이터 파일 선택 (복수 선택 가능)
+                  {t('pa:verify.selectDataFiles')}
                 </label>
                 <input
                   ref={fileInputRef}
@@ -733,15 +732,15 @@ export function PAVerify() {
                   onChange={handleDirectoryUpload}
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 dark:file:bg-blue-900/30 dark:file:text-blue-400"
                 />
-                <p className="mt-1 text-xs text-gray-500">SOD, DG1, DG2 등 .bin 파일 선택</p>
+                <p className="mt-1 text-xs text-gray-500">{t('pa:verify.selectDataFilesHint')}</p>
               </div>
 
               {/* MRZ File Upload */}
               <div className="mb-3">
                 <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-1">
                   <FileText className="w-4 h-4 text-purple-500" />
-                  MRZ 텍스트 파일 (선택사항)
-                  <span className="text-xs text-gray-400 ml-2">Optional</span>
+                  {t('pa:verify.mrzFileLabel')}
+                  <span className="text-xs text-gray-400 ml-2">{t('common:label.optional')}</span>
                 </label>
                 <input
                   ref={mrzInputRef}
@@ -750,25 +749,25 @@ export function PAVerify() {
                   onChange={handleMrzFileUpload}
                   className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 dark:file:bg-purple-900/30 dark:file:text-purple-400"
                 />
-                <p className="mt-1 text-xs text-gray-500">mrz.txt 파일 (TD3 포맷: 2줄 x 44자)</p>
+                <p className="mt-1 text-xs text-gray-500">{t('pa:verify.mrzFileHint')}</p>
               </div>
 
               {/* MRZ Preview */}
               {mrzData && (
                 <div className="mb-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">MRZ 파싱 결과</span>
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('pa:verify.mrzParseResult')}</span>
                     <button onClick={clearMrzFile} className="text-gray-400 hover:text-gray-600">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-gray-500">성명:</span> {mrzData.fullName}</div>
-                    <div><span className="text-gray-500">여권번호:</span> {mrzData.documentNumber}</div>
-                    <div><span className="text-gray-500">국적:</span> {mrzData.nationality}</div>
-                    <div><span className="text-gray-500">생년월일:</span> {mrzData.dateOfBirth}</div>
-                    <div><span className="text-gray-500">{t('common.label.genderColon')}</span> {mrzData.sex === 'M' ? t('pa.result.male') : mrzData.sex === 'F' ? t('pa.result.female') : '-'}</div>
-                    <div><span className="text-gray-500">만료일:</span> {mrzData.expirationDate}</div>
+                    <div><span className="text-gray-500">{t('common:label.fullName')}:</span> {mrzData.fullName}</div>
+                    <div><span className="text-gray-500">{t('common:label.passportNumber')}:</span> {mrzData.documentNumber}</div>
+                    <div><span className="text-gray-500">{t('common:label.nationality')}:</span> {mrzData.nationality}</div>
+                    <div><span className="text-gray-500">{t('common:label.dateOfBirth')}:</span> {mrzData.dateOfBirth}</div>
+                    <div><span className="text-gray-500">{t('common:label.gender')}:</span> {mrzData.sex === 'M' ? t('common:label.male') : mrzData.sex === 'F' ? t('common:label.female') : '-'}</div>
+                    <div><span className="text-gray-500">{t('common:label.expiryDate')}:</span> {mrzData.expirationDate}</div>
                   </div>
                 </div>
               )}
@@ -779,7 +778,7 @@ export function PAVerify() {
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
                     <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                      업로드 완료 ({(sodFile ? 1 : 0) + dgFiles.length}개)
+                      {t('pa:verify.uploadCount', { count: (sodFile ? 1 : 0) + dgFiles.length })}
                     </span>
                   </div>
                   <div className="text-xs space-y-1 text-green-600 dark:text-green-400">
@@ -810,7 +809,7 @@ export function PAVerify() {
                 ) : (
                   <Play className="w-4 h-4" />
                 )}
-                {verifying ? t('sync.dashboard.revalidatingText') : t('pa.verify.startVerification')}
+                {verifying ? t('pa:verify.verifying') : t('pa:verify.startVerification')}
               </button>
 
               <button
@@ -819,7 +818,7 @@ export function PAVerify() {
                 className="w-full mt-2 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-600 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
               >
                 <X className="w-4 h-4" />
-                {t('common.button.reset')}
+                {t('common:button.reset')}
               </button>
             </div>
           </div>
@@ -829,7 +828,7 @@ export function PAVerify() {
             <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
                 <Eye className="w-5 h-5 text-blue-500" />
-                데이터 미리보기
+                {t('pa:verify.dataPreview')}
               </h3>
               <div className="text-sm space-y-2 text-gray-600 dark:text-gray-400">
                 <div>

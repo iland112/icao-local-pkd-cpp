@@ -20,13 +20,13 @@ export default function RequestRateChart({ data }: Props) {
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
       <div className="flex items-center gap-2 mb-4">
         <TrendingUp className="w-5 h-5 text-blue-500" />
-        <h3 className="font-semibold text-gray-800 dark:text-white">요청 처리량 트렌드</h3>
-        <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">{data.length} points</span>
+        <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:requestRate.title')}</h3>
+        <span className="text-xs text-gray-500 dark:text-gray-400 ml-auto">{t('monitoring:requestRate.points', { num: data.length })}</span>
       </div>
 
       {chartData.length === 0 ? (
         <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-500 text-sm">
-          데이터 수집 중...
+          {t('monitoring:requestRate.collecting')}
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>
@@ -65,7 +65,7 @@ export default function RequestRateChart({ data }: Props) {
               contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
               formatter={(value, name) => [
                 value,
-                name === 'rps' ? '처리량 (req/s)' : '동시 접속',
+                name === 'rps' ? t('monitoring:requestRate.throughput') : t('monitoring:requestRate.concurrentConnections'),
               ]}
             />
             <Area

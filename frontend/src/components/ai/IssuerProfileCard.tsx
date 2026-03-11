@@ -77,7 +77,7 @@ export default function IssuerProfileCard() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <Users className="w-5 h-5 text-blue-500" />
-          발급자 프로파일 ({profiles.length}개)
+          {t('ai:issuerProfile.profileNum', { num: profiles.length })}
         </h3>
         <div className="flex gap-2">
           {Object.entries(riskSummary).map(([level, count]) => (
@@ -104,11 +104,11 @@ export default function IssuerProfileCard() {
                 return (
                   <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border text-sm">
                     <p className="font-medium dark:text-white">{d.name}</p>
-                    <p className="text-gray-500">인증서: {d.count}개</p>
-                    <p className="text-gray-500">준수율: {d.compliance}%</p>
-                    <p className="text-gray-500">국가: {d.country}</p>
+                    <p className="text-gray-500">{t('ai:issuerProfile.tooltipCerts', { num: d.count })}</p>
+                    <p className="text-gray-500">{t('ai:issuerProfile.tooltipCompliance', { num: d.compliance })}</p>
+                    <p className="text-gray-500">{t('ai:issuerProfile.tooltipCountry', { num: d.country })}</p>
                     <p className={d.risk === 'HIGH' ? 'text-red-500' : d.risk === 'MEDIUM' ? 'text-amber-500' : 'text-green-500'}>
-                      리스크: {d.risk}
+                      {t('ai:issuerProfile.tooltipRisk', { level: d.risk })}
                     </p>
                   </div>
                 );
@@ -128,7 +128,7 @@ export default function IssuerProfileCard() {
         <div className="mt-4">
           <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
             <AlertTriangle className="w-4 h-4 inline mr-1 text-red-500" />
-            고위험 발급자
+            {t('ai:issuerProfile.highRiskIssuers')}
           </h4>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

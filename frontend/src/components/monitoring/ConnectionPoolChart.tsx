@@ -47,10 +47,10 @@ export default function ConnectionPoolChart({ services }: Props) {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
         <div className="flex items-center gap-2 mb-4">
           <Database className="w-5 h-5 text-indigo-500" />
-          <h3 className="font-semibold text-gray-800 dark:text-white">커넥션 풀 사용량</h3>
+          <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:pool.title')}</h3>
         </div>
         <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-500 text-sm">
-          풀 데이터 수집 중...
+          {t('monitoring:pool.collecting')}
         </div>
       </div>
     );
@@ -66,7 +66,7 @@ export default function ConnectionPoolChart({ services }: Props) {
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full flex flex-col">
       <div className="flex items-center gap-2 mb-4">
         <Database className="w-5 h-5 text-indigo-500" />
-        <h3 className="font-semibold text-gray-800 dark:text-white">커넥션 풀 사용량</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:pool.title')}</h3>
       </div>
 
       <ResponsiveContainer width="100%" className="flex-1 min-h-[220px]">
@@ -84,13 +84,13 @@ export default function ConnectionPoolChart({ services }: Props) {
             contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
             formatter={(value, name) => [
               value,
-              name === 'inUse' ? '사용 중' : t('common.label.surplus'),
+              name === 'inUse' ? t('monitoring:pool.inUse') : t('common:label.surplus'),
             ]}
           />
           <Legend
             iconSize={10}
             wrapperStyle={{ fontSize: 11 }}
-            formatter={(value: string) => (value === 'inUse' ? '사용 중' : t('common.label.surplus'))}
+            formatter={(value: string) => (value === 'inUse' ? t('monitoring:pool.inUse') : t('common:label.surplus'))}
           />
           <Bar dataKey="inUse" stackId="pool" barSize={16}>
             {chartData.map((entry, idx) => (

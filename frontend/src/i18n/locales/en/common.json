@@ -235,6 +235,11 @@
     "PA_EXTRACTED_short": "PA Extraction",
     "DL_PARSED_short": "Deviation List"
   },
+  "errorBoundary": {
+    "title": "An error occurred",
+    "description": "An unexpected error occurred. Please try again.",
+    "retry": "Try Again"
+  },
   "footer": {
     "systemOperational": "System Operational",
     "icaoCompliant": "ICAO Doc 9303 Compliant",

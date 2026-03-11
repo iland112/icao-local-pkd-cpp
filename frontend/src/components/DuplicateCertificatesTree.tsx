@@ -120,7 +120,7 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
       return {
         id: `country-${group.countryCode}`,
         name: group.countryCode,
-        value: `${group.certificates.length}개 인증서, ${group.totalDuplicates}회 중복`,
+        value: t('upload:duplicateTree.countrySummary', { certNum: group.certificates.length, dupNum: group.totalDuplicates }),
         icon: `flag-${group.countryCode.toLowerCase()}`,
         children: certificateNodes,
       };
@@ -130,7 +130,7 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
   if (countryGroups.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        중복된 인증서가 없습니다.
+        {t('upload:duplicateTree.noDuplicates')}
       </div>
     );
   }
@@ -139,11 +139,14 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
     <div className="h-full flex flex-col">
       {/* Summary */}
       <div className="mb-3 px-2 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
-        <div className="text-sm text-yellow-800 dark:text-yellow-300">
-          <strong>{countryGroups.length}개 국가</strong>에서{' '}
-          <strong>{countryGroups.reduce((sum, g) => sum + g.certificates.length, 0)}개 인증서</strong>가{' '}
-          <strong>{countryGroups.reduce((sum, g) => sum + g.totalDuplicates, 0)}회 중복</strong>됨
-        </div>
+        <div className="text-sm text-yellow-800 dark:text-yellow-300"
+          dangerouslySetInnerHTML={{ __html: t('upload:duplicateTree.summary', {
+            countryNum: countryGroups.length,
+            certNum: countryGroups.reduce((sum, g) => sum + g.certificates.length, 0),
+            dupNum: countryGroups.reduce((sum, g) => sum + g.totalDuplicates, 0),
+            interpolation: { escapeValue: false }
+          }) }}
+        />
       </div>
 
       {/* Tree view */}

@@ -1,5 +1,6 @@
 {
   "title": "System Monitoring",
+  "subtitle": "Monitor real-time system resources and service status.",
   "serviceStatus": "Service Status",
   "systemMetrics": "System Metrics",
   "connectionPool": "Connection Pool",
@@ -7,6 +8,7 @@
   "uniqueVisitors": "Unique Visitors",
   "connectedNow": "{{count}} connected",
   "tcpConnections": "TCP Connections",
+  "metricsCollectedAt": "Metrics collected at: {{time}}",
   "services": {
     "pkdManagement": "PKD Management",
     "paService": "PA Service",
@@ -18,10 +20,33 @@
     "oracle": "Oracle",
     "openldap": "OpenLDAP"
   },
+  "serviceDefs": {
+    "pkdManagement": {
+      "label": "PKD Management",
+      "desc": "Upload, Certificate Management, Auth"
+    },
+    "paService": {
+      "label": "PA Service",
+      "desc": "Passport Passive Authentication"
+    },
+    "pkdRelay": {
+      "label": "PKD Relay",
+      "desc": "DB-LDAP Synchronization"
+    },
+    "monitoring": {
+      "label": "Monitoring",
+      "desc": "System Metrics Collection"
+    },
+    "aiAnalysis": {
+      "label": "AI Analysis",
+      "desc": "ML Anomaly Detection, Forensic Analysis"
+    }
+  },
   "status": {
     "healthy": "Healthy",
     "unhealthy": "Unhealthy",
-    "unknown": "Unknown"
+    "unknown": "Unknown",
+    "stopped": "Stopped"
   },
   "metrics": {
     "cpuUsage": "CPU Usage",
@@ -32,11 +57,55 @@
     "latency": "Latency",
     "errorRate": "Error Rate"
   },
+  "metricCard": {
+    "memory": "Memory",
+    "disk": "Disk",
+    "networkIO": "Network I/O",
+    "used": "Used",
+    "sent": "Sent",
+    "received": "Received",
+    "packets": "Packets"
+  },
+  "serviceCard": {
+    "responseTime": "Response Time",
+    "lastChecked": "Last Checked"
+  },
+  "summary": {
+    "serviceStatus": "Services {{up}}/{{total}} healthy"
+  },
+  "error": {
+    "fetchFailed": "Failed to load monitoring data.",
+    "loadFailed": "Monitoring Data Load Failed",
+    "unknown": "An unknown error occurred."
+  },
+  "loading": {
+    "checkingServices": "Checking service status..."
+  },
   "pool": {
+    "title": "Connection Pool Usage",
+    "collecting": "Collecting pool data...",
+    "inUse": "In Use",
     "active": "Active",
     "idle": "Idle",
     "total": "Total",
     "maxSize": "Max"
+  },
+  "requestRate": {
+    "title": "Request Throughput Trend",
+    "collecting": "Collecting data...",
+    "throughput": "Throughput (req/s)",
+    "concurrentConnections": "Concurrent Connections",
+    "points": "{{num}} points"
+  },
+  "connections": {
+    "title": "Active Connections",
+    "uniqueIpBasis": "Based on unique IPs in last 5 min",
+    "throughput": "Throughput:",
+    "totalRequests": "Total Requests:"
+  },
+  "latency": {
+    "title": "Service Latency",
+    "collecting": "Collecting data..."
   },
   "noData": "No monitoring data available",
   "dashboard": {
@@ -56,14 +125,21 @@
     "ldapConnections": "LDAP Connections",
     "dbPool": "DB Pool",
     "ldapPool": "LDAP Pool",
-    "usedConnections": "Used Connections",
-    "availableConnections": "Available Connections",
-    "maxConnections": "Max Connections",
+    "usedConnections": "Used",
+    "availableConnections": "Available",
+    "maxConnections": "Max",
     "connectionRate": "Connection Rate",
     "requestsPerMin": "Req/min",
     "avgLatency": "Avg Latency",
     "peakLatency": "Peak Latency",
     "tcpConnections": "TCP Connections",
-    "activeNow": "active now"
+    "activeNow": "active now",
+    "systemMonitoring": "System Monitoring",
+    "monitoringSubtitle": "Monitor microservice status and infrastructure.",
+    "serviceStatus": "Service Status",
+    "infrastructure": "Infrastructure",
+    "dataLoadFailed": "Unable to load monitoring data.",
+    "retryLoad": "Retry",
+    "noServiceData": "No service data available."
   }
 }

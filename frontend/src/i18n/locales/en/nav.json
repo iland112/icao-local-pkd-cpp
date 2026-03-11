@@ -51,7 +51,9 @@
     "userManagement": "User Management",
     "loginHistory": "Login History",
     "about": "About",
-    "logout": "Logout"
+    "logout": "Logout",
+    "noEmail": "No email",
+    "adminBadge": "Admin"
   },
   "about": {
     "title": "About",

@@ -125,6 +125,30 @@
       "keySize": "Key Size",
       "compliance": "ICAO Compliance",
       "validity": "Validity Period"
+    },
+    "panel": {
+      "loadError": "Failed to load forensic analysis data",
+      "loading": "Loading forensic analysis...",
+      "noData": "No analysis data. Please run a full analysis first.",
+      "forensicRisk": "Forensic Risk",
+      "anomalyDetection": "Anomaly Detection",
+      "structuralViolation": "Structural Violation",
+      "issuerDeviation": "Issuer Deviation",
+      "categoryScores": "Scores by 10 Categories",
+      "findingsTitle": "Findings ({{num}} items)",
+      "anomalyExplanations": "ML Anomaly Detection Explanations",
+      "category": {
+        "algorithm": "Signature Algorithm",
+        "keySize": "Key Size",
+        "compliance": "ICAO Compliance",
+        "validity": "Validity Period",
+        "extensions": "Extensions",
+        "anomaly": "ML Anomaly Detection",
+        "issuerReputation": "Issuer Reputation",
+        "structuralConsistency": "Structural Consistency",
+        "temporalPattern": "Temporal Pattern",
+        "dnConsistency": "DN Consistency"
+      }
     }
   },
   "issuerProfile": {
@@ -134,12 +158,26 @@
     "complianceRate": "Compliance Rate",
     "expiredRate": "Expired Rate",
     "riskScore": "Risk Score",
-    "noData": "No issuer profile data available"
+    "noData": "No issuer profile data available",
+    "profileNum": "Issuer Profiles ({{num}})",
+    "tooltipCerts": "Certificates: {{num}}",
+    "tooltipCompliance": "Compliance: {{num}}%",
+    "tooltipCountry": "Country: {{num}}",
+    "tooltipRisk": "Risk: {{level}}",
+    "highRiskIssuers": "High Risk Issuers"
   },
   "extensionCompliance": {
     "title": "Extension Rule Compliance",
     "violations": "Violations",
-    "noViolations": "No rule violations found"
+    "noViolations": "No rule violations found",
+    "ruleViolationsNum": "Extension Profile Rule Violations ({{num}})",
+    "noViolations_msg": "No extension profile rule violations.",
+    "severity": "Severity",
+    "violation": "Violations",
+    "score": "Score",
+    "missingRequired": "Missing required: {{items}}",
+    "forbiddenViolation": "Forbidden violation: {{items}}",
+    "keyUsageViolation": "Key usage violation: {{items}}"
   },
   "analysis": {
     "analysisFailed": "AI analysis failed",

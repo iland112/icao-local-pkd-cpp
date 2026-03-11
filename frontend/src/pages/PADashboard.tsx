@@ -38,6 +38,16 @@ export function PADashboard() {
   const [recentVerifications, setRecentVerifications] = useState<PAHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const formatTimeAgo = (diffMinutes: number): string => {
+    if (diffMinutes < 60) {
+      return t('pa:dashboard.minutesAgo', { num: diffMinutes });
+    } else if (diffMinutes < 1440) {
+      return t('pa:dashboard.hoursAgo', { num: Math.floor(diffMinutes / 60) });
+    } else {
+      return t('pa:dashboard.daysAgo', { num: Math.floor(diffMinutes / 1440) });
+    }
+  };
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -140,13 +150,7 @@ export function PADashboard() {
       const last = new Date(recentVerifications[0].verificationTimestamp);
       const now = new Date();
       const diffMinutes = Math.floor((now.getTime() - last.getTime()) / 1000 / 60);
-      if (diffMinutes < 60) {
-        lastVerification = `${diffMinutes}분 전`;
-      } else if (diffMinutes < 1440) {
-        lastVerification = `${Math.floor(diffMinutes / 60)}시간 전`;
-      } else {
-        lastVerification = `${Math.floor(diffMinutes / 1440)}일 전`;
-      }
+      lastVerification = formatTimeAgo(diffMinutes);
     }
 
     return { countryStats, dailyStats, todayCount, lastVerification };
@@ -179,10 +183,10 @@ export function PADashboard() {
 
   // Pie chart data for verification status
   const statusChartData = useMemo(() => [
-    { name: 'Valid', value: stats?.validCount || 0 },
-    { name: 'Invalid', value: stats?.invalidCount || 0 },
-    { name: 'Error', value: stats?.errorCount || 0 },
-  ], [stats]);
+    { name: t('common:status.valid'), value: stats?.validCount || 0 },
+    { name: t('common:status.invalid'), value: stats?.invalidCount || 0 },
+    { name: t('pa:dashboard.error'), value: stats?.errorCount || 0 },
+  ], [stats, t]);
 
   const statusTotal = (stats?.validCount || 0) + (stats?.invalidCount || 0) + (stats?.errorCount || 0);
 
@@ -215,10 +219,10 @@ export function PADashboard() {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Passive Authentication 대시보드
+              {t('pa:dashboard.paTitle')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              전자여권 검증 통계 및 추이를 시각화합니다.
+              {t('pa:dashboard.paSubtitle')}
             </p>
           </div>
           {/* Quick Actions */}
@@ -228,14 +232,14 @@ export function PADashboard() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 transition-all duration-200 shadow-md hover:shadow-lg"
             >
               <ShieldCheck className="w-4 h-4" />
-              새 검증 수행
+              {t('pa:dashboard.newVerification')}
             </Link>
             <Link
               to="/pa/history"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Clock className="w-4 h-4" />
-              {t('nav.menu.verifyHistory')}
+              {t('nav:menu.verifyHistory')}
             </Link>
             <button
               onClick={fetchDashboardData}
@@ -257,19 +261,19 @@ export function PADashboard() {
         <>
           {/* Summary Statistics */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
-            {/* 총 검증 건수 */}
+            {/* Total Verifications */}
             <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
               <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-teal-400 to-cyan-500"></div>
               <div className="pl-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
-                      총 검증 건수
+                      {t('pa:dashboard.totalVerificationCount')}
                     </h3>
                     <div className="text-3xl font-bold text-teal-500">
                       {(stats?.totalVerifications ?? 0).toLocaleString()}
                     </div>
-                    <p className="text-xs mt-1 text-gray-400">전체 검증 수행 건수</p>
+                    <p className="text-xs mt-1 text-gray-400">{t('pa:dashboard.totalVerificationDesc')}</p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-teal-50 dark:bg-teal-900/30">
                     <ShieldCheck className="w-8 h-8 text-teal-500" />
@@ -278,18 +282,18 @@ export function PADashboard() {
               </div>
             </div>
 
-            {/* 검증 성공률 */}
+            {/* Success Rate */}
             <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
               <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-green-400 to-emerald-500"></div>
               <div className="pl-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
-                      {t('upload.dashboard.successRate')}
+                      {t('pa:dashboard.successRate')}
                     </h3>
                     <div className="text-3xl font-bold text-green-500">{successRate}%</div>
                     <p className="text-xs mt-1 text-gray-400">
-                      {stats?.validCount || 0} / {stats?.totalVerifications || 0} 건
+                      {t('pa:dashboard.successRateDesc', { valid: stats?.validCount || 0, total: stats?.totalVerifications || 0 })}
                     </p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-green-50 dark:bg-green-900/30">
@@ -299,19 +303,19 @@ export function PADashboard() {
               </div>
             </div>
 
-            {/* 검증 국가 수 */}
+            {/* Countries Verified */}
             <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
               <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
               <div className="pl-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
-                      검증 국가 수
+                      {t('pa:dashboard.countryCount')}
                     </h3>
                     <div className="text-3xl font-bold text-blue-500">
                       {Object.keys(derivedStats.countryStats).length}
                     </div>
-                    <p className="text-xs mt-1 text-gray-400">서로 다른 발급 국가</p>
+                    <p className="text-xs mt-1 text-gray-400">{t('pa:dashboard.countryCountDesc')}</p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30">
                     <Globe className="w-8 h-8 text-blue-500" />
@@ -320,17 +324,17 @@ export function PADashboard() {
               </div>
             </div>
 
-            {/* 오늘 검증 건수 */}
+            {/* Today's Verifications */}
             <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
               <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500"></div>
               <div className="pl-4">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
-                      오늘 검증 건수
+                      {t('pa:dashboard.todayCount')}
                     </h3>
                     <div className="text-3xl font-bold text-amber-500">{derivedStats.todayCount}</div>
-                    <p className="text-xs mt-1 text-gray-400">최근: {derivedStats.lastVerification}</p>
+                    <p className="text-xs mt-1 text-gray-400">{t('pa:dashboard.lastVerification', { time: derivedStats.lastVerification })}</p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">
                     <Calendar className="w-8 h-8 text-amber-500" />
@@ -349,7 +353,7 @@ export function PADashboard() {
                   <div className="p-2.5 rounded-xl bg-green-50 dark:bg-green-900/30">
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">검증 결과 분포</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('pa:dashboard.statusDistribution')}</h2>
                 </div>
                 <div className="flex-1 min-h-[288px] relative">
                   <ResponsiveContainer width="100%" height="100%">
@@ -370,7 +374,7 @@ export function PADashboard() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value, name) => [`${Number(value).toLocaleString()}건`, name]}
+                        formatter={(value, name) => [t('pa:dashboard.countUnit', { num: Number(value).toLocaleString() }), name]}
                         contentStyle={{
                           backgroundColor: darkMode ? '#1F2937' : '#FFFFFF',
                           border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`,
@@ -387,7 +391,7 @@ export function PADashboard() {
                   {/* Center label */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ paddingBottom: '10%' }}>
                     <div className="text-center">
-                      <div className="text-xs text-gray-500 dark:text-gray-400">{t('common.label.totalVerification')}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.totalVerification')}</div>
                       <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
                         {statusTotal.toLocaleString()}
                       </div>
@@ -405,7 +409,7 @@ export function PADashboard() {
                     <Globe className="w-5 h-5 text-cyan-500" />
                   </div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    국가별 검증 건수 (Top 10)
+                    {t('pa:dashboard.countryDistribution')}
                   </h2>
                 </div>
                 {/* Country List with Flags and Progress Bars */}
@@ -476,7 +480,7 @@ export function PADashboard() {
                     <TrendingUp className="w-5 h-5 text-teal-500" />
                   </div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    일별 검증 추이 (최근 30일)
+                    {t('pa:dashboard.dailyTrend')}
                   </h2>
                 </div>
                 <div className="h-72">
@@ -523,7 +527,7 @@ export function PADashboard() {
                           borderRadius: '8px',
                           color: darkMode ? '#F3F4F6' : '#1F2937',
                         }}
-                        formatter={(value, name) => [`${Number(value).toLocaleString()}건`, name]}
+                        formatter={(value, name) => [t('pa:dashboard.countUnit', { num: Number(value).toLocaleString() }), name]}
                         labelFormatter={(label) => `${label}`}
                       />
                       <Legend
@@ -533,7 +537,7 @@ export function PADashboard() {
                       <Area
                         type="monotone"
                         dataKey="valid"
-                        name="Valid"
+                        name={t('common:status.valid')}
                         stroke={chartColors.valid}
                         strokeWidth={2}
                         fill="url(#gradValid)"
@@ -542,7 +546,7 @@ export function PADashboard() {
                       <Area
                         type="monotone"
                         dataKey="invalid"
-                        name="Invalid"
+                        name={t('common:status.invalid')}
                         stroke={chartColors.invalid}
                         strokeWidth={2}
                         fill="url(#gradInvalid)"
@@ -551,7 +555,7 @@ export function PADashboard() {
                       <Area
                         type="monotone"
                         dataKey="error"
-                        name="Error"
+                        name={t('pa:dashboard.error')}
                         stroke={chartColors.error}
                         strokeWidth={2}
                         fill="url(#gradError)"

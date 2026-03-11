@@ -34,15 +34,15 @@ export function Profile() {
     if (!user) return;
 
     if (!passwordData.currentPassword) {
-      setError(t('admin.userManagement.currentPasswordRequired'));
+      setError(t('admin:userManagement.currentPasswordRequired'));
       return;
     }
     if (passwordData.newPassword.length < 8) {
-      setError('새 비밀번호는 8자 이상이어야 합니다.');
+      setError(t('auth:profile.passwordMinLength'));
       return;
     }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('새 비밀번호가 일치하지 않습니다.');
+      setError(t('auth:profile.passwordMismatch'));
       return;
     }
 
@@ -54,13 +54,13 @@ export function Profile() {
         current_password: passwordData.currentPassword,
         new_password: passwordData.newPassword,
       });
-      setSuccess('비밀번호가 변경되었습니다.');
+      setSuccess(t('auth:profile.passwordChanged'));
       resetPasswordForm();
       setShowPasswordForm(false);
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || t('admin.userManagement.passwordChangeFailed');
+      const msg = err.response?.data?.message || err.message || t('admin:userManagement.passwordChangeFailed');
       if (msg.includes('incorrect')) {
-        setError('현재 비밀번호가 올바르지 않습니다.');
+        setError(t('auth:profile.incorrectCurrentPassword'));
       } else {
         setError(msg);
       }
@@ -74,7 +74,7 @@ export function Profile() {
       <div className="p-6">
         <div className="text-center">
           <p className="text-gray-600 dark:text-gray-400">
-            사용자 정보를 불러올 수 없습니다.
+            {t('auth:profile.cannotLoadUser')}
           </p>
         </div>
       </div>
@@ -86,10 +86,10 @@ export function Profile() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          {t('nav.header.profile')}
+          {t('auth:profile.title')}
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          사용자 정보 및 계정 설정
+          {t('auth:profile.subtitle')}
         </p>
       </div>
 
@@ -117,7 +117,7 @@ export function Profile() {
             {user.is_admin && (
               <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
                 <Shield className="w-3 h-3" />
-                {t('admin.userManagement.adminUsers')}
+                {t('admin:userManagement.adminUsers')}
               </span>
             )}
           </div>
@@ -130,10 +130,10 @@ export function Profile() {
             <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {t('common.label.email')}
+                {t('common:label.email')}
               </p>
               <p className="text-sm text-gray-900 dark:text-white">
-                {user.email || 'Not set'}
+                {user.email || t('auth:profile.notSet')}
               </p>
             </div>
           </div>
@@ -143,7 +143,7 @@ export function Profile() {
             <User className="w-5 h-5 text-gray-400 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                {t('common.label.userId')}
+                {t('common:label.userId')}
               </p>
               <p className="text-sm text-gray-900 dark:text-white font-mono">
                 {user.id}
@@ -156,12 +156,12 @@ export function Profile() {
       {/* Permissions Card */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {t('admin.userManagement.permissions')}
+          {t('admin:userManagement.permissions')}
         </h3>
         {user.is_admin ? (
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{t('common.label.allPermissions')}</span>
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{t('common:label.allPermissions')}</span>
           </div>
         ) : user.permissions.length > 0 ? (
           <div className="space-y-4">
@@ -171,7 +171,7 @@ export function Profile() {
               if (granted.length === 0 && denied.length === 0) return null;
               return (
                 <div key={group.label}>
-                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{group.label}</p>
+                  <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{t(group.label)}</p>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
                     {group.permissions.map((perm) => {
                       const has = user.permissions.includes(perm.value);
@@ -190,7 +190,7 @@ export function Profile() {
                             <XCircle className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
                           )}
                           <span className={`text-sm ${has ? 'text-gray-800 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500'}`}>
-                            {perm.label}
+                            {t(perm.label)}
                           </span>
                         </div>
                       );
@@ -201,7 +201,7 @@ export function Profile() {
             })}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.label.noPermissions')}</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('common:label.noPermissions')}</p>
         )}
       </div>
 
@@ -210,20 +210,20 @@ export function Profile() {
         <div className="flex items-center gap-3 mb-4">
           <Key className="w-5 h-5 text-gray-400" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {t('auth.profile.changePassword')}
+            {t('auth:profile.changePassword')}
           </h3>
         </div>
 
         {!showPasswordForm ? (
           <div>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              계정 보안을 위해 주기적으로 비밀번호를 변경해주세요.
+              {t('auth:profile.changePasswordDesc')}
             </p>
             <button
               onClick={() => { setShowPasswordForm(true); setError(''); setSuccess(''); }}
               className="px-4 py-2 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-lg hover:from-purple-600 hover:to-violet-600 transition-all shadow-md text-sm font-medium"
             >
-              {t('auth.profile.changePassword')}
+              {t('auth:profile.changePassword')}
             </button>
           </div>
         ) : (
@@ -237,7 +237,7 @@ export function Profile() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                {t('auth.profile.currentPassword')}
+                {t('auth:profile.currentPassword')}
               </label>
               <div className="relative">
                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -245,7 +245,7 @@ export function Profile() {
                   type={showCurrentPw ? 'text' : 'password'}
                   value={passwordData.currentPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  placeholder={t('admin.userManagement.currentPasswordInput')}
+                  placeholder={t('admin:userManagement.currentPasswordInput')}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 />
                 <button type="button" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -256,7 +256,7 @@ export function Profile() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                {t('auth.profile.newPassword')}
+                {t('auth:profile.newPassword')}
               </label>
               <div className="relative">
                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -264,7 +264,7 @@ export function Profile() {
                   type={showNewPw ? 'text' : 'password'}
                   value={passwordData.newPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  placeholder={t('admin.userManagement.minChars8Input')}
+                  placeholder={t('admin:userManagement.minChars8Input')}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 />
                 <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -275,7 +275,7 @@ export function Profile() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                새 비밀번호 확인
+                {t('auth:profile.confirmPassword')}
               </label>
               <div className="relative">
                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -283,14 +283,14 @@ export function Profile() {
                   type="password"
                   value={passwordData.confirmPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                  placeholder="새 비밀번호 다시 입력"
+                  placeholder={t('auth:profile.confirmPasswordPlaceholder')}
                   className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 />
               </div>
               {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
                 <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  {t('common.validation.passwordMismatch')}
+                  {t('common:validation.passwordMismatch')}
                 </p>
               )}
             </div>
@@ -300,14 +300,14 @@ export function Profile() {
                 onClick={() => { setShowPasswordForm(false); resetPasswordForm(); }}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors text-sm"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleChangePassword}
                 disabled={loading || !passwordData.currentPassword || !passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword}
                 className="px-5 py-2 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-xl hover:from-purple-600 hover:to-violet-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
-                {loading ? '변경 중...' : '비밀번호 변경'}
+                {loading ? t('auth:profile.changing') : t('auth:profile.changePassword')}
               </button>
             </div>
           </div>

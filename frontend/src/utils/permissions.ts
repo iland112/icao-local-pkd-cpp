@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 /** Permission definition */
 export interface PermissionDef {
   value: string;
@@ -13,34 +15,34 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    label: '인증서 관리',
+    label: 'admin:userMgmt.permGroup.certManagement',
     permissions: [
-      { value: 'icao:read', label: 'ICAO 버전 상태', desc: 'ICAO PKD 버전 모니터링' },
-      { value: 'upload:write', label: '파일/인증서 업로드', desc: 'LDIF, Master List, 인증서 업로드' },
-      { value: 'cert:read', label: '인증서 조회', desc: '인증서 검색 및 상세 조회' },
-      { value: 'cert:export', label: '인증서 내보내기', desc: '인증서 PEM/DER 파일 내보내기' },
-      { value: 'upload:read', label: '업로드 이력', desc: '업로드 이력 조회' },
-      { value: 'sync:read', label: '동기화 상태', desc: 'DB-LDAP 동기화 상태 조회' },
+      { value: 'icao:read', label: 'admin:userMgmt.perm.icaoRead', desc: 'admin:userMgmt.permDesc.icaoRead' },
+      { value: 'upload:write', label: 'admin:userMgmt.perm.uploadWrite', desc: 'admin:userMgmt.permDesc.uploadWrite' },
+      { value: 'cert:read', label: 'admin:userMgmt.perm.certRead', desc: 'admin:userMgmt.permDesc.certRead' },
+      { value: 'cert:export', label: 'admin:userMgmt.perm.certExport', desc: 'admin:userMgmt.permDesc.certExport' },
+      { value: 'upload:read', label: 'admin:userMgmt.perm.uploadRead', desc: 'admin:userMgmt.permDesc.uploadRead' },
+      { value: 'sync:read', label: 'admin:userMgmt.perm.syncRead', desc: 'admin:userMgmt.permDesc.syncRead' },
     ],
   },
   {
-    label: '위·변조 검사',
+    label: 'admin:userMgmt.permGroup.forgeryDetection',
     permissions: [
-      { value: 'pa:verify', label: 'PA 검증 수행', desc: 'Passive Authentication 검증' },
-      { value: 'pa:read', label: 'PA 검증 이력', desc: 'PA 검증 이력 조회' },
+      { value: 'pa:verify', label: 'admin:userMgmt.perm.paVerify', desc: 'admin:userMgmt.permDesc.paVerify' },
+      { value: 'pa:read', label: 'admin:userMgmt.perm.paRead', desc: 'admin:userMgmt.permDesc.paRead' },
     ],
   },
   {
-    label: '보고서 & 분석',
+    label: 'admin:userMgmt.permGroup.reportAnalysis',
     permissions: [
-      { value: 'report:read', label: '인증서 보고서', desc: '인증서 통계, Trust Chain, CRL, DSC_NC 보고서' },
-      { value: 'ai:read', label: 'AI 분석', desc: 'AI 인증서 분석 결과 조회' },
+      { value: 'report:read', label: 'admin:userMgmt.perm.reportRead', desc: 'admin:userMgmt.permDesc.reportRead' },
+      { value: 'ai:read', label: 'admin:userMgmt.perm.aiRead', desc: 'admin:userMgmt.permDesc.aiRead' },
     ],
   },
   {
-    label: '시스템 관리',
+    label: 'admin:userMgmt.permGroup.systemAdmin',
     permissions: [
-      { value: 'api-client:manage', label: 'API 클라이언트 관리', desc: 'API 클라이언트 생성, 수정, 삭제, 키 재발급' },
+      { value: 'api-client:manage', label: 'admin:userMgmt.perm.apiClientManage', desc: 'admin:userMgmt.permDesc.apiClientManage' },
     ],
   },
 ];
@@ -48,8 +50,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
 /** Flat list of all permissions */
 export const AVAILABLE_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.permissions);
 
-/** Look up label for a permission code */
+/** Look up translated label for a permission code */
 export const getPermissionLabel = (code: string): string => {
   const found = AVAILABLE_PERMISSIONS.find(p => p.value === code);
-  return found ? found.label : code;
+  return found ? i18n.t(found.label) : code;
 };

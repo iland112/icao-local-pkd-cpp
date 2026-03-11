@@ -76,9 +76,9 @@ export default function ApiClientManagement() {
     } catch (e) {
       const axiosErr = e as { response?: { status?: number } };
       if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
-        toast.warning('요청 제한', '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+        toast.warning(t('admin:apiClient.rateLimited'), t('admin:apiClient.rateLimitedMsg'));
       } else {
-        toast.error('재발급 실패', 'API Key 재발급에 실패했습니다.');
+        toast.error(t('admin:apiClient.apiKeyReissueFailed'), t('admin:apiClient.apiKeyReissueFailed'));
       }
     }
   };
@@ -110,8 +110,8 @@ export default function ApiClientManagement() {
             <Key className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('apiClient.title')}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin.apiClient.subtitle')}</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('admin:apiClient.title')}</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:apiClient.subtitle')}</p>
           </div>
         </div>
         {activeTab === 'clients' && (
@@ -120,7 +120,7 @@ export default function ApiClientManagement() {
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
           >
             <Plus className="w-4 h-4" />
-            클라이언트 등록
+            {t('admin:apiClient.registerClient')}
           </button>
         )}
       </div>
@@ -130,14 +130,14 @@ export default function ApiClientManagement() {
         <StatCard label={t('admin:apiClient.totalClients')} value={total} color="blue" />
         <StatCard label={t('common:status.active')} value={activeCount} color="green" />
         <StatCard label={t('common:status.inactive')} value={total - activeCount} color="gray" />
-        <StatCard label="총 누적 요청" value={todayRequests.toLocaleString()} color="purple" />
+        <StatCard label={t('admin:apiClient.totalAccumulatedRequests')} value={todayRequests.toLocaleString()} color="purple" />
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
         {([
-          { key: 'clients' as const, label: '등록된 클라이언트', icon: Shield, count: total },
-          { key: 'requests' as const, label: t('admin.apiClientRequest.submitRequest'), icon: Inbox, count: requestsTotal },
+          { key: 'clients' as const, labelKey: 'common:label.registeredClients', icon: Shield, count: total },
+          { key: 'requests' as const, labelKey: 'common:label.requestList', icon: Inbox, count: requestsTotal },
         ]).map(tab => (
           <button
             key={tab.key}
@@ -149,7 +149,7 @@ export default function ApiClientManagement() {
             }`}
           >
             <tab.icon className="w-4 h-4" />
-            {tab.label}
+            {t(tab.labelKey)}
             {tab.count > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                 activeTab === tab.key ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
@@ -167,7 +167,7 @@ export default function ApiClientManagement() {
           {/* Client List */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('common.label.registeredClients')}</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('common:label.registeredClients')}</h2>
             </div>
 
             {loading ? (
@@ -176,7 +176,7 @@ export default function ApiClientManagement() {
               </div>
             ) : clients.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-                {t('admin.apiClient.noClients')}
+                {t('admin:apiClient.noClients')}
               </div>
             ) : (
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -202,10 +202,10 @@ export default function ApiClientManagement() {
           {/* Status filter */}
           <div className="flex gap-2 mb-4">
             {[
-              { value: '', label: t('common:label.all') },
-              { value: 'PENDING', label: t('sync.dashboard.waiting') },
-              { value: 'APPROVED', label: t('common:button.approve') },
-              { value: 'REJECTED', label: t('admin.apiClient.reject') },
+              { value: '', labelKey: 'common:label.all' },
+              { value: 'PENDING', labelKey: 'common:status.pending' },
+              { value: 'APPROVED', labelKey: 'common:status.approved' },
+              { value: 'REJECTED', labelKey: 'common:status.rejected' },
             ].map(opt => (
               <button
                 key={opt.value}
@@ -216,14 +216,14 @@ export default function ApiClientManagement() {
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
               >
-                {opt.label}
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('common.label.requestList')}</h2>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('common:label.requestList')}</h2>
               <button onClick={fetchRequests} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
                 <RefreshCw className={`w-4 h-4 ${requestsLoading ? 'animate-spin' : ''}`} />
               </button>
@@ -236,7 +236,7 @@ export default function ApiClientManagement() {
             ) : requests.length === 0 ? (
               <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                 <Inbox className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
-                등록 요청이 없습니다
+                {t('admin:apiClient.noRequests')}
               </div>
             ) : (
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -256,9 +256,9 @@ export default function ApiClientManagement() {
         onConfirm={() => {
           if (showRegenConfirm) handleRegenerateConfirm(showRegenConfirm);
         }}
-        title={t('admin.apiClient.apiKeyReissue')}
+        title={t('admin:apiClient.apiKeyReissue')}
         message={t('admin:apiClient.regenerateConfirm')}
-        confirmLabel="재발급"
+        confirmLabel={t('admin:apiClient.regenerateKey')}
         variant="warning"
       />
       {showCreate && (
@@ -348,6 +348,7 @@ function ClientRow({ client, onEdit, onDelete, onUsage, onRegenerate }: {
   onUsage: () => void;
   onRegenerate: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   return (
     <div className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
       <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -358,14 +359,14 @@ function ClientRow({ client, onEdit, onDelete, onUsage, onRegenerate }: {
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-900 dark:text-white truncate">{client.client_name}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full ${client.is_active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
-              {client.is_active ? t('monitoring.pool.active') : t('common.status.inactive')}
+              {client.is_active ? t('common:status.active') : t('common:status.inactive')}
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{client.api_key_prefix}...</span>
-            <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{client.total_requests.toLocaleString()} 요청</span>
+            <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{t('admin:apiClient.requestCount', { num: client.total_requests.toLocaleString() })}</span>
             {client.last_used_at && (
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />최근: {formatDate(client.last_used_at)}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{t('admin:apiClient.recentPrefix')}: {formatDate(client.last_used_at)}</span>
             )}
           </div>
           <div className="flex flex-wrap gap-1 mt-1.5">
@@ -378,16 +379,16 @@ function ClientRow({ client, onEdit, onDelete, onUsage, onRegenerate }: {
         </div>
       </div>
       <div className="flex items-center gap-1 ml-4">
-        <button onClick={onUsage} title="사용 이력" className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors">
+        <button onClick={onUsage} title={t('admin:apiClient.usageHistory')} className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors">
           <BarChart3 className="w-4 h-4" />
         </button>
-        <button onClick={onRegenerate} title={t('admin.apiClient.keyReissue')} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
+        <button onClick={onRegenerate} title={t('admin:apiClient.keyReissue')} className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
         <button onClick={onEdit} title={t('common:button.edit')} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors">
           <Edit2 className="w-4 h-4" />
         </button>
-        <button onClick={onDelete} title={t('sync:dashboard.disabled')} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
+        <button onClick={onDelete} title={t('admin:apiClient.deleteClient')} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
@@ -439,16 +440,16 @@ function CreateDialog({ onClose, onCreated }: {
       if (res.success && res.client.api_key) {
         onCreated(res.client, res.client.api_key);
       } else {
-        setError(t('admin.apiClient.apiKeyCreateFailed'));
+        setError(t('admin:apiClient.apiKeyCreateFailed'));
       }
     } catch (e: unknown) {
       const axiosErr = e as { response?: { status?: number; data?: { message?: string } } };
       if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
-        setError('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+        setError(t('admin:apiClient.rateLimitedMsg'));
       } else if (axiosErr.response?.data?.message) {
         setError(axiosErr.response.data.message);
       } else {
-        setError(t('admin.apiClient.apiKeyCreateError'));
+        setError(t('admin:apiClient.apiKeyCreateError'));
       }
     } finally {
       setSaving(false);
@@ -456,24 +457,24 @@ function CreateDialog({ onClose, onCreated }: {
   };
 
   return (
-    <DialogWrapper onClose={onClose} title={t('admin.apiClient.registerClient')} wide>
+    <DialogWrapper onClose={onClose} title={t('admin:apiClient.registerClient')} wide>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto px-0.5">
         {/* Left Column: Client Info + Device + IPs + Rate Limits */}
         <div className="space-y-4">
           {/* Client Config */}
           <div>
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('common.label.clientSettings')}</h4>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('common:label.clientSettings')}</h4>
             <div className="space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <InputField label={t('admin:apiClient.clientName_label')} value={form.client_name} onChange={v => setForm({ ...form, client_name: v })} placeholder={t('admin.apiClientRequest.clientNamePlaceholder')} required />
-                <InputField label={t('common:label.description')} value={form.description || ''} onChange={v => setForm({ ...form, description: v })} placeholder="API 사용 용도" />
+                <InputField label={t('admin:apiClient.clientName_label')} value={form.client_name} onChange={v => setForm({ ...form, client_name: v })} placeholder={t('admin:apiClientRequest.clientNamePlaceholder')} required />
+                <InputField label={t('common:label.description')} value={form.description || ''} onChange={v => setForm({ ...form, description: v })} placeholder={t('admin:apiClient.apiUsagePlaceholder')} />
               </div>
             </div>
           </div>
 
           {/* Device Type */}
           <div>
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('common.label.deviceTypeLabel')}</span>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('common:label.deviceTypeLabel')}</span>
             <div className="grid grid-cols-4 gap-1.5">
               {DEVICE_TYPES_KEYS.map(dt => {
                 const Icon = dt.icon;
@@ -501,19 +502,19 @@ function CreateDialog({ onClose, onCreated }: {
           {showIpField && (
             <div>
               <InputField label={t('admin:apiClient.allowedIpsComma')} value={ipsText} onChange={setIpsText} placeholder="10.0.0.0/24, 192.168.1.100" />
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('common.label.emptyAllowAllIps')}</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('common:label.emptyAllowAllIps')}</p>
             </div>
           )}
           {deviceType === 'MOBILE' && (
             <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
               <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-amber-700 dark:text-amber-300">{t('common.label.mobileIpDynamic')}</p>
+              <p className="text-xs text-amber-700 dark:text-amber-300">{t('common:label.mobileIpDynamic')}</p>
             </div>
           )}
 
           {/* Rate Limits */}
           <div>
-            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('apiClient.rateLimit')}</span>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('admin:apiClient.rateLimit')}</span>
             <div className="grid grid-cols-3 gap-2">
               <InputField label={t('admin:apiClient.rateLimitPerMinute')} value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
               <InputField label={t('admin:apiClient.rateLimitPerHour')} value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
@@ -530,27 +531,27 @@ function CreateDialog({ onClose, onCreated }: {
             >
               <ChevronDown className={`w-4 h-4 transition-transform ${showRequester ? '' : '-rotate-90'}`} />
               <User className="w-4 h-4" />
-              요청자 정보 (오프라인 대리 등록 시)
+              {t('admin:apiClient.requesterInfoOffline')}
             </button>
             {showRequester && (
               <div className="mt-3 space-y-3 pl-1">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField label={t('admin.apiClient.requesterName')} value={requesterName} onChange={setRequesterName} placeholder={t('admin.apiClient.namePlaceholder')} />
-                  <InputField label={t('admin.apiClient.orgDept')} value={requesterOrg} onChange={setRequesterOrg} placeholder="법무부 출입국본부" />
+                  <InputField label={t('admin:apiClient.requesterName')} value={requesterName} onChange={setRequesterName} placeholder={t('admin:apiClient.namePlaceholder')} />
+                  <InputField label={t('admin:apiClient.orgDept')} value={requesterOrg} onChange={setRequesterOrg} placeholder={t('admin:apiClientRequest.orgPlaceholder')} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <InputField label="연락처" value={requesterPhone} onChange={setRequesterPhone} placeholder="02-1234-5678" />
+                  <InputField label={t('admin:apiClient.contactNumber')} value={requesterPhone} onChange={setRequesterPhone} placeholder="02-1234-5678" />
                   <InputField label={t('common:label.email')} value={requesterEmail} onChange={setRequesterEmail} placeholder="hong@example.go.kr" type="email" />
                 </div>
                 <div>
-                  <label htmlFor="create-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.label.registrationReason')}</label>
+                  <label htmlFor="create-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.registrationReason')}</label>
                   <textarea
                     id="create-reason"
                     name="create-reason"
                     value={requestReason}
                     onChange={e => setRequestReason(e.target.value)}
                     rows={2}
-                    placeholder="대리 등록 사유를 기재해 주세요"
+                    placeholder={t('admin:apiClient.proxyRegistrationReasonPlaceholder')}
                     className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
@@ -561,7 +562,7 @@ function CreateDialog({ onClose, onCreated }: {
 
         {/* Right Column: Permissions */}
         <div>
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('common.label.permissionSettings')}</h4>
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('common:label.permissionSettings')}</h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {AVAILABLE_PERMISSIONS_KEYS.map(p => (
               <label key={p.value} htmlFor={`create-perm-${p.value}`} className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${
@@ -590,7 +591,7 @@ function CreateDialog({ onClose, onCreated }: {
             ))}
           </div>
           <div className="mt-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg">
-            <p className="text-xs text-blue-600 dark:text-blue-400">{t('admin.apiClient.advancedSettingsNote')}</p>
+            <p className="text-xs text-blue-600 dark:text-blue-400">{t('admin:apiClient.advancedSettingsNote')}</p>
           </div>
         </div>
       </div>
@@ -605,7 +606,7 @@ function CreateDialog({ onClose, onCreated }: {
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
         <button onClick={handleSubmit} disabled={saving || !form.client_name.trim()} className="flex items-center gap-2 px-5 py-2 bg-[#02385e] text-white rounded-xl hover:bg-[#024b7a] disabled:opacity-50 transition-colors active:scale-[0.98]">
           <Key className="w-4 h-4" />
-          {saving ? '생성 중...' : t('admin.apiClient.apiKeyIssue')}
+          {saving ? t('admin:apiClient.creating') : t('admin:apiClient.apiKeyIssue')}
         </button>
       </div>
     </DialogWrapper>
@@ -617,6 +618,7 @@ function EditDialog({ client, onClose, onUpdated }: {
   onClose: () => void;
   onUpdated: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [form, setForm] = useState<UpdateApiClientRequest>({
     client_name: client.client_name,
     description: client.description,
@@ -639,7 +641,7 @@ function EditDialog({ client, onClose, onUpdated }: {
       await apiClientApi.update(client.id, req);
       onUpdated();
     } catch (e: any) {
-      const msg = e?.response?.data?.message || e?.message || t('admin.apiClient.updateFailed');
+      const msg = e?.response?.data?.message || e?.message || t('admin:apiClient.updateFailed');
       setEditError(msg);
       if (import.meta.env.DEV) console.error('Update failed', e);
     } finally {
@@ -657,7 +659,7 @@ function EditDialog({ client, onClose, onUpdated }: {
         <InputField label={t('common:label.description')} value={form.description || ''} onChange={v => setForm({ ...form, description: v })} />
 
         <div>
-          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{ t('admin:userManagement.permissions') }</span>
+          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('admin:userManagement.permissions')}</span>
           <div className="grid grid-cols-2 gap-2">
             {AVAILABLE_PERMISSIONS_KEYS.map(p => (
               <label key={p.value} htmlFor={`edit-perm-${p.value}`} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -680,24 +682,24 @@ function EditDialog({ client, onClose, onUpdated }: {
           </div>
         </div>
 
-        <InputField label={t('admin:apiClient.allowedIpsComma')} value={ipsText} onChange={setIpsText} placeholder="비워두면 모든 IP 허용" />
+        <InputField label={t('admin:apiClient.allowedIpsComma')} value={ipsText} onChange={setIpsText} placeholder={t('common:label.emptyAllowAllIps')} />
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <InputField label="분당 제한" value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
-          <InputField label="시간당 제한" value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
-          <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
+          <InputField label={t('admin:apiClient.rateLimitPerMinuteLabel')} value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
+          <InputField label={t('admin:apiClient.rateLimitPerHourLabel')} value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
+          <InputField label={t('admin:apiClient.rateLimitPerDayLabel')} value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
         </div>
 
         <label htmlFor="edit-is-active" className="flex items-center gap-2 cursor-pointer">
           <input id="edit-is-active" name="isActive" type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-gray-300" />
-          <span className="text-sm text-gray-700 dark:text-gray-300">{t('common.label.activeStatus')}</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('common:label.activeStatus')}</span>
         </label>
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
         <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
-          {saving ? t('common.label.saving') : t('common.button.save')}
+          {saving ? t('common:label.saving') : t('common:button.save')}
         </button>
       </div>
     </DialogWrapper>
@@ -709,6 +711,7 @@ function DeleteDialog({ client, onClose, onDeleted }: {
   onClose: () => void;
   onDeleted: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
@@ -722,8 +725,8 @@ function DeleteDialog({ client, onClose, onDeleted }: {
           <Trash2 className="w-7 h-7 text-red-600" />
         </div>
         <p className="text-gray-700 dark:text-gray-300">
-          <span className="font-semibold">{client.client_name}</span>{t('admin.apiClient.deactivateConfirmMsg')}</p>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('admin.apiClient.accessBlocked')}</p>
+          <span className="font-semibold">{client.client_name}</span>{t('admin:apiClient.deactivateConfirmMsg')}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('admin:apiClient.accessBlocked')}</p>
       </div>
       <div className="flex justify-center gap-3 mt-4">
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
@@ -733,7 +736,7 @@ function DeleteDialog({ client, onClose, onDeleted }: {
             setDeleteError('');
             try { await apiClientApi.deactivate(client.id); onDeleted(); }
             catch (e: any) {
-              const msg = e?.response?.data?.message || e?.message || t('admin.apiClient.deleteFailed');
+              const msg = e?.response?.data?.message || e?.message || t('admin:apiClient.deleteFailed');
               setDeleteError(msg);
               if (import.meta.env.DEV) console.error('Delete failed', e);
             }
@@ -742,18 +745,12 @@ function DeleteDialog({ client, onClose, onDeleted }: {
           disabled={deleting}
           className="px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
         >
-          {deleting ? t('upload.fileUpload.processing') : t('sync.dashboard.disabled')}
+          {deleting ? t('common:status.processing') : t('admin:apiClient.deleteClient')}
         </button>
       </div>
     </DialogWrapper>
   );
 }
-
-const PERIOD_OPTIONS = [
-  { days: 7, label: t('admin.apiClient.days7') },
-  { days: 30, label: t('admin.apiClient.days30') },
-  { days: 90, label: t('admin.apiClient.days90') },
-];
 
 const BAR_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#818cf8', '#7c3aed', '#6d28d9', '#5b21b6'];
 
@@ -765,6 +762,12 @@ function UsageDialog({ client, onClose }: {
   const [days, setDays] = useState(7);
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const PERIOD_OPTIONS = [
+    { days: 7, labelKey: 'admin:apiClient.days7' },
+    { days: 30, labelKey: 'admin:apiClient.days30' },
+    { days: 90, labelKey: 'admin:apiClient.days90' },
+  ];
 
   useEffect(() => {
     setLoading(true);
@@ -778,7 +781,7 @@ function UsageDialog({ client, onClose }: {
   const endpoints = usage?.topEndpoints ?? [];
 
   return (
-    <DialogWrapper onClose={onClose} title={`${client.client_name} — API 사용 이력`}>
+    <DialogWrapper onClose={onClose} title={t('admin:apiClient.usageDialogTitle', { name: client.client_name })}>
       {/* Period selector */}
       <div className="flex gap-2 mb-3">
         {PERIOD_OPTIONS.map(opt => (
@@ -791,7 +794,7 @@ function UsageDialog({ client, onClose }: {
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
             }`}
           >
-            {opt.label}
+            {t(opt.labelKey)}
           </button>
         ))}
       </div>
@@ -803,25 +806,25 @@ function UsageDialog({ client, onClose }: {
       ) : totalRequests === 0 ? (
         <div className="text-center py-12">
           <Activity className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-500 dark:text-gray-400">최근 {days}일간 사용 이력이 없습니다</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('admin:apiClient.noUsageHistory', { days })}</p>
         </div>
       ) : (
         <div className="space-y-3">
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3">
-              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{t('apiClient.usageDialog.totalRequests')}</p>
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">{t('admin:apiClient.usageDialog.totalRequests')}</p>
               <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{totalRequests.toLocaleString()}</p>
             </div>
             <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
-              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">{t('common.label.usageEndpoints')}</p>
+              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">{t('common:label.usageEndpoints')}</p>
               <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{endpoints.length}</p>
             </div>
           </div>
 
           {/* Horizontal bar chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.label.endpointRequests')}</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.endpointRequests')}</h4>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
               <ResponsiveContainer width="100%" height={Math.max(endpoints.length * 28, 100)}>
                 <BarChart data={endpoints} layout="vertical" margin={{ left: 0, right: 40, top: 2, bottom: 2 }}>
@@ -834,7 +837,7 @@ function UsageDialog({ client, onClose }: {
                     tickFormatter={(v: string) => v.length > 25 ? '...' + v.slice(-22) : v}
                   />
                   <Tooltip
-                    formatter={(value) => [`${Number(value).toLocaleString()} 요청`, '']}
+                    formatter={(value) => [`${Number(value).toLocaleString()} ${t('admin:apiClient.usageDialog.requests')}`, '']}
                     labelFormatter={(label) => String(label)}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
@@ -850,14 +853,14 @@ function UsageDialog({ client, onClose }: {
 
           {/* Table */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common.label.detailedHistory')}</h4>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.detailedHistory')}</h4>
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full text-xs">
                 <thead className="bg-gray-50 dark:bg-gray-700/80">
                   <tr>
-                    <th className="text-left px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">{ t('admin:apiClient.usageDialog.endpoint') }</th>
-                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">{ t('admin:apiClient.usageDialog.requests') }</th>
-                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-16">{ t('admin:apiClient.usageDialog.percentage') }</th>
+                    <th className="text-left px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">{t('admin:apiClient.usageDialog.endpoint')}</th>
+                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">{t('admin:apiClient.usageDialog.requests')}</th>
+                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-16">{t('admin:apiClient.usageDialog.percentage')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -890,6 +893,7 @@ function ApiKeyDialog({ clientName, apiKey, onClose }: {
   apiKey: string;
   onClose: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [copied, setCopied] = useState(false);
   const [visible, setVisible] = useState(false);
 
@@ -900,11 +904,11 @@ function ApiKeyDialog({ clientName, apiKey, onClose }: {
   };
 
   return (
-    <DialogWrapper onClose={onClose} title={t('admin.apiClient.apiKeyIssueComplete')}>
+    <DialogWrapper onClose={onClose} title={t('admin:apiClient.apiKeyIssueComplete')}>
       <div className="space-y-4">
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
           <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
-            이 API Key는 지금만 확인 가능합니다. 안전하게 보관하세요.
+            {t('admin:apiClient.copyKeyWarning')}
           </p>
         </div>
 
@@ -941,20 +945,21 @@ const STATUS_STYLES: Record<string, string> = {
   REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING: '대기 중',
-  APPROVED: '승인',
-  REJECTED: '거절',
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  PENDING: 'common:status.pending',
+  APPROVED: 'common:status.approved',
+  REJECTED: 'common:status.rejected',
 };
 
-const DEVICE_TYPE_INFO: Record<string, { label: string; icon: typeof Server }> = {
-  SERVER: { label: t('admin.apiClientRequest.deviceTypes.server'), icon: Server },
-  DESKTOP: { label: t('admin.apiClientRequest.deviceTypes.desktop'), icon: Monitor },
-  MOBILE: { label: t('admin.apiClientRequest.deviceTypes.mobile'), icon: Smartphone },
-  OTHER: { label: t('common.label.other'), icon: HelpCircle },
+const DEVICE_TYPE_INFO_KEYS: Record<string, { labelKey: string; icon: typeof Server }> = {
+  SERVER: { labelKey: 'admin:apiClientRequest.deviceTypes.server', icon: Server },
+  DESKTOP: { labelKey: 'admin:apiClientRequest.deviceTypes.desktop', icon: Monitor },
+  MOBILE: { labelKey: 'admin:apiClientRequest.deviceTypes.mobile', icon: Smartphone },
+  OTHER: { labelKey: 'common:label.other', icon: HelpCircle },
 };
 
 function RequestRow({ request, onClick }: { request: ApiClientRequestItem; onClick: () => void }) {
+  const { t } = useTranslation(['admin', 'common']);
   return (
     <div
       onClick={onClick}
@@ -968,13 +973,13 @@ function RequestRow({ request, onClick }: { request: ApiClientRequestItem; onCli
           <div className="flex items-center gap-2">
             <span className="font-semibold text-gray-900 dark:text-white truncate">{request.client_name}</span>
             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[request.status] || ''}`}>
-              {STATUS_LABELS[request.status] || request.status}
+              {t(STATUS_LABEL_KEYS[request.status] || 'common:status.unknown')}
             </span>
           </div>
           <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-1">
             <span className="flex items-center gap-1"><User className="w-3 h-3" />{request.requester_name}</span>
             <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{request.requester_org}</span>
-            {(() => { const dt = DEVICE_TYPE_INFO[request.device_type]; if (!dt) return null; const Icon = dt.icon; return <span className="flex items-center gap-1"><Icon className="w-3 h-3" />{t(dt.labelKey)}</span>; })()}
+            {(() => { const dt = DEVICE_TYPE_INFO_KEYS[request.device_type]; if (!dt) return null; const Icon = dt.icon; return <span className="flex items-center gap-1"><Icon className="w-3 h-3" />{t(dt.labelKey)}</span>; })()}
             <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(request.created_at)}</span>
           </div>
           <div className="flex flex-wrap gap-1 mt-1.5">
@@ -997,6 +1002,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
   onApproved: (apiKey?: string) => void;
   onRejected: () => void;
 }) {
+  const { t } = useTranslation(['admin', 'common']);
   const [reviewComment, setReviewComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
@@ -1022,13 +1028,13 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
       };
       const res = await apiClientRequestApi.approve(request.id, payload);
       if (res.success) {
-        toast.success('승인 완료', `${request.client_name} API 클라이언트가 생성되었습니다.`);
+        toast.success(t('admin:apiClient.approveComplete'), t('admin:apiClient.approveClientCreated', { name: request.client_name }));
         onApproved(res.client?.api_key);
       } else {
-        setError(res.message || '승인에 실패했습니다.');
+        setError(res.message || t('admin:apiClient.approveFailed'));
       }
     } catch (e: any) {
-      setError(e?.response?.data?.message || t('admin.apiClient.approveError'));
+      setError(e?.response?.data?.message || t('admin:apiClient.approveError'));
     } finally {
       setProcessing(false);
     }
@@ -1036,7 +1042,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
 
   const handleReject = async () => {
     if (!reviewComment.trim()) {
-      setError('거절 사유를 입력해 주세요.');
+      setError(t('admin:apiClient.rejectReasonRequired'));
       return;
     }
     setProcessing(true);
@@ -1044,36 +1050,36 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
     try {
       const res = await apiClientRequestApi.reject(request.id, reviewComment);
       if (res.success) {
-        toast.info('거절 처리', `${request.client_name} 요청이 거절되었습니다.`);
+        toast.info(t('admin:apiClient.rejectProcessed'), t('admin:apiClient.rejectProcessedMsg', { name: request.client_name }));
         onRejected();
       } else {
-        setError(res.message || '거절에 실패했습니다.');
+        setError(res.message || t('admin:apiClient.rejectFailed'));
       }
     } catch (e: any) {
-      setError(e?.response?.data?.message || '거절 처리 중 오류가 발생했습니다.');
+      setError(e?.response?.data?.message || t('admin:apiClient.rejectError'));
     } finally {
       setProcessing(false);
     }
   };
 
   const isPending = request.status === 'PENDING';
-  const dtInfo = DEVICE_TYPE_INFO[request.device_type];
+  const dtInfo = DEVICE_TYPE_INFO_KEYS[request.device_type];
   const DeviceIcon = dtInfo?.icon;
 
   return (
-    <DialogWrapper onClose={onClose} title="등록 요청 상세">
+    <DialogWrapper onClose={onClose} title={t('admin:apiClient.requestDetailTitle')}>
       <div className="space-y-4 max-h-[70vh] overflow-y-auto">
         {/* Status badge */}
         <div className="flex items-center gap-2">
           <span className={`text-sm px-3 py-1 rounded-full font-medium ${STATUS_STYLES[request.status] || ''}`}>
-            {STATUS_LABELS[request.status] || request.status}
+            {t(STATUS_LABEL_KEYS[request.status] || 'common:status.unknown')}
           </span>
-          <span className="text-xs text-gray-500 dark:text-gray-400">요청일: {formatDate(request.created_at)}</span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.requestDate')}: {formatDate(request.created_at)}</span>
         </div>
 
         {/* Requester Info */}
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('admin.apiClientRequest.requesterInfo')}</h4>
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('admin:apiClientRequest.requesterInfo')}</h4>
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
               <User className="w-3.5 h-3.5 text-gray-400" />{request.requester_name}
@@ -1100,23 +1106,23 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
 
         {/* Client Config (from requester) */}
         <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
-          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('common.label.requestedClientSettings')}</h4>
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('common:label.requestedClientSettings')}</h4>
           <div className="text-sm space-y-1.5">
-            <div><span className="text-gray-500 dark:text-gray-400">{t('common.label.nameColon')}</span> <span className="font-medium text-gray-900 dark:text-white">{request.client_name}</span></div>
-            {request.description && <div><span className="text-gray-500 dark:text-gray-400">{t('common.label.descriptionColon')}</span> <span className="text-gray-700 dark:text-gray-300">{request.description}</span></div>}
+            <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.nameColon')}</span> <span className="font-medium text-gray-900 dark:text-white">{request.client_name}</span></div>
+            {request.description && <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.descriptionColon')}</span> <span className="text-gray-700 dark:text-gray-300">{request.description}</span></div>}
             <div className="flex items-center gap-1.5">
-              <span className="text-gray-500 dark:text-gray-400">{t('common.label.deviceTypeLabelColon')}</span>
+              <span className="text-gray-500 dark:text-gray-400">{t('common:label.deviceTypeLabelColon')}</span>
               {DeviceIcon && <DeviceIcon className="w-3.5 h-3.5 text-gray-500" />}
-              <span className="text-gray-700 dark:text-gray-300">{dtInfo?.label || request.device_type}</span>
+              <span className="text-gray-700 dark:text-gray-300">{dtInfo ? t(dtInfo.labelKey) : request.device_type}</span>
             </div>
             <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-gray-500 dark:text-gray-400">{t('common.label.permissionsColon')}</span>
+              <span className="text-gray-500 dark:text-gray-400">{t('common:label.permissionsColon')}</span>
               {request.permissions.map(p => (
                 <span key={p} className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded">{p}</span>
               ))}
             </div>
             {request.allowed_ips.length > 0 && (
-              <div><span className="text-gray-500 dark:text-gray-400">{t('common.label.suggestedIpColon')}</span> <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{request.allowed_ips.join(', ')}</span></div>
+              <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.suggestedIpColon')}</span> <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{request.allowed_ips.join(', ')}</span></div>
             )}
           </div>
         </div>
@@ -1124,10 +1130,10 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
         {/* Review section (for non-pending, show existing review) */}
         {!isPending && request.reviewed_by && (
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">검토 결과</h4>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('admin:apiClient.reviewResult')}</h4>
             <div className="text-sm space-y-1">
-              {request.reviewed_at && <div><span className="text-gray-500 dark:text-gray-400">{t('common.label.reviewDateColon')}</span> <span className="text-gray-700 dark:text-gray-300">{formatDate(request.reviewed_at)}</span></div>}
-              {request.review_comment && <div><span className="text-gray-500 dark:text-gray-400">{t('common.label.commentColon')}</span> <span className="text-gray-700 dark:text-gray-300">{request.review_comment}</span></div>}
+              {request.reviewed_at && <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.reviewDateColon')}</span> <span className="text-gray-700 dark:text-gray-300">{formatDate(request.reviewed_at)}</span></div>}
+              {request.review_comment && <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.commentColon')}</span> <span className="text-gray-700 dark:text-gray-300">{request.review_comment}</span></div>}
             </div>
           </div>
         )}
@@ -1135,31 +1141,31 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
         {/* Admin approval settings (only for PENDING) */}
         {isPending && (
           <div className="bg-blue-50 dark:bg-blue-900/10 rounded-xl p-4 space-y-3">
-            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">승인 설정 (관리자)</h4>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{t('admin:apiClient.approvalSettingsAdmin')}</h4>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label htmlFor="approve-rpm" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">분당 제한</label>
+                <label htmlFor="approve-rpm" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClient.rateLimitPerMinuteLabel')}</label>
                 <input id="approve-rpm" type="number" value={rateLimitPerMinute} onChange={e => setRateLimitPerMinute(parseInt(e.target.value) || 60)}
                   className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
               </div>
               <div>
-                <label htmlFor="approve-rph" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">시간당 제한</label>
+                <label htmlFor="approve-rph" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClient.rateLimitPerHourLabel')}</label>
                 <input id="approve-rph" type="number" value={rateLimitPerHour} onChange={e => setRateLimitPerHour(parseInt(e.target.value) || 1000)}
                   className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
               </div>
               <div>
-                <label htmlFor="approve-rpd" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">일당 제한</label>
+                <label htmlFor="approve-rpd" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClient.rateLimitPerDayLabel')}</label>
                 <input id="approve-rpd" type="number" value={rateLimitPerDay} onChange={e => setRateLimitPerDay(parseInt(e.target.value) || 10000)}
                   className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
               </div>
             </div>
             <div>
-              <label htmlFor="approve-days" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">사용 기간 (일)</label>
+              <label htmlFor="approve-days" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClient.usagePeriodDays')}</label>
               <input id="approve-days" type="number" value={requestedDays} onChange={e => setRequestedDays(parseInt(e.target.value) || 365)}
                 className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
             </div>
             <div>
-              <label htmlFor="approve-endpoints" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">허용 엔드포인트 (콤마 구분, 비워두면 전체 허용)</label>
+              <label htmlFor="approve-endpoints" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClient.allowedEndpointsLabel')}</label>
               <input id="approve-endpoints" type="text" value={allowedEndpointsText} onChange={e => setAllowedEndpointsText(e.target.value)}
                 placeholder="/api/pa/*, /api/certificates/*"
                 className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
@@ -1170,14 +1176,14 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
         {/* Admin review comment */}
         {isPending && (
           <div>
-            <label htmlFor="review-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">검토 코멘트</label>
+            <label htmlFor="review-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('admin:pendingDsc.reviewComment')}</label>
             <textarea
               id="review-comment"
               name="review-comment"
               value={reviewComment}
               onChange={e => setReviewComment(e.target.value)}
               rows={2}
-              placeholder="승인 또는 거절 사유를 입력하세요 (거절 시 필수)"
+              placeholder={t('admin:apiClient.reviewCommentPlaceholder')}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
@@ -1192,7 +1198,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-          {t('icao.banner.dismiss')}
+          {t('common:button.close')}
         </button>
         {isPending && (
           <>
@@ -1202,7 +1208,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
               className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
               <XCircle className="w-4 h-4" />
-              {processing ? t('upload.fileUpload.processing') : t('admin.apiClient.reject')}
+              {processing ? t('common:status.processing') : t('common:button.reject')}
             </button>
             <button
               onClick={handleApprove}
@@ -1210,7 +1216,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
               className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
             >
               <CheckCircle className="w-4 h-4" />
-              {processing ? t('upload.fileUpload.processing') : t('common.button.approve')}
+              {processing ? t('common:status.processing') : t('common:button.approve')}
             </button>
           </>
         )}

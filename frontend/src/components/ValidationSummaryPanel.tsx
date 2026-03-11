@@ -60,10 +60,11 @@ interface ValidationSummaryPanelProps {
 
 export function ValidationSummaryPanel({
   data,
-  title = '검증 결과 요약',
+  title,
   isProcessing = false,
 }: ValidationSummaryPanelProps) {
   const { t } = useTranslation(['upload', 'common']);
+  const displayTitle = title ?? t('upload:validationSummary.title');
   const expiredValidCount = data.expiredValidCount ?? 0;
 
   // Trust chain success rate
@@ -122,8 +123,8 @@ export function ValidationSummaryPanel({
   const gridColsClass = totalCards <= 2 ? 'md:grid-cols-2' : totalCards <= 3 ? 'md:grid-cols-3' : totalCards <= 4 ? 'md:grid-cols-4' : 'md:grid-cols-5';
 
   const violationLabel: Record<string, string> = {
-    keyUsage: 'Key Usage', algorithm: '서명 알고리즘', keySize: '키 크기',
-    validityPeriod: '유효 기간', dnFormat: 'DN 형식', extensions: '확장 필드',
+    keyUsage: 'Key Usage', algorithm: t('upload:validationSummary.violationAlgorithm'), keySize: t('upload:validationSummary.violationKeySize'),
+    validityPeriod: t('upload:validationSummary.violationValidityPeriod'), dnFormat: t('upload:validationSummary.violationDnFormat'), extensions: t('upload:validationSummary.violationExtensions'),
   };
 
   return (
@@ -132,7 +133,7 @@ export function ValidationSummaryPanel({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <ShieldCheck className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-          <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">{title}</h3>
+          <h3 className="text-xs font-semibold text-gray-700 dark:text-gray-300">{displayTitle}</h3>
         </div>
         {isProcessing && (
           <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
@@ -151,28 +152,28 @@ export function ValidationSummaryPanel({
               <p className="text-base font-bold text-slate-700 dark:text-slate-300 leading-tight">
                 {fileTotal.toLocaleString()}
               </p>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">파일 전체</span>
+              <span className="text-[10px] text-slate-500 dark:text-slate-400">{t('upload:validationSummary.fileTotal')}</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" />
             <div className="flex-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5 text-center min-w-0">
               <p className="text-base font-bold text-amber-700 dark:text-amber-300 leading-tight">
                 {dupCount.toLocaleString()}
               </p>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400">중복 ({dupPct}%)</span>
+              <span className="text-[10px] text-amber-600 dark:text-amber-400">{t('upload:validationSummary.duplicatePercent', { pct: dupPct })}</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" />
             <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-2 py-1.5 text-center min-w-0">
               <p className="text-base font-bold text-blue-700 dark:text-blue-300 leading-tight">
                 {newCount.toLocaleString()}
               </p>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400">신규 처리</span>
+              <span className="text-[10px] text-blue-600 dark:text-blue-400">{t('upload:validationSummary.newlyProcessed')}</span>
             </div>
           </div>
 
           {/* Row 2: Validation result inline chips */}
           {activeCards.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-0.5">검증:</span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-0.5">{t('upload:validationSummary.validationLabel')}:</span>
               {activeCards.map((card) => {
                 const c = cc[card.color];
                 return (
@@ -196,7 +197,7 @@ export function ValidationSummaryPanel({
                 {data.processedCount!.toLocaleString()}
               </p>
               <span className="text-[10px] text-blue-600 dark:text-blue-400">
-                처리됨 / {data.totalCertificates!.toLocaleString()}
+                {t('upload:validationSummary.processedOf', { num: data.totalCertificates!.toLocaleString() })}
               </span>
             </div>
           )}
@@ -219,7 +220,7 @@ export function ValidationSummaryPanel({
         <div className="flex items-center gap-2">
           <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
           <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
-            전체 파일 분석 ({fileTotal.toLocaleString()}개, 중복 포함)
+            {t('upload:validationSummary.fullFileAnalysis', { num: fileTotal.toLocaleString() })}
           </span>
           <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
         </div>
@@ -233,7 +234,7 @@ export function ValidationSummaryPanel({
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
               <div className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">신뢰 체인</h4>
+                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.trustChain')}</h4>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
@@ -254,7 +255,7 @@ export function ValidationSummaryPanel({
               {data.cscaNotFoundCount > 0 && (
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-yellow-600 dark:text-yellow-400 flex items-center gap-1">
-                    <AlertTriangle className="w-2.5 h-2.5" /> CSCA 미발견
+                    <AlertTriangle className="w-2.5 h-2.5" /> {t('upload:validationSummary.cscaNotFound')}
                   </span>
                   <span className="font-semibold text-yellow-700 dark:text-yellow-300">{data.cscaNotFoundCount.toLocaleString()}</span>
                 </div>
@@ -267,7 +268,7 @@ export function ValidationSummaryPanel({
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ICAO 9303 준수</h4>
+                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.icaoCompliance')}</h4>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
@@ -327,7 +328,7 @@ export function ValidationSummaryPanel({
                 {hasRevokedData && (
                   <div className="flex items-center gap-1 text-xs">
                     <XCircle className="w-2.5 h-2.5 text-orange-500" />
-                    <span className="text-orange-600 dark:text-orange-400">해지</span>
+                    <span className="text-orange-600 dark:text-orange-400">{t('upload:validationSummary.revoked')}</span>
                     <span className="font-semibold text-orange-700 dark:text-orange-300">{(data.revokedCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}

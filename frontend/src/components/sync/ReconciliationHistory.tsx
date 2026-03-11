@@ -85,11 +85,11 @@ export function ReconciliationHistory() {
   const getTriggeredByLabel = (triggeredBy: string) => {
     switch (triggeredBy) {
       case 'MANUAL':
-        return '수동';
+        return t('sync:reconciliation.manual');
       case 'AUTO':
         return t('upload.detail.auto');
       case 'DAILY_SYNC':
-        return t('sync.reconciliation.dailySync');
+        return t('sync:reconciliation.dailySync');
       default:
         return triggeredBy;
     }
@@ -98,10 +98,10 @@ export function ReconciliationHistory() {
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
     const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) return `${seconds}초`;
+    if (seconds < 60) return `${seconds}${t('sync:reconciliation.secondsUnit')}`;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
-    return `${minutes}분 ${remainingSeconds}초`;
+    return t('sync:reconciliation.minutesSeconds', { min: minutes, sec: remainingSeconds });
   };
 
   if (loading) {
@@ -117,7 +117,7 @@ export function ReconciliationHistory() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-          자동 조정 기록
+          {t('sync:reconciliation.historyTitle')}
         </h2>
         <button
           onClick={fetchHistory}
@@ -130,7 +130,7 @@ export function ReconciliationHistory() {
 
       {history.length === 0 ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-          자동 조정 기록이 없습니다.
+          {t('sync:reconciliation.noHistory_msg')}
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
@@ -140,12 +140,12 @@ export function ReconciliationHistory() {
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">{ t('admin:apiClient.status') }</th>
                   <th className="px-4 py-3 text-left font-medium">{t('reconciliation.startedAt')}</th>
-                  <th className="px-4 py-3 text-left font-medium">트리거</th>
+                  <th className="px-4 py-3 text-left font-medium">{t('sync:reconciliation.trigger')}</th>
                   <th className="px-4 py-3 text-center font-medium">{ t('common:label.processing') }</th>
                   <th className="px-4 py-3 text-center font-medium">{t('common:toast.success')}</th>
                   <th className="px-4 py-3 text-center font-medium">{t('common:status.failed')}</th>
-                  <th className="px-4 py-3 text-center font-medium">추가</th>
-                  <th className="px-4 py-3 text-center font-medium">소요시간</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('sync:reconciliation.added')}</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('sync:reconciliation.elapsedTime')}</th>
                   <th className="px-4 py-3 text-center font-medium">{ t('nav:breadcrumb.detail') }</th>
                 </tr>
               </thead>
@@ -221,7 +221,7 @@ export function ReconciliationHistory() {
             setSelectedItem(null);
             setLogs([]);
           }}
-          title={`자동 조정 상세 정보 #${selectedItem.id}`}
+          title={t('sync:reconciliation.detailTitle', { id: selectedItem.id })}
           size="4xl"
         >
           <div className="space-y-6">
@@ -237,7 +237,7 @@ export function ReconciliationHistory() {
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">트리거</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('sync:reconciliation.trigger')}</div>
                 <div className="flex items-center gap-2">
                   {getTriggeredByIcon(selectedItem.triggeredBy)}
                   <span className="font-medium text-gray-900 dark:text-white">
@@ -274,7 +274,7 @@ export function ReconciliationHistory() {
                 </div>
               </div>
               <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                <div className="text-sm text-blue-700 dark:text-blue-300 mb-2">추가된 인증서</div>
+                <div className="text-sm text-blue-700 dark:text-blue-300 mb-2">{t('sync:reconciliation.addedCerts')}</div>
                 <div className="space-y-1">
                   <div className="text-sm text-blue-600 dark:text-blue-400">
                     CSCA: <span className="font-bold">{selectedItem.cscaAdded}</span>
@@ -292,7 +292,7 @@ export function ReconciliationHistory() {
             {/* Operation Logs */}
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-                작업 로그
+                {t('sync:reconciliation.operationLogs')}
               </h3>
               {loadingDetails ? (
                 <div className="flex items-center justify-center py-8">
@@ -301,7 +301,7 @@ export function ReconciliationHistory() {
                 </div>
               ) : logs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                  작업 로그가 없습니다.
+                  {t('sync:reconciliation.noLogs')}
                 </div>
               ) : (
                 <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -312,7 +312,7 @@ export function ReconciliationHistory() {
                           {t('common.label.action')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                          타입
+                          {t('sync:reconciliation.logType')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('pa.history.country')}
@@ -380,7 +380,7 @@ export function ReconciliationHistory() {
             {selectedItem.errorMessage && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
                 <div className="text-sm font-medium text-red-700 dark:text-red-300 mb-1">
-                  에러 메시지
+                  {t('sync:reconciliation.errorMessage')}
                 </div>
                 <div className="text-sm text-red-600 dark:text-red-400 font-mono">
                   {selectedItem.errorMessage}

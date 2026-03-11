@@ -37,12 +37,12 @@ export default function LatencyTrendChart({ data }: Props) {
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
       <div className="flex items-center gap-2 mb-4">
         <Timer className="w-5 h-5 text-green-500" />
-        <h3 className="font-semibold text-gray-800 dark:text-white">서비스 응답시간 (Latency)</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:latency.title')}</h3>
       </div>
 
       {chartData.length === 0 ? (
         <div className="flex items-center justify-center h-48 text-gray-400 dark:text-gray-500 text-sm">
-          데이터 수집 중...
+          {t('monitoring:latency.collecting')}
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={220}>

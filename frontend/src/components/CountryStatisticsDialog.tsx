@@ -41,7 +41,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
       setData(response.data.countries || []);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to fetch detailed country statistics:', err);
-      setError('데이터를 불러오는데 실패했습니다.');
+      setError(t('common:error.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -100,10 +100,10 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900 dark:text-white">
-                국가별 인증서 상세 통계
+                {t('dashboard:countryStats.detailTitle')}
               </h2>
               <p className="text-xs text-gray-600 dark:text-gray-400">
-                전체 {data.length}개 국가의 인증서 종류별 현황
+                {t('dashboard:countryStats.detailSubtitle', { num: data.length })}
               </p>
             </div>
           </div>
@@ -138,12 +138,12 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                 onClick={fetchData}
                 className="mt-4 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
               >
-                다시 시도
+                {t('common:button.retry')}
               </button>
             </div>
           ) : data.length === 0 ? (
             <div className="text-center py-20 text-gray-500">
-              데이터가 없습니다.
+              {t('common:table.noData')}
             </div>
           ) : (
               <table className="w-full border-collapse text-xs">
@@ -166,7 +166,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                       className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600" />
                     <SortableHeader label="CRL" sortKey="crl" sortConfig={sortConfig} onSort={requestSort}
                       className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600" />
-                    <SortableHeader label="총계" sortKey="totalCerts" sortConfig={sortConfig} onSort={requestSort}
+                    <SortableHeader label={t('dashboard:countryStats.total')} sortKey="totalCerts" sortConfig={sortConfig} onSort={requestSort}
                       className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600" />
                   </tr>
                 </thead>
@@ -243,7 +243,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                 <tfoot>
                   <tr className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
                     <td className="px-1.5 py-2 font-bold text-gray-900 dark:text-white" colSpan={2}>
-                      총계
+                      {t('dashboard:countryStats.total')}
                     </td>
                     <td className="px-1.5 py-2 text-right tabular-nums font-bold text-purple-600 dark:text-purple-300">
                       {totals.mlsc.toLocaleString()}
@@ -276,14 +276,14 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
         <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
             <div className="flex items-center gap-4">
-              <span><strong>SS:</strong> Self-signed (자체 서명)</span>
-              <span><strong>LC:</strong> Link Certificate (연결 인증서)</span>
+              <span><strong>SS:</strong> {t('dashboard:countryStats.selfSigned')}</span>
+              <span><strong>LC:</strong> {t('dashboard:countryStats.linkCert')}</span>
             </div>
             <button
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors font-medium"
             >
-              {t('icao.banner.dismiss')}
+              {t('common:button.close')}
             </button>
           </div>
         </div>

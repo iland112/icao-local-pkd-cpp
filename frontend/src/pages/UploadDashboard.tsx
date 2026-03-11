@@ -110,12 +110,12 @@ export function UploadDashboard() {
   };
 
   const translateReason = (reason: string): string => {
-    if (reason.includes('Trust chain signature verification failed')) return t('upload.dashboard.signatureVerificationFailed');
-    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return t('upload.dashboard.trustChainBroken');
-    if (reason.includes('CSCA not found')) return t('report.trustChain.cscaNotFound');
-    if (reason.includes('not yet valid')) return t('upload.dashboard.notYetValidPeriod');
-    if (reason.includes('certificates expired')) return t('upload.dashboard.expiredValidSignature');
-    if (reason === 'Trust chain validation failed') return t('upload.dashboard.trustChainValidationFailed');
+    if (reason.includes('Trust chain signature verification failed')) return t('upload:dashboard.sigVerifyFailed');
+    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return t('upload:dashboard.trustChainBroken');
+    if (reason.includes('CSCA not found')) return t('upload:dashboard.cscaNotRegistered');
+    if (reason.includes('not yet valid')) return t('upload:dashboard.notYetValid');
+    if (reason.includes('certificates expired')) return t('upload:dashboard.expiredButSigValid');
+    if (reason === 'Trust chain validation failed') return t('upload:dashboard.trustChainValidationFailed');
     return reason;
   };
 
@@ -152,7 +152,7 @@ export function UploadDashboard() {
             <BarChart3 className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PKD 통계 대시보드</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('upload:dashboard.pkdStatsDashboard')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('upload.dashboard.subtitle')}
             </p>
@@ -219,7 +219,7 @@ export function UploadDashboard() {
                     {(stats?.totalCertificates ?? 0).toLocaleString()}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    {stats?.countriesCount || 0}개국
+                    {t('upload:dashboard.countriesSuffix', { num: stats?.countriesCount || 0 })}
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30">
@@ -238,11 +238,11 @@ export function UploadDashboard() {
                   </p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs text-green-600 dark:text-green-400">
-                      성공 {stats?.successfulUploads ?? 0}
+                      {t('upload:dashboard.successLabel', { num: stats?.successfulUploads ?? 0 })}
                     </span>
                     <span className="text-xs text-gray-300 dark:text-gray-600">|</span>
                     <span className="text-xs text-red-600 dark:text-red-400">
-                      실패 {stats?.failedUploads ?? 0}
+                      {t('upload:dashboard.failedLabel', { num: stats?.failedUploads ?? 0 })}
                     </span>
                   </div>
                 </div>
@@ -261,7 +261,7 @@ export function UploadDashboard() {
                     {validPercent}%
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    {(stats?.validation?.validCount || 0).toLocaleString()}건 유효
+                    {t('upload:dashboard.validCountSuffix', { num: (stats?.validation?.validCount || 0).toLocaleString() })}
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-900/30">
@@ -319,7 +319,7 @@ export function UploadDashboard() {
                   </p>
                   <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
                     {stats.cscaExtractedFromMl && stats.cscaExtractedFromMl > 0
-                      ? `${((stats.cscaExtractedFromMl - (stats.cscaDuplicates ?? 0)) / stats.cscaExtractedFromMl * 100).toFixed(1)}% 신규`
+                      ? t('upload:dashboard.percentNew', { pct: ((stats.cscaExtractedFromMl - (stats.cscaDuplicates ?? 0)) / stats.cscaExtractedFromMl * 100).toFixed(1) })
                       : 'N/A'}
                   </p>
                 </div>
@@ -495,7 +495,7 @@ export function UploadDashboard() {
                     })}
                     <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
                       <span className="text-xs text-gray-500 dark:text-gray-400">{ t('upload:dashboard.totalCertificates') }</span>
-                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{total.toLocaleString()}건</span>
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{t('upload:dashboard.itemCount', { num: total.toLocaleString() })}</span>
                     </div>
                   </div>
                 );
@@ -602,9 +602,9 @@ export function UploadDashboard() {
                         <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
                           <div className="space-y-1">
-                            <div className="font-semibold mb-1">CSCA를 찾지 못함</div>
-                            <div>아직 해당 국가의 CSCA가 업로드되지 않았습니다.</div>
-                            <div className="text-yellow-400">즉, DSC는 있지만 발급한 CSCA가 시스템에 없습니다.</div>
+                            <div className="font-semibold mb-1">{t('upload:dashboard.cscaNotFoundTitle')}</div>
+                            <div>{t('upload:dashboard.cscaNotFoundDesc')}</div>
+                            <div className="text-yellow-400">{t('upload:dashboard.cscaNotFoundDetail')}</div>
                           </div>
                           <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                         </div>
@@ -642,8 +642,8 @@ export function UploadDashboard() {
                         <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-56 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
                           <div className="space-y-1">
-                            <div className="font-semibold mb-1">검증 중 기술적 오류</div>
-                            <div>인증서 파싱 또는 검증 프로세스에서 오류가 발생했습니다.</div>
+                            <div className="font-semibold mb-1">{t('upload:dashboard.technicalErrorTitle')}</div>
+                            <div>{t('upload:dashboard.technicalErrorDesc')}</div>
                           </div>
                           <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                         </div>
@@ -688,7 +688,7 @@ export function UploadDashboard() {
                     </div>
                     <p className="text-2xl font-bold text-green-800 dark:text-green-200">{(stats.validation?.trustChainValidCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.expiredValidCount ?? 0) > 0 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">만료(서명유효): {stats.validation!.expiredValidCount.toLocaleString()}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('upload:dashboard.expiredValidPrefix', { num: stats.validation!.expiredValidCount.toLocaleString() })}</p>
                     )}
                   </div>
                   <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
@@ -699,43 +699,43 @@ export function UploadDashboard() {
                     <p className="text-2xl font-bold text-red-800 dark:text-red-200">{(stats.validation?.invalidCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.invalidCount ?? 0) > 0 && (
                       <button onClick={() => openDetailDialog('INVALID')} className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline mt-1">
-                        상세 내용
+                        {t('upload:dashboard.viewDetail')}
                       </button>
                     )}
                   </div>
                   <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <div className="flex items-center gap-2 mb-2">
                       <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                      <span className="text-sm font-medium text-amber-700 dark:text-amber-300">CSCA 미발견</span>
+                      <span className="text-sm font-medium text-amber-700 dark:text-amber-300">{t('upload:dashboard.cscaNotFound')}</span>
                     </div>
                     <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{(stats.validation?.cscaNotFoundCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.cscaNotFoundCount ?? 0) > 0 && (
                       <button onClick={() => openDetailDialog('PENDING')} className="text-xs text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline mt-1">
-                        상세 내용
+                        {t('upload:dashboard.viewDetail')}
                       </button>
                     )}
                   </div>
                   <div className="p-4 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
                     <div className="flex items-center gap-2 mb-2">
                       <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                      <span className="text-sm font-medium text-orange-700 dark:text-orange-300">만료됨</span>
+                      <span className="text-sm font-medium text-orange-700 dark:text-orange-300">{t('upload:dashboard.expired')}</span>
                     </div>
                     <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats.validation?.expiredCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.expiredCount ?? 0) > 0 && (
                       <button onClick={() => openDetailDialog('EXPIRED')} className="text-xs text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 underline mt-1">
-                        상세 내용
+                        {t('upload:dashboard.viewDetail')}
                       </button>
                     )}
                   </div>
                   <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
                     <div className="flex items-center gap-2 mb-2">
                       <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">폐지됨</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('upload:dashboard.revoked')}</span>
                     </div>
                     <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{(stats.validation?.revokedCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.revokedCount ?? 0) > 0 && (
                       <button onClick={() => openDetailDialog('REVOKED')} className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline mt-1">
-                        상세 내용
+                        {t('upload:dashboard.viewDetail')}
                       </button>
                     )}
                   </div>
@@ -749,9 +749,9 @@ export function UploadDashboard() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <div className="flex items-center gap-2 mb-6">
                 <TrendingUp className="w-5 h-5 text-violet-500" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 변동 추이</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.certTrend')}</h3>
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  (최근 {chartData.length}개 업로드)
+                  {t('upload:dashboard.recentUploads', { num: chartData.length })}
                 </span>
               </div>
               <ResponsiveContainer width="100%" height={350}>
@@ -769,7 +769,7 @@ export function UploadDashboard() {
                     tick={{ fill: '#6B7280', fontSize: 12 }}
                     stroke="#6B7280"
                     label={{
-                      value: '인증서 수',
+                      value: t('upload:dashboard.certCount'),
                       angle: -90,
                       position: 'insideLeft',
                       style: { fill: '#6B7280', fontSize: 12 },
@@ -820,10 +820,10 @@ export function UploadDashboard() {
                   {reasonDialogOpen === 'EXPIRED' && <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />}
                   {reasonDialogOpen === 'REVOKED' && <XCircle className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
                   <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                    {reasonDialogOpen === 'INVALID' && '검증 실패 상세'}
-                    {reasonDialogOpen === 'PENDING' && 'CSCA 미발견 상세'}
-                    {reasonDialogOpen === 'EXPIRED' && '만료 인증서 상세'}
-                    {reasonDialogOpen === 'REVOKED' && '폐지 인증서 상세'}
+                    {reasonDialogOpen === 'INVALID' && t('upload:dashboard.invalidDetail')}
+                    {reasonDialogOpen === 'PENDING' && t('upload:dashboard.pendingDetail')}
+                    {reasonDialogOpen === 'EXPIRED' && t('upload:dashboard.expiredDetail')}
+                    {reasonDialogOpen === 'REVOKED' && t('upload:dashboard.revokedDetail')}
                   </h3>
                 </div>
                 <button onClick={() => setReasonDialogOpen(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -831,10 +831,10 @@ export function UploadDashboard() {
                 </button>
               </div>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {reasonDialogOpen === 'INVALID' && 'DSC_NC (Non-Conformant) 인증서는 ICAO 표준을 완전히 따르지 않아 서명 검증이 실패하는 것이 정상적인 결과입니다.'}
-                {reasonDialogOpen === 'PENDING' && 'PENDING은 검증 불가 상태로, 해당 국가의 CSCA가 Master List나 LDIF Collection에 포함되지 않아 Trust Chain을 구성할 수 없는 경우입니다.'}
-                {reasonDialogOpen === 'EXPIRED' && '유효기간이 경과한 인증서를 국가별, 만료 연도별로 분류합니다.'}
-                {reasonDialogOpen === 'REVOKED' && 'CRL(인증서 폐지 목록)에 의해 폐지된 인증서를 국가별로 분류합니다.'}
+                {reasonDialogOpen === 'INVALID' && t('upload:dashboard.invalidExplanation')}
+                {reasonDialogOpen === 'PENDING' && t('upload:dashboard.pendingExplanation')}
+                {reasonDialogOpen === 'EXPIRED' && t('upload:dashboard.expiredExplanation')}
+                {reasonDialogOpen === 'REVOKED' && t('upload:dashboard.revokedExplanation')}
               </p>
             </div>
 
@@ -874,12 +874,12 @@ export function UploadDashboard() {
                 const grandTotal = sorted.reduce((s, r) => s + r.totalCount, 0);
 
                 const getDescription = (reason: string) => {
-                  if (reason === '서명 검증 실패') return t('upload.dashboard.cscaPublicKeyMismatch');
-                  if (reason === 'Trust Chain 끊김') return '중간 CSCA가 없어 Trust Chain 구성 불가';
-                  if (reason === 'CSCA 미등록') return '해당 국가 CSCA가 DB에 없어 검증 수행 불가';
-                  if (reason === '유효기간 미도래') return '인증서 유효기간이 아직 시작되지 않음';
-                  if (reason === '인증서 만료 (서명 유효)') return '유효기간은 경과했으나 서명 검증은 성공';
-                  if (reason === 'Trust Chain 검증 실패') return t('upload.dashboard.cscaExistsButFailed');
+                  if (reason === t('upload:dashboard.sigVerifyFailed')) return t('upload:dashboard.cscaPublicKeyMismatch');
+                  if (reason === t('upload:dashboard.trustChainBroken')) return t('upload:dashboard.trustChainBrokenDesc');
+                  if (reason === t('upload:dashboard.cscaNotRegistered')) return t('upload:dashboard.cscaNotRegisteredDesc');
+                  if (reason === t('upload:dashboard.notYetValid')) return t('upload:dashboard.notYetValidDesc');
+                  if (reason === t('upload:dashboard.expiredButSigValid')) return t('upload:dashboard.expiredValidDesc');
+                  if (reason === t('upload:dashboard.trustChainValidationFailed')) return t('upload:dashboard.cscaExistsButFailed');
                   return '';
                 };
                 const isInvalid = reasonDialogOpen === 'INVALID';
@@ -911,7 +911,7 @@ export function UploadDashboard() {
                               ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
                               : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
                           )}>
-                            {row.totalCount.toLocaleString()}건
+                            {t('upload:dashboard.itemCount', { num: row.totalCount.toLocaleString() })}
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5 ml-8">
@@ -933,13 +933,13 @@ export function UploadDashboard() {
                       isInvalid ? 'border-red-200 dark:border-red-800' : 'border-amber-200 dark:border-amber-800'
                     )}>
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        총 {sorted.length}개 사유
+                        {t('upload:dashboard.totalReasons', { num: sorted.length })}
                       </span>
                       <span className={cn(
                         'text-lg font-bold',
                         isInvalid ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
                       )}>
-                        합계 {grandTotal.toLocaleString()}건
+                        {t('upload:dashboard.totalSum', { num: grandTotal.toLocaleString() })}
                       </span>
                     </div>
                   </div>
@@ -982,13 +982,13 @@ export function UploadDashboard() {
                             </span>
                           </div>
                           <span className="shrink-0 px-3 py-1 rounded-full text-sm font-bold bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300">
-                            {row.totalCount.toLocaleString()}건
+                            {t('upload:dashboard.itemCount', { num: row.totalCount.toLocaleString() })}
                           </span>
                         </div>
                         <div className="flex flex-wrap gap-1.5 ml-8">
                           {row.years.map((y, yi) => (
                             <span key={yi} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
-                              <span className="font-bold">{y.year}년</span>
+                              <span className="font-bold">{t('upload:dashboard.year', { year: y.year })}</span>
                               <span className="text-gray-400 dark:text-gray-500">{y.count.toLocaleString()}</span>
                             </span>
                           ))}
@@ -997,10 +997,10 @@ export function UploadDashboard() {
                     ))}
                     <div className="flex items-center justify-between pt-2 border-t border-orange-200 dark:border-orange-800">
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        총 {sorted.length}개 국가
+                        {t('upload:dashboard.totalCountries', { num: sorted.length })}
                       </span>
                       <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                        합계 {grandTotal.toLocaleString()}건
+                        {t('upload:dashboard.totalSum', { num: grandTotal.toLocaleString() })}
                       </span>
                     </div>
                   </div>
@@ -1028,17 +1028,17 @@ export function UploadDashboard() {
                             </span>
                           </div>
                           <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
-                            {row.count.toLocaleString()}건
+                            {t('upload:dashboard.itemCount', { num: row.count.toLocaleString() })}
                           </span>
                         </div>
                       </div>
                     ))}
                     <div className="flex items-center justify-between pt-2 border-t border-gray-300 dark:border-gray-600">
                       <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                        총 {sorted.length}개 국가
+                        {t('upload:dashboard.totalCountries', { num: sorted.length })}
                       </span>
                       <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
-                        합계 {grandTotal.toLocaleString()}건
+                        {t('upload:dashboard.totalSum', { num: grandTotal.toLocaleString() })}
                       </span>
                     </div>
                   </div>

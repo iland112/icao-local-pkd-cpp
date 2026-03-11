@@ -46,16 +46,17 @@ const overallStatusStyle = (status: string) => {
   }
 };
 
-const overallStatusLabel = (status: string) => {
+const getOverallStatusLabel = (status: string, t: (key: string) => string) => {
   switch (status) {
-    case 'CONFORMANT': return t('certificate.compliance.doc9303Pass');
-    case 'NON_CONFORMANT': return t('certificate.compliance.doc9303Fail');
-    case 'WARNING': return t('certificate.compliance.doc9303Warning');
+    case 'CONFORMANT': return t('certificate:compliance.doc9303Pass');
+    case 'NON_CONFORMANT': return t('certificate:compliance.doc9303Fail');
+    case 'WARNING': return t('certificate:compliance.doc9303Warning');
     default: return status;
   }
 };
 
 function CategorySection({ group, defaultOpen }: { group: CategoryGroup; defaultOpen: boolean }) {
+  const { t } = useTranslation(['certificate', 'common']);
   const [open, setOpen] = useState(defaultOpen);
   const total = group.items.length;
   const hasIssues = group.failCount > 0 || group.warningCount > 0;
@@ -79,17 +80,17 @@ function CategorySection({ group, defaultOpen }: { group: CategoryGroup; default
             <>
               {group.failCount > 0 && (
                 <span className="text-xs text-red-500 dark:text-red-400 font-medium">
-                  {group.failCount}건 실패
+                  {t('certificate:doc9303.numFailed', { num: group.failCount })}
                 </span>
               )}
               {group.warningCount > 0 && (
                 <span className="text-xs text-yellow-500 dark:text-yellow-400 font-medium">
-                  {group.warningCount}건 경고
+                  {t('certificate:doc9303.numWarning', { num: group.warningCount })}
                 </span>
               )}
             </>
           ) : (
-            <span className="text-xs text-green-500 dark:text-green-400">모두 통과</span>
+            <span className="text-xs text-green-500 dark:text-green-400">{t('certificate:doc9303.allPassed')}</span>
           )}
         </div>
       </button>
@@ -153,7 +154,7 @@ export function Doc9303ComplianceChecklist({ checklist, compact = false }: Props
         overallStatusStyle(checklist.overallStatus)
       )}>
         {statusIcon(checklist.overallStatus === 'CONFORMANT' ? 'PASS' : checklist.overallStatus === 'NON_CONFORMANT' ? 'FAIL' : 'WARNING', 'w-3.5 h-3.5')}
-        <span>{overallStatusLabel(checklist.overallStatus)}</span>
+        <span>{getOverallStatusLabel(checklist.overallStatus, t)}</span>
         {checklist.failCount > 0 && (
           <span className="text-red-500 dark:text-red-400">({checklist.failCount})</span>
         )}
@@ -173,7 +174,7 @@ export function Doc9303ComplianceChecklist({ checklist, compact = false }: Props
             checklist.overallStatus === 'CONFORMANT' ? 'PASS' : checklist.overallStatus === 'NON_CONFORMANT' ? 'FAIL' : 'WARNING',
             'w-5 h-5'
           )}
-          <span className="font-semibold text-sm">{overallStatusLabel(checklist.overallStatus)}</span>
+          <span className="font-semibold text-sm">{getOverallStatusLabel(checklist.overallStatus, t)}</span>
           <span className="text-xs opacity-70">({checklist.certificateType})</span>
         </div>
         <div className="flex items-center gap-3 text-xs">

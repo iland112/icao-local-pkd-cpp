@@ -50,7 +50,7 @@ export function PADetail() {
       const response = await paApi.getDetail(paId);
       setResult(response.data);
     } catch (err) {
-      setError('PA 검증 정보를 불러오는데 실패했습니다.');
+      setError(t('pa:detail.loadFailed'));
       if (import.meta.env.DEV) console.error('Failed to fetch PA detail:', err);
     } finally {
       setLoading(false);
@@ -86,10 +86,10 @@ export function PADetail() {
       return <span className="inline-flex items-center px-4 py-2 rounded-full text-base font-medium bg-gray-100 text-gray-600">{status}</span>;
     }
     const label: Record<PAStatus, string> = {
-      VALID: '검증 성공',
-      EXPIRED_VALID: '만료(서명유효)',
-      INVALID: '검증 실패',
-      ERROR: '오류 발생',
+      VALID: t('pa:detail.statusValid'),
+      EXPIRED_VALID: t('pa:detail.statusExpiredValid'),
+      INVALID: t('pa:detail.statusInvalid'),
+      ERROR: t('pa:detail.statusError'),
     };
 
     return (
@@ -128,12 +128,12 @@ export function PADetail() {
       <div className="w-full px-4 lg:px-6 py-4">
         <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
           <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-          <p className="text-lg font-medium">{error || 'PA 검증 정보를 찾을 수 없습니다.'}</p>
+          <p className="text-lg font-medium">{error || t('pa:detail.notFound')}</p>
           <button
             onClick={() => navigate('/pa/history')}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            {t('upload.detail.backToList')}
+            {t('pa:detail.backToList')}
           </button>
         </div>
       </div>
@@ -157,7 +157,7 @@ export function PADetail() {
             <ShieldCheck className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('detail.title')}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('pa:detail.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
               {result.verificationId}
             </p>
@@ -186,10 +186,10 @@ export function PADetail() {
           <div className="flex-grow">
             <h2 className="text-xl font-bold">
               {isValid
-                ? 'Passive Authentication 성공'
+                ? t('pa:detail.paSuccess')
                 : result.status === 'INVALID'
-                ? 'Passive Authentication 실패'
-                : 'Passive Authentication 오류'}
+                ? t('pa:detail.paFailed')
+                : t('pa:detail.paError')}
             </h2>
             <div className="flex items-center gap-4 mt-1 text-sm opacity-90">
               <span className="flex items-center gap-1">
@@ -218,7 +218,7 @@ export function PADetail() {
         <div className="rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4 mb-6">
           <h3 className="font-bold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
             <AlertTriangle className="w-5 h-5" />
-            검증 오류
+            {t('pa:detail.verificationErrors')}
           </h3>
           <ul className="space-y-1 text-sm text-red-600 dark:text-red-400">
             {result.errors.map((err, idx) => (
@@ -243,7 +243,7 @@ export function PADetail() {
                 : 'bg-red-500 text-white'
             )}>
               <Lock className="w-5 h-5" />
-              <span className="font-bold">{t('common.label.certChainVerification')}</span>
+              <span className="font-bold">{t('common:label.certChainVerification')}</span>
               {result.certificateChainValidation?.valid ? (
                 <CheckCircle className="w-5 h-5 ml-auto" />
               ) : (
@@ -279,13 +279,13 @@ export function PADetail() {
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">유효기간 시작</label>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">{t('pa:detail.validityStart')}</label>
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         {result.certificateChainValidation.notBefore || '-'}
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">유효기간 종료</label>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">{t('pa:detail.validityEnd')}</label>
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         {result.certificateChainValidation.notAfter || '-'}
                       </p>
@@ -372,7 +372,7 @@ export function PADetail() {
                 : 'bg-red-500 text-white'
             )}>
               <Hash className="w-5 h-5" />
-              <span className="font-bold">Data Group 해시 검증</span>
+              <span className="font-bold">{t('pa:detail.dgHashVerification')}</span>
               {result.dataGroupValidation?.invalidGroups === 0 ? (
                 <CheckCircle className="w-5 h-5 ml-auto" />
               ) : (
@@ -426,7 +426,7 @@ export function PADetail() {
                                 ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
                                 : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
                             )}>
-                              {detail.valid ? t('sync.dashboard.consistent') : t('sync.dashboard.discrepancy')}
+                              {detail.valid ? t('pa:detail.hashMatch') : t('pa:detail.hashMismatch')}
                             </span>
                           </div>
                           <div className="font-mono text-xs space-y-1">
@@ -455,7 +455,7 @@ export function PADetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Fingerprint className="w-5 h-5 text-purple-500" />
-              {t('pa.detail.verificationInfo')}
+              {t('pa:detail.verificationInfo')}
             </h2>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -485,7 +485,7 @@ export function PADetail() {
                   <Clock className="w-4 h-4 text-gray-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('result.processingDuration')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('pa:result.processingDuration')}</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {result.processingDurationMs}ms
                   </p>
@@ -497,7 +497,7 @@ export function PADetail() {
                     <Globe className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('result.country')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('pa:result.country')}</p>
                     <div className="flex items-center gap-2">
                       <img
                         src={`/svg/${result.issuingCountry.toLowerCase()}.svg`}
@@ -520,7 +520,7 @@ export function PADetail() {
                     <IdCard className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.label.passportNumber')}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.passportNumber')}</p>
                     <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
                       {result.documentNumber}
                     </p>
@@ -532,32 +532,32 @@ export function PADetail() {
 
           {/* Validation Summary */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">검증 요약</h2>
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{t('pa:detail.verificationSummary')}</h2>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">{t('detail.certificateChain')}</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('pa:detail.certificateChain')}</span>
                 <span className={cn(
                   'text-xs font-medium px-2 py-1 rounded',
                   result.certificateChainValidation?.valid
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                     : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                 )}>
-                  {result.certificateChainValidation?.valid ? t('sync.reconciliation.successCount') : t('common:status.failed')}
+                  {result.certificateChainValidation?.valid ? t('common:toast.success') : t('common:status.failed')}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">SOD 서명</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('pa:detail.sodSignature')}</span>
                 <span className={cn(
                   'text-xs font-medium px-2 py-1 rounded',
                   result.sodSignatureValidation?.valid
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                     : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                 )}>
-                  {result.sodSignatureValidation?.valid ? t('sync.reconciliation.successCount') : t('common:status.failed')}
+                  {result.sodSignatureValidation?.valid ? t('common:toast.success') : t('common:status.failed')}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-600 dark:text-gray-400">DG 해시</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('pa:detail.dgHash')}</span>
                 <span className={cn(
                   'text-xs font-medium px-2 py-1 rounded',
                   result.dataGroupValidation?.invalidGroups === 0
@@ -576,13 +576,13 @@ export function PADetail() {
               to="/pa/verify"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 transition-all shadow-md hover:shadow-lg"
             >
-              새 PA 검증
+              {t('pa:detail.newVerification')}
             </Link>
             <Link
               to="/pa/history"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              {t('nav.menu.verifyHistory')}
+              {t('pa:detail.verifyHistory')}
             </Link>
           </div>
         </div>

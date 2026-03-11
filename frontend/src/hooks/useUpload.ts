@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { uploadApi } from '@/services/api';
 import type { PageRequest } from '@/types';
 import { toast } from '@/stores/toastStore';
@@ -51,6 +52,7 @@ export function useUploadStatistics() {
 // Upload LDIF file mutation
 export function useUploadLdif() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation(['upload', 'common']);
 
   return useMutation({
     mutationFn: async ({ file }: { file: File }) => {
@@ -61,11 +63,11 @@ export function useUploadLdif() {
       queryClient.invalidateQueries({ queryKey: uploadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: uploadKeys.statistics() });
       if (data.success) {
-        toast.success('파일 업로드 성공', 'LDIF 파일이 성공적으로 업로드되었습니다.');
+        toast.success(t('upload:hook.uploadSuccess'), t('upload:hook.ldifUploadSuccessDesc'));
       }
     },
     onError: (error) => {
-      toast.error('파일 업로드 실패', error instanceof Error ? error.message : '알 수 없는 오류');
+      toast.error(t('upload:hook.uploadFailed'), error instanceof Error ? error.message : t('common:error.unknownError_short'));
     },
   });
 }
@@ -73,6 +75,7 @@ export function useUploadLdif() {
 // Upload Master List file mutation
 export function useUploadMasterList() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation(['upload', 'common']);
 
   return useMutation({
     mutationFn: async ({ file }: { file: File }) => {
@@ -83,11 +86,11 @@ export function useUploadMasterList() {
       queryClient.invalidateQueries({ queryKey: uploadKeys.lists() });
       queryClient.invalidateQueries({ queryKey: uploadKeys.statistics() });
       if (data.success) {
-        toast.success('파일 업로드 성공', 'Master List 파일이 성공적으로 업로드되었습니다.');
+        toast.success(t('upload:hook.uploadSuccess'), t('upload:hook.mlUploadSuccessDesc'));
       }
     },
     onError: (error) => {
-      toast.error('파일 업로드 실패', error instanceof Error ? error.message : '알 수 없는 오류');
+      toast.error(t('upload:hook.uploadFailed'), error instanceof Error ? error.message : t('common:error.unknownError_short'));
     },
   });
 }

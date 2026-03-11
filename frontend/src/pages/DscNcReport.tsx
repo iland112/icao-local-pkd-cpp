@@ -168,7 +168,7 @@ export default function DscNcReport() {
         }
       } catch (err: unknown) {
         if (!controller.signal.aborted) {
-          const message = err instanceof Error ? err.message : 'Failed to load report';
+          const message = err instanceof Error ? err.message : t('common:label.dataLoadFailed');
           setError(message);
         }
       } finally {
@@ -263,7 +263,7 @@ export default function DscNcReport() {
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                 {data.summary.totalDscNc.toLocaleString()}
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">비준수 인증서</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('report:dscNc.nonConformantCerts')}</p>
             </div>
             <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">
               <ShieldAlert className="w-8 h-8 text-amber-500" />
@@ -278,7 +278,7 @@ export default function DscNcReport() {
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                 {data.summary.conformanceCodeCount}
               </p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">유형 분류</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('report:dscNc.typeClassification')}</p>
             </div>
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/30">
               <Hash className="w-8 h-8 text-red-500" />
@@ -289,12 +289,12 @@ export default function DscNcReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-rose-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dscNc.expirationRate')}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:dscNc.expirationRate')}</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                 {expiredRate.toFixed(1)}%
               </p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                {data.summary.validityBreakdown.EXPIRED.toLocaleString()}건 만료
+                {t('report:dscNc.expiredNum', { num: data.summary.validityBreakdown.EXPIRED.toLocaleString() })}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-900/30">
@@ -313,7 +313,7 @@ export default function DscNcReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">비준수 코드별 분포</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.byConformanceCode')}</h3>
           </div>
           <ResponsiveContainer width="100%" height={Math.max(250, data.conformanceCodes.length * 32)}>
             <BarChart data={data.conformanceCodes} layout="vertical" margin={{ left: 130, right: 20, top: 5, bottom: 5 }}>
@@ -331,7 +331,7 @@ export default function DscNcReport() {
                         <HelpCircle className="w-3 h-3 text-gray-400" />
                       </div>
                       <p className="text-xs text-gray-300 mb-1.5">{item.description}</p>
-                      <p className="text-sm font-semibold text-white">{item.count}건</p>
+                      <p className="text-sm font-semibold text-white">{t('report:dscNc.numItems', { num: item.count })}</p>
                     </div>
                   );
                 }}
@@ -386,17 +386,17 @@ export default function DscNcReport() {
                         <span className="text-xs text-gray-400">{getCountryName(item.countryCode)}</span>
                       </div>
                       <div className="flex gap-3 text-xs">
-                        <span className="text-green-400">Valid: {item.validCount}</span>
-                        <span className="text-red-400">Expired: {item.expiredCount}</span>
-                        <span className="text-gray-300 font-medium">Total: {item.count}</span>
+                        <span className="text-green-400">{t('report:dscNc.tooltipValid', { num: item.validCount })}</span>
+                        <span className="text-red-400">{t('report:dscNc.tooltipExpired', { num: item.expiredCount })}</span>
+                        <span className="text-gray-300 font-medium">{t('report:dscNc.tooltipTotal', { num: item.count })}</span>
                       </div>
                     </div>
                   );
                 }}
               />
               <Legend />
-              <Bar dataKey="validCount" name="Valid" stackId="a" fill="#10b981" />
-              <Bar dataKey="expiredCount" name="Expired" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} />
+              <Bar dataKey="validCount" name={t('report:dscNc.validity.valid')} stackId="a" fill="#10b981" />
+              <Bar dataKey="expiredCount" name={t('report:dscNc.validity.expired')} stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -408,7 +408,7 @@ export default function DscNcReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-blue-500" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">발급년도별 분포</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.byYear')}</h3>
           </div>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.byYear} margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
@@ -552,7 +552,7 @@ export default function DscNcReport() {
               </button>
             )}
             <span className="ml-auto text-sm text-gray-500 dark:text-gray-400 pb-2">
-              {data.certificates.total.toLocaleString()}건
+              {t('report:dscNc.numItems', { num: data.certificates.total.toLocaleString() })}
             </span>
           </div>
         </div>
@@ -563,9 +563,9 @@ export default function DscNcReport() {
         {/* Table Header */}
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">비준수 인증서 목록</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('report:dscNc.certList')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
-            {data.certificates.total.toLocaleString()}건
+            {t('report:dscNc.numItems', { num: data.certificates.total.toLocaleString() })}
           </span>
         </div>
 
@@ -574,9 +574,9 @@ export default function DscNcReport() {
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
                 <SortableHeader label={t('common:label.country')} sortKey="countryCode" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="발급년도" sortKey="notBefore" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('report:dscNc.issuedYear')} sortKey="notBefore" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('certificate:detail.signatureAlgorithm')} sortKey="signatureAlgorithm" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="공개키" sortKey="publicKeySize" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('report:dscNc.publicKey')} sortKey="publicKeySize" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('ai:forensic.categories.validity')} sortKey="notAfter" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('common:label.status')} sortKey="validity" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('report:dscNc.nonConformanceCode')} sortKey="pkdConformanceCode" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
@@ -585,7 +585,7 @@ export default function DscNcReport() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {sortedCerts.map((cert) => (
                 <tr key={cert.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                  {/* 국가 */}
+                  {/* Country */}
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex items-center justify-center gap-1.5">
                       {getFlagSvgPath(cert.countryCode) && (
@@ -599,17 +599,17 @@ export default function DscNcReport() {
                       <span className="text-xs font-medium text-gray-900 dark:text-white">{cert.countryCode}</span>
                     </div>
                   </td>
-                  {/* 발급년도 */}
+                  {/* Issued Year */}
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                       {cert.notBefore ? new Date(cert.notBefore).getFullYear() : '-'}
                     </span>
                   </td>
-                  {/* 서명 알고리즘 */}
+                  {/* Signature Algorithm */}
                   <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
                     {formatAlgorithm(cert.signatureAlgorithm)}
                   </td>
-                  {/* 공개키 알고리즘 + 크기 */}
+                  {/* Public Key Algorithm + Size */}
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       {cert.publicKeyAlgorithm || '-'}
@@ -625,7 +625,7 @@ export default function DscNcReport() {
                       </span>
                     )}
                   </td>
-                  {/* 유효기간 */}
+                  {/* Validity Period */}
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       {formatDate(cert.notBefore)}
@@ -633,11 +633,11 @@ export default function DscNcReport() {
                       {formatDate(cert.notAfter)}
                     </span>
                   </td>
-                  {/* 상태 */}
+                  {/* Status */}
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <ValidityBadge validity={cert.validity} />
                   </td>
-                  {/* 비준수 코드 + ? 도움말 */}
+                  {/* Non-conformance Code + Help */}
                   <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-amber-700 dark:text-amber-400 font-mono">
@@ -675,8 +675,11 @@ export default function DscNcReport() {
         {totalPages > 1 && (
           <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              총 {data.certificates.total.toLocaleString()}개 중{' '}
-              {((page - 1) * pageSize + 1).toLocaleString()}-{Math.min(page * pageSize, data.certificates.total).toLocaleString()}개 표시
+              {t('report:dscNc.paginationInfo', {
+                total: data.certificates.total.toLocaleString(),
+                start: ((page - 1) * pageSize + 1).toLocaleString(),
+                end: Math.min(page * pageSize, data.certificates.total).toLocaleString()
+              })}
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -707,6 +710,7 @@ export default function DscNcReport() {
 // ─── Sub Components ──────────────────────────────────────────────────────────
 
 function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; onExport: () => void; loading: boolean }) {
+  const { t } = useTranslation(['report', 'common']);
   return (
     <div className="mb-6">
       <div className="flex items-center gap-4">
@@ -714,9 +718,9 @@ function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; o
           <ShieldAlert className="w-7 h-7 text-white" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">DSC_NC 비준수 인증서 보고서</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('report:dscNc.pageTitle')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            표준 부적합(Non-Conformant) DSC 인증서 분석
+            {t('report:dscNc.pageSubtitle')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -732,7 +736,7 @@ function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; o
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 transition-all duration-200 shadow-md hover:shadow-lg"
           >
             <Download className="w-4 h-4" />
-            CSV Export
+            {t('report:dscNc.csvExport')}
           </button>
         </div>
       </div>
@@ -745,17 +749,17 @@ function ValidityBar({ breakdown, total }: { breakdown: DscNcSummary['validityBr
   if (total === 0) return null;
 
   const segments = [
-    { key: 'VALID', label: 'Valid', count: breakdown.VALID, color: 'bg-green-500', icon: <CheckCircle className="w-3 h-3" /> },
-    { key: 'EXPIRED', label: 'Expired', count: breakdown.EXPIRED, color: 'bg-red-500', icon: <XCircle className="w-3 h-3" /> },
-    { key: 'NOT_YET_VALID', label: 'Not Yet Valid', count: breakdown.NOT_YET_VALID, color: 'bg-yellow-500', icon: <Clock className="w-3 h-3" /> },
-    { key: 'UNKNOWN', label: 'Unknown', count: breakdown.UNKNOWN, color: 'bg-gray-400', icon: <AlertCircle className="w-3 h-3" /> },
+    { key: 'VALID', labelKey: 'report:dscNc.validity.valid' as const, count: breakdown.VALID, color: 'bg-green-500', icon: <CheckCircle className="w-3 h-3" /> },
+    { key: 'EXPIRED', labelKey: 'report:dscNc.validity.expired' as const, count: breakdown.EXPIRED, color: 'bg-red-500', icon: <XCircle className="w-3 h-3" /> },
+    { key: 'NOT_YET_VALID', labelKey: 'report:dscNc.validity.notYetValid' as const, count: breakdown.NOT_YET_VALID, color: 'bg-yellow-500', icon: <Clock className="w-3 h-3" /> },
+    { key: 'UNKNOWN', labelKey: 'report:dscNc.validity.unknown' as const, count: breakdown.UNKNOWN, color: 'bg-gray-400', icon: <AlertCircle className="w-3 h-3" /> },
   ].filter(s => s.count > 0);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
       <div className="flex items-center gap-2 mb-3">
         <CheckCircle className="w-5 h-5 text-green-500" />
-        <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('dscNc.validityStatus')}</h3>
+        <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.validityStatus')}</h3>
       </div>
       <div className="flex rounded-full overflow-hidden h-7 shadow-inner">
         {segments.map(seg => (
@@ -763,9 +767,9 @@ function ValidityBar({ breakdown, total }: { breakdown: DscNcSummary['validityBr
             key={seg.key}
             className={cn(seg.color, 'flex items-center justify-center text-xs font-medium text-white transition-all')}
             style={{ width: `${(seg.count / total) * 100}%` }}
-            title={`${seg.label}: ${seg.count} (${((seg.count / total) * 100).toFixed(1)}%)`}
+            title={`${t(seg.labelKey)}: ${seg.count} (${((seg.count / total) * 100).toFixed(1)}%)`}
           >
-            {(seg.count / total) > 0.08 && `${seg.label} ${seg.count}`}
+            {(seg.count / total) > 0.08 && `${t(seg.labelKey)} ${seg.count}`}
           </div>
         ))}
       </div>
@@ -773,7 +777,7 @@ function ValidityBar({ breakdown, total }: { breakdown: DscNcSummary['validityBr
         {segments.map(seg => (
           <span key={seg.key} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
             <span className={cn('w-2.5 h-2.5 rounded-full', seg.color)} />
-            {seg.label}: {seg.count.toLocaleString()} ({((seg.count / total) * 100).toFixed(1)}%)
+            {t(seg.labelKey)}: {seg.count.toLocaleString()} ({((seg.count / total) * 100).toFixed(1)}%)
           </span>
         ))}
       </div>
@@ -781,7 +785,15 @@ function ValidityBar({ breakdown, total }: { breakdown: DscNcSummary['validityBr
   );
 }
 
+const VALIDITY_LABEL_KEYS: Record<string, string> = {
+  VALID: 'report:dscNc.validity.valid',
+  EXPIRED: 'report:dscNc.validity.expired',
+  NOT_YET_VALID: 'report:dscNc.validity.notYetValid',
+  UNKNOWN: 'report:dscNc.validity.unknown',
+};
+
 function ValidityBadge({ validity }: { validity: string }) {
+  const { t } = useTranslation(['report', 'common']);
   const config: Record<string, { bg: string; text: string; icon: React.ReactNode }> = {
     VALID: {
       bg: 'bg-green-100 dark:bg-green-900/30',
@@ -810,7 +822,7 @@ function ValidityBadge({ validity }: { validity: string }) {
   return (
     <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
       {style.icon}
-      {validity}
+      {t(VALIDITY_LABEL_KEYS[validity] || VALIDITY_LABEL_KEYS.UNKNOWN)}
     </span>
   );
 }

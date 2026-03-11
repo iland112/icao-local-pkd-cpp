@@ -30,18 +30,18 @@ const extractCountryFromDn = (dn: string): string | null => {
   return match ? match[1].toUpperCase() : null;
 };
 
-const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
+const ERROR_MESSAGES: Record<string, { titleKey: string; descriptionKey: string }> = {
   CSCA_NOT_FOUND: {
-    title: 'CSCA 인증서 미등록',
-    description: t('pa.steps.cscaNotInPkd'),
+    titleKey: 'steps.cscaNotRegisteredTitle',
+    descriptionKey: 'steps.cscaNotInPkd',
   },
   CSCA_DN_MISMATCH: {
-    title: t('pa.steps.cscaDnMismatch'),
-    description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
+    titleKey: 'steps.cscaDnMismatch',
+    descriptionKey: 'steps.cscaDnMismatchDesc',
   },
   CSCA_SELF_SIGNATURE_FAILED: {
-    title: t('pa.steps.cscaSelfSignFailed'),
-    description: 'Root CSCA의 자체 서명 검증에 실패했습니다.',
+    titleKey: 'steps.cscaSelfSignFailed',
+    descriptionKey: 'steps.cscaSelfSignFailedDesc',
   },
 };
 
@@ -69,7 +69,6 @@ interface DGHashDetail {
 }
 
 export function getStepStatusIcon(status: StepStatus) {
-  const { t } = useTranslation(['pa', 'common']);
   switch (status) {
     case 'success':
       return <CheckCircle className="w-5 h-5 text-green-500" />;
@@ -110,12 +109,14 @@ export function VerificationStepsPanel({
   expandedSteps,
   toggleStep,
 }: VerificationStepsPanelProps) {
+  const { t } = useTranslation(['pa', 'common']);
+
   return (
     <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg overflow-hidden">
       <div className="px-5 py-4 bg-gradient-to-r from-indigo-500 to-purple-500">
         <div className="flex items-center gap-3">
           <ListChecks className="w-6 h-6 text-white" />
-          <h2 className="text-lg font-bold text-white">검증 단계 (ICAO 9303)</h2>
+          <h2 className="text-lg font-bold text-white">{t('pa:steps.panelTitle')}</h2>
         </div>
       </div>
       <div className="p-4 space-y-2">
@@ -163,18 +164,18 @@ export function VerificationStepsPanel({
 
 
 
-                {/* Step 1: SOD 파싱 상세 정보 */}
+                {/* Step 1: SOD parsing details */}
                 {step.id === 1 && step.details && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
+                        <span className="text-gray-500">{t('pa:steps.hashAlgorithm')}</span>
                         <code className="ml-1 font-mono bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
                           {String(step.details.hashAlgorithm || '')}
                         </code>
                       </div>
                       <div>
-                        <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
+                        <span className="text-gray-500">{t('pa:steps.signatureAlgorithm')}</span>
                         <code className="ml-1 font-mono bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
                           {String(step.details.signatureAlgorithm || '')}
                         </code>
@@ -183,23 +184,23 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 2: DSC 추출 상세 정보 */}
+                {/* Step 2: DSC extraction details */}
                 {step.id === 2 && step.details && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1.5">
                     <div className="flex items-start gap-2">
-                      <span className="text-gray-500 shrink-0 w-16">주체(Subject):</span>
+                      <span className="text-gray-500 shrink-0 w-16">{t('pa:steps.subject')}:</span>
                       <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
                         {step.details.subject || ''}
                       </code>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="text-gray-500 shrink-0 w-16">일련번호:</span>
+                      <span className="text-gray-500 shrink-0 w-16">{t('pa:steps.serialNumber')}:</span>
                       <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                         {step.details.serial || ''}
                       </code>
                     </div>
                     <div className="flex items-start gap-2">
-                      <span className="text-gray-500 shrink-0 w-16">발급자:</span>
+                      <span className="text-gray-500 shrink-0 w-16">{t('pa:steps.issuer')}:</span>
                       <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
                         {step.details.issuer || ''}
                       </code>
@@ -207,10 +208,10 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 3: Trust Chain 검증 상세 정보 (성공) */}
+                {/* Step 3: Trust Chain verification details (success) */}
                 {step.id === 3 && step.details && step.status !== 'error' && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
-                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{ t('certificate:detail.trustChainPath') }</div>
+                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('pa:steps.trustChainPath')}</div>
                     <div className="flex flex-col items-center gap-1">
                       {/* CSCA (Root) */}
                       <div className="w-full p-2 bg-green-100 dark:bg-green-900/30 rounded border border-green-300 dark:border-green-700">
@@ -223,7 +224,7 @@ export function VerificationStepsPanel({
                         </code>
                       </div>
                       {/* Arrow */}
-                      <div className="text-gray-400 dark:text-gray-500">&#8595; 서명</div>
+                      <div className="text-gray-400 dark:text-gray-500">&#8595; {t('pa:steps.signature')}</div>
                       {/* DSC (Leaf) */}
                       <div className="w-full p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-300 dark:border-blue-700">
                         <div className="flex items-center gap-2">
@@ -231,7 +232,7 @@ export function VerificationStepsPanel({
                           <span className="font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
                           {step.details.dscExpired && (
                             <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
-                              만료됨
+                              {t('pa:steps.expired')}
                             </span>
                           )}
                         </div>
@@ -240,7 +241,7 @@ export function VerificationStepsPanel({
                         </code>
                         {step.details.notBefore && step.details.notAfter && (
                           <div className="mt-1 text-xs text-gray-500">
-                            유효기간: {step.details.notBefore} ~ {step.details.notAfter}
+                            {t('pa:steps.validityPeriod')}: {step.details.notBefore} ~ {step.details.notAfter}
                           </div>
                         )}
                       </div>
@@ -266,11 +267,11 @@ export function VerificationStepsPanel({
                                 ? 'text-orange-700 dark:text-orange-300'
                                 : 'text-yellow-700 dark:text-yellow-300'
                             )}>
-                              {step.details.expirationStatus === 'EXPIRED' ? '인증서 만료' : '인증서 만료 임박'}
+                              {step.details.expirationStatus === 'EXPIRED' ? t('pa:steps.certExpired') : t('pa:steps.certExpiringSoon')}
                             </span>
                             {step.details.validAtSigningTime && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                                &#10003; 서명 당시 유효
+                                &#10003; {t('pa:steps.validAtSigningTime')}
                               </span>
                             )}
                           </div>
@@ -286,7 +287,7 @@ export function VerificationStepsPanel({
                         <div className="w-full mt-2 p-2 rounded text-xs bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
                           <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                            <span className="font-semibold text-amber-700 dark:text-amber-300">Non-Conformant DSC (ICAO PKD)</span>
+                            <span className="font-semibold text-amber-700 dark:text-amber-300">{t('pa:steps.nonConformantDsc')}</span>
                           </div>
                           {step.details.pkdConformanceCode && (
                             <p className="mt-1 text-gray-600 dark:text-gray-400">
@@ -301,13 +302,13 @@ export function VerificationStepsPanel({
                     </div>
                   </div>
                 )}
-                {/* Step 3: Trust Chain 검증 상세 정보 (실패) */}
+                {/* Step 3: Trust Chain verification details (failure) */}
                 {step.id === 3 && step.status === 'error' && step.details && (
                   <div className="mt-2 space-y-2">
-                    {/* 검증 대상 인증서 정보 */}
+                    {/* Target certificate info */}
                     {(step.details.dscSubject || step.details.cscaSubject) && (
                       <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1.5">
-                        <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">검증 대상 인증서:</div>
+                        <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">{t('pa:steps.targetCertificate')}:</div>
                         {step.details.dscSubject && (
                           <div className="flex items-start gap-2">
                             <span className="text-gray-500 shrink-0 w-12">DSC:</span>
@@ -326,7 +327,7 @@ export function VerificationStepsPanel({
                         )}
                         {step.details.notBefore && step.details.notAfter && (
                           <div className="flex items-start gap-2">
-                            <span className="text-gray-500 shrink-0 w-12">유효기간:</span>
+                            <span className="text-gray-500 shrink-0 w-12">{t('pa:steps.validityPeriod')}:</span>
                             <span className="text-gray-600 dark:text-gray-400">
                               {step.details.notBefore} ~ {step.details.notAfter}
                             </span>
@@ -334,7 +335,7 @@ export function VerificationStepsPanel({
                         )}
                       </div>
                     )}
-                    {/* 실패 원인 */}
+                    {/* Failure reason */}
                     {(() => {
                       const errorCode = step.details.errorCode as string | undefined;
                       const errorInfo = errorCode ? ERROR_MESSAGES[errorCode] : null;
@@ -355,9 +356,9 @@ export function VerificationStepsPanel({
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
                                 )}
-                                {cc ? `${getCountryName(cc)} (${cc})` : ''} {errorInfo.title}
+                                {cc ? `${getCountryName(cc)} (${cc})` : ''} {t(`pa:${errorInfo.titleKey}`)}
                               </div>
-                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{errorInfo.description}</p>
+                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{t(`pa:${errorInfo.descriptionKey}`)}</p>
                             </div>
                           </div>
                           {issuerDn && (errorCode === 'CSCA_NOT_FOUND' || errorCode === 'CSCA_DN_MISMATCH') && (
@@ -372,10 +373,10 @@ export function VerificationStepsPanel({
                           <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
                             <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
                             <div>
-                              <span className="font-semibold">{ t('common:error.failReason') }</span>
+                              <span className="font-semibold">{t('common:error.failReason')}</span>
                               {step.details.error
                                 ? String(step.details.error)
-                                : t('pa.steps.dscNotSignedByCsca')}
+                                : t('pa:steps.dscNotSignedByCsca')}
                             </div>
                           </div>
                         </div>
@@ -384,7 +385,7 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 4: CSCA 조회 상세 정보 */}
+                {/* Step 4: CSCA lookup details */}
                 {step.id === 4 && step.details && step.status === 'success' && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                     <div className="flex items-start gap-2">
@@ -417,9 +418,9 @@ export function VerificationStepsPanel({
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
                                 )}
-                                {countryCode ? `${getCountryName(countryCode)} (${countryCode})` : ''} {errorInfo.title}
+                                {countryCode ? `${getCountryName(countryCode)} (${countryCode})` : ''} {t(`pa:${errorInfo.titleKey}`)}
                               </div>
-                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{errorInfo.description}</p>
+                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{t(`pa:${errorInfo.descriptionKey}`)}</p>
                             </div>
                           </div>
                           {issuerDn && (errorCode === 'CSCA_NOT_FOUND' || errorCode === 'CSCA_DN_MISMATCH') && (
@@ -433,7 +434,7 @@ export function VerificationStepsPanel({
                         <>
                           {step.details.dscSubject && (
                             <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
-                              <span className="text-gray-500 shrink-0">DSC 발급자:</span>
+                              <span className="text-gray-500 shrink-0">{t('pa:steps.dscIssuer')}:</span>
                               <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
                                 {step.details.dscSubject}
                               </code>
@@ -441,7 +442,7 @@ export function VerificationStepsPanel({
                           )}
                           {step.details.error && (
                             <div className="text-red-600 dark:text-red-400">
-                              <span className="font-semibold">원인:</span> {String(step.details.error)}
+                              <span className="font-semibold">{t('pa:steps.cause')}:</span> {String(step.details.error)}
                             </div>
                           )}
                         </>
@@ -450,13 +451,13 @@ export function VerificationStepsPanel({
                   );
                 })()}
 
-                {/* Step 5: SOD 서명 검증 상세 정보 (성공) */}
+                {/* Step 5: SOD signature verification details (success) */}
                 {step.id === 5 && step.status === 'success' && step.details && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                     <div className="grid grid-cols-2 gap-2">
                       {step.details.signatureAlgorithm && (
                         <div>
-                          <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
+                          <span className="text-gray-500">{t('pa:steps.signatureAlgorithm')}</span>
                           <code className="ml-1 font-mono bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
                             {String(step.details.signatureAlgorithm)}
                           </code>
@@ -464,7 +465,7 @@ export function VerificationStepsPanel({
                       )}
                       {step.details.hashAlgorithm && (
                         <div>
-                          <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
+                          <span className="text-gray-500">{t('pa:steps.hashAlgorithm')}</span>
                           <code className="ml-1 font-mono bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
                             {String(step.details.hashAlgorithm)}
                           </code>
@@ -473,7 +474,7 @@ export function VerificationStepsPanel({
                     </div>
                   </div>
                 )}
-                {/* Step 5: SOD 서명 검증 상세 정보 (실패) */}
+                {/* Step 5: SOD signature verification details (failure) */}
                 {step.id === 5 && step.status === 'error' && (
                   <div className="mt-2 space-y-2">
                     {step.details && (step.details.signatureAlgorithm || step.details.hashAlgorithm) && (
@@ -481,7 +482,7 @@ export function VerificationStepsPanel({
                         <div className="grid grid-cols-2 gap-2">
                           {step.details.signatureAlgorithm && (
                             <div>
-                              <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
+                              <span className="text-gray-500">{t('pa:steps.signatureAlgorithm')}</span>
                               <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                                 {String(step.details.signatureAlgorithm)}
                               </code>
@@ -489,7 +490,7 @@ export function VerificationStepsPanel({
                           )}
                           {step.details.hashAlgorithm && (
                             <div>
-                              <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
+                              <span className="text-gray-500">{t('pa:steps.hashAlgorithm')}</span>
                               <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                                 {String(step.details.hashAlgorithm)}
                               </code>
@@ -502,17 +503,17 @@ export function VerificationStepsPanel({
                       <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
                         <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-semibold">{ t('common:error.failReason') }</span>
+                          <span className="font-semibold">{t('common:error.failReason')}</span>
                           {step.details?.error
                             ? String(step.details.error)
-                            : 'SOD의 서명이 DSC 공개키로 검증되지 않았습니다.'}
+                            : t('pa:steps.sodSignatureNotVerified')}
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Step 6: DG 해시 검증 상세 정보 */}
+                {/* Step 6: DG hash verification details */}
                 {step.id === 6 && step.details?.dgDetails ? (() => {
                   const dgDetails = step.details.dgDetails as Record<string, DGHashDetail>;
                   return (
@@ -527,19 +528,19 @@ export function VerificationStepsPanel({
                           <div className="flex items-center justify-between mb-2">
                             <div className="flex items-center gap-2">
                               <span className="font-semibold text-sm">{dgName}</span>
-                              {dgName === 'DG1' ? <span className="text-gray-500">기계판독영역 (MRZ)</span> : null}
-                              {dgName === 'DG2' ? <span className="text-gray-500">얼굴 생체이미지</span> : null}
-                              {dgName === 'DG3' ? <span className="text-gray-500">지문 생체정보</span> : null}
-                              {dgName === 'DG14' ? <span className="text-gray-500">보안 옵션</span> : null}
+                              {dgName === 'DG1' ? <span className="text-gray-500">{t('pa:steps.dgDescMrz')}</span> : null}
+                              {dgName === 'DG2' ? <span className="text-gray-500">{t('pa:steps.dgDescFace')}</span> : null}
+                              {dgName === 'DG3' ? <span className="text-gray-500">{t('pa:steps.dgDescFingerprint')}</span> : null}
+                              {dgName === 'DG14' ? <span className="text-gray-500">{t('pa:steps.dgDescSecurityOptions')}</span> : null}
                             </div>
                             <div className={cn(
                               'px-2 py-0.5 rounded-full text-xs font-medium',
                               detail.valid ? 'bg-green-200 text-green-700 dark:bg-green-800 dark:text-green-200' : 'bg-red-200 text-red-700 dark:bg-red-800 dark:text-red-200'
                             )}>
                               {detail.valid ? (
-                                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />{ t('sync:dashboard.consistent') }</span>
+                                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />{t('pa:steps.match')}</span>
                               ) : (
-                                <span className="flex items-center gap-1"><XCircle className="w-3 h-3" />{ t('sync:dashboard.discrepancy') }</span>
+                                <span className="flex items-center gap-1"><XCircle className="w-3 h-3" />{t('pa:steps.mismatch')}</span>
                               )}
                             </div>
                           </div>
@@ -547,14 +548,14 @@ export function VerificationStepsPanel({
                             <div>
                               <div className="flex items-center gap-1 text-gray-500 mb-1">
                                 <FileText className="w-3 h-3" />
-                                <span>예상 해시 (SOD):</span>
+                                <span>{t('pa:steps.expectedHash')}:</span>
                               </div>
                               <code className="block font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded break-all text-xs">{detail.expectedHash}</code>
                             </div>
                             <div>
                               <div className="flex items-center gap-1 text-gray-500 mb-1">
                                 <Hash className="w-3 h-3" />
-                                <span>계산된 해시:</span>
+                                <span>{t('pa:steps.computedHash')}:</span>
                               </div>
                               <code className="block font-mono bg-gray-200 dark:bg-gray-600 px-2 py-1 rounded break-all text-xs">{detail.actualHash}</code>
                             </div>
@@ -562,7 +563,7 @@ export function VerificationStepsPanel({
                           {detail.valid ? (
                             <div className="mt-2 flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
                               <CheckCircle className="w-3 h-3" />
-                              <span>해시 일치 - 데이터 무결성 검증 완료</span>
+                              <span>{t('pa:steps.hashMatchIntegrity')}</span>
                             </div>
                           ) : null}
                         </div>
@@ -571,7 +572,7 @@ export function VerificationStepsPanel({
                   );
                 })() : null}
 
-                {/* Step 7: CRL 검사 상세 정보 */}
+                {/* Step 7: CRL check details */}
                 {step.id === 7 && step.details && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1">
                     {step.details.description && (

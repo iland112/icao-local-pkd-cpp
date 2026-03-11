@@ -65,7 +65,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
       <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <AlertCircle className="w-5 h-5" />
-          <p className="text-sm">X.509 메타데이터를 사용할 수 없습니다.</p>
+          <p className="text-sm">{t('certificate:metadata.noMetadata')}</p>
         </div>
       </div>
     );
@@ -77,7 +77,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
           <Shield className="w-4 h-4 text-blue-500" />
-          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">알고리즘 정보</h4>
+          <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('certificate:metadata.algorithmInfo')}</h4>
         </div>
         <div className="space-y-2">
           {certificate.version !== undefined && (
@@ -112,7 +112,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
             <Key className="w-4 h-4 text-green-500" />
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">공개키 정보</h4>
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('certificate:metadata.publicKeyInfo')}</h4>
           </div>
           <div className="space-y-2">
             {certificate.publicKeyAlgorithm && (
@@ -191,7 +191,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
             <Shield className="w-4 h-4 text-cyan-500" />
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">CA 정보</h4>
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('certificate:metadata.caInfo')}</h4>
           </div>
           <div className="space-y-2">
             {certificate.isCA !== undefined && (
@@ -229,7 +229,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
             <Key className="w-4 h-4 text-amber-500" />
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">식별자</h4>
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('certificate:metadata.identifiers')}</h4>
           </div>
           <div className="space-y-2">
             {certificate.subjectKeyIdentifier && (
@@ -280,7 +280,7 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
             <Link className="w-4 h-4 text-indigo-500" />
-            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">배포 지점</h4>
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('certificate:metadata.distributionPoints')}</h4>
           </div>
           <div className="space-y-3">
             {certificate.crlDistributionPoints && certificate.crlDistributionPoints.length > 0 && (

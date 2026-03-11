@@ -22,15 +22,15 @@ export default function ActiveConnectionsCard({ nginx, requestsPerSecond, unique
         <span className="text-3xl font-bold text-gray-900 dark:text-white">
           {uniqueUsers}
         </span>
-        <span className="text-sm text-gray-500 dark:text-gray-400">명 접속 중</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400">{t('monitoring:dashboard.activeNow')}</span>
       </div>
-      <div className="text-xs text-gray-400 dark:text-gray-500 mb-4">최근 5분 고유 IP 기준</div>
+      <div className="text-xs text-gray-400 dark:text-gray-500 mb-4">{t('monitoring:connections.uniqueIpBasis')}</div>
 
       {/* Secondary: TCP Connections */}
       <div className="flex items-center gap-1.5 mb-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
         <Link className="w-3.5 h-3.5 text-gray-400" />
         <span className="text-sm text-gray-600 dark:text-gray-300">
-          TCP 연결: <span className="font-semibold text-gray-800 dark:text-white">{nginx.activeConnections}</span>
+          {t('monitoring:dashboard.tcpConnections')}: <span className="font-semibold text-gray-800 dark:text-white">{nginx.activeConnections}</span>
         </span>
       </div>
 
@@ -54,11 +54,11 @@ export default function ActiveConnectionsCard({ nginx, requestsPerSecond, unique
 
       <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex justify-between">
-          <span className="flex items-center gap-1"><ArrowUpDown className="w-3.5 h-3.5" /> 처리량:</span>
+          <span className="flex items-center gap-1"><ArrowUpDown className="w-3.5 h-3.5" /> {t('monitoring:connections.throughput')}</span>
           <span className="font-medium text-gray-800 dark:text-gray-200">{requestsPerSecond.toFixed(1)} req/s</span>
         </div>
         <div className="flex justify-between">
-          <span>총 요청:</span>
+          <span>{t('monitoring:connections.totalRequests')}</span>
           <span className="font-medium text-gray-800 dark:text-gray-200">{nginx.totalRequests.toLocaleString()}</span>
         </div>
       </div>

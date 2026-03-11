@@ -98,7 +98,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Certificate Type */}
             <div>
               <label htmlFor="cert-type" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                인증서 종류
+                {t('certificate:filters.certType')}
               </label>
               <select
                 id="cert-type"
@@ -118,7 +118,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Validity */}
             <div>
               <label htmlFor="cert-validity" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                유효성
+                {t('certificate:filters.validity')}
               </label>
               <select
                 id="cert-validity"
@@ -159,7 +159,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Limit */}
             <div>
               <label htmlFor="cert-limit" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                표시 개수
+                {t('certificate:filters.displayCount')}
               </label>
               <select
                 id="cert-limit"
@@ -179,7 +179,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Search */}
             <div>
               <label htmlFor="cert-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                키워드 검색
+                {t('certificate:filters.keywordSearch')}
               </label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -205,7 +205,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
             >
               <Search className="w-4 h-4" />
-              검색
+              {t('certificate:filters.search')}
             </button>
             {criteria.country && (
               <>
@@ -232,7 +232,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                 className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
               >
                 {exportAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
-                전체 내보내기 PEM
+                {t('certificate:filters.exportAllPem')}
               </button>
               <button
                 onClick={() => exportAll('der')}
@@ -240,7 +240,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                 className="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
               >
                 {exportAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
-                전체 내보내기 DER
+                {t('certificate:filters.exportAllDer')}
               </button>
             </div>
           </div>

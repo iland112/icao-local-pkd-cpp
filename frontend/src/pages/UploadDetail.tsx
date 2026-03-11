@@ -130,12 +130,12 @@ export function UploadDetail() {
     const style = styles[status];
     const label: Record<UploadStatus, string> = {
       PENDING: t('common:status.pending'),
-      UPLOADING: '업로드 중',
-      PARSING: '파싱 중',
+      UPLOADING: t('upload:detail.uploading'),
+      PARSING: t('upload:detail.parsing'),
       PROCESSING: t('common:status.processing'),
-      VALIDATING: '검증 중',
-      SAVING_DB: 'DB 저장 중',
-      SAVING_LDAP: 'LDAP 저장 중',
+      VALIDATING: t('upload:detail.validating'),
+      SAVING_DB: t('upload:detail.savingDb'),
+      SAVING_LDAP: t('upload:detail.savingLdap'),
       COMPLETED: t('common:status.completed'),
       FAILED: t('common:status.failed'),
     };
@@ -187,7 +187,7 @@ export function UploadDetail() {
       <div className="w-full px-4 lg:px-6 py-4">
         <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
           <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-          <p className="text-lg font-medium">{error || '업로드 정보를 찾을 수 없습니다.'}</p>
+          <p className="text-lg font-medium">{error || t('upload:detail.notFoundMessage')}</p>
           <button
             onClick={() => navigate('/upload-history')}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
@@ -294,11 +294,11 @@ export function UploadDetail() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {upload.status === 'PROCESSING' ? t('upload.detail.processingCerts') : '처리 진행 중'}
+                      {upload.status === 'PROCESSING' ? t('upload.detail.processingCerts') : t('upload:detail.processingInProgressLabel')}
                     </p>
                     {upload.totalEntries && upload.totalEntries > 0 && (
                       <p className="text-sm text-blue-600 dark:text-blue-400">
-                        {(upload.processedEntries || 0).toLocaleString()} / {upload.totalEntries.toLocaleString()} 엔트리
+                        {(upload.processedEntries || 0).toLocaleString()} / {upload.totalEntries.toLocaleString()} {t('upload:detail.entriesUnit')}
                       </p>
                     )}
                   </div>
@@ -559,10 +559,10 @@ export function UploadDetail() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Validation Results
+                    {t('upload:detail.validationResultsTitle')}
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Total: {validationTotal} certificates
+                    {t('upload:detail.validationResultsTotal', { num: validationTotal })}
                   </p>
                 </div>
               </div>
@@ -636,7 +636,7 @@ export function UploadDetail() {
                           onClick={() => setSelectedValidation(result)}
                           className="px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                         >
-                          Details
+                          {t('upload:detail.details')}
                         </button>
                       </div>
                     </div>
@@ -646,7 +646,7 @@ export function UploadDetail() {
                   {validationTotal > validationLimit && (
                     <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Showing {validationPage * validationLimit + 1} - {Math.min((validationPage + 1) * validationLimit, validationTotal)} of {validationTotal}
+                        {t('upload:detail.showingRange', { start: validationPage * validationLimit + 1, end: Math.min((validationPage + 1) * validationLimit, validationTotal), num: validationTotal })}
                       </p>
                       <div className="flex items-center gap-2">
                         <button
@@ -654,14 +654,14 @@ export function UploadDetail() {
                           disabled={validationPage === 0}
                           className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Previous
+                          {t('upload:detail.previous')}
                         </button>
                         <button
                           onClick={() => fetchValidationResults(validationPage + 1)}
                           disabled={(validationPage + 1) * validationLimit >= validationTotal}
                           className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                          Next
+                          {t('upload:detail.next')}
                         </button>
                       </div>
                     </div>
@@ -670,7 +670,7 @@ export function UploadDetail() {
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
                   <Shield className="w-12 h-12 mb-3 opacity-50" />
-                  <p className="text-sm">No validation results found</p>
+                  <p className="text-sm">{t('upload:detail.noValidationResults')}</p>
                 </div>
               )}
             </div>
@@ -688,7 +688,7 @@ export function UploadDetail() {
           <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Validation Details
+                {t('upload:detail.validationDetails')}
               </h3>
               <button
                 onClick={() => setSelectedValidation(null)}
@@ -702,7 +702,7 @@ export function UploadDetail() {
               {/* Trust Chain Visualization */}
               {selectedValidation.trustChainPath && (
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Trust Chain Path</h4>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('upload:detail.trustChainPath')}</h4>
                   <TrustChainVisualization
                     trustChainPath={selectedValidation.trustChainPath}
                     trustChainValid={selectedValidation.trustChainValid}
@@ -713,26 +713,26 @@ export function UploadDetail() {
 
               {/* Certificate Info */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Certificate Information</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('upload:detail.certificateInformation')}</h4>
                 <div className="space-y-2 text-sm">
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Type:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.typeLabel')}</span>
                     <span className="text-gray-900 dark:text-white">{selectedValidation.certificateType}</span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Country:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.countryLabel')}</span>
                     <span className="text-gray-900 dark:text-white">{selectedValidation.countryCode}</span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Subject DN:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.subjectDnLabel')}</span>
                     <span className="text-gray-900 dark:text-white break-all">{selectedValidation.subjectDn}</span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Issuer DN:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.issuerDnLabel')}</span>
                     <span className="text-gray-900 dark:text-white break-all">{selectedValidation.issuerDn}</span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Serial Number:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.serialNumberLabel')}</span>
                     <span className="text-gray-900 dark:text-white font-mono">{selectedValidation.serialNumber}</span>
                   </div>
                 </div>
@@ -740,10 +740,10 @@ export function UploadDetail() {
 
               {/* Validation Status */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Validation Status</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('upload:detail.validationStatusTitle')}</h4>
                 <div className="space-y-2 text-sm">
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Overall Status:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.overallStatusLabel')}</span>
                     <span className={cn(
                       'font-medium',
                       selectedValidation.validationStatus === 'VALID' ? 'text-green-600 dark:text-green-400'
@@ -754,26 +754,26 @@ export function UploadDetail() {
                     </span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">Trust Chain:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.trustChainLabel')}</span>
                     <span className={cn(
                       'font-medium',
                       selectedValidation.trustChainValid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                     )}>
-                      {selectedValidation.trustChainValid ? 'Valid' : 'Invalid'}
+                      {selectedValidation.trustChainValid ? t('upload:detail.valid') : t('upload:detail.invalid')}
                     </span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">
-                    <span className="text-gray-600 dark:text-gray-400">CSCA Found:</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.cscaFoundLabel')}</span>
                     <span className={cn(
                       'font-medium',
                       selectedValidation.cscaFound ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                     )}>
-                      {selectedValidation.cscaFound ? 'Yes' : 'No'}
+                      {selectedValidation.cscaFound ? t('upload:detail.yes') : t('upload:detail.no')}
                     </span>
                   </div>
                   {selectedValidation.cscaSubjectDn && (
                     <div className="grid grid-cols-[140px_1fr] gap-2">
-                      <span className="text-gray-600 dark:text-gray-400">CSCA Subject:</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('upload:detail.cscaSubjectLabel')}</span>
                       <span className="text-gray-900 dark:text-white break-all">{selectedValidation.cscaSubjectDn}</span>
                     </div>
                   )}

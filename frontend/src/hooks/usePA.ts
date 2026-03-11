@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { paApi } from '@/services/api';
 import type { PageRequest, PAVerificationRequest } from '@/types';
 import { toast } from '@/stores/toastStore';
@@ -51,6 +52,7 @@ export function usePAStatistics() {
 // Perform PA verification mutation
 export function useVerifyPA() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation(['pa', 'common']);
 
   return useMutation({
     mutationFn: async (request: PAVerificationRequest) => {
@@ -62,40 +64,44 @@ export function useVerifyPA() {
       queryClient.invalidateQueries({ queryKey: paKeys.statistics() });
       if (data.success && data.data) {
         if (data.data.status === 'VALID') {
-          toast.success('PA 검증 성공', 'Passive Authentication이 성공적으로 완료되었습니다.');
+          toast.success(t('pa:hook.verifySuccess'), t('pa:hook.verifySuccessDesc'));
         } else {
-          toast.warning('PA 검증 실패', '일부 검증 단계가 실패했습니다.');
+          toast.warning(t('pa:hook.verifyFailed'), t('pa:hook.verifyFailedDesc'));
         }
       }
     },
     onError: (error) => {
-      toast.error('PA 검증 오류', error instanceof Error ? error.message : '알 수 없는 오류');
+      toast.error(t('pa:hook.verifyError'), error instanceof Error ? error.message : t('common:error.unknownError_short'));
     },
   });
 }
 
 // Parse DG1 mutation
 export function useParseDG1() {
+  const { t } = useTranslation(['pa', 'common']);
+
   return useMutation({
     mutationFn: async (data: string) => {
       const response = await paApi.parseDG1(data);
       return response.data;
     },
     onError: (error) => {
-      toast.error('DG1 파싱 실패', error instanceof Error ? error.message : '알 수 없는 오류');
+      toast.error(t('pa:hook.dg1ParseFailed'), error instanceof Error ? error.message : t('common:error.unknownError_short'));
     },
   });
 }
 
 // Parse DG2 mutation
 export function useParseDG2() {
+  const { t } = useTranslation(['pa', 'common']);
+
   return useMutation({
     mutationFn: async (data: string) => {
       const response = await paApi.parseDG2(data);
       return response.data;
     },
     onError: (error) => {
-      toast.error('DG2 파싱 실패', error instanceof Error ? error.message : '알 수 없는 오류');
+      toast.error(t('pa:hook.dg2ParseFailed'), error instanceof Error ? error.message : t('common:error.unknownError_short'));
     },
   });
 }

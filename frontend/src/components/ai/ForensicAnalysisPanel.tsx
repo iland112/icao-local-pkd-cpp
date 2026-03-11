@@ -7,17 +7,17 @@ interface ForensicAnalysisPanelProps {
   fingerprint: string;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  algorithm: '서명 알고리즘',
-  key_size: '키 크기',
-  compliance: 'ICAO 준수',
-  validity: '유효기간',
-  extensions: '확장 필드',
-  anomaly: 'ML 이상 탐지',
-  issuer_reputation: '발급자 평판',
-  structural_consistency: '구조 일관성',
-  temporal_pattern: '시간 패턴',
-  dn_consistency: 'DN 일관성',
+const CATEGORY_KEYS: Record<string, string> = {
+  algorithm: 'forensic.panel.category.algorithm',
+  key_size: 'forensic.panel.category.keySize',
+  compliance: 'forensic.panel.category.compliance',
+  validity: 'forensic.panel.category.validity',
+  extensions: 'forensic.panel.category.extensions',
+  anomaly: 'forensic.panel.category.anomaly',
+  issuer_reputation: 'forensic.panel.category.issuerReputation',
+  structural_consistency: 'forensic.panel.category.structuralConsistency',
+  temporal_pattern: 'forensic.panel.category.temporalPattern',
+  dn_consistency: 'forensic.panel.category.dnConsistency',
 };
 
 const CATEGORY_MAX: Record<string, number> = {
@@ -61,7 +61,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
     setError(null);
     aiAnalysisApi.getCertificateForensic(fingerprint)
       .then(res => setDetail(res.data))
-      .catch(() => setError('포렌식 분석 데이터를 불러올 수 없습니다'))
+      .catch(() => setError(t('ai:forensic.panel.loadError')))
       .finally(() => setLoading(false));
   }, [fingerprint]);
 
@@ -69,7 +69,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-500 border-t-transparent" />
-        <span className="ml-3 text-gray-500">포렌식 분석 로딩 중...</span>
+        <span className="ml-3 text-gray-500">{t('ai:forensic.panel.loading')}</span>
       </div>
     );
   }
@@ -78,7 +78,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
         <Shield className="w-10 h-10 mx-auto mb-2 text-gray-300" />
-        <p>{error || '분석 데이터가 없습니다. 전체 분석을 먼저 실행하세요.'}</p>
+        <p>{error || t('ai:forensic.panel.noData')}</p>
       </div>
     );
   }
@@ -97,31 +97,31 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
         </div>
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <span className="text-lg font-semibold dark:text-white">포렌식 리스크</span>
+            <span className="text-lg font-semibold dark:text-white">{t('ai:forensic.panel.forensicRisk')}</span>
             <span className={`px-2 py-0.5 rounded text-xs font-medium ${SEVERITY_COLORS[detail.forensic_risk_level] || ''}`}>
               {detail.forensic_risk_level}
             </span>
           </div>
           <div className="flex gap-4 mt-1 text-sm text-gray-500 dark:text-gray-400">
-            <span>이상 탐지: {(detail.anomaly_score * 100).toFixed(1)}%</span>
-            <span>구조 위반: {(detail.structural_anomaly_score * 100).toFixed(1)}%</span>
-            <span>발급자 편차: {(detail.issuer_anomaly_score * 100).toFixed(1)}%</span>
+            <span>{t('ai:forensic.panel.anomalyDetection')}: {(detail.anomaly_score * 100).toFixed(1)}%</span>
+            <span>{t('ai:forensic.panel.structuralViolation')}: {(detail.structural_anomaly_score * 100).toFixed(1)}%</span>
+            <span>{t('ai:forensic.panel.issuerDeviation')}: {(detail.issuer_anomaly_score * 100).toFixed(1)}%</span>
           </div>
         </div>
       </div>
 
       {/* Category Scores Bar Chart */}
       <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-        <h4 className="text-sm font-semibold mb-3 dark:text-white">10개 카테고리별 점수</h4>
+        <h4 className="text-sm font-semibold mb-3 dark:text-white">{t('ai:forensic.panel.categoryScores')}</h4>
         <div className="space-y-2">
-          {Object.entries(CATEGORY_LABELS).map(([key, label]) => {
+          {Object.entries(CATEGORY_KEYS).map(([key, labelKey]) => {
             const score = categories[key] || 0;
             const max = CATEGORY_MAX[key] || 10;
             const pct = Math.min((score / max) * 100, 100);
             const color = pct >= 60 ? 'bg-red-500' : pct >= 30 ? 'bg-amber-500' : 'bg-green-500';
             return (
               <div key={key} className="flex items-center gap-2">
-                <span className="text-xs text-gray-600 dark:text-gray-400 w-24 text-right">{label}</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400 w-24 text-right">{t(`ai:${labelKey}`)}</span>
                 <div className="flex-1 h-4 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                   <div className={`h-full ${color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                 </div>
@@ -136,7 +136,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
       {findings.length > 0 && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <h4 className="text-sm font-semibold mb-3 dark:text-white">
-            발견 사항 ({findings.length}건)
+            {t('ai:forensic.panel.findingsTitle', { num: findings.length })}
           </h4>
           <div className="space-y-2">
             {findings.map((f) => (
@@ -144,7 +144,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
                 <SeverityIcon severity={f.severity} />
                 <div className="flex-1">
                   <span className="text-sm">{f.message}</span>
-                  <span className="ml-2 text-xs opacity-60">[{CATEGORY_LABELS[f.category] || f.category}]</span>
+                  <span className="ml-2 text-xs opacity-60">[{CATEGORY_KEYS[f.category] ? t(`ai:${CATEGORY_KEYS[f.category]}`) : f.category}]</span>
                 </div>
               </div>
             ))}
@@ -155,7 +155,7 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
       {/* Anomaly Explanations */}
       {detail.anomaly_explanations.length > 0 && (
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-          <h4 className="text-sm font-semibold mb-3 dark:text-white">ML 이상 탐지 설명</h4>
+          <h4 className="text-sm font-semibold mb-3 dark:text-white">{t('ai:forensic.panel.anomalyExplanations')}</h4>
           <ul className="space-y-1">
             {detail.anomaly_explanations.map((exp) => (
               <li key={exp} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">

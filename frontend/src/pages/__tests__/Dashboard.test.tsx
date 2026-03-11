@@ -74,7 +74,7 @@ describe('Dashboard page', () => {
     render(<Dashboard />);
 
     expect(
-      screen.getByText('ePassport 인증서 관리 및 Passive Authentication 검증 플랫폼')
+      screen.getByText('ePassport 인증서 관리 및 {t('pa:verify.pageTitle')} 플랫폼')
     ).toBeInTheDocument();
   });
 

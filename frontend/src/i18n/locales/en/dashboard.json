@@ -42,6 +42,10 @@
     "dsc": "DSC",
     "dscNc": "DSC_NC",
     "crl": "CRL",
-    "total": "Total"
+    "total": "Total",
+    "detailTitle": "Detailed Certificate Statistics by Country",
+    "detailSubtitle": "Certificate type breakdown for all {{num}} countries",
+    "selfSigned": "Self-signed",
+    "linkCert": "Link Certificate"
   }
 }

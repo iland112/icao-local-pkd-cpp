@@ -101,7 +101,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <ShieldAlert className="w-5 h-5 text-orange-500" />
-          확장 프로파일 규칙 위반 ({anomalies.length}건)
+          {t('ai:extensionCompliance.ruleViolationsNum', { num: anomalies.length })}
         </h3>
         <div className="flex flex-wrap gap-2">
           {Object.entries(severityDist).map(([sev, count]) => (
@@ -122,7 +122,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
             className="text-xs border border-gray-200 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 dark:text-gray-200"
           >
             <option value="">{ t('ai:dashboard.allTypes') }</option>
-            {certTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            {certTypes.map(ct => <option key={ct} value={ct}>{ct}</option>)}
           </select>
         </div>
         <select
@@ -138,7 +138,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
       {anomalies.length === 0 ? (
         <div className="text-center py-8 text-gray-400">
           <CheckCircle className="w-10 h-10 mx-auto mb-2 text-green-400" />
-          <p className="text-sm">확장 프로파일 규칙 위반이 없습니다.</p>
+          <p className="text-sm">{t('ai:extensionCompliance.noViolations_msg')}</p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -148,9 +148,9 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
             <SortableHeader as="div" label={t('upload:certUpload.certificates')} sortKey="fingerprint" sortConfig={anomalySortConfig} onSort={requestAnomalySort} />
             <SortableHeader as="div" label={t('common:label.type')} sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
             <SortableHeader as="div" label={t('common:label.country')} sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
-            <SortableHeader as="div" label="심각도" sortKey="_severityOrder" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
-            <SortableHeader as="div" label="위반" sortKey="_violationCount" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
-            <SortableHeader as="div" label="점수" sortKey="structural_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label={t('ai:extensionCompliance.severity')} sortKey="_severityOrder" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label={t('ai:extensionCompliance.violation')} sortKey="_violationCount" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label={t('ai:extensionCompliance.score')} sortKey="structural_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
           </div>
 
           {/* Rows */}
@@ -210,17 +210,17 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
                         ))}
                         {a.missing_required.length > 0 && (
                           <div className="text-xs text-red-500 break-words">
-                            필수 누락: {a.missing_required.join(', ')}
+                            {t('ai:extensionCompliance.missingRequired', { items: a.missing_required.join(', ') })}
                           </div>
                         )}
                         {a.forbidden_violations.length > 0 && (
                           <div className="text-xs text-orange-500 break-words">
-                            금지 위반: {a.forbidden_violations.join(', ')}
+                            {t('ai:extensionCompliance.forbiddenViolation', { items: a.forbidden_violations.join(', ') })}
                           </div>
                         )}
                         {a.key_usage_violations.length > 0 && (
                           <div className="text-xs text-amber-500 break-words">
-                            키 사용 위반: {a.key_usage_violations.join(', ')}
+                            {t('ai:extensionCompliance.keyUsageViolation', { items: a.key_usage_violations.join(', ') })}
                           </div>
                         )}
                       </div>

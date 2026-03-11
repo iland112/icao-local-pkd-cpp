@@ -127,7 +127,21 @@
     "noHistory": "No reconciliation history",
     "startedAt": "Started At",
     "completedAt": "Completed At",
-    "dailySync": "Daily Sync"
+    "dailySync": "Daily Sync",
+    "historyTitle": "Reconciliation History",
+    "noHistory_msg": "No reconciliation history available.",
+    "trigger": "Trigger",
+    "manual": "Manual",
+    "added": "Added",
+    "elapsedTime": "Duration",
+    "detailTitle": "Reconciliation Detail #{{id}}",
+    "addedCerts": "Added Certificates",
+    "operationLogs": "Operation Logs",
+    "noLogs": "No operation logs available.",
+    "errorMessage": "Error Message",
+    "logType": "Type",
+    "secondsUnit": "s",
+    "minutesSeconds": "{{min}}m {{sec}}s"
   },
   "revalidation": {
     "title": "DSC Expiration Revalidation",

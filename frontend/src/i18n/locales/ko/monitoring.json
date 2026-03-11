@@ -1,5 +1,6 @@
 {
   "title": "시스템 모니터링",
+  "subtitle": "실시간 시스템 리소스 및 서비스 상태를 모니터링합니다.",
   "serviceStatus": "서비스 상태",
   "systemMetrics": "시스템 메트릭",
   "connectionPool": "연결 풀",
@@ -7,6 +8,7 @@
   "uniqueVisitors": "고유 접속자",
   "connectedNow": "{{count}}명 접속 중",
   "tcpConnections": "TCP 연결",
+  "metricsCollectedAt": "메트릭 수집 시간: {{time}}",
   "services": {
     "pkdManagement": "PKD Management",
     "paService": "PA Service",
@@ -18,10 +20,33 @@
     "oracle": "Oracle",
     "openldap": "OpenLDAP"
   },
+  "serviceDefs": {
+    "pkdManagement": {
+      "label": "PKD Management",
+      "desc": "업로드, 인증서 관리, 인증"
+    },
+    "paService": {
+      "label": "PA Service",
+      "desc": "여권 Passive Authentication"
+    },
+    "pkdRelay": {
+      "label": "PKD Relay",
+      "desc": "DB-LDAP 동기화"
+    },
+    "monitoring": {
+      "label": "Monitoring",
+      "desc": "시스템 메트릭 수집"
+    },
+    "aiAnalysis": {
+      "label": "AI Analysis",
+      "desc": "ML 이상 탐지, 포렌식 분석"
+    }
+  },
   "status": {
     "healthy": "정상",
     "unhealthy": "비정상",
-    "unknown": "알 수 없음"
+    "unknown": "알 수 없음",
+    "stopped": "중단"
   },
   "metrics": {
     "cpuUsage": "CPU 사용률",
@@ -32,21 +57,65 @@
     "latency": "응답 시간",
     "errorRate": "오류율"
   },
+  "metricCard": {
+    "memory": "메모리",
+    "disk": "디스크",
+    "networkIO": "네트워크 I/O",
+    "used": "사용",
+    "sent": "송신",
+    "received": "수신",
+    "packets": "패킷"
+  },
+  "serviceCard": {
+    "responseTime": "응답 시간",
+    "lastChecked": "마지막 체크"
+  },
+  "summary": {
+    "serviceStatus": "서비스 {{up}}/{{total}} 정상"
+  },
+  "error": {
+    "fetchFailed": "모니터링 데이터를 불러오는데 실패했습니다.",
+    "loadFailed": "모니터링 데이터 로드 실패",
+    "unknown": "알 수 없는 오류가 발생했습니다."
+  },
+  "loading": {
+    "checkingServices": "서비스 상태를 확인하는 중..."
+  },
   "pool": {
+    "title": "커넥션 풀 사용량",
+    "collecting": "풀 데이터 수집 중...",
+    "inUse": "사용 중",
     "active": "활성",
     "idle": "대기",
     "total": "전체",
     "maxSize": "최대"
   },
+  "requestRate": {
+    "title": "요청 처리량 트렌드",
+    "collecting": "데이터 수집 중...",
+    "throughput": "처리량 (req/s)",
+    "concurrentConnections": "동시 접속",
+    "points": "{{num}} points"
+  },
+  "connections": {
+    "title": "접속 현황",
+    "uniqueIpBasis": "최근 5분 고유 IP 기준",
+    "throughput": "처리량:",
+    "totalRequests": "총 요청:"
+  },
+  "latency": {
+    "title": "서비스 응답시간 (Latency)",
+    "collecting": "데이터 수집 중..."
+  },
   "noData": "모니터링 데이터가 없습니다",
   "dashboard": {
     "systemMetrics": "시스템 메트릭",
     "serviceHealth": "서비스 상태",
-    "connectionPool": "커넥션 풀",
+    "connectionPool": "연결 풀",
     "activeConnections": "활성 연결",
     "uniqueVisitors": "고유 접속자",
     "connected": "접속 중",
-    "latencyTrend": "응답 시간 추이",
+    "latencyTrend": "지연시간 추이",
     "requestRate": "요청 비율",
     "cpuUsage": "CPU 사용률",
     "memoryUsage": "메모리 사용률",
@@ -56,14 +125,21 @@
     "ldapConnections": "LDAP 연결",
     "dbPool": "DB 풀",
     "ldapPool": "LDAP 풀",
-    "usedConnections": "사용 연결",
-    "availableConnections": "가용 연결",
-    "maxConnections": "최대 연결",
+    "usedConnections": "사용",
+    "availableConnections": "가용",
+    "maxConnections": "최대",
     "connectionRate": "연결 비율",
     "requestsPerMin": "요청/분",
     "avgLatency": "평균 지연",
     "peakLatency": "최대 지연",
     "tcpConnections": "TCP 연결",
-    "activeNow": "명 접속 중"
+    "activeNow": "명 접속 중",
+    "systemMonitoring": "시스템 모니터링",
+    "monitoringSubtitle": "마이크로서비스 상태 및 인프라 현황을 모니터링합니다.",
+    "serviceStatus": "서비스 상태",
+    "infrastructure": "인프라",
+    "dataLoadFailed": "모니터링 데이터를 불러올 수 없습니다.",
+    "retryLoad": "다시 시도",
+    "noServiceData": "서비스 데이터가 없습니다."
   }
 }

@@ -151,6 +151,9 @@
     "passCount": "{{count}} passed",
     "failCount": "{{count}} failed",
     "warnCount": "{{count}} warnings",
+    "numFailed": "{{num}} failed",
+    "numWarning": "{{num}} warnings",
+    "allPassed": "All passed",
     "category": {
       "version": "Version",
       "serialNumber": "Serial Number",
@@ -183,18 +186,48 @@
     "notBefore": "Not Before",
     "notAfter": "Not After",
     "serialNumber": "Serial Number",
-    "fingerprintSha256": "SHA-256 Fingerprint"
+    "fingerprintSha256": "SHA-256 Fingerprint",
+    "noMetadata": "X.509 metadata is not available.",
+    "algorithmInfo": "Algorithm Information",
+    "publicKeyInfo": "Public Key Information",
+    "caInfo": "CA Information",
+    "identifiers": "Identifiers",
+    "distributionPoints": "Distribution Points"
   },
   "duplicate": {
     "title": "Duplicate Certificates",
     "noData": "No duplicate certificates",
     "totalDuplicates": "{{count}} duplicates"
   },
+  "typeDescription": {
+    "linkCert": "Certificate defined in ICAO Doc 9303 Part 12 that links trust chains between a previous CSCA and a new CSCA.\n\nUse cases: CSCA key rollover/renewal, signature algorithm migration (RSA \u2192 ECDSA), organizational information changes, CSCA infrastructure upgrades",
+    "mlsc": "Self-signed certificate used to digitally sign Master List CMS structures in ICAO PKD.\n\nCharacteristics: Subject DN = Issuer DN, included in Master List CMS SignerInfo, digitalSignature key usage (0x80 bit)",
+    "csca": "Self-signed root certificate defined in ICAO Doc 9303 Part 12, the top-level national certificate authority that issues DSCs for signing passport electronic chips.\n\nRole: DSC issuance, root of national PKI trust chain, top-level trust anchor for passport verification",
+    "dsc": "Certificate defined in ICAO Doc 9303 Part 12, used to digitally sign data groups (DG1-DG16) in passport electronic chips (eMRTD).\n\nRole: Passport data group (DG) signing (SOD generation), issued by CSCA, subject of Passive Authentication verification, validity: 3 months ~ 3 years",
+    "dscNc": "DSC that does not fully comply with ICAO 9303 technical standards. Stored separately in the nc-data container of ICAO PKD.\n\n\u26a0\ufe0f Warning: Not recommended for production use, may be rejected by some verification systems, ICAO recommends deprecating nc-data since 2021",
+    "crl": "Certificate Revocation List - an X.509 data structure containing a list of revoked certificates.",
+    "ml": "Master List - a CMS SignedData structure distributed by ICAO PKD containing country-specific CSCA certificate lists."
+  },
+  "format": {
+    "unknown": "Unknown"
+  },
+  "filters": {
+    "certType": "Certificate Type",
+    "validity": "Validity",
+    "displayCount": "Display Count",
+    "keywordSearch": "Keyword Search",
+    "search": "Search",
+    "exportAllPem": "Export All PEM",
+    "exportAllDer": "Export All DER",
+    "violationItems": "Violations:"
+  },
   "compliance": {
     "doc9303Pass": "Doc 9303 Compliant",
     "doc9303Warning": "Doc 9303 Warning",
     "doc9303Fail": "Doc 9303 Non-Compliant",
     "icaoWarning": "ICAO Warning",
-    "icaoUnknown": "ICAO Unknown"
+    "icaoUnknown": "ICAO Unknown",
+    "icaoCompliant": "ICAO Compliant",
+    "icaoNonCompliant": "ICAO Non-Compliant"
   }
 }

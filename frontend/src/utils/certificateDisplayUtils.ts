@@ -9,13 +9,14 @@
  */
 
 import type { Certificate } from '@/components/CertificateDetailDialog';
+import i18n from '@/i18n';
 export { formatDate } from '@/utils/dateFormat';
 
 // --- Formatting ---
 
 /** Format X.509 version number (0 → v1, 1 → v2, 2 → v3) */
 export function formatVersion(version: number | undefined): string {
-  if (version === undefined) return 'Unknown';
+  if (version === undefined) return i18n.t('certificate:format.unknown');
   const versionMap: Record<number, string> = { 0: 'v1', 1: 'v2', 2: 'v3' };
   return versionMap[version] || `v${version + 1}`;
 }
@@ -89,26 +90,25 @@ export function isMasterListSignerCertificate(cert: Certificate): boolean {
 /** Get certificate type description for tooltip display */
 export function getCertTypeDescription(certType: string, cert: Certificate): string {
   if (isLinkCertificate(cert)) {
-    return 'ICAO Doc 9303 Part 12에 정의된 인증서로, 이전 CSCA와 새 CSCA 사이의 신뢰 체인을 연결합니다.\n\n사용 사례: CSCA 키 교체/갱신, 서명 알고리즘 마이그레이션 (RSA \u2192 ECDSA), 조직 정보 변경, CSCA 인프라 업그레이드';
+    return i18n.t('certificate:typeDescription.linkCert');
   }
   if (isMasterListSignerCertificate(cert)) {
-    return 'ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.\n\n특징: Subject DN = Issuer DN, Master List CMS SignerInfo에 포함, digitalSignature key usage (0x80 bit)';
+    return i18n.t('certificate:typeDescription.mlsc');
   }
 
-  switch (certType) {
-    case 'CSCA':
-      return 'ICAO Doc 9303 Part 12에 정의된 Self-signed 루트 인증서로, 여권 전자 칩에 서명하는 DSC를 발급하는 국가 최상위 인증기관입니다.\n\n역할: DSC 발급, 국가 PKI 신뢰 체인의 루트, 여권 검증 시 최상위 신뢰 앵커 (Trust Anchor)';
-    case 'DSC':
-      return 'ICAO Doc 9303 Part 12에 정의된 인증서로, 여권 전자 칩(eMRTD)의 데이터 그룹(DG1-DG16)에 디지털 서명하는데 사용됩니다.\n\n역할: 여권 데이터 그룹(DG) 서명 (SOD 생성), CSCA에 의해 발급, Passive Authentication 검증 대상, 유효기간: 3개월 ~ 3년';
-    case 'DSC_NC':
-      return 'ICAO 9303 기술 표준을 완전히 준수하지 않는 DSC입니다. ICAO PKD의 nc-data 컨테이너에 별도 저장됩니다.\n\n\u26a0\ufe0f 주의: 프로덕션 환경에서 사용 권장하지 않음, 일부 검증 시스템에서 거부될 수 있음, ICAO는 2021년부터 nc-data 폐기 권장';
-    case 'MLSC':
-      return 'ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.\n\n특징: Subject DN = Issuer DN, Master List CMS SignerInfo에 포함, digitalSignature key usage (0x80 bit)';
-    case 'CRL':
-      return '인증서 폐지 목록 (Certificate Revocation List) - 폐지된 인증서 목록을 담은 X.509 데이터 구조입니다.';
-    case 'ML':
-      return 'Master List - ICAO PKD에서 배포하는 국가별 CSCA 인증서 목록이 포함된 CMS SignedData 구조입니다.';
-    default:
-      return certType;
+  const typeKeyMap: Record<string, string> = {
+    'CSCA': 'csca',
+    'DSC': 'dsc',
+    'DSC_NC': 'dscNc',
+    'MLSC': 'mlsc',
+    'CRL': 'crl',
+    'ML': 'ml',
+  };
+
+  const key = typeKeyMap[certType];
+  if (key) {
+    return i18n.t(`certificate:typeDescription.${key}`);
   }
+
+  return certType;
 }

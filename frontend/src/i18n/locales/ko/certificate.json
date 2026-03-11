@@ -151,6 +151,9 @@
     "passCount": "{{count}}건 통과",
     "failCount": "{{count}}건 실패",
     "warnCount": "{{count}}건 주의",
+    "numFailed": "{{num}}건 실패",
+    "numWarning": "{{num}}건 경고",
+    "allPassed": "모두 통과",
     "category": {
       "version": "버전",
       "serialNumber": "일련번호",
@@ -183,18 +186,48 @@
     "notBefore": "유효 시작",
     "notAfter": "유효 종료",
     "serialNumber": "일련번호",
-    "fingerprintSha256": "SHA-256 지문"
+    "fingerprintSha256": "SHA-256 지문",
+    "noMetadata": "X.509 메타데이터를 사용할 수 없습니다.",
+    "algorithmInfo": "알고리즘 정보",
+    "publicKeyInfo": "공개키 정보",
+    "caInfo": "CA 정보",
+    "identifiers": "식별자",
+    "distributionPoints": "배포 지점"
   },
   "duplicate": {
     "title": "중복 인증서",
     "noData": "중복된 인증서가 없습니다",
     "totalDuplicates": "중복 {{count}}건"
   },
+  "typeDescription": {
+    "linkCert": "ICAO Doc 9303 Part 12에 정의된 인증서로, 이전 CSCA와 새 CSCA 사이의 신뢰 체인을 연결합니다.\n\n사용 사례: CSCA 키 교체/갱신, 서명 알고리즘 마이그레이션 (RSA \u2192 ECDSA), 조직 정보 변경, CSCA 인프라 업그레이드",
+    "mlsc": "ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.\n\n특징: Subject DN = Issuer DN, Master List CMS SignerInfo에 포함, digitalSignature key usage (0x80 bit)",
+    "csca": "ICAO Doc 9303 Part 12에 정의된 Self-signed 루트 인증서로, 여권 전자 칩에 서명하는 DSC를 발급하는 국가 최상위 인증기관입니다.\n\n역할: DSC 발급, 국가 PKI 신뢰 체인의 루트, 여권 검증 시 최상위 신뢰 앵커 (Trust Anchor)",
+    "dsc": "ICAO Doc 9303 Part 12에 정의된 인증서로, 여권 전자 칩(eMRTD)의 데이터 그룹(DG1-DG16)에 디지털 서명하는데 사용됩니다.\n\n역할: 여권 데이터 그룹(DG) 서명 (SOD 생성), CSCA에 의해 발급, Passive Authentication 검증 대상, 유효기간: 3개월 ~ 3년",
+    "dscNc": "ICAO 9303 기술 표준을 완전히 준수하지 않는 DSC입니다. ICAO PKD의 nc-data 컨테이너에 별도 저장됩니다.\n\n\u26a0\ufe0f 주의: 프로덕션 환경에서 사용 권장하지 않음, 일부 검증 시스템에서 거부될 수 있음, ICAO는 2021년부터 nc-data 폐기 권장",
+    "crl": "인증서 폐지 목록 (Certificate Revocation List) - 폐지된 인증서 목록을 담은 X.509 데이터 구조입니다.",
+    "ml": "Master List - ICAO PKD에서 배포하는 국가별 CSCA 인증서 목록이 포함된 CMS SignedData 구조입니다."
+  },
+  "format": {
+    "unknown": "Unknown"
+  },
+  "filters": {
+    "certType": "인증서 종류",
+    "validity": "유효성",
+    "displayCount": "표시 개수",
+    "keywordSearch": "키워드 검색",
+    "search": "검색",
+    "exportAllPem": "전체 내보내기 PEM",
+    "exportAllDer": "전체 내보내기 DER",
+    "violationItems": "위반 항목:"
+  },
   "compliance": {
     "doc9303Pass": "Doc 9303 적합",
     "doc9303Warning": "Doc 9303 경고",
     "doc9303Fail": "Doc 9303 부적합",
     "icaoWarning": "ICAO 경고",
-    "icaoUnknown": "ICAO 미확인"
+    "icaoUnknown": "ICAO 미확인",
+    "icaoCompliant": "ICAO 준수",
+    "icaoNonCompliant": "ICAO 미준수"
   }
 }

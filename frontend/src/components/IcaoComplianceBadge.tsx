@@ -60,13 +60,13 @@ export function IcaoComplianceBadge({
   const getLabel = () => {
     switch (compliance.complianceLevel) {
       case 'CONFORMANT':
-        return t('upload.statistics.icaoCompliant');
+        return t('certificate:compliance.icaoCompliant');
       case 'WARNING':
-        return t('certificate.compliance.icaoWarning');
+        return t('certificate:compliance.icaoWarning');
       case 'NON_CONFORMANT':
-        return t('upload.statistics.icaoNonCompliant');
+        return t('certificate:compliance.icaoNonCompliant');
       default:
-        return t('certificate.compliance.icaoUnknown');
+        return t('certificate:compliance.icaoUnknown');
     }
   };
 
@@ -87,7 +87,7 @@ export function IcaoComplianceBadge({
 
       {showDetails && compliance.violations.length > 0 && (
         <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
-          <div className="font-medium">위반 항목:</div>
+          <div className="font-medium">{t('certificate:filters.violationItems')}</div>
           <ul className="list-disc list-inside space-y-0.5">
             {compliance.violations.map((violation) => (
               <li key={violation}>{violation}</li>

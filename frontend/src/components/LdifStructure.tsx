@@ -151,12 +151,12 @@ const buildDnTree = (entries: LdifEntry[]): DnTreeNode => {
 /**
  * Convert DN tree to TreeNode format (recursive)
  */
-function convertDnTreeToTreeNode(dnNode: DnTreeNode, nodeId: string): TreeNode {
+function convertDnTreeToTreeNode(dnNode: DnTreeNode, nodeId: string, t: (key: string, opts?: Record<string, unknown>) => string): TreeNode {
   const children: TreeNode[] = [];
 
   // Add child DN nodes
   dnNode.children.forEach((childDnNode, rdn) => {
-    children.push(convertDnTreeToTreeNode(childDnNode, `${nodeId}-dn-${rdn}`));
+    children.push(convertDnTreeToTreeNode(childDnNode, `${nodeId}-dn-${rdn}`, t));
   });
 
   // Add entries at this DN level
@@ -183,7 +183,7 @@ function convertDnTreeToTreeNode(dnNode: DnTreeNode, nodeId: string): TreeNode {
   return {
     id: nodeId,
     name: displayRdn,
-    value: dnNode.entries.length > 0 ? `${dnNode.entries.length}개 엔트리` : undefined,
+    value: dnNode.entries.length > 0 ? t('upload:ldifStructure.entriesCount', { num: dnNode.entries.length }) : undefined,
     icon: isRoot ? 'shield' : 'key',
     children: children.length > 0 ? children : undefined,
   };
@@ -203,8 +203,8 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
   const treeData = useMemo((): TreeNode[] => {
     if (!data) return [];
     const dnTree = buildDnTree(data.entries);
-    return [convertDnTreeToTreeNode(dnTree, 'root')];
-  }, [data]);
+    return [convertDnTreeToTreeNode(dnTree, 'root', t)];
+  }, [data, t]);
 
   // Fetch LDIF structure
   useEffect(() => {
@@ -237,7 +237,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         <span className="ml-3 text-gray-600 dark:text-gray-400">
-          LDIF 구조 로딩 중...
+          {t('upload:ldifStructure.loading')}
         </span>
       </div>
     );
@@ -250,7 +250,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
         <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
         <div>
           <div className="font-semibold text-red-800 dark:text-red-300">
-            LDIF 구조 로드 실패
+            {t('upload:ldifStructure.loadFailed')}
           </div>
           <div className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</div>
         </div>
@@ -262,7 +262,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
   if (!data) {
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-        LDIF 구조 데이터가 없습니다.
+        {t('upload:ldifStructure.noData')}
       </div>
     );
   }
@@ -275,19 +275,19 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
           <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {data.totalEntries.toLocaleString()}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">총 엔트리</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.totalEntries')}</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
             {data.displayedEntries.toLocaleString()}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">표시 중</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.displayed')}</div>
         </div>
         <div className="text-center">
           <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {data.totalAttributes.toLocaleString()}
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">총 속성</div>
+          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.totalAttributes')}</div>
         </div>
       </div>
 
@@ -299,7 +299,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
             className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-sm"
           >
             <span className="font-semibold">{className}</span>:{' '}
-            <span>{count.toLocaleString()}개</span>
+            <span>{count.toLocaleString()}</span>
           </div>
         ))}
       </div>
@@ -308,18 +308,18 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            표시 개수:
+            {t('upload:ldifStructure.displayCount')}
           </label>
           <select
             value={maxEntries}
             onChange={(e) => setMaxEntries(Number(e.target.value))}
             className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
           >
-            <option value="50">50 엔트리</option>
-            <option value="100">100 엔트리</option>
-            <option value="500">500 엔트리</option>
-            <option value="1000">1000 엔트리</option>
-            <option value="10000">{ t('monitoring:pool.total') }</option>
+            <option value="50">{t('upload:ldifStructure.nEntries', { num: 50 })}</option>
+            <option value="100">{t('upload:ldifStructure.nEntries', { num: 100 })}</option>
+            <option value="500">{t('upload:ldifStructure.nEntries', { num: 500 })}</option>
+            <option value="1000">{t('upload:ldifStructure.nEntries', { num: 1000 })}</option>
+            <option value="10000">{t('upload:ldifStructure.all')}</option>
           </select>
         </div>
       </div>
@@ -329,9 +329,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
         <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
           <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
           <div className="text-sm text-yellow-800 dark:text-yellow-300">
-            <strong>표시 제한:</strong> 전체 {data.totalEntries.toLocaleString()}개 중{' '}
-            {data.displayedEntries.toLocaleString()}개만 표시됩니다. 더 많은 엔트리를
-            보려면 표시 개수를 늘려주세요.
+            <strong>{t('upload:ldifStructure.truncatedLabel')}</strong> {t('upload:ldifStructure.truncatedMessage', { total: data.totalEntries.toLocaleString(), displayed: data.displayedEntries.toLocaleString() })}
           </div>
         </div>
       )}
@@ -344,7 +342,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
 
       {/* Entry Count Footer */}
       <div className="text-center text-sm text-gray-500 dark:text-gray-400">
-        {data.entries.length.toLocaleString()}개 엔트리 표시됨
+        {t('upload:ldifStructure.entriesDisplayed', { num: data.entries.length.toLocaleString() })}
       </div>
     </div>
   );

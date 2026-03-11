@@ -119,7 +119,7 @@ export function AuditLog() {
               {t('nav.header.loginHistory')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              사용자 인증 및 활동 로그
+              {t('admin:auditLog.pageSubtitle')}
             </p>
           </div>
         </div>
@@ -165,7 +165,7 @@ export function AuditLog() {
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
                   {(stats.last24hEvents ?? 0).toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">최근 24시간</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('admin:auditLog.last24h')}</p>
               </div>
             </div>
           </div>
@@ -204,14 +204,14 @@ export function AuditLog() {
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="사용자명 입력..."
+              placeholder={t('admin:auditLog.usernamePlaceholder')}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
 
           <div>
             <label htmlFor="audit-event-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              이벤트 타입
+              {t('admin:auditLog.eventType_label')}
             </label>
             <select
               id="audit-event-type"
@@ -230,7 +230,7 @@ export function AuditLog() {
 
           <div>
             <label htmlFor="audit-success" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              성공 여부
+              {t('admin:auditLog.successResult')}
             </label>
             <select
               id="audit-success"
@@ -264,7 +264,7 @@ export function AuditLog() {
               <tr>
                 <SortableHeader label={t('admin:operationAudit.timestamp')} sortKey="createdAt" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('common:label.user')} sortKey="username" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="이벤트" sortKey="eventType" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('admin:auditLog.event')} sortKey="eventType" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('admin:operationAudit.ipAddress')} sortKey="ipAddress" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('common:label.status')} sortKey="success" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
@@ -282,7 +282,7 @@ export function AuditLog() {
               ) : logs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
-                    로그가 없습니다.
+                    {t('admin:auditLog.noLogs_msg')}
                   </td>
                 </tr>
               ) : (
@@ -295,7 +295,7 @@ export function AuditLog() {
                       <div className="flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-gray-400" />
                         <span className="text-xs font-medium text-gray-900 dark:text-white">
-                          {log.username || '시스템'}
+                          {log.username || t('admin:auditLog.system')}
                         </span>
                       </div>
                     </td>
@@ -343,7 +343,11 @@ export function AuditLog() {
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <div className="text-sm text-gray-600 dark:text-gray-400">
-              전체 {total.toLocaleString()}개 중 {((page - 1) * limit) + 1}-{Math.min(page * limit, total)}
+              {t('admin:auditLog.paginationShowing', {
+                total: total.toLocaleString(),
+                start: ((page - 1) * limit) + 1,
+                end: Math.min(page * limit, total)
+              })}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -386,11 +390,11 @@ export function AuditLog() {
                 </span>
                 {selectedLog.success ? (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                    <CheckCircle className="w-3 h-3 mr-1" />성공
+                    <CheckCircle className="w-3 h-3 mr-1" />{t('admin:auditLog.successBadge')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
-                    <XCircle className="w-3 h-3 mr-1" />실패
+                    <XCircle className="w-3 h-3 mr-1" />{t('admin:auditLog.failureBadge')}
                   </span>
                 )}
               </div>
@@ -402,7 +406,7 @@ export function AuditLog() {
               </button>
             </div>
 
-            {/* Dialog Content — dense layout */}
+            {/* Dialog Content -- dense layout */}
             <div className="px-5 py-4 space-y-3">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                 <div>
@@ -411,7 +415,7 @@ export function AuditLog() {
                 </div>
                 <div>
                   <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('common:label.user') }</dt>
-                  <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || '시스템'}</dd>
+                  <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || t('admin:auditLog.system')}</dd>
                 </div>
                 <div>
                   <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('auditLog.ipAddress')}</dt>

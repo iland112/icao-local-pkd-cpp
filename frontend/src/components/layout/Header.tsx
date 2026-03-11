@@ -288,7 +288,7 @@ export function Header() {
                 {user?.is_admin && (
                   <span className="flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 leading-none">
                     <Shield className="w-2.5 h-2.5" />
-                    Admin
+                    {t('nav:header.adminBadge')}
                   </span>
                 )}
               </div>
@@ -303,7 +303,7 @@ export function Header() {
                   {user?.full_name || user?.username}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {user?.email || 'No email'}
+                  {user?.email || t('nav:header.noEmail')}
                 </p>
               </div>
 

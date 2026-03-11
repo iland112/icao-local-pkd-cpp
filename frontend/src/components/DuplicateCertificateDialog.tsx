@@ -58,10 +58,10 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">
-                중복 인증서 상세 정보
+                {t('upload:duplicateDialog.title')}
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Duplicate Certificate Details
+                {t('upload:duplicateDialog.subtitle')}
               </p>
             </div>
           </div>
@@ -79,19 +79,19 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
           <section>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
-              인증서 정보
+              {t('upload:duplicateDialog.certInfo')}
             </h3>
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24">
-                  타입:
+                  {t('upload:duplicateDialog.type')}:
                 </span>
                 {getCertificateTypeBadge(duplicate.certificateType)}
               </div>
 
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                  국가:
+                  {t('common:label.country')}:
                 </span>
                 <div className="flex items-center gap-2">
                   {duplicate.country && getFlagSvgPath(duplicate.country) && (
@@ -149,12 +149,12 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
           <section>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Database className="w-5 h-5 text-green-500" />
-              원본 업로드 정보
+              {t('upload:duplicateDialog.originalUpload')}
             </h3>
             <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 space-y-3 border border-green-200 dark:border-green-800">
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                  파일명:
+                  {t('common:label.fileName')}:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
                   {duplicate.firstUploadFileName || 'N/A'}
@@ -163,7 +163,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
 
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                  업로드 시각:
+                  {t('upload:duplicateDialog.uploadTime')}:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
                   {formatDateTime(duplicate.firstUploadTimestamp || '')}
@@ -194,12 +194,12 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
           <section>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <MapPin className="w-5 h-5 text-orange-500" />
-              중복 감지 정보
+              {t('upload:duplicateDialog.detectionInfo')}
             </h3>
             <div className="bg-orange-50 dark:bg-orange-900/20 rounded-xl p-4 space-y-3 border border-orange-200 dark:border-orange-800">
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                  소스 타입:
+                  {t('upload:duplicateDialog.sourceType')}:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
                   {duplicate.sourceType}
@@ -209,7 +209,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
               {duplicate.sourceCountry && (
                 <div className="flex items-start gap-2">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                    소스 국가:
+                    {t('upload:duplicateDialog.sourceCountry')}:
                   </span>
                   <span className="text-sm text-gray-900 dark:text-gray-100">
                     {duplicate.sourceCountry}
@@ -220,7 +220,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
               {duplicate.sourceFileName && (
                 <div className="flex items-start gap-2">
                   <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                    소스 파일:
+                    {t('upload:duplicateDialog.sourceFile')}:
                   </span>
                   <span className="text-sm text-gray-900 dark:text-gray-100">
                     {duplicate.sourceFileName}
@@ -250,7 +250,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
 
               <div className="flex items-start gap-2">
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400 w-24 flex-shrink-0">
-                  감지 시각:
+                  {t('upload:duplicateDialog.detectedAt')}:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
                   {formatDateTime(duplicate.detectedAt)}
@@ -263,7 +263,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
           <section>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
               <Link2 className="w-5 h-5 text-gray-500" />
-              데이터베이스 정보
+              {t('upload:duplicateDialog.databaseInfo')}
             </h3>
             <div className="bg-gray-50 dark:bg-gray-900 rounded-xl p-4 space-y-3">
               <div className="flex items-start gap-2">
@@ -302,7 +302,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
             onClick={onClose}
             className="w-full px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
           >
-            {t('icao.banner.dismiss')}
+            {t('common:button.close')}
           </button>
         </div>
       </div>

@@ -105,7 +105,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         <span className="ml-3 text-gray-600 dark:text-gray-400">
-          ASN.1 구조 분석 중...
+          {t('upload:masterListStructure.loading')}
         </span>
       </div>
     );
@@ -128,7 +128,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
   if (!data || !data.asn1Tree || data.asn1Tree.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        ASN.1 구조 정보를 찾을 수 없습니다.
+        {t('upload:masterListStructure.noData')}
       </div>
     );
   }
@@ -141,7 +141,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
           <div className="flex items-center gap-2">
             <FileCode className="w-5 h-5 text-blue-600 dark:text-blue-400" />
             <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-              Master List ASN.1/DER 구조 (TLV)
+              {t('upload:masterListStructure.title')}
             </h3>
           </div>
           {data.truncated && (
@@ -151,12 +151,12 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
                 onChange={(e) => setMaxLines(Number(e.target.value))}
                 className="text-xs border border-blue-300 dark:border-blue-700 rounded px-2 py-1 bg-white dark:bg-gray-800"
               >
-                <option value={50}>50 라인</option>
-                <option value={100}>100 라인</option>
-                <option value={500}>500 라인</option>
-                <option value={1000}>1,000 라인</option>
-                <option value={5000}>5,000 라인</option>
-                <option value={0}>전체 (느림)</option>
+                <option value={50}>{t('upload:masterListStructure.nLines', { num: 50 })}</option>
+                <option value={100}>{t('upload:masterListStructure.nLines', { num: 100 })}</option>
+                <option value={500}>{t('upload:masterListStructure.nLines', { num: 500 })}</option>
+                <option value={1000}>{t('upload:masterListStructure.nLines', { num: '1,000' })}</option>
+                <option value={5000}>{t('upload:masterListStructure.nLines', { num: '5,000' })}</option>
+                <option value={0}>{t('upload:masterListStructure.allSlow')}</option>
               </select>
             </div>
           )}
@@ -164,13 +164,13 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div>
-            <span className="text-blue-700 dark:text-blue-300">파일:</span>
+            <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.file')}:</span>
             <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
               {data.fileName || 'Unknown'}
             </span>
           </div>
           <div>
-            <span className="text-blue-700 dark:text-blue-300">크기:</span>
+            <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.size')}:</span>
             <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
               {data.fileSize ? formatBytes(data.fileSize) : 'N/A'}
             </span>
@@ -178,15 +178,15 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
           {data.statistics && (
             <>
               <div>
-                <span className="text-blue-700 dark:text-blue-300">총 노드:</span>
+                <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.totalNodes')}:</span>
                 <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
                   {data.statistics.totalNodes}
                 </span>
               </div>
               <div>
-                <span className="text-blue-700 dark:text-blue-300">구조:</span>
+                <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.structure')}:</span>
                 <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
-                  {data.statistics.constructedNodes}개 / Prim {data.statistics.primitiveNodes}개
+                  {t('upload:masterListStructure.constructedPrimitive', { constructed: data.statistics.constructedNodes, primitive: data.statistics.primitiveNodes })}
                 </span>
               </div>
             </>
@@ -197,7 +197,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
           <div className="mt-3 flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-2 rounded">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>
-              출력이 {data.maxLines}개 라인으로 제한되었습니다. 전체 구조를 보려면 위에서 "전체"를 선택하세요.
+              {t('upload:masterListStructure.truncatedMessage', { num: data.maxLines })}
             </span>
           </div>
         )}

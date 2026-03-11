@@ -32,22 +32,23 @@ const extractCountryFromDn = (dn: string): string | null => {
 
 /** Render structured error message for trust chain failures */
 function TrustChainErrorDetail({ chainValidation }: { chainValidation: CertificateChainValidationDto }) {
+  const { t } = useTranslation(['pa', 'common']);
   const errorCode = chainValidation.errorCode;
   const issuerDn = chainValidation.dscIssuer || '';
   const countryCode = extractCountryFromDn(issuerDn);
 
   const errorMessages: Record<string, { title: string; description: string }> = {
     CSCA_NOT_FOUND: {
-      title: 'CSCA 인증서 미등록',
-      description: t('pa.steps.cscaNotInPkd'),
+      title: t('pa:steps.cscaNotRegisteredTitle'),
+      description: t('pa:steps.cscaNotInPkd'),
     },
     CSCA_DN_MISMATCH: {
-      title: t('pa.steps.cscaDnMismatch'),
-      description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
+      title: t('pa:steps.cscaDnMismatch'),
+      description: t('pa:steps.cscaDnMismatchDesc'),
     },
     CSCA_SELF_SIGNATURE_FAILED: {
-      title: t('pa.steps.cscaSelfSignFailed'),
-      description: 'Root CSCA의 자체 서명 검증에 실패했습니다. 인증서가 변조되었을 수 있습니다.',
+      title: t('pa:steps.cscaSelfSignFailed'),
+      description: t('pa:result.cscaSelfSignFailedDetail'),
     },
   };
 
@@ -58,7 +59,7 @@ function TrustChainErrorDetail({ chainValidation }: { chainValidation: Certifica
     return (
       <div className="flex items-center gap-2 text-sm opacity-90">
         <XCircle className="w-3.5 h-3.5 shrink-0" />
-        <span>Trust Chain 검증 실패{chainValidation.validationErrors ? ` — ${chainValidation.validationErrors}` : ''}</span>
+        <span>{t('pa:result.trustChainFailed')}{chainValidation.validationErrors ? ` — ${chainValidation.validationErrors}` : ''}</span>
       </div>
     );
   }
@@ -94,7 +95,7 @@ function TrustChainErrorDetail({ chainValidation }: { chainValidation: Certifica
   );
 }
 
-// DG1 MRZ 파싱 결과 타입
+// DG1 MRZ parse result type
 export interface DG1ParseResult {
   success: boolean;
   documentType?: string;
@@ -113,7 +114,7 @@ export interface DG1ParseResult {
   error?: string;
 }
 
-// DG2 Face 파싱 결과 타입
+// DG2 Face parse result type
 export interface DG2ParseResult {
   success: boolean;
   faceCount?: number;
@@ -161,10 +162,10 @@ export function VerificationResultCard({
         <div className="flex-grow">
           <h2 className="text-lg font-bold">
             {result.status === 'VALID'
-              ? t('pa.result.passed')
+              ? t('pa:result.passed')
               : result.status === 'INVALID'
-              ? t('upload.fileUpload.validationFailed')
-              : '검증 오류'}
+              ? t('pa:result.failed')
+              : t('pa:result.verificationError')}
           </h2>
           <div className="flex items-center gap-4 mt-0.5 text-sm opacity-90">
             <span className="flex items-center gap-1">
@@ -202,33 +203,33 @@ export function VerificationResultCard({
           className="flex items-center gap-1 text-xs opacity-80 hover:opacity-100 underline shrink-0"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          {t('upload.history.detail')}
+          {t('common:button.viewDetail')}
         </Link>
       </div>
 
       {/* Failure reasons */}
       {result.status === 'INVALID' && (
         <div className="mt-3 pt-3 border-t border-white/20 space-y-1.5">
-          <div className="text-xs font-semibold opacity-90">{ t('common:error.failReason') }</div>
+          <div className="text-xs font-semibold opacity-90">{t('common:error.failReason')}</div>
           {!result.certificateChainValidation?.valid && result.certificateChainValidation && (
             <TrustChainErrorDetail chainValidation={result.certificateChainValidation} />
           )}
           {!result.sodSignatureValidation?.valid && (
             <div className="flex items-center gap-2 text-sm opacity-90">
               <XCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>SOD 서명 검증 실패{result.sodSignatureValidation?.validationErrors ? ` \u2014 ${result.sodSignatureValidation.validationErrors}` : ''}</span>
+              <span>{t('pa:result.sodSignatureFailed')}{result.sodSignatureValidation?.validationErrors ? ` \u2014 ${result.sodSignatureValidation.validationErrors}` : ''}</span>
             </div>
           )}
           {result.dataGroupValidation && result.dataGroupValidation.invalidGroups > 0 && (
             <div className="flex items-center gap-2 text-sm opacity-90">
               <XCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>Data Group 해시 불일치 ({result.dataGroupValidation.invalidGroups}/{result.dataGroupValidation.totalGroups})</span>
+              <span>{t('pa:result.dgHashMismatch', { invalid: result.dataGroupValidation.invalidGroups, total: result.dataGroupValidation.totalGroups })}</span>
             </div>
           )}
           {result.certificateChainValidation?.revoked && (
             <div className="flex items-center gap-2 text-sm opacity-90">
               <XCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>인증서 폐기됨 (CRL)</span>
+              <span>{t('pa:result.certRevoked')}</span>
             </div>
           )}
         </div>
@@ -245,7 +246,7 @@ export function VerificationResultCard({
             {result.certificateChainValidation.pkdConformanceCode && (
               <span className="font-mono">{result.certificateChainValidation.pkdConformanceCode}: </span>
             )}
-            {result.certificateChainValidation.pkdConformanceText || t('pa.result.icaoNonConformant')}
+            {result.certificateChainValidation.pkdConformanceText || t('pa:result.icaoNonConformant')}
           </p>
         </div>
       )}
@@ -268,29 +269,29 @@ export function VerificationResultCard({
             {dg1ParseResult?.success && (
               <div className="flex-grow grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
                 <div>
-                  <span className="opacity-70">{t('common.label.fullName')}</span>
+                  <span className="opacity-70">{t('common:label.fullName')}</span>
                   <div className="font-semibold">{dg1ParseResult.fullName}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">{ t('pa:result.documentNumber') }</span>
+                  <span className="opacity-70">{t('pa:result.documentNumber')}</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.documentNumber}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">{t('common.label.nationality')}</span>
+                  <span className="opacity-70">{t('common:label.nationality')}</span>
                   <div className="font-semibold">{dg1ParseResult.nationality}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">{t('common.label.dateOfBirth')}</span>
+                  <span className="opacity-70">{t('common:label.dateOfBirth')}</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.dateOfBirth}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">{ t('common:label.expiryDate') }</span>
+                  <span className="opacity-70">{t('common:label.expiryDate')}</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.dateOfExpiry}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">{t('common.label.gender')}</span>
+                  <span className="opacity-70">{t('common:label.gender')}</span>
                   <div className="font-semibold">
-                    {dg1ParseResult.sex === 'M' ? t('pa.result.male') : dg1ParseResult.sex === 'F' ? t('pa.result.female') : dg1ParseResult.sex}
+                    {dg1ParseResult.sex === 'M' ? t('pa:result.male') : dg1ParseResult.sex === 'F' ? t('pa:result.female') : dg1ParseResult.sex}
                   </div>
                 </div>
               </div>
@@ -302,11 +303,11 @@ export function VerificationResultCard({
       {/* Verification ID & Timestamp */}
       <div className="mt-3 pt-2 border-t border-white/20 text-xs flex flex-wrap gap-4 opacity-75">
         <div>
-          <span>검증 ID: </span>
+          <span>{t('pa:result.verificationId')}: </span>
           <span className="font-mono">{result.verificationId}</span>
         </div>
         <div>
-          <span>검증 시각: </span>
+          <span>{t('pa:result.verificationTimestamp')}: </span>
           <span>{formatDateTime(result.verificationTimestamp)}</span>
         </div>
       </div>
