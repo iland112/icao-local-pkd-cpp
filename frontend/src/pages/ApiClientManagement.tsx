@@ -1006,6 +1006,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
   const [reviewComment, setReviewComment] = useState('');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
+  const [commentError, setCommentError] = useState(false);
 
   // Admin-configured settings (only used at approval)
   const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60);
@@ -1043,8 +1044,10 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
   const handleReject = async () => {
     if (!reviewComment.trim()) {
       setError(t('admin:apiClient.rejectReasonRequired'));
+      setCommentError(true);
       return;
     }
+    setCommentError(false);
     setProcessing(true);
     setError('');
     try {
@@ -1181,11 +1184,14 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
               id="review-comment"
               name="review-comment"
               value={reviewComment}
-              onChange={e => setReviewComment(e.target.value)}
+              onChange={e => { setReviewComment(e.target.value); if (commentError) setCommentError(false); }}
               rows={2}
               placeholder={t('admin:apiClient.reviewCommentPlaceholder')}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className={`w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent ${commentError ? 'border-red-500 dark:border-red-400' : 'border-gray-200 dark:border-gray-600'}`}
             />
+            {commentError && (
+              <p className="mt-1 text-xs text-red-600 dark:text-red-400">{t('admin:apiClient.rejectReasonRequired')}</p>
+            )}
           </div>
         )}
 
