@@ -1,6 +1,14 @@
 /**
- * @file sod_parser_service.cpp
- * @brief Implementation of SodParser
+ * @file sod_parser.cpp
+ * @brief Implementation of SodParser — ICAO Doc 9303 compliant SOD parsing
+ *
+ * Key design decisions:
+ * - LDSSecurityObject hashAlgorithm (for DG hashes) is distinct from
+ *   CMS SignerInfo digestAlgorithm (for SOD signature). These CAN differ.
+ *   Example: NL Specimen uses SHA-256 for DG hashes, SHA-512 for CMS signature.
+ * - Unknown algorithm OIDs are returned as-is with a warning log,
+ *   never silently replaced with a wrong fallback.
+ * - LDSSecurityObject parsing is consolidated into a single helper method.
  */
 
 #include "sod_parser.h"
@@ -17,28 +25,73 @@
 
 namespace icao {
 
-// Algorithm OID mappings (static initialization)
+// ============================================================
+// Algorithm OID mappings per ICAO Doc 9303 Part 11, Table 35-40
+// ============================================================
+
 static const std::map<std::string, std::string> HASH_ALGORITHM_NAMES = {
-    {"1.3.14.3.2.26", "SHA-1"},
-    {"2.16.840.1.101.3.4.2.1", "SHA-256"},
-    {"2.16.840.1.101.3.4.2.2", "SHA-384"},
-    {"2.16.840.1.101.3.4.2.3", "SHA-512"}
+    // SHA-1 (deprecated but still used by some countries)
+    {"1.3.14.3.2.26",             "SHA-1"},
+    // SHA-2 family
+    {"2.16.840.1.101.3.4.2.4",    "SHA-224"},
+    {"2.16.840.1.101.3.4.2.1",    "SHA-256"},
+    {"2.16.840.1.101.3.4.2.2",    "SHA-384"},
+    {"2.16.840.1.101.3.4.2.3",    "SHA-512"},
 };
 
 static const std::map<std::string, std::string> SIGNATURE_ALGORITHM_NAMES = {
-    {"1.2.840.113549.1.1.11", "SHA256withRSA"},
-    {"1.2.840.113549.1.1.12", "SHA384withRSA"},
-    {"1.2.840.113549.1.1.13", "SHA512withRSA"},
-    {"1.2.840.10045.4.3.2", "SHA256withECDSA"},
-    {"1.2.840.10045.4.3.3", "SHA384withECDSA"},
-    {"1.2.840.10045.4.3.4", "SHA512withECDSA"}
+    // RSA PKCS#1 v1.5 (RFC 3447)
+    {"1.2.840.113549.1.1.5",      "SHA1withRSA"},
+    {"1.2.840.113549.1.1.11",     "SHA256withRSA"},
+    {"1.2.840.113549.1.1.12",     "SHA384withRSA"},
+    {"1.2.840.113549.1.1.13",     "SHA512withRSA"},
+    {"1.2.840.113549.1.1.14",     "SHA224withRSA"},
+    // RSA-PSS (RFC 4055) — parameters specify the actual hash algorithm
+    {"1.2.840.113549.1.1.10",     "RSASSA-PSS"},
+    // ECDSA (RFC 5758)
+    {"1.2.840.10045.4.1",         "ECDSAwithSHA1"},
+    {"1.2.840.10045.4.3.1",       "SHA224withECDSA"},
+    {"1.2.840.10045.4.3.2",       "SHA256withECDSA"},
+    {"1.2.840.10045.4.3.3",       "SHA384withECDSA"},
+    {"1.2.840.10045.4.3.4",       "SHA512withECDSA"},
 };
+
+// ============================================================
+// ASN.1 DER length parser helper
+// ============================================================
+
+bool SodParser::parseAsn1Length(const unsigned char*& p, const unsigned char* end, size_t& outLen) {
+    if (p >= end) return false;
+
+    if (!(*p & 0x80)) {
+        // Short form: single byte
+        outLen = *p++;
+        return true;
+    }
+
+    // Long form
+    int numBytes = *p & 0x7F;
+    p++;
+    if (numBytes == 0 || numBytes > 4 || p + numBytes > end) return false;
+
+    outLen = 0;
+    for (int i = 0; i < numBytes; i++) {
+        outLen = (outLen << 8) | *p++;
+    }
+    return true;
+}
+
+// ============================================================
+// Constructor
+// ============================================================
 
 SodParser::SodParser() {
     spdlog::debug("SodParser initialized");
 }
 
-/// --- Main SOD Parsing Operations ---
+// ============================================================
+// Main SOD Parsing Operations
+// ============================================================
 
 models::SodData SodParser::parseSod(const std::vector<uint8_t>& sodBytes) {
     spdlog::debug("Parsing SOD ({} bytes)", sodBytes.size());
@@ -46,30 +99,93 @@ models::SodData SodParser::parseSod(const std::vector<uint8_t>& sodBytes) {
     models::SodData sodData;
 
     try {
-        // Extract algorithms
-        sodData.signatureAlgorithm = extractSignatureAlgorithm(sodBytes);
-        sodData.signatureAlgorithmOid = extractSignatureAlgorithmOid(sodBytes);
-        sodData.hashAlgorithm = extractHashAlgorithm(sodBytes);
-        sodData.hashAlgorithmOid = extractHashAlgorithmOid(sodBytes);
+        // Parse CMS once, extract all information from it
+        std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
-        // Extract DSC certificate
-        sodData.dscCertificate = extractDscCertificate(sodBytes);
+        BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+        if (!bio) throw std::runtime_error("Failed to create BIO for SOD parsing");
 
-        // Extract data group hashes
-        sodData.dataGroupHashes = extractDataGroupHashes(sodBytes);
+        CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+        BIO_free(bio);
+        if (!cms) throw std::runtime_error("Failed to parse CMS structure");
 
-        // Extract signing time from CMS signed attributes (for point-in-time validation)
+        // --- Extract CMS-level algorithms (SignerInfo) ---
+        STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+        if (signerInfos && sk_CMS_SignerInfo_num(signerInfos) > 0) {
+            CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, 0);
+
+            // Signature algorithm (4th param)
+            X509_ALGOR* signatureAlg = nullptr;
+            CMS_SignerInfo_get0_algs(si, nullptr, nullptr, nullptr, &signatureAlg);
+            if (signatureAlg) {
+                const ASN1_OBJECT* obj = nullptr;
+                X509_ALGOR_get0(&obj, nullptr, nullptr, signatureAlg);
+                char oidBuf[80];
+                OBJ_obj2txt(oidBuf, sizeof(oidBuf), obj, 1);
+                sodData.signatureAlgorithmOid = oidBuf;
+                sodData.signatureAlgorithm = getAlgorithmName(oidBuf, false);
+            }
+
+            // CMS digest algorithm (3rd param) — NOT the DG hash algorithm
+            X509_ALGOR* digestAlg = nullptr;
+            CMS_SignerInfo_get0_algs(si, nullptr, nullptr, &digestAlg, nullptr);
+            if (digestAlg) {
+                const ASN1_OBJECT* obj = nullptr;
+                X509_ALGOR_get0(&obj, nullptr, nullptr, digestAlg);
+                char oidBuf[80];
+                OBJ_obj2txt(oidBuf, sizeof(oidBuf), obj, 1);
+                sodData.cmsDigestAlgorithmOid = oidBuf;
+                sodData.cmsDigestAlgorithm = getAlgorithmName(oidBuf, true);
+            }
+        }
+
+        // --- Extract LDSSecurityObject fields ---
+        auto ldsOpt = parseLdsSecurityObject(cms);
+        if (ldsOpt) {
+            auto& lds = *ldsOpt;
+
+            // LDS hash algorithm (for DG hashes)
+            sodData.hashAlgorithmOid = lds.hashAlgorithmOid;
+            sodData.hashAlgorithm = getAlgorithmName(lds.hashAlgorithmOid, true);
+
+            // LDS version
+            sodData.ldsSecurityObjectVersion = (lds.version == 1) ? "V1" : "V0";
+
+            // Data group hashes
+            for (const auto& [dgNum, hashBytes] : lds.dgHashes) {
+                sodData.dataGroupHashes[std::to_string(dgNum)] = hashToHexString(hashBytes);
+            }
+
+            // Log if CMS digest and LDS hash algorithms differ
+            if (!sodData.cmsDigestAlgorithmOid.empty() &&
+                sodData.cmsDigestAlgorithmOid != sodData.hashAlgorithmOid) {
+                spdlog::info("SOD uses different algorithms: LDS hash={} ({}), CMS digest={} ({})",
+                    sodData.hashAlgorithm, sodData.hashAlgorithmOid,
+                    sodData.cmsDigestAlgorithm, sodData.cmsDigestAlgorithmOid);
+            }
+        } else {
+            spdlog::warn("Failed to parse LDSSecurityObject from SOD");
+        }
+
+        // --- Extract DSC certificate ---
+        STACK_OF(X509)* certs = CMS_get1_certs(cms);
+        if (certs && sk_X509_num(certs) > 0) {
+            sodData.dscCertificate = X509_dup(sk_X509_value(certs, 0));
+        }
+        if (certs) sk_X509_pop_free(certs, X509_free);
+
+        // --- Extract signing time ---
         sodData.signingTime = extractSigningTime(sodBytes);
         if (!sodData.signingTime.empty()) {
             spdlog::info("SOD signing time: {}", sodData.signingTime);
         }
 
-        // Set LDS version (assume V0 for now, can be extracted from encapsulated content)
-        sodData.ldsSecurityObjectVersion = "V0";
+        CMS_ContentInfo_free(cms);
 
         sodData.parsingSuccess = true;
-        spdlog::info("SOD parsing successful: {} data groups, algorithm: {}",
-            sodData.dataGroupHashes.size(), sodData.signatureAlgorithm);
+        spdlog::info("SOD parsing successful: {} data groups, LDS hash={}, CMS sig={}, LDS version={}",
+            sodData.dataGroupHashes.size(), sodData.hashAlgorithm,
+            sodData.signatureAlgorithm, sodData.ldsSecurityObjectVersion);
 
     } catch (const std::exception& e) {
         spdlog::error("SOD parsing failed: {}", e.what());
@@ -125,7 +241,6 @@ std::map<std::string, std::string> SodParser::extractDataGroupHashes(
     std::map<std::string, std::string> hexHashes;
 
     for (const auto& [dgNum, hashBytes] : rawHashes) {
-        // Use number-only format to match frontend ("1", "2", "3" instead of "DG1", "DG2", "DG3")
         std::string dgKey = std::to_string(dgNum);
         hexHashes[dgKey] = hashToHexString(hashBytes);
     }
@@ -198,7 +313,9 @@ bool SodParser::verifySodSignature(
     return valid;
 }
 
-/// --- Algorithm Extraction ---
+// ============================================================
+// Algorithm Extraction
+// ============================================================
 
 std::string SodParser::extractSignatureAlgorithm(const std::vector<uint8_t>& sodBytes) {
     std::string oid = extractSignatureAlgorithmOid(sodBytes);
@@ -241,6 +358,29 @@ std::string SodParser::extractSignatureAlgorithmOid(const std::vector<uint8_t>& 
 }
 
 std::string SodParser::extractHashAlgorithmOid(const std::vector<uint8_t>& sodBytes) {
+    // Extract hashAlgorithm from LDSSecurityObject (encapsulated content),
+    // NOT from CMS SignerInfo digestAlgorithm.
+    // CMS digestAlgorithm is for SOD signature (e.g., SHA-512),
+    // while LDSSecurityObject hashAlgorithm is for DG hashes (e.g., SHA-256).
+    std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
+
+    BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "";
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+    BIO_free(bio);
+
+    if (!cms) return "";
+
+    auto ldsOpt = parseLdsSecurityObject(cms);
+    CMS_ContentInfo_free(cms);
+
+    if (ldsOpt) {
+        return ldsOpt->hashAlgorithmOid;
+    }
+    return "";
+}
+
+std::string SodParser::extractCmsDigestAlgorithmOid(const std::vector<uint8_t>& sodBytes) {
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
@@ -339,7 +479,155 @@ std::string SodParser::extractSigningTime(const std::vector<uint8_t>& sodBytes) 
     return result;
 }
 
-/// --- Helper Methods ---
+// ============================================================
+// LDSSecurityObject consolidated parser
+// ============================================================
+
+std::optional<SodParser::LdsSecurityObject> SodParser::parseLdsSecurityObject(CMS_ContentInfo* cms) {
+    if (!cms) return std::nullopt;
+
+    // Get encapsulated content
+    ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+    if (!contentPtr || !*contentPtr) {
+        spdlog::error("No encapsulated content in CMS");
+        return std::nullopt;
+    }
+
+    const unsigned char* p = ASN1_STRING_get0_data(*contentPtr);
+    long dataLen = ASN1_STRING_length(*contentPtr);
+    const unsigned char* end = p + dataLen;
+
+    LdsSecurityObject result;
+
+    // LDSSecurityObject ::= SEQUENCE {
+    //   version INTEGER,
+    //   hashAlgorithm AlgorithmIdentifier,
+    //   dataGroupHashValues SEQUENCE OF DataGroupHash,
+    //   ldsVersionInfo LDSVersionInfo OPTIONAL  -- only if version == 1
+    // }
+
+    // Outer SEQUENCE
+    if (p >= end || *p != 0x30) {
+        spdlog::error("Expected SEQUENCE tag for LDSSecurityObject");
+        return std::nullopt;
+    }
+    p++;
+    size_t seqLen = 0;
+    if (!parseAsn1Length(p, end, seqLen)) return std::nullopt;
+
+    // --- version INTEGER ---
+    if (p < end && *p == 0x02) {
+        p++;  // skip tag
+        size_t vLen = 0;
+        if (!parseAsn1Length(p, end, vLen)) return std::nullopt;
+        if (p + vLen > end) return std::nullopt;
+
+        // Parse version value (typically 0 or 1)
+        result.version = 0;
+        for (size_t i = 0; i < vLen; i++) {
+            result.version = (result.version << 8) | *p++;
+        }
+        spdlog::debug("LDSSecurityObject version: {}", result.version);
+    }
+
+    // --- hashAlgorithm AlgorithmIdentifier SEQUENCE ---
+    if (p >= end || *p != 0x30) {
+        spdlog::error("Expected AlgorithmIdentifier SEQUENCE in LDSSecurityObject");
+        return std::nullopt;
+    }
+    p++;  // skip SEQUENCE tag
+    size_t algIdLen = 0;
+    if (!parseAsn1Length(p, end, algIdLen)) return std::nullopt;
+    if (p + algIdLen > end) return std::nullopt;
+
+    const unsigned char* algIdEnd = p + algIdLen;
+
+    // First element inside AlgorithmIdentifier is the OID
+    if (p < algIdEnd && *p == 0x06) {
+        const unsigned char* oidTlvStart = p;
+        p++;  // skip tag
+        size_t oidLen = 0;
+        if (!parseAsn1Length(p, algIdEnd, oidLen)) return std::nullopt;
+
+        // Build OID TLV for d2i_ASN1_OBJECT
+        long oidTlvLen = static_cast<long>((p - oidTlvStart) + oidLen);
+        if (oidTlvStart + oidTlvLen > end) return std::nullopt;
+
+        const unsigned char* bp = oidTlvStart;
+        ASN1_OBJECT* obj = d2i_ASN1_OBJECT(nullptr, &bp, oidTlvLen);
+        if (obj) {
+            char oidBuf[80];
+            OBJ_obj2txt(oidBuf, sizeof(oidBuf), obj, 1);
+            result.hashAlgorithmOid = oidBuf;
+            ASN1_OBJECT_free(obj);
+            spdlog::debug("LDSSecurityObject hashAlgorithm OID: {}", result.hashAlgorithmOid);
+        }
+    }
+
+    // Skip to end of AlgorithmIdentifier (may have optional parameters)
+    p = algIdEnd;
+
+    // --- dataGroupHashValues SEQUENCE OF DataGroupHash ---
+    if (p >= end || *p != 0x30) {
+        spdlog::error("Expected SEQUENCE OF DataGroupHash in LDSSecurityObject");
+        return std::nullopt;
+    }
+    p++;  // skip tag
+    size_t dgHashesLen = 0;
+    if (!parseAsn1Length(p, end, dgHashesLen)) return std::nullopt;
+
+    const unsigned char* dgHashesEnd = p + dgHashesLen;
+    if (dgHashesEnd > end) dgHashesEnd = end;
+
+    // Parse each DataGroupHash ::= SEQUENCE { dataGroupNumber INTEGER, dataGroupHashValue OCTET STRING }
+    while (p < dgHashesEnd) {
+        if (*p != 0x30) break;
+        p++;
+        size_t dgHashLen = 0;
+        if (!parseAsn1Length(p, dgHashesEnd, dgHashLen)) break;
+
+        const unsigned char* dgHashEnd = p + dgHashLen;
+        if (dgHashEnd > dgHashesEnd) break;
+
+        // dataGroupNumber INTEGER
+        int dgNumber = 0;
+        if (p < dgHashEnd && *p == 0x02) {
+            p++;
+            size_t intLen = 0;
+            if (!parseAsn1Length(p, dgHashEnd, intLen) || p + intLen > dgHashEnd) {
+                p = dgHashEnd;
+                continue;
+            }
+            for (size_t i = 0; i < intLen; i++) {
+                dgNumber = (dgNumber << 8) | *p++;
+            }
+        }
+
+        // dataGroupHashValue OCTET STRING
+        if (p < dgHashEnd && *p == 0x04) {
+            p++;
+            size_t hashLen = 0;
+            if (!parseAsn1Length(p, dgHashEnd, hashLen) || p + hashLen > dgHashEnd) {
+                p = dgHashEnd;
+                continue;
+            }
+            result.dgHashes[dgNumber] = std::vector<uint8_t>(p, p + hashLen);
+            p += hashLen;
+            spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+        }
+
+        p = dgHashEnd;
+    }
+
+    spdlog::info("Parsed LDSSecurityObject: version={}, hashAlg={}, {} DG hashes",
+        result.version, result.hashAlgorithmOid, result.dgHashes.size());
+
+    return result;
+}
+
+// ============================================================
+// Helper Methods
+// ============================================================
 
 std::vector<uint8_t> SodParser::unwrapIcaoSod(const std::vector<uint8_t>& sodBytes) {
     // Check if SOD has ICAO wrapper tag (0x77)
@@ -376,171 +664,28 @@ std::vector<uint8_t> SodParser::unwrapIcaoSod(const std::vector<uint8_t>& sodByt
 std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
     const std::vector<uint8_t>& sodBytes)
 {
-    std::map<int, std::vector<uint8_t>> result;
-
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
     if (!bio) {
         spdlog::error("Failed to create BIO for DG hash parsing");
-        return result;
+        return {};
     }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
     if (!cms) {
         spdlog::error("Failed to parse CMS for DG hashes");
-        return result;
+        return {};
     }
 
-    // Get encapsulated content (LDSSecurityObject)
-    ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
-    if (!contentPtr || !*contentPtr) {
-        spdlog::error("No encapsulated content in CMS");
-        CMS_ContentInfo_free(cms);
-        return result;
-    }
-
-    // Parse LDSSecurityObject ASN.1 - Manual parsing (from v1.0)
-    const unsigned char* p = ASN1_STRING_get0_data(*contentPtr);
-    long dataLen = ASN1_STRING_length(*contentPtr);
-    const unsigned char* contentData = p;
-    const unsigned char* end = p + dataLen;  // Buffer boundary for all checks
-
-    // Skip outer SEQUENCE tag and length
-    if (contentData >= end || *contentData != 0x30) {
-        spdlog::error("Expected SEQUENCE tag for LDSSecurityObject");
-        CMS_ContentInfo_free(cms);
-        return result;
-    }
-    contentData++;
-
-    // Parse length
-    if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
-    size_t contentLen = 0;
-    if (*contentData & 0x80) {
-        int numBytes = *contentData & 0x7F;
-        contentData++;
-        if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
-        for (int i = 0; i < numBytes; i++) {
-            contentLen = (contentLen << 8) | *contentData++;
-        }
-    } else {
-        contentLen = *contentData++;
-    }
-
-    // Skip version (INTEGER)
-    if (contentData < end && *contentData == 0x02) {
-        contentData++;
-        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
-        size_t versionLen = *contentData++;
-        if (contentData + versionLen > end) { CMS_ContentInfo_free(cms); return result; }
-        contentData += versionLen;
-    }
-
-    // Skip hashAlgorithm (SEQUENCE - AlgorithmIdentifier)
-    if (contentData < end && *contentData == 0x30) {
-        contentData++;
-        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
-        size_t algLen = 0;
-        if (*contentData & 0x80) {
-            int numBytes = *contentData & 0x7F;
-            contentData++;
-            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
-            for (int i = 0; i < numBytes; i++) {
-                algLen = (algLen << 8) | *contentData++;
-            }
-        } else {
-            algLen = *contentData++;
-        }
-        if (contentData + algLen > end) { CMS_ContentInfo_free(cms); return result; }
-        contentData += algLen;
-    }
-
-    // Parse dataGroupHashValues (SEQUENCE OF DataGroupHash)
-    if (contentData < end && *contentData == 0x30) {
-        contentData++;
-        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
-        size_t dgHashesLen = 0;
-        if (*contentData & 0x80) {
-            int numBytes = *contentData & 0x7F;
-            contentData++;
-            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
-            for (int i = 0; i < numBytes; i++) {
-                dgHashesLen = (dgHashesLen << 8) | *contentData++;
-            }
-        } else {
-            dgHashesLen = *contentData++;
-        }
-
-        // Clamp dgHashesEnd to buffer boundary
-        const unsigned char* dgHashesEnd = contentData + dgHashesLen;
-        if (dgHashesEnd > end) dgHashesEnd = end;
-
-        // Parse each DataGroupHash
-        while (contentData < dgHashesEnd) {
-            if (*contentData != 0x30) break;
-            contentData++;
-            if (contentData >= dgHashesEnd) break;
-
-            size_t dgHashLen = 0;
-            if (*contentData & 0x80) {
-                int numBytes = *contentData & 0x7F;
-                contentData++;
-                if (contentData + numBytes > dgHashesEnd) break;
-                for (int i = 0; i < numBytes; i++) {
-                    dgHashLen = (dgHashLen << 8) | *contentData++;
-                }
-            } else {
-                dgHashLen = *contentData++;
-            }
-
-            const unsigned char* dgHashEnd = contentData + dgHashLen;
-            if (dgHashEnd > dgHashesEnd) break;
-
-            // Parse dataGroupNumber (INTEGER)
-            int dgNumber = 0;
-            if (contentData < dgHashEnd && *contentData == 0x02) {
-                contentData++;
-                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
-                size_t intLen = *contentData++;
-                if (contentData + intLen > dgHashEnd) { contentData = dgHashEnd; continue; }
-                for (size_t i = 0; i < intLen; i++) {
-                    dgNumber = (dgNumber << 8) | *contentData++;
-                }
-            }
-
-            // Parse dataGroupHashValue (OCTET STRING)
-            if (contentData < dgHashEnd && *contentData == 0x04) {
-                contentData++;
-                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
-                size_t hashLen = 0;
-                if (*contentData & 0x80) {
-                    int numBytes = *contentData & 0x7F;
-                    contentData++;
-                    if (contentData + numBytes > dgHashEnd) { contentData = dgHashEnd; continue; }
-                    for (int i = 0; i < numBytes; i++) {
-                        hashLen = (hashLen << 8) | *contentData++;
-                    }
-                } else {
-                    hashLen = *contentData++;
-                }
-
-                if (contentData + hashLen <= dgHashEnd) {
-                    std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
-                    result[dgNumber] = hashValue;
-                    contentData += hashLen;
-                    spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
-                }
-            }
-
-            contentData = dgHashEnd;
-        }
-    }
-
+    auto ldsOpt = parseLdsSecurityObject(cms);
     CMS_ContentInfo_free(cms);
-    spdlog::info("Parsed {} Data Group hashes from SOD", result.size());
-    return result;
+
+    if (ldsOpt) {
+        return ldsOpt->dgHashes;
+    }
+    return {};
 }
 
 std::string SodParser::hashToHexString(const std::vector<uint8_t>& hashBytes) {
@@ -553,18 +698,18 @@ std::string SodParser::hashToHexString(const std::vector<uint8_t>& hashBytes) {
 }
 
 std::string SodParser::getAlgorithmName(const std::string& oid, bool isHash) {
+    if (oid.empty()) return "UNKNOWN";
+
     const auto& nameMap = isHash ? HASH_ALGORITHM_NAMES : SIGNATURE_ALGORITHM_NAMES;
     auto it = nameMap.find(oid);
     if (it != nameMap.end()) {
         return it->second;
     }
 
-    // Default fallbacks
-    if (isHash) {
-        return "SHA-256";
-    } else {
-        return "SHA256withRSA";
-    }
+    // Unknown OID — return OID as-is with warning instead of silently returning wrong algorithm
+    spdlog::warn("Unknown {} algorithm OID: {} — returning OID as name",
+        isHash ? "hash" : "signature", oid);
+    return oid;
 }
 
 const std::map<std::string, std::string>& SodParser::getHashAlgorithmNames() {
@@ -575,7 +720,9 @@ const std::map<std::string, std::string>& SodParser::getSignatureAlgorithmNames(
     return SIGNATURE_ALGORITHM_NAMES;
 }
 
-/// --- API-Specific Methods ---
+// ============================================================
+// API-Specific Methods
+// ============================================================
 
 Json::Value SodParser::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
     spdlog::debug("Parsing SOD for API response ({} bytes)", sodBytes.size());
@@ -585,15 +732,24 @@ Json::Value SodParser::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
     result["sodSize"] = static_cast<int>(sodBytes.size());
 
     try {
-        // Extract hash algorithm
+        // Extract hash algorithm (from LDSSecurityObject)
         std::string hashAlgorithm = extractHashAlgorithm(sodBytes);
         std::string hashAlgorithmOid = extractHashAlgorithmOid(sodBytes);
         result["hashAlgorithm"] = hashAlgorithm;
         result["hashAlgorithmOid"] = hashAlgorithmOid;
 
-        // Extract signature algorithm
+        // Extract signature algorithm (from CMS SignerInfo)
         std::string signatureAlgorithm = extractSignatureAlgorithm(sodBytes);
+        std::string signatureAlgorithmOid = extractSignatureAlgorithmOid(sodBytes);
         result["signatureAlgorithm"] = signatureAlgorithm;
+        result["signatureAlgorithmOid"] = signatureAlgorithmOid;
+
+        // Extract CMS digest algorithm (may differ from LDS hash algorithm)
+        std::string cmsDigestOid = extractCmsDigestAlgorithmOid(sodBytes);
+        if (!cmsDigestOid.empty()) {
+            result["cmsDigestAlgorithm"] = getAlgorithmName(cmsDigestOid, true);
+            result["cmsDigestAlgorithmOid"] = cmsDigestOid;
+        }
 
         // Extract DSC certificate info
         X509* dscCert = extractDscCertificate(sodBytes);
@@ -703,9 +859,8 @@ Json::Value SodParser::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
         bool hasIcaoWrapper = (sodBytes.size() > 0 && sodBytes[0] == 0x77);
         result["hasIcaoWrapper"] = hasIcaoWrapper;
 
-        // LDS version (if available from DG hashes)
+        // Check for DG14 (Active Authentication) and DG15 (Extended Access Control)
         if (!dgHashes.empty()) {
-            // Check for DG14 (Active Authentication) and DG15 (Extended Access Control)
             result["hasDg14"] = (dgHashes.find(14) != dgHashes.end());
             result["hasDg15"] = (dgHashes.find(15) != dgHashes.end());
         }

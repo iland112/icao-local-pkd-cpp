@@ -208,8 +208,8 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 3: Trust Chain verification details (success) */}
-                {step.id === 3 && step.details && step.status !== 'error' && (
+                {/* Step 4: Trust Chain verification details (success) */}
+                {step.id === 4 && step.details && step.status !== 'error' && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                     <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('pa:steps.trustChainPath')}</div>
                     <div className="flex flex-col items-center gap-1">
@@ -302,8 +302,8 @@ export function VerificationStepsPanel({
                     </div>
                   </div>
                 )}
-                {/* Step 3: Trust Chain verification details (failure) */}
-                {step.id === 3 && step.status === 'error' && step.details && (
+                {/* Step 4: Trust Chain verification details (failure) */}
+                {step.id === 4 && step.status === 'error' && step.details && (
                   <div className="mt-2 space-y-2">
                     {/* Target certificate info */}
                     {(step.details.dscSubject || step.details.cscaSubject) && (
@@ -385,8 +385,8 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 4: CSCA lookup details */}
-                {step.id === 4 && step.details && step.status === 'success' && (
+                {/* Step 3: CSCA lookup details */}
+                {step.id === 3 && step.details && step.status === 'success' && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                     <div className="flex items-start gap-2">
                       <span className="text-gray-500 shrink-0">CSCA DN:</span>
@@ -396,7 +396,7 @@ export function VerificationStepsPanel({
                     </div>
                   </div>
                 )}
-                {step.id === 4 && step.status === 'error' && step.details && (() => {
+                {step.id === 3 && step.status === 'error' && step.details && (() => {
                   const errorCode = step.details.errorCode as string | undefined;
                   const errorInfo = errorCode ? ERROR_MESSAGES[errorCode] : null;
                   const issuerDn = (step.details.dscIssuer || step.details.dscSubject || '') as string;

@@ -143,9 +143,21 @@ public:
      * @brief Get algorithm name from OID
      * @param oid Algorithm OID
      * @param isHash true for hash algorithm, false for signature algorithm
-     * @return Algorithm name or "UNKNOWN"
+     * @return Algorithm name or OID string if unknown (with warning log)
      */
     std::string getAlgorithmName(const std::string& oid, bool isHash);
+
+    /**
+     * @brief Extract CMS SignerInfo digest algorithm OID
+     *
+     * This is the digest algorithm used for CMS signature computation.
+     * It may differ from the LDSSecurityObject hashAlgorithm used for DG hashes.
+     * Example: CMS digest = SHA-512, LDS hash = SHA-256 (NL Specimen passport)
+     *
+     * @param sodBytes SOD data bytes
+     * @return CMS digest algorithm OID or empty string
+     */
+    std::string extractCmsDigestAlgorithmOid(const std::vector<uint8_t>& sodBytes);
 
     /// @name API-Specific Methods
 
@@ -170,6 +182,35 @@ private:
      * @return Encapsulated content bytes
      */
     std::vector<uint8_t> extractEncapsulatedContent(CMS_ContentInfo* cms);
+
+    /**
+     * @brief Parsed LDSSecurityObject fields
+     */
+    struct LdsSecurityObject {
+        int version = 0;                                 // 0 = V0, 1 = V1
+        std::string hashAlgorithmOid;                    // Hash algorithm OID for DG hashes
+        std::map<int, std::vector<uint8_t>> dgHashes;    // DG number → hash bytes
+    };
+
+    /**
+     * @brief Parse LDSSecurityObject from CMS encapsulated content
+     *
+     * Consolidated parser for LDSSecurityObject ASN.1 structure.
+     * Used by extractHashAlgorithmOid(), parseDataGroupHashesRaw(), and parseSod().
+     *
+     * @param cms CMS_ContentInfo (must not be null)
+     * @return Parsed LdsSecurityObject or nullopt on parse failure
+     */
+    std::optional<LdsSecurityObject> parseLdsSecurityObject(CMS_ContentInfo* cms);
+
+    /**
+     * @brief Parse ASN.1 DER length from buffer
+     * @param p Current position (updated on success)
+     * @param end Buffer boundary
+     * @param outLen Output length value
+     * @return true on success
+     */
+    static bool parseAsn1Length(const unsigned char*& p, const unsigned char* end, size_t& outLen);
 
     // Algorithm OID mappings
     static const std::map<std::string, std::string>& getHashAlgorithmNames();

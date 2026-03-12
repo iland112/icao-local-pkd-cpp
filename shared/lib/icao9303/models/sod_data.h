@@ -32,11 +32,17 @@ namespace models {
  * - LDS Security Object version
  */
 struct SodData {
-    // Algorithms
-    std::string signatureAlgorithm;  // OID or name (e.g., "SHA256withRSA")
-    std::string signatureAlgorithmOid;
-    std::string hashAlgorithm;  // OID or name (e.g., "SHA-256")
+    // LDSSecurityObject hash algorithm (used for DG hashes)
+    std::string hashAlgorithm;  // Name (e.g., "SHA-256")
     std::string hashAlgorithmOid;
+
+    // CMS SignerInfo signature algorithm (used for SOD signature)
+    std::string signatureAlgorithm;  // Name (e.g., "SHA256withRSA", "RSASSA-PSS")
+    std::string signatureAlgorithmOid;
+
+    // CMS SignerInfo digest algorithm (used for SOD signature, may differ from LDS hashAlgorithm)
+    std::string cmsDigestAlgorithm;  // Name (e.g., "SHA-512")
+    std::string cmsDigestAlgorithmOid;
 
     // DSC certificate (extracted from SOD)
     X509* dscCertificate = nullptr;  // Ownership: caller must X509_free()
@@ -78,10 +84,12 @@ struct SodData {
      * @brief Copy constructor (deep copy of X509 certificate)
      */
     SodData(const SodData& other)
-        : signatureAlgorithm(other.signatureAlgorithm),
-          signatureAlgorithmOid(other.signatureAlgorithmOid),
-          hashAlgorithm(other.hashAlgorithm),
+        : hashAlgorithm(other.hashAlgorithm),
           hashAlgorithmOid(other.hashAlgorithmOid),
+          signatureAlgorithm(other.signatureAlgorithm),
+          signatureAlgorithmOid(other.signatureAlgorithmOid),
+          cmsDigestAlgorithm(other.cmsDigestAlgorithm),
+          cmsDigestAlgorithmOid(other.cmsDigestAlgorithmOid),
           dscCertificate(other.dscCertificate ? X509_dup(other.dscCertificate) : nullptr),
           dataGroupHashes(other.dataGroupHashes),
           signingTime(other.signingTime),
@@ -102,10 +110,12 @@ struct SodData {
             if (dscCertificate) {
                 X509_free(dscCertificate);
             }
-            signatureAlgorithm = other.signatureAlgorithm;
-            signatureAlgorithmOid = other.signatureAlgorithmOid;
             hashAlgorithm = other.hashAlgorithm;
             hashAlgorithmOid = other.hashAlgorithmOid;
+            signatureAlgorithm = other.signatureAlgorithm;
+            signatureAlgorithmOid = other.signatureAlgorithmOid;
+            cmsDigestAlgorithm = other.cmsDigestAlgorithm;
+            cmsDigestAlgorithmOid = other.cmsDigestAlgorithmOid;
             dscCertificate = other.dscCertificate ? X509_dup(other.dscCertificate) : nullptr;
             dataGroupHashes = other.dataGroupHashes;
             signingTime = other.signingTime;
@@ -123,10 +133,12 @@ struct SodData {
      * @brief Move constructor
      */
     SodData(SodData&& other) noexcept
-        : signatureAlgorithm(std::move(other.signatureAlgorithm)),
-          signatureAlgorithmOid(std::move(other.signatureAlgorithmOid)),
-          hashAlgorithm(std::move(other.hashAlgorithm)),
+        : hashAlgorithm(std::move(other.hashAlgorithm)),
           hashAlgorithmOid(std::move(other.hashAlgorithmOid)),
+          signatureAlgorithm(std::move(other.signatureAlgorithm)),
+          signatureAlgorithmOid(std::move(other.signatureAlgorithmOid)),
+          cmsDigestAlgorithm(std::move(other.cmsDigestAlgorithm)),
+          cmsDigestAlgorithmOid(std::move(other.cmsDigestAlgorithmOid)),
           dscCertificate(other.dscCertificate),
           dataGroupHashes(std::move(other.dataGroupHashes)),
           signingTime(std::move(other.signingTime)),
@@ -148,10 +160,12 @@ struct SodData {
             if (dscCertificate) {
                 X509_free(dscCertificate);
             }
-            signatureAlgorithm = std::move(other.signatureAlgorithm);
-            signatureAlgorithmOid = std::move(other.signatureAlgorithmOid);
             hashAlgorithm = std::move(other.hashAlgorithm);
             hashAlgorithmOid = std::move(other.hashAlgorithmOid);
+            signatureAlgorithm = std::move(other.signatureAlgorithm);
+            signatureAlgorithmOid = std::move(other.signatureAlgorithmOid);
+            cmsDigestAlgorithm = std::move(other.cmsDigestAlgorithm);
+            cmsDigestAlgorithmOid = std::move(other.cmsDigestAlgorithmOid);
             dscCertificate = other.dscCertificate;
             dataGroupHashes = std::move(other.dataGroupHashes);
             signingTime = std::move(other.signingTime);
@@ -177,10 +191,14 @@ struct SodData {
      */
     Json::Value toJson() const {
         Json::Value json;
-        json["signatureAlgorithm"] = signatureAlgorithm;
-        json["signatureAlgorithmOid"] = signatureAlgorithmOid;
         json["hashAlgorithm"] = hashAlgorithm;
         json["hashAlgorithmOid"] = hashAlgorithmOid;
+        json["signatureAlgorithm"] = signatureAlgorithm;
+        json["signatureAlgorithmOid"] = signatureAlgorithmOid;
+        if (!cmsDigestAlgorithm.empty()) {
+            json["cmsDigestAlgorithm"] = cmsDigestAlgorithm;
+            json["cmsDigestAlgorithmOid"] = cmsDigestAlgorithmOid;
+        }
         json["ldsSecurityObjectVersion"] = ldsSecurityObjectVersion;
         json["dataGroupCount"] = static_cast<int>(dataGroupHashes.size());
         json["parsingSuccess"] = parsingSuccess;

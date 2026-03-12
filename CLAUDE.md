@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.31.3
+**Current Version**: v2.32.0
 **Last Updated**: 2026-03-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.32.0 (2026-03-12) - SOD 파서 ICAO Doc 9303 준수 리팩토링 + PA 검증 Step 순서 수정
+- **CRITICAL FIX — DG 해시 알고리즘 오류**: SOD 파서가 LDSSecurityObject의 hashAlgorithm(DG 해시용, e.g., SHA-256) 대신 CMS SignerInfo의 digestAlgorithm(SOD 서명용, e.g., SHA-512)을 사용 → DG 해시 검증 실패. 대부분의 여권은 두 알고리즘이 동일하여 잠복 버그였으나, NL Specimen 여권(SHA-256 DG + SHA-512 CMS)에서 발견
+- **SOD 파서 통합 리팩토링**: LDSSecurityObject 파싱을 `parseLdsSecurityObject()` 단일 헬퍼로 통합 (기존 `extractHashAlgorithmOid()`, `parseDataGroupHashesRaw()`에서 중복 ASN.1 파싱)
+- **LDS 버전 추출**: LDSSecurityObject의 version INTEGER 필드에서 실제 버전 추출 (기존 하드코딩 "V0")
+- **알고리즘 OID 확장**: 해시 4→5개 (SHA-224 추가), 서명 6→11개 (RSA-PSS, SHA1withRSA, SHA224withRSA, ECDSAwithSHA1, SHA224withECDSA 추가)
+- **위험한 fallback 제거**: 미등록 OID에 대해 "SHA-256"/"SHA256withRSA" 자동 반환 → OID 문자열 그대로 반환 + 경고 로그 (잘못된 알고리즘 선택 방지)
+- **CMS vs LDS 알고리즘 구분**: `SodData` 모델에 `cmsDigestAlgorithm`/`cmsDigestAlgorithmOid` 필드 추가 — CMS 서명용 다이제스트와 DG 해시용 알고리즘을 명확히 분리
+- **DG 파서 SHA-224 지원**: `computeHash()`에 SHA-224 알고리즘 추가
+- **PA 검증 Step 순서 수정**: Frontend Step 3 "Trust Chain 검증" ↔ Step 4 "CSCA 조회" 순서 교정 → Step 3 "CSCA 조회", Step 4 "Trust Chain 검증" (백엔드 실행 순서와 일치)
+- **i18n 수정**: 한국어/영어 PA Step 3/4 라벨 교정, CSCA DN 불일치 메시지 개선 ("CSCA DN 불일치" → "DSC를 발급한 CSCA가 존재하지 않음")
+- **ASN.1 파싱 안전성**: `parseAsn1Length()` 정적 헬퍼 도입 — DER 길이 파싱 로직 통합, 경계 검증 강화 (numBytes 최대 4바이트 제한)
+- 8 files changed (0 new, 8 modified: sod_parser.cpp, sod_parser.h, sod_data.h, dg_parser.cpp, PAVerify.tsx, VerificationStepsPanel.tsx, ko/pa.json, en/pa.json)
 
 ### v2.31.3 (2026-03-12) - Reconciliation 후 동기화 상태 자동 갱신
 - **Bug fix**: 수동 동기화(Reconciliation) 성공 후 SyncDashboard에 불일치 건수가 갱신되지 않는 문제 수정

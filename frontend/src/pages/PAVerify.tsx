@@ -141,7 +141,33 @@ export function PAVerify() {
         };
       }
 
-      // Step 3: Trust Chain 검증
+      // Step 3: CSCA 조회
+      if (response.certificateChainValidation?.cscaSubject) {
+        newSteps[2] = {
+          ...newSteps[2],
+          status: 'success',
+          message: t('pa:verify.cscaLookupSuccess'),
+          details: {
+            dn: response.certificateChainValidation.cscaSubject,
+          },
+          expanded: true,
+        };
+      } else {
+        newSteps[2] = {
+          ...newSteps[2],
+          status: 'error',
+          message: t('pa:verify.cscaLookupFailed'),
+          details: {
+            error: response.certificateChainValidation?.validationErrors,
+            errorCode: response.certificateChainValidation?.errorCode,
+            dscSubject: response.certificateChainValidation?.dscSubject,
+            dscIssuer: response.certificateChainValidation?.dscIssuer,
+          },
+          expanded: true,
+        };
+      }
+
+      // Step 4: Trust Chain 검증
       if (response.certificateChainValidation?.valid) {
         const chainValidation = response.certificateChainValidation;
         // Determine status based on expiration
@@ -154,8 +180,8 @@ export function PAVerify() {
             ? t('pa:verify.trustChainSuccessExpiring')
             : t('pa:verify.trustChainSuccess');
 
-        newSteps[2] = {
-          ...newSteps[2],
+        newSteps[3] = {
+          ...newSteps[3],
           status: stepStatus,
           message: statusMessage,
           details: {
@@ -176,8 +202,8 @@ export function PAVerify() {
         };
       } else {
         const chainValidation = response.certificateChainValidation;
-        newSteps[2] = {
-          ...newSteps[2],
+        newSteps[3] = {
+          ...newSteps[3],
           status: 'error',
           message: t('pa:verify.trustChainFailed'),
           details: {
@@ -191,32 +217,6 @@ export function PAVerify() {
             dscNonConformant: chainValidation?.dscNonConformant,
             pkdConformanceCode: chainValidation?.pkdConformanceCode,
             pkdConformanceText: chainValidation?.pkdConformanceText,
-          },
-          expanded: true,
-        };
-      }
-
-      // Step 4: CSCA 조회
-      if (response.certificateChainValidation?.cscaSubject) {
-        newSteps[3] = {
-          ...newSteps[3],
-          status: 'success',
-          message: t('pa:verify.cscaLookupSuccess'),
-          details: {
-            dn: response.certificateChainValidation.cscaSubject,
-          },
-          expanded: true,
-        };
-      } else {
-        newSteps[3] = {
-          ...newSteps[3],
-          status: 'error',
-          message: t('pa:verify.cscaLookupFailed'),
-          details: {
-            error: response.certificateChainValidation?.validationErrors,
-            errorCode: response.certificateChainValidation?.errorCode,
-            dscSubject: response.certificateChainValidation?.dscSubject,
-            dscIssuer: response.certificateChainValidation?.dscIssuer,
           },
           expanded: true,
         };

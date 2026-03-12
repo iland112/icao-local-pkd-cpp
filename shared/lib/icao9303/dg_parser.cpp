@@ -427,6 +427,8 @@ std::string DgParser::computeHash(
 
     if (algorithm == "SHA-1" || algorithm == "SHA1") {
         md = EVP_sha1();
+    } else if (algorithm == "SHA-224" || algorithm == "SHA224") {
+        md = EVP_sha224();
     } else if (algorithm == "SHA-256" || algorithm == "SHA256") {
         md = EVP_sha256();
     } else if (algorithm == "SHA-384" || algorithm == "SHA384") {
