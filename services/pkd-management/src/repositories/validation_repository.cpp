@@ -232,6 +232,86 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
     }
 }
 
+bool ValidationRepository::copyForUpload(const std::string& fingerprint, const std::string& newUploadId)
+{
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        if (dbType == "oracle") {
+            // Oracle: INSERT with SYS_GUID(), copy from existing record by fingerprint
+            std::string query =
+                "INSERT INTO validation_result ("
+                "id, upload_id, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant, validation_timestamp"
+                ") SELECT "
+                "SYS_GUID(), $1, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant, SYSTIMESTAMP "
+                "FROM validation_result "
+                "WHERE certificate_id = $2 "
+                "AND ROWNUM = 1";
+
+            queryExecutor_->executeCommand(query, {newUploadId, fingerprint});
+        } else {
+            // PostgreSQL: INSERT ... SELECT with uuid_generate_v4()
+            std::string query =
+                "INSERT INTO validation_result ("
+                "upload_id, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant"
+                ") SELECT "
+                "$1, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant "
+                "FROM validation_result "
+                "WHERE certificate_id = (SELECT id FROM certificate WHERE fingerprint_sha256 = $2 LIMIT 1) "
+                "ORDER BY validation_timestamp DESC NULLS LAST LIMIT 1 "
+                "ON CONFLICT (certificate_id, upload_id) DO NOTHING";
+
+            queryExecutor_->executeCommand(query, {newUploadId, fingerprint});
+        }
+
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::warn("[ValidationRepository] copyForUpload failed for fingerprint {}: {}",
+                     fingerprint.substr(0, 16), e.what());
+        return false;
+    }
+}
+
 bool ValidationRepository::updateRevalidation(const std::string& certificateId,
                                               const std::string& validationStatus,
                                               bool trustChainValid,

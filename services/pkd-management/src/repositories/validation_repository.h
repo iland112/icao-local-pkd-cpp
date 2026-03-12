@@ -128,6 +128,19 @@ public:
     Json::Value getReasonBreakdown();
 
     /**
+     * @brief Copy existing validation result for a new upload
+     * @param fingerprint Certificate fingerprint (SHA-256 hex)
+     * @param newUploadId New upload UUID to associate with
+     * @return true if copy successful or no existing record found, false on error
+     *
+     * When a duplicate certificate is uploaded (fingerprint cache hit),
+     * the existing validation_result is copied with the new upload_id.
+     * This ensures the ICAO violation detail dialog can display per-certificate
+     * data even for duplicate uploads.
+     */
+    bool copyForUpload(const std::string& fingerprint, const std::string& newUploadId);
+
+    /**
      * @brief Update validation result for revalidation
      * @param certificateId Certificate UUID
      * @param validationStatus New validation status (VALID/INVALID)

@@ -228,6 +228,11 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         X509_free(cert);
         enhancedStats.totalCertificates++;
         enhancedStats.duplicateCount++;
+
+        // Copy existing validation_result for this upload_id so that
+        // per-certificate ICAO violation details can be queried by upload_id
+        g_services->validationRepository()->copyForUpload(fingerprint, uploadId);
+
         return true;  // Already processed — skip validation, DB save, and LDAP write
     }
 
