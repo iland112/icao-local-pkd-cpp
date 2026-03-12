@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.31.2
-**Last Updated**: 2026-03-11
+**Current Version**: v2.31.3
+**Last Updated**: 2026-03-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -595,6 +595,13 @@ scripts/
 ---
 
 ## Version History
+
+### v2.31.3 (2026-03-12) - Reconciliation 후 동기화 상태 자동 갱신
+- **Bug fix**: 수동 동기화(Reconciliation) 성공 후 SyncDashboard에 불일치 건수가 갱신되지 않는 문제 수정
+- **Root cause**: Reconciliation이 LDAP에 인증서를 추가하고 `stored_in_ldap=TRUE`로 업데이트하지만, sync check를 다시 실행하지 않아 프론트엔드가 이전 `sync_status` 레코드(구 불일치 건수)를 표시
+- **Fix**: `ReconciliationHandler`에 `SyncStatusRepository` 의존성 추가, reconciliation 성공 후(dry-run 제외, successCount > 0) `performSyncCheck()` 자동 실행하여 최신 DB/LDAP 카운트를 `sync_status` 테이블에 저장
+- **안전장치**: dry-run이거나 성공 건수 0인 경우 불필요한 sync check 스킵, sync check 실패 시 경고 로그만 출력 (reconciliation 결과 응답에 영향 없음)
+- 3 files changed (0 new, 3 modified: reconciliation_handler.h, reconciliation_handler.cpp, main.cpp)
 
 ### v2.31.1 (2026-03-11) - 전체 프론트엔드 반응형 디자인 개선 (13개 페이지)
 - **모달/다이얼로그 모바일 대응**: 고정 `max-w-6xl`/`max-w-4xl` → `max-w-sm sm:max-w-2xl lg:max-w-Nxl` 점진적 확장 (UploadHistory, UploadDetail, PAHistory, CrlReport)

@@ -10,6 +10,8 @@
 #include "relay/sync/common/types.h"
 #include "relay/sync/reconciliation_engine.h"
 #include "../services/reconciliation_service.h"
+#include "../infrastructure/relay_operations.h"
+#include "../repositories/sync_status_repository.h"
 
 #include <icao/audit/audit_log.h>
 #include "handler_utils.h"
@@ -23,11 +25,13 @@ ReconciliationHandler::ReconciliationHandler(
     icao::relay::services::ReconciliationService* reconciliationService,
     common::IQueryExecutor* queryExecutor,
     common::LdapConnectionPool* ldapPool,
-    icao::relay::Config& config)
+    icao::relay::Config& config,
+    icao::relay::repositories::SyncStatusRepository* syncStatusRepo)
     : reconciliationService_(reconciliationService)
     , queryExecutor_(queryExecutor)
     , ldapPool_(ldapPool)
-    , config_(config) {}
+    , config_(config)
+    , syncStatusRepo_(syncStatusRepo) {}
 
 void ReconciliationHandler::handleReconcile(const HttpRequestPtr& req,
                                              std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -87,6 +91,18 @@ void ReconciliationHandler::handleReconcile(const HttpRequestPtr& req,
                 failures.append(f);
             }
             response["failures"] = failures;
+        }
+
+        // After successful reconciliation (not dry-run), refresh sync status
+        if (!dryRun && result.successCount > 0 && syncStatusRepo_) {
+            try {
+                auto syncResult = infrastructure::performSyncCheck(
+                    queryExecutor_, ldapPool_, config_, syncStatusRepo_);
+                spdlog::info("Post-reconciliation sync check completed: {} (discrepancy: {})",
+                            syncResult.status, syncResult.totalDiscrepancy);
+            } catch (const std::exception& ex) {
+                spdlog::warn("Post-reconciliation sync check failed: {}", ex.what());
+            }
         }
 
         auto resp = HttpResponse::newHttpJsonResponse(response);

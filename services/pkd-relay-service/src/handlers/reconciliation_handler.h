@@ -19,6 +19,9 @@ namespace icao::relay {
     namespace services {
         class ReconciliationService;
     }
+    namespace repositories {
+        class SyncStatusRepository;
+    }
 }
 
 namespace handlers {
@@ -41,7 +44,8 @@ public:
     ReconciliationHandler(icao::relay::services::ReconciliationService* reconciliationService,
                           common::IQueryExecutor* queryExecutor,
                           common::LdapConnectionPool* ldapPool,
-                          icao::relay::Config& config);
+                          icao::relay::Config& config,
+                          icao::relay::repositories::SyncStatusRepository* syncStatusRepo);
 
     /** @brief POST /api/sync/reconcile - Trigger reconciliation */
     void handleReconcile(const drogon::HttpRequestPtr& req,
@@ -64,6 +68,7 @@ private:
     common::IQueryExecutor* queryExecutor_;
     common::LdapConnectionPool* ldapPool_;
     icao::relay::Config& config_;
+    icao::relay::repositories::SyncStatusRepository* syncStatusRepo_;
 };
 
 } // namespace handlers

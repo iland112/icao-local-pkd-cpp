@@ -424,7 +424,8 @@ int main() {
         g_services->reconciliationService(),
         g_services->queryExecutor(),
         g_services->ldapPool(),
-        g_config);
+        g_config,
+        g_services->syncStatusRepository());
 
     g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
 
