@@ -1,7 +1,7 @@
 # ARM64 Docker Images Build Pipeline
 # Builds PostgreSQL-only ARM64 images for Luckfox deployment
 # vcpkg-base → GHCR → Service builds → Artifacts
-# Last full rebuild: 2026-03-12
+# Last full rebuild: 2026-03-12T13:00+09:00
 name: Build ARM64 Docker Images
 
 on:
