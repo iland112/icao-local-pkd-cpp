@@ -21,7 +21,7 @@ services:
   # Frontend (React.js)
   # ---------------------------------------------------------------------------
   frontend:
-    image: icao-local-pkd-frontend:arm64
+    image: icao-local-pkd-frontend:arm64  # CI: pkd-frontend-arm64.tar.gz
     container_name: icao-local-pkd-frontend
     platform: linux/arm64
     ports:
@@ -39,7 +39,7 @@ services:
   # PKD Management Service (File Upload, Parsing, Certificate Validation)
   # ---------------------------------------------------------------------------
   pkd-management:
-    image: icao-local-pkd-management:arm64
+    image: icao-local-management:arm64  # CI: pkd-management-arm64.tar.gz
     container_name: icao-local-pkd-management
     platform: linux/arm64
     ports:
@@ -83,7 +83,7 @@ services:
   # PA Service (Passive Authentication Verification)
   # ---------------------------------------------------------------------------
   pa-service:
-    image: icao-local-pkd-pa:arm64
+    image: icao-local-pa:arm64  # CI: pkd-pa-arm64.tar.gz
     container_name: icao-local-pkd-pa-service
     platform: linux/arm64
     ports:
@@ -118,17 +118,17 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Sync Service (DB-LDAP Synchronization Checker)
+  # PKD Relay Service (DB-LDAP Synchronization & Reconciliation)
   # ---------------------------------------------------------------------------
-  sync-service:
-    image: icao-local-pkd-sync:arm64
-    container_name: icao-local-pkd-sync-service
+  pkd-relay:
+    image: icao-local-pkd-relay:arm64  # CI: pkd-relay-arm64.tar.gz
+    container_name: icao-local-pkd-relay
     platform: linux/arm64
     ports:
       - "8083:8083"
     environment:
       - TZ=Asia/Seoul
-      - SERVICE_NAME=sync-service
+      - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -159,6 +159,86 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Monitoring Service (System Metrics, Service Health)
+  # ---------------------------------------------------------------------------
+  monitoring-service:
+    image: icao-local-monitoring:arm64  # CI: monitoring-service-arm64.tar.gz
+    container_name: icao-local-pkd-monitoring
+    platform: linux/arm64
+    ports:
+      - "8084:8084"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=monitoring-service
+      - SERVER_PORT=8084
+      - THREAD_NUM=4
+      - SYSTEM_METRICS_INTERVAL=5
+      - SERVICE_HEALTH_INTERVAL=30
+      - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
+      - SERVICE_PA_SERVICE=http://pa-service:8082/api/health
+      - SERVICE_SYNC_SERVICE=http://pkd-relay:8083/api/sync/health
+      - NGINX_STATUS_URL=http://api-gateway:8080/nginx_status
+      - COLLECTION_INTERVAL=10
+      - METRICS_ENDPOINT_AI_ANALYSIS=http://ai-analysis:8085/api/ai/internal/metrics
+    depends_on:
+      pkd-management:
+        condition: service_healthy
+      pa-service:
+        condition: service_healthy
+      pkd-relay:
+        condition: service_healthy
+    volumes:
+      - ./data/monitoring-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/api/monitoring/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # AI Analysis Service (ML-based Certificate Anomaly Detection)
+  # ---------------------------------------------------------------------------
+  ai-analysis:
+    image: icao-local-ai-analysis:arm64  # CI: ai-analysis-arm64.tar.gz
+    container_name: icao-local-pkd-ai-analysis
+    platform: linux/arm64
+    ports:
+      - "8085:8085"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=ai-analysis
+      - SERVER_PORT=8085
+      - DB_TYPE=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_POOL_SIZE=5
+      - DB_POOL_OVERFLOW=10
+      - UVICORN_WORKERS=2
+      - ANALYSIS_SCHEDULE_HOUR=3
+      - ANALYSIS_ENABLED=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/ai-analysis-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/api/ai/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   # ---------------------------------------------------------------------------
   # PostgreSQL Database

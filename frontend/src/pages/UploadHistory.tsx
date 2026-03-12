@@ -998,6 +998,7 @@ export function UploadHistory() {
                         totalCertificates: selectedUpload.totalEntries,
                         processedCount: selectedUpload.processedEntries,
                       }}
+                      uploadId={selectedUpload.id}
                     />
                   )}
 

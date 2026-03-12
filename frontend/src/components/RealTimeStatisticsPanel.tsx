@@ -6,13 +6,14 @@ import type { ValidationSummaryData } from './ValidationSummaryPanel';
 interface RealTimeStatisticsPanelProps {
   statistics: ValidationStatistics;
   isProcessing: boolean;
+  uploadId?: string;
 }
 
 /**
  * Thin wrapper that maps SSE ValidationStatistics to the shared ValidationSummaryPanel.
  * Preserves backward compatibility with existing FileUpload.tsx usage.
  */
-export function RealTimeStatisticsPanel({ statistics, isProcessing }: RealTimeStatisticsPanelProps) {
+export function RealTimeStatisticsPanel({ statistics, isProcessing, uploadId }: RealTimeStatisticsPanelProps) {
   const { t } = useTranslation(['upload', 'common']);
   const data: ValidationSummaryData = {
     validCount: statistics.validCount,
@@ -42,6 +43,7 @@ export function RealTimeStatisticsPanel({ statistics, isProcessing }: RealTimeSt
       data={data}
       title={t('upload:statistics.realTimeTitle')}
       isProcessing={isProcessing}
+      uploadId={uploadId}
     />
   );
 }

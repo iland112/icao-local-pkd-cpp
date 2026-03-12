@@ -62,6 +62,9 @@ export function FileUpload() {
   const pollingIntervalRef = useRef<number | null>(null);
   const isProcessingRef = useRef(false);
 
+  // Upload ID for violation detail lookups
+  const [currentFileId, setCurrentFileId] = useState<string | null>(null);
+
   // Phase 4.4: Enhanced metadata tracking
   const [statistics, setStatistics] = useState<ValidationStatistics | null>(null);
   const [currentCertificate, setCurrentCertificate] = useState<CertificateMetadata | null>(null);
@@ -257,6 +260,7 @@ export function FileUpload() {
       if (response.data.success && response.data.data) {
         const uploadedFile = response.data.data;
         const fileId = (uploadedFile as { uploadId?: string }).uploadId || uploadedFile.id;
+        setCurrentFileId(fileId);
         setUploadStage({ status: 'COMPLETED', message: t('upload:fileUpload.uploadComplete'), percentage: 100 });
 
         connectToProgressStream(fileId);
@@ -967,6 +971,7 @@ export function FileUpload() {
               <RealTimeStatisticsPanel
                 statistics={statistics}
                 isProcessing={false}
+                uploadId={currentFileId ?? undefined}
               />
             )}
 

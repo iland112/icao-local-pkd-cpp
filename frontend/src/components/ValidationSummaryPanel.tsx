@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckCircle,
   XCircle,
@@ -8,8 +8,10 @@ import {
   Shield,
   ShieldCheck,
   FileCheck,
-  FileX
+  FileX,
+  Search,
 } from 'lucide-react';
+import { IcaoViolationDetailDialog } from './IcaoViolationDetailDialog';
 
 /**
  * Unified validation summary data interface.
@@ -56,14 +58,19 @@ interface ValidationSummaryPanelProps {
   data: ValidationSummaryData;
   title?: string;
   isProcessing?: boolean;
+  /** Upload ID for fetching per-certificate violation details */
+  uploadId?: string;
 }
 
 export function ValidationSummaryPanel({
   data,
   title,
   isProcessing = false,
+  uploadId,
 }: ValidationSummaryPanelProps) {
   const { t } = useTranslation(['upload', 'common']);
+  const [violationDialogOpen, setViolationDialogOpen] = useState(false);
+  const [violationDialogCategory, setViolationDialogCategory] = useState<string | undefined>();
   const displayTitle = title ?? t('upload:validationSummary.title');
   const expiredValidCount = data.expiredValidCount ?? 0;
 
@@ -279,26 +286,37 @@ export function ValidationSummaryPanel({
                 </span>
               </div>
               {(data.icaoNonCompliantCount ?? 0) > 0 && (
-                <div className="flex justify-between items-center text-xs">
+                <button
+                  onClick={() => { setViolationDialogCategory(undefined); setViolationDialogOpen(true); }}
+                  className="w-full flex justify-between items-center text-xs hover:bg-red-50 dark:hover:bg-red-900/10 rounded px-1 -mx-1 py-0.5 transition-colors group cursor-pointer"
+                >
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
                     <XCircle className="w-2.5 h-2.5" /> {t('certificate:doc9303.nonCompliant')}
+                    <Search className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">
                     {(data.icaoNonCompliantCount ?? 0).toLocaleString()}
                   </span>
-                </div>
+                </button>
               )}
-              {/* Violation breakdown — inline row */}
+              {/* Violation breakdown — inline row (clickable for detail) */}
               {data.complianceViolations && Object.keys(data.complianceViolations).length > 0 && (
                 <div className="pt-1 mt-1 border-t border-gray-200 dark:border-gray-600">
                   <div className="grid grid-cols-2 gap-1">
                     {Object.entries(data.complianceViolations)
                       .sort(([, a], [, b]) => b - a)
                       .map(([cat, count]) => (
-                        <div key={cat} className="flex items-center justify-between text-[10px] px-1.5 py-0.5 bg-red-50 dark:bg-red-900/10 rounded">
-                          <span className="text-gray-500 dark:text-gray-400">{violationLabel[cat] ?? cat}</span>
+                        <button
+                          key={cat}
+                          onClick={() => { setViolationDialogCategory(cat); setViolationDialogOpen(true); }}
+                          className="flex items-center justify-between text-[10px] px-1.5 py-0.5 bg-red-50 dark:bg-red-900/10 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors cursor-pointer group"
+                        >
+                          <span className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 flex items-center gap-0.5">
+                            {violationLabel[cat] ?? cat}
+                            <Search className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </span>
                           <span className="font-semibold text-red-600 dark:text-red-400 ml-1">{count.toLocaleString()}</span>
-                        </div>
+                        </button>
                       ))}
                   </div>
                 </div>
@@ -425,6 +443,17 @@ export function ValidationSummaryPanel({
           </div>
         );
       })()}
+
+      {/* ICAO Violation Detail Dialog */}
+      {data.complianceViolations && Object.keys(data.complianceViolations).length > 0 && uploadId && (
+        <IcaoViolationDetailDialog
+          open={violationDialogOpen}
+          onClose={() => setViolationDialogOpen(false)}
+          uploadId={uploadId}
+          violations={data.complianceViolations}
+          initialCategory={violationDialogCategory}
+        />
+      )}
     </div>
   );
 }

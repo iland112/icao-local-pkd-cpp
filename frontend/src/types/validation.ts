@@ -56,6 +56,16 @@ export interface ValidationResult {
   validatedAt: string;
   validationDurationMs: number;
 
+  // ICAO 9303 Compliance
+  icaoCompliant?: boolean;
+  icaoComplianceLevel?: string;
+  icaoViolations?: string;
+  icaoKeyUsageCompliant?: boolean;
+  icaoAlgorithmCompliant?: boolean;
+  icaoKeySizeCompliant?: boolean;
+  icaoValidityPeriodCompliant?: boolean;
+  icaoExtensionsCompliant?: boolean;
+
   // Fingerprint (from certificate join)
   fingerprint?: string;
 }
