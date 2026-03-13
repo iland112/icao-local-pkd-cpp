@@ -77,7 +77,7 @@ AlgorithmComplianceResult validateAlgorithmCompliance(X509* cert) {
                              " bits is below Doc 9303 minimum of 2048 bits";
         } else if (keyType == EVP_PKEY_EC) {
             // Check ECDSA curve: Doc 9303 Part 12 (NIST) + BSI TR-03110 (Brainpool)
-            EC_KEY* ecKey = EVP_PKEY_get0_EC_KEY(pkey);
+            const EC_KEY* ecKey = EVP_PKEY_get0_EC_KEY(pkey);
             if (ecKey) {
                 int curveNid = EC_GROUP_get_curve_name(EC_KEY_get0_group(ecKey));
                 bool doc9303Curve = (curveNid == NID_X9_62_prime256v1 ||  // P-256
