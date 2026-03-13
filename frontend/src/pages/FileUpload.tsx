@@ -383,7 +383,7 @@ export function FileUpload() {
           const details = parts.length > 0 ? `${t('upload:fileUpload.saveCompleteLabel')}: ${parts.join(', ')}` : t('upload:fileUpload.entriesSaved', { num: (upload.processedEntries || upload.totalEntries)?.toLocaleString() ?? '0' });
           setDbSaveStage({
             status: 'COMPLETED',
-            message: t('upload:fileUpload.saveComplete'),
+            message: t('upload:fileUpload.saveCompleteLabel'),
             percentage: 100,
             details
           });
@@ -563,7 +563,7 @@ export function FileUpload() {
         const milestone = Math.floor(processedCount / 10000) * 10000;
         if (milestone > 0 && milestone > lastMilestoneRef.current) {
           lastMilestoneRef.current = milestone;
-          addEntry('MILESTONE', t('upload:fileUpload.milestoneProgress', { processed: milestone.toLocaleString(), total: totalCount.toLocaleString(), pct: percentage }), 'info');
+          addEntry('MILESTONE', t('upload:fileUpload.milestoneProgress', { milestone: milestone.toLocaleString(), total: totalCount.toLocaleString(), pct: percentage }), 'info');
         }
       }
 
@@ -1109,7 +1109,7 @@ export function FileUpload() {
                         {t('upload:fileUpload.dragOrClick')}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        {t('upload:fileUpload.supportedFormats')}
+                        {t('upload:fileUpload.supportedFormats', { formats: 'LDIF, Master List' })}
                       </p>
                     </>
                   ) : (

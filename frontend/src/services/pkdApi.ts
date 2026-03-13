@@ -223,6 +223,10 @@ export const certificateApi = {
   /** Doc 9303 compliance checklist by fingerprint */
   getDoc9303Checklist: (fingerprint: string) =>
     pkdApi.get<Doc9303ChecklistResult>(`/certificates/doc9303-checklist`, { params: { fingerprint } }),
+
+  /** Certificate quality report (ICAO compliance aggregation) */
+  getQualityReport: (params?: { country?: string; certType?: string; category?: string; page?: number; size?: number }) =>
+    pkdApi.get('/certificates/quality/report', { params }),
 };
 
 // --- Upload History & Statistics (Read-Only) ---

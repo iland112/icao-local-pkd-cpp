@@ -10,6 +10,8 @@
 #include "../common.h"  // For LdifEntry structure
 #include "../infrastructure/service_container.h"
 #include "../services/ldap_storage_service.h"
+#include "../domain/models/validation_result.h"
+#include "../repositories/validation_repository.h"
 #include <spdlog/spdlog.h>
 
 // Global service container (defined in main.cpp)
@@ -299,6 +301,57 @@ bool parseMasterListEntryV2(
                         }
                     }
                 }
+
+                // Save validation_result for MLSC (ICAO compliance + metadata)
+                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                    try {
+                        domain::models::ValidationResult valRecord;
+                        valRecord.certificateId = certId;
+                        valRecord.uploadId = uploadId;
+                        valRecord.certificateType = "MLSC";
+                        valRecord.countryCode = certCountryCode;
+                        valRecord.subjectDn = meta.subjectDn;
+                        valRecord.issuerDn = meta.issuerDn;
+                        valRecord.serialNumber = meta.serialNumber;
+                        valRecord.fingerprint = meta.fingerprint;
+                        valRecord.notBefore = meta.notBefore;
+                        valRecord.notAfter = meta.notAfter;
+                        valRecord.validationStatus = "VALID";
+                        valRecord.trustChainValid = true;
+                        valRecord.trustChainMessage = "Extracted from Master List (MLSC signer)";
+                        valRecord.signatureVerified = true;
+                        valRecord.validityCheckPassed = true;
+                        valRecord.isSelfSigned = false;
+
+                        // Extract signature algorithm
+                        common::CertificateMetadata mlscMeta = common::extractCertificateMetadataForProgress(signerCert, false);
+                        valRecord.signatureAlgorithm = mlscMeta.signatureAlgorithm;
+
+                        // ICAO 9303 compliance check
+                        common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(signerCert, "MLSC");
+                        valRecord.icaoCompliant = icaoCompliance.isCompliant;
+                        valRecord.icaoComplianceLevel = icaoCompliance.complianceLevel;
+                        valRecord.icaoKeyUsageCompliant = icaoCompliance.keyUsageCompliant;
+                        valRecord.icaoAlgorithmCompliant = icaoCompliance.algorithmCompliant;
+                        valRecord.icaoKeySizeCompliant = icaoCompliance.keySizeCompliant;
+                        valRecord.icaoValidityPeriodCompliant = icaoCompliance.validityPeriodCompliant;
+                        valRecord.icaoExtensionsCompliant = icaoCompliance.extensionsCompliant;
+                        {
+                            std::string violations;
+                            for (const auto& v : icaoCompliance.violations) {
+                                if (!violations.empty()) violations += "|";
+                                violations += v;
+                            }
+                            if (!violations.empty()) {
+                                valRecord.icaoViolations = violations;
+                            }
+                        }
+
+                        g_services->validationRepository()->save(valRecord);
+                    } catch (const std::exception& e) {
+                        spdlog::warn("[ML-LDIF] MLSC {}/{} - Failed to save validation_result: {}", i + 1, numSigners, e.what());
+                    }
+                }
             }
         }
 
@@ -519,12 +572,71 @@ bool parseMasterListEntryV2(
                 // Expiration status
                 const ASN1_TIME* notAfterTime = X509_get0_notAfter(cert);
                 const ASN1_TIME* notBeforeTime = X509_get0_notBefore(cert);
+                bool isExpired = false;
                 if (notAfterTime && X509_cmp_current_time(notAfterTime) < 0) {
                     enhancedStats->expiredCount++;
+                    isExpired = true;
                 } else if (notBeforeTime && X509_cmp_current_time(notBeforeTime) > 0) {
                     enhancedStats->notYetValidCount++;
                 } else {
                     enhancedStats->validPeriodCount++;
+                }
+
+                // Save validation_result for CSCA/LC (ICAO compliance + metadata)
+                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                    try {
+                        domain::models::ValidationResult valRecord;
+                        valRecord.certificateId = certId;
+                        valRecord.uploadId = uploadId;
+                        valRecord.certificateType = "CSCA";
+                        valRecord.countryCode = certCountryCode;
+                        valRecord.subjectDn = meta.subjectDn;
+                        valRecord.issuerDn = meta.issuerDn;
+                        valRecord.serialNumber = meta.serialNumber;
+                        valRecord.fingerprint = meta.fingerprint;
+                        valRecord.notBefore = meta.notBefore;
+                        valRecord.notAfter = meta.notAfter;
+                        valRecord.isSelfSigned = meta.isSelfSigned;
+                        valRecord.isCa = true;  // CSCA/LC are CA certificates
+                        valRecord.isExpired = isExpired;
+                        valRecord.signatureAlgorithm = certMeta.signatureAlgorithm;
+
+                        if (meta.isSelfSigned) {
+                            valRecord.validationStatus = isExpired ? "EXPIRED_VALID" : "VALID";
+                            valRecord.trustChainValid = true;
+                            valRecord.trustChainMessage = "Extracted from Master List (self-signed CSCA)";
+                            valRecord.signatureVerified = true;
+                        } else {
+                            valRecord.validationStatus = isExpired ? "EXPIRED_VALID" : "VALID";
+                            valRecord.trustChainValid = true;
+                            valRecord.trustChainMessage = "Extracted from Master List (Link Certificate)";
+                            valRecord.signatureVerified = false;  // Cannot self-verify link cert
+                        }
+                        valRecord.validityCheckPassed = !isExpired;
+
+                        // ICAO 9303 compliance
+                        valRecord.icaoCompliant = icaoCompliance.isCompliant;
+                        valRecord.icaoComplianceLevel = icaoCompliance.complianceLevel;
+                        valRecord.icaoKeyUsageCompliant = icaoCompliance.keyUsageCompliant;
+                        valRecord.icaoAlgorithmCompliant = icaoCompliance.algorithmCompliant;
+                        valRecord.icaoKeySizeCompliant = icaoCompliance.keySizeCompliant;
+                        valRecord.icaoValidityPeriodCompliant = icaoCompliance.validityPeriodCompliant;
+                        valRecord.icaoExtensionsCompliant = icaoCompliance.extensionsCompliant;
+                        {
+                            std::string violations;
+                            for (const auto& v : icaoCompliance.violations) {
+                                if (!violations.empty()) violations += "|";
+                                violations += v;
+                            }
+                            if (!violations.empty()) {
+                                valRecord.icaoViolations = violations;
+                            }
+                        }
+
+                        g_services->validationRepository()->save(valRecord);
+                    } catch (const std::exception& e) {
+                        spdlog::warn("[ML-LDIF] CSCA/LC {} - Failed to save validation_result: {}", totalCerts, e.what());
+                    }
                 }
             }
 
@@ -750,6 +862,55 @@ bool processMasterListFile(
                         spdlog::info("[ML-FILE] MLSC {}/{} - DUPLICATE - fingerprint: {}",
                                     i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...");
                     }
+
+                    // Save validation_result for MLSC
+                    if (!isDuplicate && g_services && g_services->validationRepository()) {
+                        try {
+                            domain::models::ValidationResult valRecord;
+                            valRecord.certificateId = certId;
+                            valRecord.uploadId = uploadId;
+                            valRecord.certificateType = "MLSC";
+                            valRecord.countryCode = countryCode;
+                            valRecord.subjectDn = meta.subjectDn;
+                            valRecord.issuerDn = meta.issuerDn;
+                            valRecord.serialNumber = meta.serialNumber;
+                            valRecord.fingerprint = meta.fingerprint;
+                            valRecord.notBefore = meta.notBefore;
+                            valRecord.notAfter = meta.notAfter;
+                            valRecord.validationStatus = "VALID";
+                            valRecord.trustChainValid = true;
+                            valRecord.trustChainMessage = "Extracted from Master List (MLSC signer)";
+                            valRecord.signatureVerified = true;
+                            valRecord.validityCheckPassed = true;
+                            valRecord.isSelfSigned = false;
+
+                            common::CertificateMetadata mlscMeta = common::extractCertificateMetadataForProgress(signerCert, false);
+                            valRecord.signatureAlgorithm = mlscMeta.signatureAlgorithm;
+
+                            common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(signerCert, "MLSC");
+                            valRecord.icaoCompliant = icaoCompliance.isCompliant;
+                            valRecord.icaoComplianceLevel = icaoCompliance.complianceLevel;
+                            valRecord.icaoKeyUsageCompliant = icaoCompliance.keyUsageCompliant;
+                            valRecord.icaoAlgorithmCompliant = icaoCompliance.algorithmCompliant;
+                            valRecord.icaoKeySizeCompliant = icaoCompliance.keySizeCompliant;
+                            valRecord.icaoValidityPeriodCompliant = icaoCompliance.validityPeriodCompliant;
+                            valRecord.icaoExtensionsCompliant = icaoCompliance.extensionsCompliant;
+                            {
+                                std::string violations;
+                                for (const auto& v : icaoCompliance.violations) {
+                                    if (!violations.empty()) violations += "|";
+                                    violations += v;
+                                }
+                                if (!violations.empty()) {
+                                    valRecord.icaoViolations = violations;
+                                }
+                            }
+
+                            g_services->validationRepository()->save(valRecord);
+                        } catch (const std::exception& e) {
+                            spdlog::warn("[ML-FILE] MLSC {}/{} - Failed to save validation_result: {}", i + 1, numSigners, e.what());
+                        }
+                    }
                 }
 
                 X509_free(signerCert);
@@ -965,12 +1126,70 @@ bool processMasterListFile(
                 // Expiration status
                 const ASN1_TIME* notAfterTime = X509_get0_notAfter(cert);
                 const ASN1_TIME* notBeforeTime = X509_get0_notBefore(cert);
+                bool isExpired = false;
                 if (notAfterTime && X509_cmp_current_time(notAfterTime) < 0) {
                     enhancedStats->expiredCount++;
+                    isExpired = true;
                 } else if (notBeforeTime && X509_cmp_current_time(notBeforeTime) > 0) {
                     enhancedStats->notYetValidCount++;
                 } else {
                     enhancedStats->validPeriodCount++;
+                }
+
+                // Save validation_result for CSCA/LC (ICAO compliance + metadata)
+                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                    try {
+                        domain::models::ValidationResult valRecord;
+                        valRecord.certificateId = certId;
+                        valRecord.uploadId = uploadId;
+                        valRecord.certificateType = "CSCA";
+                        valRecord.countryCode = certCountryCode;
+                        valRecord.subjectDn = meta.subjectDn;
+                        valRecord.issuerDn = meta.issuerDn;
+                        valRecord.serialNumber = meta.serialNumber;
+                        valRecord.fingerprint = meta.fingerprint;
+                        valRecord.notBefore = meta.notBefore;
+                        valRecord.notAfter = meta.notAfter;
+                        valRecord.isSelfSigned = meta.isSelfSigned;
+                        valRecord.isCa = true;
+                        valRecord.isExpired = isExpired;
+                        valRecord.signatureAlgorithm = certMeta.signatureAlgorithm;
+
+                        if (meta.isSelfSigned) {
+                            valRecord.validationStatus = isExpired ? "EXPIRED_VALID" : "VALID";
+                            valRecord.trustChainValid = true;
+                            valRecord.trustChainMessage = "Extracted from Master List (self-signed CSCA)";
+                            valRecord.signatureVerified = true;
+                        } else {
+                            valRecord.validationStatus = isExpired ? "EXPIRED_VALID" : "VALID";
+                            valRecord.trustChainValid = true;
+                            valRecord.trustChainMessage = "Extracted from Master List (Link Certificate)";
+                            valRecord.signatureVerified = false;
+                        }
+                        valRecord.validityCheckPassed = !isExpired;
+
+                        valRecord.icaoCompliant = icaoCompliance.isCompliant;
+                        valRecord.icaoComplianceLevel = icaoCompliance.complianceLevel;
+                        valRecord.icaoKeyUsageCompliant = icaoCompliance.keyUsageCompliant;
+                        valRecord.icaoAlgorithmCompliant = icaoCompliance.algorithmCompliant;
+                        valRecord.icaoKeySizeCompliant = icaoCompliance.keySizeCompliant;
+                        valRecord.icaoValidityPeriodCompliant = icaoCompliance.validityPeriodCompliant;
+                        valRecord.icaoExtensionsCompliant = icaoCompliance.extensionsCompliant;
+                        {
+                            std::string violations;
+                            for (const auto& v : icaoCompliance.violations) {
+                                if (!violations.empty()) violations += "|";
+                                violations += v;
+                            }
+                            if (!violations.empty()) {
+                                valRecord.icaoViolations = violations;
+                            }
+                        }
+
+                        g_services->validationRepository()->save(valRecord);
+                    } catch (const std::exception& e) {
+                        spdlog::warn("[ML-FILE] CSCA/LC {} - Failed to save validation_result: {}", totalCerts, e.what());
+                    }
                 }
 
                 // Send SSE progress with validation statistics every 10 certificates

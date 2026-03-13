@@ -31,6 +31,7 @@ const OperationAuditLog = lazy(() => import('./pages/OperationAuditLog'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
 const PendingDscApproval = lazy(() => import('./pages/PendingDscApproval'));
 const ApiClientRequest = lazy(() => import('./pages/ApiClientRequest'));
+const CertificateQualityReport = lazy(() => import('./pages/CertificateQualityReport'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +91,7 @@ function App() {
             <Route path="upload/certificate" element={<Suspense fallback={<PageLoader />}><CertificateUpload /></Suspense>} />
             <Route path="pkd/certificates" element={<Suspense fallback={<PageLoader />}><CertificateSearch /></Suspense>} />
             <Route path="pkd/dsc-nc" element={<Suspense fallback={<PageLoader />}><DscNcReport /></Suspense>} />
+            <Route path="pkd/quality" element={<Suspense fallback={<PageLoader />}><CertificateQualityReport /></Suspense>} />
             <Route path="pkd/crl" element={<Suspense fallback={<PageLoader />}><CrlReport /></Suspense>} />
             <Route path="upload-history" element={<Suspense fallback={<PageLoader />}><UploadHistory /></Suspense>} />
             <Route path="upload/:uploadId" element={<Suspense fallback={<PageLoader />}><UploadDetail /></Suspense>} />

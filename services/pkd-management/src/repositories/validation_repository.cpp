@@ -934,7 +934,9 @@ Json::Value ValidationRepository::findByUploadId(
                 "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
                 "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
                 "       vr.csca_found, vr.csca_subject_dn, "
-                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.signature_valid, "
+                "       CASE WHEN vr.signature_algorithm IS NOT NULL AND vr.signature_algorithm != ' ' "
+                "            THEN vr.signature_algorithm ELSE c.signature_algorithm END AS signature_algorithm, "
                 "       vr.validity_period_valid, "
                 "       vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
@@ -945,6 +947,7 @@ Json::Value ValidationRepository::findByUploadId(
                 "       vr.validation_timestamp, "
                 "       vr.certificate_id AS fingerprint_sha256 "
                 "FROM validation_result vr "
+                "LEFT JOIN certificate c ON vr.certificate_id = c.fingerprint_sha256 "
                 + whereClause +
                 " ORDER BY vr.validation_status, vr.validation_timestamp DESC "
                 " OFFSET $" + std::to_string(paramIdx) +
@@ -956,7 +959,8 @@ Json::Value ValidationRepository::findByUploadId(
                 "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
                 "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
                 "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
-                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.signature_valid, "
+                "       COALESCE(NULLIF(vr.signature_algorithm, ''), c.signature_algorithm) AS signature_algorithm, "
                 "       vr.validity_period_valid, "
                 "       vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "

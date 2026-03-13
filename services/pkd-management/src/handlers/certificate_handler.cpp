@@ -238,6 +238,15 @@ void CertificateHandler::registerRoutes(drogon::HttpAppFramework& app) {
         },
         {drogon::Get});
 
+    // GET /api/certificates/quality/report
+    app.registerHandler(
+        "/api/certificates/quality/report",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handleQualityReport(req, std::move(callback));
+        },
+        {drogon::Get});
+
     // GET /api/certificates/doc9303-checklist
     app.registerHandler(
         "/api/certificates/doc9303-checklist",
@@ -1705,6 +1714,332 @@ void CertificateHandler::handleCrlDownload(
 
     } catch (const std::exception& e) {
         callback(common::handler::internalError("CertHandler::crlDownload", e));
+    }
+}
+
+// =============================================================================
+// Handler: GET /api/certificates/quality/report
+// =============================================================================
+
+void CertificateHandler::handleQualityReport(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+
+    spdlog::info("GET /api/certificates/quality/report");
+
+    try {
+        // Parse query parameters
+        std::string countryFilter = req->getOptionalParameter<std::string>("country").value_or("");
+        std::string certTypeFilter = req->getOptionalParameter<std::string>("certType").value_or("");
+        std::string categoryFilter = req->getOptionalParameter<std::string>("category").value_or("");
+        int page = req->getOptionalParameter<int>("page").value_or(1);
+        int size = req->getOptionalParameter<int>("size").value_or(50);
+        if (page < 1) page = 1;
+        if (size < 1) size = 50;
+        if (size > 200) size = 200;
+
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // --- 1. Overall summary (total, compliant, non-compliant, warning counts) ---
+        std::string summaryQuery;
+        if (dbType == "oracle") {
+            summaryQuery =
+                "SELECT COUNT(*) AS total, "
+                "  SUM(CASE WHEN icao_compliance_level = 'CONFORMANT' THEN 1 ELSE 0 END) AS compliant_count, "
+                "  SUM(CASE WHEN icao_compliance_level = 'NON_CONFORMANT' THEN 1 ELSE 0 END) AS non_compliant_count, "
+                "  SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END) AS warning_count "
+                "FROM validation_result WHERE icao_compliance_level IS NOT NULL";
+        } else {
+            summaryQuery =
+                "SELECT COUNT(*) AS total, "
+                "  SUM(CASE WHEN icao_compliance_level = 'CONFORMANT' THEN 1 ELSE 0 END) AS compliant_count, "
+                "  SUM(CASE WHEN icao_compliance_level = 'NON_CONFORMANT' THEN 1 ELSE 0 END) AS non_compliant_count, "
+                "  SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END) AS warning_count "
+                "FROM validation_result WHERE icao_compliance_level IS NOT NULL";
+        }
+        Json::Value summaryResult = queryExecutor_->executeQuery(summaryQuery, {});
+
+        Json::Value summary;
+        if (!summaryResult.empty()) {
+            summary["total"] = common::db::scalarToInt(summaryResult[0].get("total", 0));
+            summary["compliantCount"] = common::db::scalarToInt(summaryResult[0].get("compliant_count", 0));
+            summary["nonCompliantCount"] = common::db::scalarToInt(summaryResult[0].get("non_compliant_count", 0));
+            summary["warningCount"] = common::db::scalarToInt(summaryResult[0].get("warning_count", 0));
+        }
+
+        // --- 2. Per-category compliance breakdown ---
+        std::string categoryQuery;
+        if (dbType == "oracle") {
+            categoryQuery =
+                "SELECT "
+                "  SUM(CASE WHEN icao_algorithm_compliant = 0 THEN 1 ELSE 0 END) AS algorithm_fail, "
+                "  SUM(CASE WHEN icao_key_size_compliant = 0 THEN 1 ELSE 0 END) AS key_size_fail, "
+                "  SUM(CASE WHEN icao_key_usage_compliant = 0 THEN 1 ELSE 0 END) AS key_usage_fail, "
+                "  SUM(CASE WHEN icao_extensions_compliant = 0 THEN 1 ELSE 0 END) AS extensions_fail, "
+                "  SUM(CASE WHEN icao_validity_period_compliant = 0 THEN 1 ELSE 0 END) AS validity_period_fail "
+                "FROM validation_result WHERE icao_compliance_level IS NOT NULL";
+        } else {
+            categoryQuery =
+                "SELECT "
+                "  SUM(CASE WHEN icao_algorithm_compliant = FALSE THEN 1 ELSE 0 END) AS algorithm_fail, "
+                "  SUM(CASE WHEN icao_key_size_compliant = FALSE THEN 1 ELSE 0 END) AS key_size_fail, "
+                "  SUM(CASE WHEN icao_key_usage_compliant = FALSE THEN 1 ELSE 0 END) AS key_usage_fail, "
+                "  SUM(CASE WHEN icao_extensions_compliant = FALSE THEN 1 ELSE 0 END) AS extensions_fail, "
+                "  SUM(CASE WHEN icao_validity_period_compliant = FALSE THEN 1 ELSE 0 END) AS validity_period_fail "
+                "FROM validation_result WHERE icao_compliance_level IS NOT NULL";
+        }
+        Json::Value categoryResult = queryExecutor_->executeQuery(categoryQuery, {});
+
+        Json::Value byCategory(Json::arrayValue);
+        if (!categoryResult.empty()) {
+            auto& row = categoryResult[0];
+            auto addCategory = [&](const std::string& name, const std::string& field) {
+                Json::Value item;
+                item["category"] = name;
+                item["failCount"] = common::db::scalarToInt(row.get(field, 0));
+                byCategory.append(item);
+            };
+            addCategory("algorithm", "algorithm_fail");
+            addCategory("keySize", "key_size_fail");
+            addCategory("keyUsage", "key_usage_fail");
+            addCategory("extensions", "extensions_fail");
+            addCategory("validityPeriod", "validity_period_fail");
+        }
+
+        // --- 3. By country compliance ---
+        std::string countryQuery;
+        if (dbType == "oracle") {
+            countryQuery =
+                "SELECT country_code, "
+                "  COUNT(*) AS total, "
+                "  SUM(CASE WHEN icao_compliance_level = 'CONFORMANT' THEN 1 ELSE 0 END) AS compliant, "
+                "  SUM(CASE WHEN icao_compliance_level = 'NON_CONFORMANT' THEN 1 ELSE 0 END) AS non_compliant, "
+                "  SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END) AS warning "
+                "FROM validation_result "
+                "WHERE icao_compliance_level IS NOT NULL AND country_code IS NOT NULL "
+                "GROUP BY country_code ORDER BY non_compliant DESC "
+                "OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY";
+        } else {
+            countryQuery =
+                "SELECT country_code, "
+                "  COUNT(*) AS total, "
+                "  SUM(CASE WHEN icao_compliance_level = 'CONFORMANT' THEN 1 ELSE 0 END) AS compliant, "
+                "  SUM(CASE WHEN icao_compliance_level = 'NON_CONFORMANT' THEN 1 ELSE 0 END) AS non_compliant, "
+                "  SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END) AS warning "
+                "FROM validation_result "
+                "WHERE icao_compliance_level IS NOT NULL AND country_code IS NOT NULL "
+                "GROUP BY country_code ORDER BY non_compliant DESC "
+                "LIMIT 50";
+        }
+        Json::Value countryResult = queryExecutor_->executeQuery(countryQuery, {});
+
+        Json::Value byCountry(Json::arrayValue);
+        for (const auto& row : countryResult) {
+            Json::Value item;
+            item["countryCode"] = row.get("country_code", "").asString();
+            item["total"] = common::db::scalarToInt(row.get("total", 0));
+            item["compliant"] = common::db::scalarToInt(row.get("compliant", 0));
+            item["nonCompliant"] = common::db::scalarToInt(row.get("non_compliant", 0));
+            item["warning"] = common::db::scalarToInt(row.get("warning", 0));
+            byCountry.append(item);
+        }
+
+        // --- 4. By certificate type ---
+        std::string typeQuery =
+            "SELECT certificate_type, "
+            "  COUNT(*) AS total, "
+            "  SUM(CASE WHEN icao_compliance_level = 'CONFORMANT' THEN 1 ELSE 0 END) AS compliant, "
+            "  SUM(CASE WHEN icao_compliance_level = 'NON_CONFORMANT' THEN 1 ELSE 0 END) AS non_compliant, "
+            "  SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END) AS warning "
+            "FROM validation_result "
+            "WHERE icao_compliance_level IS NOT NULL "
+            "GROUP BY certificate_type ORDER BY total DESC";
+        Json::Value typeResult = queryExecutor_->executeQuery(typeQuery, {});
+
+        Json::Value byCertType(Json::arrayValue);
+        for (const auto& row : typeResult) {
+            Json::Value item;
+            item["certType"] = row.get("certificate_type", "").asString();
+            item["total"] = common::db::scalarToInt(row.get("total", 0));
+            item["compliant"] = common::db::scalarToInt(row.get("compliant", 0));
+            item["nonCompliant"] = common::db::scalarToInt(row.get("non_compliant", 0));
+            item["warning"] = common::db::scalarToInt(row.get("warning", 0));
+            byCertType.append(item);
+        }
+
+        // --- 5. Violation details breakdown (parse icao_violations text) ---
+        // icao_violations is pipe-separated, e.g. "Missing Key Usage|RSA key size below minimum..."
+        // We aggregate by counting individual violations from the text field
+        std::string violationQuery;
+        if (dbType == "oracle") {
+            violationQuery =
+                "SELECT TO_CHAR(icao_violations) AS icao_violations, "
+                "  certificate_type, country_code "
+                "FROM validation_result "
+                "WHERE icao_compliance_level IN ('NON_CONFORMANT', 'WARNING') "
+                "AND icao_violations IS NOT NULL";
+        } else {
+            violationQuery =
+                "SELECT icao_violations, certificate_type, country_code "
+                "FROM validation_result "
+                "WHERE icao_compliance_level IN ('NON_CONFORMANT', 'WARNING') "
+                "AND icao_violations IS NOT NULL AND icao_violations != ''";
+        }
+        Json::Value violationResult = queryExecutor_->executeQuery(violationQuery, {});
+
+        // Parse pipe-separated violations and aggregate
+        std::map<std::string, int> violationCountMap;
+        for (const auto& row : violationResult) {
+            std::string violations = row.get("icao_violations", "").asString();
+            if (violations.empty()) continue;
+
+            // Split by pipe '|'
+            size_t pos = 0;
+            while (pos < violations.size()) {
+                size_t end = violations.find('|', pos);
+                if (end == std::string::npos) end = violations.size();
+                std::string v = violations.substr(pos, end - pos);
+                // Trim whitespace
+                while (!v.empty() && v.front() == ' ') v.erase(v.begin());
+                while (!v.empty() && v.back() == ' ') v.pop_back();
+                if (!v.empty()) {
+                    violationCountMap[v]++;
+                }
+                pos = end + 1;
+            }
+        }
+
+        // Sort by count desc
+        std::vector<std::pair<std::string, int>> violationVec(violationCountMap.begin(), violationCountMap.end());
+        std::sort(violationVec.begin(), violationVec.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
+
+        Json::Value violationsArray(Json::arrayValue);
+        for (const auto& [msg, count] : violationVec) {
+            Json::Value item;
+            item["violation"] = msg;
+            item["count"] = count;
+            violationsArray.append(item);
+        }
+
+        // --- 6. Non-compliant certificates table (filtered + paginated) ---
+        std::string whereClause = "WHERE icao_compliance_level IN ('NON_CONFORMANT', 'WARNING')";
+        std::vector<std::string> params;
+        int paramIdx = 1;
+
+        if (!countryFilter.empty()) {
+            whereClause += " AND country_code = $" + std::to_string(paramIdx);
+            params.push_back(countryFilter);
+            paramIdx++;
+        }
+        if (!certTypeFilter.empty()) {
+            whereClause += " AND certificate_type = $" + std::to_string(paramIdx);
+            params.push_back(certTypeFilter);
+            paramIdx++;
+        }
+        if (!categoryFilter.empty()) {
+            if (categoryFilter == "algorithm") {
+                whereClause += " AND icao_algorithm_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (categoryFilter == "keySize") {
+                whereClause += " AND icao_key_size_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (categoryFilter == "keyUsage") {
+                whereClause += " AND icao_key_usage_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (categoryFilter == "extensions") {
+                whereClause += " AND icao_extensions_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (categoryFilter == "validityPeriod") {
+                whereClause += " AND icao_validity_period_compliant = " + common::db::boolLiteral(dbType, false);
+            }
+        }
+
+        // Count
+        std::string countQuery = "SELECT COUNT(*) FROM validation_result " + whereClause;
+        int total = common::db::scalarToInt(queryExecutor_->executeScalar(countQuery, params));
+
+        // Fetch page
+        std::string dataQuery;
+        auto paginationParams = params;
+        paginationParams.push_back(std::to_string((page - 1) * size));
+        paginationParams.push_back(std::to_string(size));
+
+        if (dbType == "oracle") {
+            dataQuery =
+                "SELECT certificate_id, certificate_type, country_code, subject_dn, "
+                "  icao_compliance_level, TO_CHAR(icao_violations) AS icao_violations, "
+                "  icao_algorithm_compliant, icao_key_size_compliant, "
+                "  icao_key_usage_compliant, icao_extensions_compliant, "
+                "  icao_validity_period_compliant, not_before, not_after, signature_algorithm "
+                "FROM validation_result " + whereClause +
+                " ORDER BY icao_compliance_level, country_code "
+                " OFFSET $" + std::to_string(paramIdx) +
+                " ROWS FETCH NEXT $" + std::to_string(paramIdx + 1) + " ROWS ONLY";
+        } else {
+            dataQuery =
+                "SELECT certificate_id, certificate_type, country_code, subject_dn, "
+                "  icao_compliance_level, icao_violations, "
+                "  icao_algorithm_compliant, icao_key_size_compliant, "
+                "  icao_key_usage_compliant, icao_extensions_compliant, "
+                "  icao_validity_period_compliant, not_before, not_after, signature_algorithm "
+                "FROM validation_result " + whereClause +
+                " ORDER BY icao_compliance_level, country_code "
+                " LIMIT $" + std::to_string(paramIdx + 1) +
+                " OFFSET $" + std::to_string(paramIdx);
+        }
+
+        Json::Value dataResult = queryExecutor_->executeQuery(dataQuery, paginationParams);
+
+        Json::Value certificates;
+        certificates["total"] = total;
+        certificates["page"] = page;
+        certificates["size"] = size;
+
+        Json::Value items(Json::arrayValue);
+        for (const auto& row : dataResult) {
+            Json::Value item;
+            item["fingerprint"] = row.get("certificate_id", "").asString();
+            item["certificateType"] = row.get("certificate_type", "").asString();
+            item["countryCode"] = row.get("country_code", "").asString();
+            item["subjectDn"] = row.get("subject_dn", "").asString();
+            item["complianceLevel"] = row.get("icao_compliance_level", "").asString();
+            item["violations"] = row.get("icao_violations", "").asString();
+            item["signatureAlgorithm"] = row.get("signature_algorithm", "").asString();
+            item["notBefore"] = row.get("not_before", "").asString();
+            item["notAfter"] = row.get("not_after", "").asString();
+
+            // Boolean fields
+            auto toBool = [](const Json::Value& v) -> bool {
+                if (v.isBool()) return v.asBool();
+                if (v.isString()) {
+                    auto s = v.asString();
+                    return s == "t" || s == "true" || s == "1";
+                }
+                if (v.isInt()) return v.asInt() != 0;
+                return true;
+            };
+            item["algorithmCompliant"] = toBool(row.get("icao_algorithm_compliant", true));
+            item["keySizeCompliant"] = toBool(row.get("icao_key_size_compliant", true));
+            item["keyUsageCompliant"] = toBool(row.get("icao_key_usage_compliant", true));
+            item["extensionsCompliant"] = toBool(row.get("icao_extensions_compliant", true));
+            item["validityPeriodCompliant"] = toBool(row.get("icao_validity_period_compliant", true));
+
+            items.append(item);
+        }
+        certificates["items"] = items;
+
+        // --- Build response ---
+        Json::Value response;
+        response["success"] = true;
+        response["summary"] = summary;
+        response["byCategory"] = byCategory;
+        response["byCountry"] = byCountry;
+        response["byCertType"] = byCertType;
+        response["violations"] = violationsArray;
+        response["certificates"] = certificates;
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        callback(common::handler::internalError("CertHandler::qualityReport", e));
     }
 }
 

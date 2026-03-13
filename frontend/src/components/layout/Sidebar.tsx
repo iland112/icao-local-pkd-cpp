@@ -98,6 +98,7 @@ function buildNavSections(): NavSection[] {
             { path: '/pkd/trust-chain', labelKey: 'menu.dscTrustChain', icon: <Link2 className="w-4 h-4" />, permission: 'report:read' },
             { path: '/pkd/crl', labelKey: 'menu.crlReport', icon: <FileWarning className="w-4 h-4" />, permission: 'report:read' },
             { path: '/pkd/dsc-nc', labelKey: 'menu.nonConformantDsc', icon: <ShieldX className="w-4 h-4" />, permission: 'report:read' },
+            { path: '/pkd/quality', labelKey: 'menu.certQuality', icon: <ShieldCheck className="w-4 h-4" />, permission: 'report:read' },
           ],
         },
         { path: '/pa/dashboard', labelKey: 'menu.paStats', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },

@@ -247,6 +247,16 @@ private:
         const std::string& id);
 
     /**
+     * @brief GET /api/certificates/quality/report
+     *
+     * Certificate quality report aggregating ICAO Doc 9303 compliance data.
+     * Query params: country, certType, category, page, size
+     */
+    void handleQualityReport(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /**
      * @brief GET /api/certificates/doc9303-checklist
      *
      * Doc 9303 compliance checklist for a certificate identified by fingerprint.

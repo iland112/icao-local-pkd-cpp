@@ -258,6 +258,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     valRecord.serialNumber = serialNumber;
     valRecord.notBefore = notBefore;
     valRecord.notAfter = notAfter;
+    valRecord.signatureAlgorithm = certMetadata.signatureAlgorithm;
 
     auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -545,6 +546,19 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         for (const auto& v : icaoCompliance.violations) {
             if (!violations.empty()) violations += "|";
             violations += v;
+        }
+        // DSC_NC: append LDIF conformance code/text to violations for richer detail
+        if (certType == "DSC_NC") {
+            std::string ncCode = entry.getFirstAttribute("pkdConformanceCode");
+            std::string ncText = entry.getFirstAttribute("pkdConformanceText");
+            if (!ncCode.empty()) {
+                if (!violations.empty()) violations += "|";
+                violations += "NC Code: " + ncCode;
+            }
+            if (!ncText.empty()) {
+                if (!violations.empty()) violations += "|";
+                violations += "NC Description: " + ncText;
+            }
         }
         valRecord.icaoViolations = violations;
     }

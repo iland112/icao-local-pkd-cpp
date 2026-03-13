@@ -295,7 +295,7 @@ export function Dashboard() {
                     {icaoStatus.last_checked_at && (
                       <span className="text-xs text-amber-500 dark:text-amber-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {t('icao:lastChecked', { time: formatDateTime(icaoStatus.last_checked_at) })}
+                        {t('icao:statusPage.lastChecked', { time: formatDateTime(icaoStatus.last_checked_at) })}
                       </span>
                     )}
                   </div>

@@ -323,3 +323,68 @@ export const exportCrlReportToCsv = (
   link.click();
   URL.revokeObjectURL(link.href);
 };
+
+// Helper for escaping CSV values
+const escapeCsv = (val: string): string => {
+  if (!val) return '';
+  if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+    return `"${val.replace(/"/g, '""')}"`;
+  }
+  return val;
+};
+
+export interface QualityCertItem {
+  fingerprint: string;
+  certificateType: string;
+  countryCode: string;
+  subjectDn: string;
+  complianceLevel: string;
+  violations: string;
+  signatureAlgorithm: string;
+  notBefore: string;
+  notAfter: string;
+  algorithmCompliant: boolean;
+  keySizeCompliant: boolean;
+  keyUsageCompliant: boolean;
+  extensionsCompliant: boolean;
+  validityPeriodCompliant: boolean;
+}
+
+export const exportQualityReportToCsv = (
+  certificates: QualityCertItem[],
+  filename: string = 'certificate-quality-report.csv'
+) => {
+  if (certificates.length === 0) return;
+
+  const BOM = '\uFEFF';
+  const headers = [
+    'Country', 'Certificate Type', 'Compliance Level', 'Subject DN',
+    'Violations', 'Signature Algorithm', 'Not Before', 'Not After',
+    'Algorithm', 'Key Size', 'Key Usage', 'Extensions', 'Validity Period', 'Fingerprint'
+  ];
+
+  const rows = certificates.map(cert => [
+    cert.countryCode,
+    cert.certificateType,
+    cert.complianceLevel,
+    escapeCsv(cert.subjectDn),
+    escapeCsv(cert.violations),
+    cert.signatureAlgorithm,
+    cert.notBefore,
+    cert.notAfter,
+    cert.algorithmCompliant ? 'PASS' : 'FAIL',
+    cert.keySizeCompliant ? 'PASS' : 'FAIL',
+    cert.keyUsageCompliant ? 'PASS' : 'FAIL',
+    cert.extensionsCompliant ? 'PASS' : 'FAIL',
+    cert.validityPeriodCompliant ? 'PASS' : 'FAIL',
+    cert.fingerprint
+  ]);
+
+  const csvContent = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
