@@ -22,13 +22,15 @@ export const getUploadValidations = async (
     offset?: number;
     status?: 'VALID' | 'INVALID' | 'PENDING' | 'ERROR';
     certType?: 'CSCA' | 'DSC' | 'DSC_NC';
+    icaoCategory?: string;
   } = {}
 ): Promise<ValidationListResponse> => {
   const params: Record<string, string | number> = {};
   if (options.limit) params.limit = options.limit;
-  if (options.offset) params.offset = options.offset;
+  if (options.offset !== undefined) params.offset = options.offset;
   if (options.status) params.status = options.status;
   if (options.certType) params.certType = options.certType;
+  if (options.icaoCategory) params.icaoCategory = options.icaoCategory;
 
   const response = await pkdApi.get<ValidationListResponse>(
     `/upload/${uploadId}/validations`,

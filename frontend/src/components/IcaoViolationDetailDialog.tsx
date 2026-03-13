@@ -71,15 +71,6 @@ const categoryInfo: Record<ViolationCategory, {
   },
 };
 
-/** Map violation category to the boolean field name in ValidationResult */
-const categoryToField: Record<ViolationCategory, keyof ValidationResult> = {
-  algorithm: 'icaoAlgorithmCompliant',
-  keySize: 'icaoKeySizeCompliant',
-  validityPeriod: 'icaoValidityPeriodCompliant',
-  keyUsage: 'icaoKeyUsageCompliant',
-  extensions: 'icaoExtensionsCompliant',
-  dnFormat: 'icaoComplianceLevel', // fallback, filtered by icaoViolations
-};
 
 export function IcaoViolationDetailDialog({
   open,
@@ -100,32 +91,20 @@ export function IcaoViolationDetailDialog({
 
   const totalNonCompliant = sortedCategories.reduce((sum, [, count]) => sum + count, 0);
 
-  // Load non-compliant certificates when category is expanded
+  // Load non-compliant certificates when category is expanded (server-side filtering)
   const loadCertificates = useCallback(async (category: string) => {
     if (!uploadId || loadedForCategory === category) return;
 
     setLoading(true);
     try {
-      // Load all validations for this upload (paginated, up to 200)
-      const response = await getUploadValidations(uploadId, { limit: 200, offset: 0 });
-      if (response.validations) {
-        // Filter by category violation
-        const filtered = response.validations.filter((v) => {
-          if (!v.icaoCompliant && v.icaoComplianceLevel === 'NON_CONFORMANT') {
-            const field = categoryToField[category as ViolationCategory];
-            if (field && field !== 'icaoComplianceLevel') {
-              return v[field] === false;
-            }
-            // Fallback: check icaoViolations string
-            if (v.icaoViolations) {
-              return v.icaoViolations.toLowerCase().includes(category.toLowerCase());
-            }
-          }
-          return false;
-        });
-        setCertificates(filtered);
-        setLoadedForCategory(category);
-      }
+      // Server-side filtering by icaoCategory — returns only matching violations
+      const response = await getUploadValidations(uploadId, {
+        limit: 200,
+        offset: 0,
+        icaoCategory: category,
+      });
+      setCertificates(response.validations ?? []);
+      setLoadedForCategory(category);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to load violation certificates:', err);
       setCertificates([]);

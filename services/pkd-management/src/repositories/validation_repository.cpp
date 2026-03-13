@@ -866,11 +866,12 @@ Json::Value ValidationRepository::findByUploadId(
     int limit,
     int offset,
     const std::string& statusFilter,
-    const std::string& certTypeFilter
+    const std::string& certTypeFilter,
+    const std::string& icaoCategoryFilter
 )
 {
-    spdlog::debug("[ValidationRepository] Finding by upload ID: {} (limit: {}, offset: {}, status: {}, certType: {})",
-        uploadId, limit, offset, statusFilter, certTypeFilter);
+    spdlog::debug("[ValidationRepository] Finding by upload ID: {} (limit: {}, offset: {}, status: {}, certType: {}, icaoCategory: {})",
+        uploadId, limit, offset, statusFilter, certTypeFilter, icaoCategoryFilter);
 
     Json::Value response;
 
@@ -890,6 +891,30 @@ Json::Value ValidationRepository::findByUploadId(
             whereClause += " AND vr.certificate_type = $" + std::to_string(paramIdx);
             paramValues.push_back(certTypeFilter);
             paramIdx++;
+        }
+
+        // ICAO violation category server-side filter
+        if (!icaoCategoryFilter.empty()) {
+            std::string dbType = queryExecutor_->getDatabaseType();
+            whereClause += " AND vr.icao_compliant = " + common::db::boolLiteral(dbType, false);
+            if (icaoCategoryFilter == "algorithm") {
+                whereClause += " AND vr.icao_algorithm_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (icaoCategoryFilter == "keySize") {
+                whereClause += " AND vr.icao_key_size_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (icaoCategoryFilter == "keyUsage") {
+                whereClause += " AND vr.icao_key_usage_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (icaoCategoryFilter == "extensions") {
+                whereClause += " AND vr.icao_extensions_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (icaoCategoryFilter == "validityPeriod") {
+                whereClause += " AND vr.icao_validity_period_compliant = " + common::db::boolLiteral(dbType, false);
+            } else if (icaoCategoryFilter == "dnFormat") {
+                // DN format violations are stored in icao_violations text
+                if (dbType == "oracle") {
+                    whereClause += " AND (LOWER(TO_CHAR(vr.icao_violations)) LIKE '%subject dn%' OR LOWER(TO_CHAR(vr.icao_violations)) LIKE '%issuer dn%' OR LOWER(TO_CHAR(vr.icao_violations)) LIKE '%country code%')";
+                } else {
+                    whereClause += " AND (LOWER(vr.icao_violations) LIKE '%subject dn%' OR LOWER(vr.icao_violations) LIKE '%issuer dn%' OR LOWER(vr.icao_violations) LIKE '%country code%')";
+                }
+            }
         }
 
         // Get total count

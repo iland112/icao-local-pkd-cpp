@@ -429,16 +429,17 @@ Json::Value ValidationService::getValidationsByUploadId(
     int limit,
     int offset,
     const std::string& statusFilter,
-    const std::string& certTypeFilter
+    const std::string& certTypeFilter,
+    const std::string& icaoCategoryFilter
 )
 {
-    spdlog::info("ValidationService::getValidationsByUploadId - uploadId: {}, limit: {}, offset: {}, status: {}, certType: {}",
-        uploadId, limit, offset, statusFilter, certTypeFilter);
+    spdlog::info("ValidationService::getValidationsByUploadId - uploadId: {}, limit: {}, offset: {}, status: {}, certType: {}, icaoCategory: {}",
+        uploadId, limit, offset, statusFilter, certTypeFilter, icaoCategoryFilter);
 
     Json::Value response;
 
     try {
-        response = validationRepo_->findByUploadId(uploadId, limit, offset, statusFilter, certTypeFilter);
+        response = validationRepo_->findByUploadId(uploadId, limit, offset, statusFilter, certTypeFilter, icaoCategoryFilter);
     } catch (const std::exception& e) {
         spdlog::error("ValidationService::getValidationsByUploadId failed: {}", e.what());
         response["success"] = false;

@@ -1364,13 +1364,14 @@ void UploadHandler::handleGetValidations(
         std::string offsetStr = req->getOptionalParameter<std::string>("offset").value_or("0");
         std::string status = req->getOptionalParameter<std::string>("status").value_or("");
         std::string certType = req->getOptionalParameter<std::string>("certType").value_or("");
+        std::string icaoCategory = req->getOptionalParameter<std::string>("icaoCategory").value_or("");
 
         int limit = std::stoi(limitStr);
         int offset = std::stoi(offsetStr);
 
         // Call ValidationService (Repository Pattern)
         Json::Value response = validationService_->getValidationsByUploadId(
-            uploadId, limit, offset, status, certType
+            uploadId, limit, offset, status, certType, icaoCategory
         );
 
         auto resp = drogon::HttpResponse::newHttpJsonResponse(response);

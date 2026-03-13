@@ -78,6 +78,7 @@ public:
      * @param offset Pagination offset
      * @param statusFilter Filter by validation_status (VALID/INVALID/PENDING)
      * @param certTypeFilter Filter by certificate_type (DSC/DSC_NC)
+     * @param icaoCategoryFilter Filter by ICAO violation category (algorithm/keySize/keyUsage/extensions/dnFormat/validityPeriod)
      * @return JSON object with count, total, limit, offset, validations array
      */
     Json::Value findByUploadId(
@@ -85,7 +86,8 @@ public:
         int limit,
         int offset,
         const std::string& statusFilter = "",
-        const std::string& certTypeFilter = ""
+        const std::string& certTypeFilter = "",
+        const std::string& icaoCategoryFilter = ""
     );
 
     /**

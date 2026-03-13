@@ -152,7 +152,8 @@ public:
         int limit,
         int offset,
         const std::string& statusFilter = "",
-        const std::string& certTypeFilter = ""
+        const std::string& certTypeFilter = "",
+        const std::string& icaoCategoryFilter = ""
     );
     Json::Value getValidationStatistics(const std::string& uploadId);
 
