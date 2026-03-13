@@ -17,6 +17,94 @@ import type { ValidationResult } from '@/types/validation';
 /** ICAO 9303 violation category key */
 type ViolationCategory = 'algorithm' | 'keySize' | 'validityPeriod' | 'keyUsage' | 'extensions' | 'dnFormat';
 
+/** Extract relevant info from icaoViolations text per category */
+function extractViolationDetail(violations: string | undefined, category: string): string {
+  if (!violations) return '-';
+  // icaoViolations is pipe-delimited, e.g. "Signature hash algorithm not ICAO-approved: unknown|Key size too small: 1024"
+  const parts = violations.split('|').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return '-';
+
+  switch (category) {
+    case 'algorithm': {
+      // Extract algorithm name from violation text
+      const match = parts.find(p => /algorithm/i.test(p) || /hash/i.test(p));
+      if (match) {
+        const colonIdx = match.lastIndexOf(':');
+        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
+      }
+      return parts[0];
+    }
+    case 'keySize': {
+      // Extract key size or curve info
+      const match = parts.find(p => /key.?size|curve|bit/i.test(p));
+      if (match) {
+        const colonIdx = match.lastIndexOf(':');
+        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
+      }
+      return parts[0];
+    }
+    case 'keyUsage': {
+      // Extract key usage info
+      const match = parts.find(p => /key.?usage/i.test(p));
+      if (match) {
+        const colonIdx = match.lastIndexOf(':');
+        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
+        return match;
+      }
+      return parts[0];
+    }
+    case 'extensions': {
+      // Extract extension violation info
+      const match = parts.find(p => /basic.?constraint|extension|AKI|SKI|critical/i.test(p));
+      return match ?? parts[0];
+    }
+    case 'dnFormat': {
+      // Extract DN format issue
+      const match = parts.find(p => /DN|country.?code|subject|issuer/i.test(p));
+      return match ?? parts[0];
+    }
+    case 'validityPeriod': {
+      // Show not before/after info
+      const match = parts.find(p => /validity|expired|not.?yet/i.test(p));
+      return match ?? parts[0];
+    }
+    default:
+      return parts[0];
+  }
+}
+
+/** Category-specific column header and value extractor */
+const categoryColumnConfig: Record<string, { header: string; getValue: (cert: ValidationResult) => string }> = {
+  algorithm: {
+    header: '알고리즘',
+    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'algorithm'),
+  },
+  keySize: {
+    header: '키 크기',
+    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'keySize'),
+  },
+  keyUsage: {
+    header: 'Key Usage',
+    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'keyUsage'),
+  },
+  extensions: {
+    header: '확장 필드',
+    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'extensions'),
+  },
+  dnFormat: {
+    header: 'DN 정보',
+    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'dnFormat'),
+  },
+  validityPeriod: {
+    header: '유효기간',
+    getValue: (cert) => {
+      if (cert.isExpired) return '만료됨';
+      if (cert.isNotYetValid) return '미유효';
+      return extractViolationDetail(cert.icaoViolations, 'validityPeriod');
+    },
+  },
+};
+
 interface IcaoViolationDetailDialogProps {
   open: boolean;
   onClose: () => void;
@@ -261,7 +349,7 @@ export function IcaoViolationDetailDialog({
                                 <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">국가</th>
                                 <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">유형</th>
                                 <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Subject</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">알고리즘</th>
+                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{categoryColumnConfig[cat]?.header ?? '상세'}</th>
                                 <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">상태</th>
                               </tr>
                             </thead>
@@ -287,8 +375,8 @@ export function IcaoViolationDetailDialog({
                                   <td className="px-2 py-1.5 max-w-[200px] truncate text-gray-700 dark:text-gray-300" title={cert.subjectDn}>
                                     {cert.subjectDn?.replace(/^.*?CN=/, 'CN=')?.substring(0, 40)}
                                   </td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap text-gray-600 dark:text-gray-400">
-                                    {cert.signatureAlgorithm?.replace(/WithRSAEncryption|with/gi, '') || '-'}
+                                  <td className="px-2 py-1.5 max-w-[180px] truncate text-gray-600 dark:text-gray-400" title={categoryColumnConfig[cat]?.getValue(cert)}>
+                                    {categoryColumnConfig[cat]?.getValue(cert) ?? '-'}
                                   </td>
                                   <td className="px-2 py-1.5 text-center">
                                     <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400">

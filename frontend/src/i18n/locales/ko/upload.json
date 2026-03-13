@@ -45,7 +45,7 @@
     "dbSaveFailed": "DB 저장 실패",
     "ldapSaveFailed": "LDAP 저장 실패",
     "duplicateCert": "중복 인증서",
-    "duplicateSkipped": "{{new}}개 중복 건너뜀 (누적 {{total}}개)",
+    "duplicateSkipped": "{{newDups}}개 중복 건너뜀 (누적 {{total}}개)",
     "validationFailed": "검증 실패",
     "validationPending": "검증 보류",
     "expiredValidLabel": "만료-유효",

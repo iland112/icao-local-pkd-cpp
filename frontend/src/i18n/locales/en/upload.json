@@ -45,7 +45,7 @@
     "dbSaveFailed": "DB save failed",
     "ldapSaveFailed": "LDAP save failed",
     "duplicateCert": "Duplicate certificate",
-    "duplicateSkipped": "{{new}} duplicates skipped (cumulative {{total}})",
+    "duplicateSkipped": "{{newDups}} duplicates skipped (cumulative {{total}})",
     "validationFailed": "Validation failed",
     "validationPending": "Validation pending",
     "expiredValidLabel": "Expired-Valid",
