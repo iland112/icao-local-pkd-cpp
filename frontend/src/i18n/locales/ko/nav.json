@@ -21,6 +21,7 @@
     "dscTrustChain": "DSC Trust Chain",
     "crlReport": "CRL 보고서",
     "nonConformantDsc": "표준 부적합 DSC",
+    "certQuality": "인증서 품질 보고서",
     "paStats": "PA 검증 통계",
     "aiAnalysis": "AI 인증서 분석",
     "systemMonitoring": "시스템 모니터링",

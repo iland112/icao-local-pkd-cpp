@@ -17,93 +17,132 @@ import type { ValidationResult } from '@/types/validation';
 /** ICAO 9303 violation category key */
 type ViolationCategory = 'algorithm' | 'keySize' | 'validityPeriod' | 'keyUsage' | 'extensions' | 'dnFormat';
 
+/** Map backend violation message to i18n key + interpolation params */
+type ViolationMapping = [RegExp, string, ((m: RegExpMatchArray) => Record<string, string>)?];
+
+const violationMappings: ViolationMapping[] = [
+  // Extensions
+  [/^(\w+) missing required Basic Constraints extension$/i, 'certificate:violation.missingBasicConstraints', (m) => ({ type: m[1] })],
+  [/^Missing Key Usage extension$/i, 'certificate:violation.missingKeyUsageExtension'],
+  // Key Usage
+  [/^CSCA must have CA=TRUE$/i, 'certificate:violation.cscaMustCaTrue'],
+  [/^DSC must have CA=FALSE$/i, 'certificate:violation.dscMustCaFalse'],
+  [/^MLSC must have CA=TRUE$/i, 'certificate:violation.mlscMustCaTrue'],
+  [/^MLSC must be self-signed$/i, 'certificate:violation.mlscMustSelfSigned'],
+  [/^Missing required Key Usage: (.+)$/i, 'certificate:violation.missingRequiredKeyUsage', (m) => ({ value: m[1] })],
+  // Algorithm — new formats (Doc 9303 / BSI TR-03110)
+  [/^SHA-1 is deprecated.*:\s*(.+)$/i, 'certificate:violation.sha1Deprecated', (m) => ({ value: m[1] })],
+  [/^SHA-224 supported via BSI TR-03110.*:\s*(.+)$/i, 'certificate:violation.sha224BsiSupported', (m) => ({ value: m[1] })],
+  [/^Signature hash algorithm not in Doc 9303.*:\s*(.+)$/i, 'certificate:violation.hashAlgorithmNotApproved', (m) => ({ value: m[1] })],
+  [/^Signature hash algorithm not ICAO-approved.*:\s*(.+)$/i, 'certificate:violation.hashAlgorithmNotApproved', (m) => ({ value: m[1] })],
+  [/^Public key algorithm not in Doc 9303.*:\s*(.+)$/i, 'certificate:violation.pubKeyAlgorithmNotApproved', (m) => ({ value: m[1] })],
+  [/^Public key algorithm not ICAO-approved.*:\s*(.+)$/i, 'certificate:violation.pubKeyAlgorithmNotApproved', (m) => ({ value: m[1] })],
+  // Key Size / Curve — new formats
+  [/^RSA key size below minimum.*:\s*(.+)$/i, 'certificate:violation.rsaKeySizeBelowMin', (m) => ({ value: m[1] })],
+  [/^RSA key size exceeds.*:\s*(.+)$/i, 'certificate:violation.rsaKeySizeExceedsMax', (m) => ({ value: m[1] })],
+  [/^Brainpool curve supported via BSI TR-03110.*:\s*(.+)$/i, 'certificate:violation.brainpoolBsiSupported', (m) => ({ value: m[1] })],
+  [/^ECDSA curve not in Doc 9303.*:\s*(.+)$/i, 'certificate:violation.ecdsaCurveNotApproved', (m) => ({ value: m[1] })],
+  [/^ECDSA curve not ICAO-approved.*:\s*(.+)$/i, 'certificate:violation.ecdsaCurveNotApproved', (m) => ({ value: m[1] })],
+  [/^ECDSA key size below minimum.*:\s*(.+)$/i, 'certificate:violation.ecdsaKeySizeBelowMin', (m) => ({ value: m[1] })],
+  // Validity Period
+  [/^CSCA validity period exceeds.*:\s*(.+)$/i, 'certificate:violation.cscaValidityExceeds', (m) => ({ value: m[1] })],
+  [/^DSC validity period exceeds.*:\s*(.+)$/i, 'certificate:violation.dscValidityExceeds', (m) => ({ value: m[1] })],
+  // DN Format
+  [/^Subject DN missing required Country \(C\) attribute$/i, 'certificate:violation.subjectDnMissingCountry'],
+  [/^Certificate has no Subject DN$/i, 'certificate:violation.noSubjectDn'],
+  // DSC_NC
+  [/^ICAO PKD non-conformant DSC.*$/i, 'certificate:violation.dscNcNonConformant'],
+];
+
+/** Translate backend violation message via i18n */
+function translateViolation(msg: string, t: (key: string, opts?: Record<string, string>) => string): string {
+  for (const [pattern, key, paramsFn] of violationMappings) {
+    const m = msg.match(pattern);
+    if (m) {
+      const params = paramsFn ? paramsFn(m) : undefined;
+      return t(key, params);
+    }
+  }
+  return msg; // fallback: return original if no mapping found
+}
+
 /** Extract relevant info from icaoViolations text per category */
-function extractViolationDetail(violations: string | undefined, category: string): string {
+function extractViolationDetail(
+  violations: string | undefined,
+  category: string,
+  t: (key: string, opts?: Record<string, string>) => string,
+): string {
   if (!violations) return '-';
-  // icaoViolations is pipe-delimited, e.g. "Signature hash algorithm not ICAO-approved: unknown|Key size too small: 1024"
   const parts = violations.split('|').map(s => s.trim()).filter(Boolean);
   if (parts.length === 0) return '-';
 
+  let match: string | undefined;
   switch (category) {
-    case 'algorithm': {
-      // Extract algorithm name from violation text
-      const match = parts.find(p => /algorithm/i.test(p) || /hash/i.test(p));
-      if (match) {
-        const colonIdx = match.lastIndexOf(':');
-        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
-      }
-      return parts[0];
-    }
-    case 'keySize': {
-      // Extract key size or curve info
-      const match = parts.find(p => /key.?size|curve|bit/i.test(p));
-      if (match) {
-        const colonIdx = match.lastIndexOf(':');
-        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
-      }
-      return parts[0];
-    }
-    case 'keyUsage': {
-      // Extract key usage info
-      const match = parts.find(p => /key.?usage/i.test(p));
-      if (match) {
-        const colonIdx = match.lastIndexOf(':');
-        if (colonIdx >= 0) return match.substring(colonIdx + 1).trim();
-        return match;
-      }
-      return parts[0];
-    }
-    case 'extensions': {
-      // Extract extension violation info
-      const match = parts.find(p => /basic.?constraint|extension|AKI|SKI|critical/i.test(p));
-      return match ?? parts[0];
-    }
-    case 'dnFormat': {
-      // Extract DN format issue
-      const match = parts.find(p => /DN|country.?code|subject|issuer/i.test(p));
-      return match ?? parts[0];
-    }
-    case 'validityPeriod': {
-      // Show not before/after info
-      const match = parts.find(p => /validity|expired|not.?yet/i.test(p));
-      return match ?? parts[0];
-    }
+    case 'algorithm':
+      match = parts.find(p => /algorithm/i.test(p) || /hash/i.test(p));
+      break;
+    case 'keySize':
+      match = parts.find(p => /key.?size|curve|bit/i.test(p));
+      break;
+    case 'keyUsage':
+      match = parts.find(p => /key.?usage|CA=TRUE|CA=FALSE|self-signed/i.test(p));
+      break;
+    case 'extensions':
+      match = parts.find(p => /basic.?constraint|extension|AKI|SKI|critical/i.test(p));
+      break;
+    case 'dnFormat':
+      match = parts.find(p => /DN|country.?code|subject|issuer/i.test(p));
+      break;
+    case 'validityPeriod':
+      match = parts.find(p => /validity|expired|not.?yet/i.test(p));
+      break;
     default:
-      return parts[0];
+      break;
   }
+
+  return translateViolation(match ?? parts[0], t);
 }
 
-/** Category-specific column header and value extractor */
-const categoryColumnConfig: Record<string, { header: string; getValue: (cert: ValidationResult) => string }> = {
-  algorithm: {
-    header: '알고리즘',
-    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'algorithm'),
-  },
-  keySize: {
-    header: '키 크기',
-    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'keySize'),
-  },
-  keyUsage: {
-    header: 'Key Usage',
-    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'keyUsage'),
-  },
-  extensions: {
-    header: '확장 필드',
-    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'extensions'),
-  },
-  dnFormat: {
-    header: 'DN 정보',
-    getValue: (cert) => extractViolationDetail(cert.icaoViolations, 'dnFormat'),
-  },
-  validityPeriod: {
-    header: '유효기간',
-    getValue: (cert) => {
-      if (cert.isExpired) return '만료됨';
-      if (cert.isNotYetValid) return '미유효';
-      return extractViolationDetail(cert.icaoViolations, 'validityPeriod');
+/** Build category column config with i18n t() */
+function buildCategoryColumnConfig(t: (key: string, opts?: Record<string, string>) => string) {
+  return {
+    algorithm: {
+      header: t('certificate:doc9303.category.algorithm'),
+      getValue: (cert: ValidationResult) => {
+        const fromViolation = extractViolationDetail(cert.icaoViolations, 'algorithm', t);
+        if (fromViolation === '-') return cert.signatureAlgorithm || fromViolation;
+        return fromViolation;
+      },
     },
-  },
-};
+    keySize: {
+      header: t('certificate:doc9303.category.keySize'),
+      getValue: (cert: ValidationResult) => extractViolationDetail(cert.icaoViolations, 'keySize', t),
+    },
+    keyUsage: {
+      header: t('certificate:doc9303.category.keyUsage'),
+      getValue: (cert: ValidationResult) => extractViolationDetail(cert.icaoViolations, 'keyUsage', t),
+    },
+    extensions: {
+      header: t('certificate:doc9303.category.extensions'),
+      getValue: (cert: ValidationResult) => extractViolationDetail(cert.icaoViolations, 'extensions', t),
+    },
+    dnFormat: {
+      header: 'DN',
+      getValue: (cert: ValidationResult) => extractViolationDetail(cert.icaoViolations, 'dnFormat', t),
+    },
+    validityPeriod: {
+      header: t('certificate:doc9303.category.validity'),
+      getValue: (cert: ValidationResult) => {
+        // Show translated violation reason (e.g., "CSCA 유효기간 초과 (ICAO 권장 15년): 16")
+        const violation = extractViolationDetail(cert.icaoViolations, 'validityPeriod', t);
+        if (violation !== '-') return violation;
+        if (cert.isExpired) return t('certificate:violation.expired');
+        if (cert.isNotYetValid) return t('certificate:violation.notYetValid');
+        return '-';
+      },
+    },
+  } as Record<string, { header: string; getValue: (cert: ValidationResult) => string }>;
+}
 
 interface IcaoViolationDetailDialogProps {
   open: boolean;
@@ -123,39 +162,39 @@ const categoryInfo: Record<ViolationCategory, {
 }> = {
   algorithm: {
     icon: '🔐',
-    description: 'ICAO Doc 9303에서 승인한 서명 알고리즘을 사용하지 않는 인증서',
+    description: 'ICAO가 승인하지 않은 암호화 알고리즘을 사용하는 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1',
-    detail: '승인 알고리즘: SHA-256/384/512 + RSA(2048+)/ECDSA(P-256/384/521)/RSA-PSS. SHA-1, MD5 등 취약 알고리즘 사용 시 미준수로 판정됩니다.',
+    detail: '여권 보안을 위해 ICAO는 안전한 알고리즘만 허용합니다. 승인 해시: SHA-256, SHA-384, SHA-512. 승인 공개키: RSA, ECDSA. SHA-1, MD5 등 오래된 알고리즘은 위변조 위험이 있어 미준수로 판정됩니다.',
   },
   keySize: {
     icon: '🔑',
-    description: 'ICAO 권장 최소 키 크기를 충족하지 않는 인증서',
+    description: '암호화 키의 크기가 ICAO 권장 범위에 맞지 않는 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1',
-    detail: '최소 요구사항: RSA 2048비트, ECDSA P-256(256비트). RSA 1024비트 등 짧은 키는 브루트포스 공격에 취약하여 미준수로 판정됩니다.',
+    detail: '키가 짧으면 해킹에 취약하고, 지나치게 길면 호환성 문제가 발생합니다. RSA: 최소 2048비트, 권장 최대 4096비트. ECDSA: P-256, P-384, P-521 곡선만 허용.',
   },
   validityPeriod: {
     icon: '📅',
-    description: '유효기간이 만료되었거나 아직 유효하지 않은 인증서',
+    description: 'ICAO 권장 최대 유효기간을 초과하는 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1.1',
-    detail: '인증서의 notBefore/notAfter 필드 기준으로 현재 시점에서 유효하지 않은 인증서입니다. 만료된 인증서로 서명된 여권은 검증 실패할 수 있습니다.',
+    detail: '유효기간이 너무 길면 암호화 기술 발전으로 보안이 약해질 수 있습니다. ICAO 권장 최대: CSCA(국가 루트 인증서) 15년, DSC(여권 서명 인증서) 3년.',
   },
   keyUsage: {
     icon: '🏷️',
-    description: 'Key Usage 확장이 인증서 유형에 맞지 않는 인증서',
+    description: '인증서의 용도(Key Usage)가 유형에 맞지 않는 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1.1',
-    detail: 'CSCA: keyCertSign + cRLSign 필수 (CA 인증서). DSC: digitalSignature 필수 (서명 전용). Key Usage가 없거나 잘못 설정된 경우 미준수로 판정됩니다.',
+    detail: '각 인증서 유형에는 허용된 용도가 정해져 있습니다. CSCA(루트): 인증서 발급 + CRL 서명 용도 필수. DSC(여권 서명): 디지털 서명 용도 필수. MLSC(마스터리스트 서명): 인증서 발급 용도 + 자체 서명 필수.',
   },
   extensions: {
     icon: '📋',
-    description: 'X.509 확장 필드가 ICAO 표준에 부합하지 않는 인증서',
+    description: '필수 확장 필드가 누락된 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1.1',
-    detail: 'CSCA: Basic Constraints(CA=true, pathLen=0) 필수. DSC: Basic Constraints(CA=false) 필수. AKI/SKI 존재 여부, 알 수 없는 critical 확장 사용 여부를 검사합니다.',
+    detail: 'ICAO 표준은 인증서에 특정 확장 필드를 필수로 요구합니다. CSCA/MLSC: Basic Constraints 확장 필수 (CA 인증서 표시). 모든 유형: Key Usage 확장 필수 (용도 명시).',
   },
   dnFormat: {
     icon: '📝',
-    description: 'DN(Distinguished Name) 형식이 표준에 맞지 않는 인증서',
+    description: '인증서 소유자 정보(DN)에 국가 코드가 누락된 인증서',
     reference: 'Doc 9303 Part 12, Section 7.1.1',
-    detail: 'issuer/subject DN에 국가 코드(C=) 필드가 없거나, ISO 3166-1 alpha-2 형식이 아닌 경우 미준수로 판정됩니다.',
+    detail: '여권 인증서에는 발급 국가를 식별하기 위해 Subject DN에 국가 코드(C=XX)가 반드시 포함되어야 합니다. 국가 코드가 없으면 어느 국가의 인증서인지 확인할 수 없습니다.',
   },
 };
 
@@ -168,6 +207,7 @@ export function IcaoViolationDetailDialog({
   initialCategory,
 }: IcaoViolationDetailDialogProps) {
   const { t } = useTranslation(['upload', 'common', 'certificate']);
+  const categoryColumnConfig = buildCategoryColumnConfig(t);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(initialCategory ?? null);
   const [loading, setLoading] = useState(false);
   const [certificates, setCertificates] = useState<ValidationResult[]>([]);
@@ -250,7 +290,7 @@ export function IcaoViolationDetailDialog({
             <ShieldAlert className="w-5 h-5 text-red-600 dark:text-red-400" />
             <div>
               <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                ICAO 9303 미준수 상세
+                ICAO Doc 9303 미준수 상세
               </h2>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 총 {totalNonCompliant.toLocaleString()}건의 미준수 항목이 감지되었습니다

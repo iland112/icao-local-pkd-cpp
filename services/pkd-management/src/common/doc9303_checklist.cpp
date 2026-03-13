@@ -301,30 +301,41 @@ Doc9303ChecklistResult runDoc9303Checklist(X509* cert, const std::string& certTy
                          "TBSCertificate의 signatureAlgorithm과 외부 signatureAlgorithm OID가 일치해야 합니다"});
     }
 
-    // ICAO approved signature algorithm
+    // Doc 9303 Part 12 / BSI TR-03110 approved signature algorithm
     {
         std::string sigAlg = meta.signatureAlgorithm;
         std::string hashAlg = meta.signatureHashAlgorithm;
         std::string lowerHash = hashAlg;
         std::transform(lowerHash.begin(), lowerHash.end(), lowerHash.begin(), ::tolower);
 
-        bool approvedHash = (lowerHash.find("sha256") != std::string::npos ||
-                             lowerHash.find("sha-256") != std::string::npos ||
-                             lowerHash.find("sha384") != std::string::npos ||
-                             lowerHash.find("sha-384") != std::string::npos ||
-                             lowerHash.find("sha512") != std::string::npos ||
-                             lowerHash.find("sha-512") != std::string::npos);
+        // Doc 9303 Part 12: SHA-256, SHA-384, SHA-512
+        bool doc9303Hash = (lowerHash.find("sha256") != std::string::npos ||
+                            lowerHash.find("sha-256") != std::string::npos ||
+                            lowerHash.find("sha384") != std::string::npos ||
+                            lowerHash.find("sha-384") != std::string::npos ||
+                            lowerHash.find("sha512") != std::string::npos ||
+                            lowerHash.find("sha-512") != std::string::npos);
+        // BSI TR-03110: SHA-224
+        bool bsiHash = (lowerHash.find("sha224") != std::string::npos ||
+                        lowerHash.find("sha-224") != std::string::npos);
+        // Deprecated: SHA-1 (ICAO NTWG)
+        bool deprecatedHash = (lowerHash.find("sha1") != std::string::npos ||
+                               lowerHash.find("sha-1") != std::string::npos);
+
         bool approvedPubKey = (meta.publicKeyAlgorithm == "RSA" ||
                                meta.publicKeyAlgorithm == "ECDSA");
 
-        std::string status = (approvedHash && approvedPubKey) ? "PASS" : "FAIL";
+        bool allOk = (doc9303Hash || bsiHash || deprecatedHash) && approvedPubKey;
+        std::string status = allOk ? (deprecatedHash || bsiHash ? "WARNING" : "PASS") : "FAIL";
         std::string msg = sigAlg + " (" + meta.publicKeyAlgorithm + ")";
-        if (!approvedHash) msg += " — 해시 알고리즘 미승인";
-        if (!approvedPubKey) msg += " — 공개키 알고리즘 미승인";
+        if (!doc9303Hash && !bsiHash && !deprecatedHash) msg += " — 해시 알고리즘 미충족";
+        else if (deprecatedHash) msg += " — SHA-1 지원 중단 예정 (ICAO NTWG 권고)";
+        else if (bsiHash) msg += " — BSI TR-03110 지원 (Doc 9303 Part 12 외)";
+        if (!approvedPubKey) msg += " — 공개키 알고리즘 미충족";
 
-        addItem(result, {"sig_algo_approved", "서명", "ICAO 승인 서명 알고리즘",
+        addItem(result, {"sig_algo_approved", "서명", "Doc 9303/BSI TR-03110 서명 알고리즘",
                          status, msg,
-                         "SHA-256/384/512 + RSA 또는 ECDSA만 허용됩니다"});
+                         "Doc 9303 Part 12: SHA-256/384/512 + RSA/ECDSA, BSI TR-03110: SHA-224 추가 지원"});
     }
 
     // ========================================================================
@@ -709,19 +720,25 @@ Doc9303ChecklistResult runDoc9303Checklist(X509* cert, const std::string& certTy
             msg = "RSA " + std::to_string(keySize) + "비트" +
                   (recommended ? " (권고 충족)" : " (3072비트 이상 권고)");
         } else if (pubAlg == "ECDSA") {
-            // ICAO approved curves: P-256 or higher
-            bool approvedCurve = false;
+            // Doc 9303 Part 12 curves: P-256, P-384, P-521 (NIST)
+            // BSI TR-03110 curves: brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
+            bool doc9303Curve = false;
+            bool bsiCurve = false;
             if (meta.publicKeyCurve.has_value()) {
                 const auto& curve = meta.publicKeyCurve.value();
-                approvedCurve = (curve == "prime256v1" || curve == "secp256r1" ||
-                                 curve == "secp384r1" || curve == "secp521r1");
+                doc9303Curve = (curve == "prime256v1" || curve == "secp256r1" ||
+                                curve == "secp384r1" || curve == "secp521r1");
+                bsiCurve = (curve == "brainpoolP256r1" ||
+                            curve == "brainpoolP384r1" ||
+                            curve == "brainpoolP512r1");
             }
-            recommended = approvedCurve || keySize >= 256;
+            recommended = doc9303Curve || bsiCurve || keySize >= 256;
             msg = "ECDSA " + std::to_string(keySize) + "비트";
             if (meta.publicKeyCurve.has_value()) {
                 msg += " (" + meta.publicKeyCurve.value() + ")";
+                if (bsiCurve) msg += " — BSI TR-03110 지원";
             }
-            if (!recommended) msg += " (P-256/384/521 권고)";
+            if (!recommended) msg += " (P-256/384/521 또는 Brainpool 권고)";
         } else {
             msg = pubAlg + " " + std::to_string(keySize) + "비트";
             recommended = false;
@@ -729,7 +746,7 @@ Doc9303ChecklistResult runDoc9303Checklist(X509* cert, const std::string& certTy
 
         addItem(result, {"key_size_recommended", "키 크기", "권고 키 크기 충족",
                          recommended ? "PASS" : "WARNING", msg,
-                         "RSA: 3072비트 이상, ECDSA: P-256/384/521 커브 권고"});
+                         "RSA: 3072비트 이상, ECDSA: P-256/384/521(NIST) 또는 Brainpool(BSI TR-03110) 커브 권고"});
     }
 
     // ========================================================================

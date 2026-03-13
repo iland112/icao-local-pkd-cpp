@@ -140,9 +140,9 @@
     "savingCert": "인증서 저장..."
   },
   "doc9303": {
-    "title": "ICAO Doc 9303 준수 검사",
-    "compliant": "준수",
-    "nonCompliant": "미준수",
+    "title": "ICAO Doc 9303 권고 준수 검사",
+    "compliant": "적합",
+    "nonCompliant": "부적합",
     "warning": "주의",
     "notApplicable": "해당 없음",
     "passed": "통과",
@@ -229,5 +229,30 @@
     "icaoUnknown": "ICAO 미확인",
     "icaoCompliant": "ICAO 준수",
     "icaoNonCompliant": "ICAO 미준수"
+  },
+  "violation": {
+    "missingBasicConstraints": "{{type}} Basic Constraints 확장 필드 누락",
+    "missingKeyUsageExtension": "Key Usage 확장 필드 누락",
+    "cscaMustCaTrue": "CSCA는 CA=TRUE 필수",
+    "dscMustCaFalse": "DSC는 CA=FALSE 필수",
+    "mlscMustCaTrue": "MLSC는 CA=TRUE 필수",
+    "mlscMustSelfSigned": "MLSC는 자체 서명 필수",
+    "missingRequiredKeyUsage": "필수 Key Usage 누락: {{value}}",
+    "hashAlgorithmNotApproved": "Doc 9303 Part 12 미충족 해시 알고리즘: {{value}}",
+    "sha1Deprecated": "SHA-1 지원 중단 예정 (ICAO NTWG 권고, SHA-256+ 전환 필요): {{value}}",
+    "sha224BsiSupported": "SHA-224 BSI TR-03110 지원 (Doc 9303 Part 12 외): {{value}}",
+    "pubKeyAlgorithmNotApproved": "Doc 9303 Part 12 미충족 공개키 알고리즘: {{value}}",
+    "rsaKeySizeBelowMin": "RSA 키 크기 미달 (최소 2048비트): {{value}}",
+    "rsaKeySizeExceedsMax": "RSA 키 크기 초과 (권장 최대 4096비트): {{value}}",
+    "ecdsaCurveNotApproved": "Doc 9303/BSI TR-03110 미충족 ECDSA 곡선: {{value}}",
+    "brainpoolBsiSupported": "Brainpool 곡선 BSI TR-03110 지원 (Doc 9303 Part 12 외): {{value}}",
+    "ecdsaKeySizeBelowMin": "ECDSA 키 크기 미달 (최소 224비트): {{value}}",
+    "cscaValidityExceeds": "CSCA 유효기간 초과 (ICAO 권장 15년): {{value}}",
+    "dscValidityExceeds": "DSC 유효기간 초과 (ICAO 권장 3년): {{value}}",
+    "subjectDnMissingCountry": "Subject DN에 필수 국가(C) 속성 누락",
+    "noSubjectDn": "인증서에 Subject DN 없음",
+    "dscNcNonConformant": "ICAO PKD 표준 부적합 DSC (ICAO 분류)",
+    "expired": "만료됨",
+    "notYetValid": "미유효"
   }
 }

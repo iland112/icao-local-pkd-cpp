@@ -54,6 +54,37 @@ export interface ValidationSummaryData {
   keySizes?: Record<string, number>;
 }
 
+/** Display-friendly certificate type label */
+const certTypeLabel = (type: string): string => {
+  const labels: Record<string, string> = {
+    CSCA: 'CSCA (Self-Signed)',
+    LINK_CERT: 'CSCA (Link Cert)',
+    DSC: 'DSC',
+    DSC_NC: 'DSC (Non Conformant)',
+    MLSC: 'Master List Signer Cert',
+    CRL: 'CRL',
+  };
+  return labels[type] ?? type;
+};
+
+/** Display-friendly key size label with algorithm family hint */
+const keySizeLabel = (bits: number): string => {
+  // NIST curves: 256 (P-256), 384 (P-384), 521 (P-521)
+  // BSI TR-03110 Brainpool curves: 256 (brainpoolP256r1), 384 (brainpoolP384r1), 512 (brainpoolP512r1)
+  // Note: EC 256/384 may be NIST or Brainpool — shown as generic "EC" here
+  const ecSizes: Record<number, string> = {
+    256: 'EC 256bit',
+    384: 'EC 384bit',
+    521: 'EC P-521',
+    320: 'EC 320bit',
+    512: 'EC 512bit',
+  };
+  if (ecSizes[bits]) return ecSizes[bits];
+  // RSA sizes: 1024, 1536, 2048, 3072, 4096, 6144, 8192
+  if (bits >= 1024) return `RSA ${bits}`;
+  return `${bits}bit`;
+};
+
 interface ValidationSummaryPanelProps {
   data: ValidationSummaryData;
   title?: string;
@@ -111,7 +142,7 @@ export function ValidationSummaryPanel({
   type CardInfo = { key: string; label: string; value: number; color: string };
   const activeCards: CardInfo[] = [];
   if (data.validCount > 0) activeCards.push({ key: 'valid', label: t('common:status.valid'), value: data.validCount, color: 'green' });
-  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: t('upload:dashboard.expiredValidCount'), value: expiredValidCount, color: 'amber' });
+  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: t('upload:fileUpload.expiredValid'), value: expiredValidCount, color: 'amber' });
   if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: t('upload:dashboard.pendingCount'), value: data.pendingCount, color: 'yellow' });
   if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: t('upload:statistics.invalidCount'), value: data.invalidCount, color: 'red' });
   if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: t('sync:dashboard.error'), value: data.errorCount!, color: 'gray' });
@@ -369,7 +400,7 @@ export function ValidationSummaryPanel({
                   .map(([type, count]) => (
                     <div key={type} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-center">
                       <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{count.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{type}</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{certTypeLabel(type)}</span>
                     </div>
                   ))}
               </div>
@@ -386,7 +417,7 @@ export function ValidationSummaryPanel({
                   .map(([size, count]) => (
                     <div key={size} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-center">
                       <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{count.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{size}b</span>
+                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{keySizeLabel(parseInt(size))}</span>
                     </div>
                   ))}
               </div>

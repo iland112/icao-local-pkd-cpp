@@ -712,7 +712,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
     std::transform(sigAlg.begin(), sigAlg.end(), sigAlg.begin(), ::tolower);
     std::transform(hashAlg.begin(), hashAlg.end(), hashAlg.begin(), ::tolower);
 
-    // ICAO approved hash algorithms: SHA-256, SHA-384, SHA-512
+    // Doc 9303 Part 12 recommended hash algorithms: SHA-256, SHA-384, SHA-512
     bool approvedHash = (hashAlg.find("sha-256") != std::string::npos ||
                          hashAlg.find("sha-384") != std::string::npos ||
                          hashAlg.find("sha-512") != std::string::npos ||
@@ -720,18 +720,34 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
                          hashAlg.find("sha384") != std::string::npos ||
                          hashAlg.find("sha512") != std::string::npos);
 
-    // ICAO approved public key algorithms: RSA, ECDSA
+    // SHA-224 — supported via BSI TR-03110 (PACE/EAC), not in Doc 9303 Part 12 primary list
+    bool bsiHash = (hashAlg.find("sha-224") != std::string::npos ||
+                    hashAlg.find("sha224") != std::string::npos);
+
+    // SHA-1 — deprecated per ICAO NTWG, still functional but phasing out
+    bool deprecatedHash = (hashAlg.find("sha-1") != std::string::npos ||
+                           hashAlg.find("sha1") != std::string::npos);
+
+    // Doc 9303 Part 12 approved public key algorithms: RSA, ECDSA
     std::string pubKeyAlg = metadata.publicKeyAlgorithm;
     bool approvedPubKey = (pubKeyAlg == "RSA" || pubKeyAlg == "ECDSA");
 
-    if (!approvedHash) {
+    if (!approvedHash && !bsiHash && !deprecatedHash) {
         status.algorithmCompliant = false;
-        status.violations.push_back("Signature hash algorithm not ICAO-approved (must be SHA-256/384/512): " + hashAlg);
+        status.violations.push_back("Signature hash algorithm not in Doc 9303 Part 12 (SHA-256/384/512 required): " + hashAlg);
+    } else if (deprecatedHash) {
+        // SHA-1: deprecated, WARNING level (not a hard failure)
+        status.complianceLevel = "WARNING";
+        status.violations.push_back("SHA-1 is deprecated per ICAO NTWG recommendation (migration to SHA-256+ advised): " + hashAlg);
+    } else if (bsiHash) {
+        // SHA-224: BSI TR-03110 supported, WARNING level
+        status.complianceLevel = "WARNING";
+        status.violations.push_back("SHA-224 supported via BSI TR-03110 but outside Doc 9303 Part 12 primary list: " + hashAlg);
     }
 
     if (!approvedPubKey) {
         status.algorithmCompliant = false;
-        status.violations.push_back("Public key algorithm not ICAO-approved (must be RSA or ECDSA): " + pubKeyAlg);
+        status.violations.push_back("Public key algorithm not in Doc 9303 Part 12 (RSA or ECDSA required): " + pubKeyAlg);
     }
 
     // --- 3. Key Size Validation ---
@@ -749,16 +765,24 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
             status.violations.push_back("RSA key size exceeds recommended maximum (4096 bits): " + std::to_string(keySize) + " bits");
         }
     } else if (pubKeyAlg == "ECDSA") {
-        // ICAO approved curves: P-256 (224 bits), P-384 (384 bits), P-521 (521 bits)
+        // Doc 9303 Part 12 recommended curves: P-256, P-384, P-521 (NIST)
+        // BSI TR-03110 supported curves: brainpoolP256r1, brainpoolP384r1, brainpoolP512r1
         if (metadata.publicKeyCurve.has_value()) {
             std::string curve = metadata.publicKeyCurve.value();
-            bool approvedCurve = (curve == "prime256v1" || curve == "secp256r1" ||  // P-256
-                                  curve == "secp384r1" ||                            // P-384
-                                  curve == "secp521r1");                             // P-521
+            bool doc9303Curve = (curve == "prime256v1" || curve == "secp256r1" ||  // P-256
+                                 curve == "secp384r1" ||                            // P-384
+                                 curve == "secp521r1");                             // P-521
+            bool bsiCurve = (curve == "brainpoolP256r1" ||   // BSI TR-03110
+                             curve == "brainpoolP384r1" ||
+                             curve == "brainpoolP512r1");
 
-            if (!approvedCurve) {
+            if (!doc9303Curve && !bsiCurve) {
                 status.keySizeCompliant = false;
-                status.violations.push_back("ECDSA curve not ICAO-approved (must be P-256/384/521): " + curve);
+                status.violations.push_back("ECDSA curve not in Doc 9303/BSI TR-03110 (NIST P-256/384/521 or Brainpool required): " + curve);
+            } else if (bsiCurve) {
+                // Brainpool: supported via BSI TR-03110 (Doc 9303 Part 11), WARNING level
+                status.complianceLevel = "WARNING";
+                status.violations.push_back("Brainpool curve supported via BSI TR-03110 but outside Doc 9303 Part 12 primary list: " + curve);
             }
         } else {
             if (keySize < 224) {

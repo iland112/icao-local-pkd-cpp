@@ -1697,12 +1697,16 @@ scripts/
 - [docs/API_CLIENT_ADMIN_GUIDE.md](docs/API_CLIENT_ADMIN_GUIDE.md) - API Client admin guide (management API, permissions, rate limiting)
 - [docs/API_CLIENT_USER_GUIDE.md](docs/API_CLIENT_USER_GUIDE.md) - API Client user guide (external integration, Python/Java/C#/curl examples)
 - [docs/FRONTEND_DESIGN_SYSTEM.md](docs/FRONTEND_DESIGN_SYSTEM.md) - Frontend UI/UX design system (color theme, components, tokens)
-- [docs/PII_ENCRYPTION_COMPLIANCE.md](docs/PII_ENCRYPTION_COMPLIANCE.md) - PII encryption compliance (개인정보보호법, AES-256-GCM, legal basis)
 
 ### Architecture
 - [docs/SOFTWARE_ARCHITECTURE.md](docs/SOFTWARE_ARCHITECTURE.md) - System architecture
 - [docs/ARCHITECTURE_DESIGN_PRINCIPLES.md](docs/ARCHITECTURE_DESIGN_PRINCIPLES.md) - Design principles
 - [docs/MASTER_LIST_PROCESSING_GUIDE.md](docs/MASTER_LIST_PROCESSING_GUIDE.md) - Master List format & processing
+
+### Standards & Compliance
+- [docs/DOC9303_COMPLIANCE_CHECKS.md](docs/DOC9303_COMPLIANCE_CHECKS.md) - Doc 9303 compliance checklist (~28 checks)
+- [docs/BSI_TR03110_ALGORITHM_SUPPORT.md](docs/BSI_TR03110_ALGORITHM_SUPPORT.md) - BSI TR-03110 algorithm support guide (Brainpool, SHA-224, SHA-1 classification)
+- [docs/PII_ENCRYPTION_COMPLIANCE.md](docs/PII_ENCRYPTION_COMPLIANCE.md) - PII encryption compliance (개인정보보호법, AES-256-GCM)
 
 ### Deployment & Build
 - [docs/DEPLOYMENT_PROCESS.md](docs/DEPLOYMENT_PROCESS.md) - CI/CD pipeline

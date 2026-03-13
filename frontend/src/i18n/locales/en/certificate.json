@@ -140,9 +140,9 @@
     "savingCert": "Saving certificate..."
   },
   "doc9303": {
-    "title": "ICAO Doc 9303 Compliance Check",
-    "compliant": "Compliant",
-    "nonCompliant": "Non-Compliant",
+    "title": "ICAO Doc 9303 Conformance Check",
+    "compliant": "Conformant",
+    "nonCompliant": "Non-Conformant",
     "warning": "Warning",
     "notApplicable": "N/A",
     "passed": "Passed",
@@ -229,5 +229,30 @@
     "icaoUnknown": "ICAO Unknown",
     "icaoCompliant": "ICAO Compliant",
     "icaoNonCompliant": "ICAO Non-Compliant"
+  },
+  "violation": {
+    "missingBasicConstraints": "{{type}} missing required Basic Constraints extension",
+    "missingKeyUsageExtension": "Missing Key Usage extension",
+    "cscaMustCaTrue": "CSCA must have CA=TRUE",
+    "dscMustCaFalse": "DSC must have CA=FALSE",
+    "mlscMustCaTrue": "MLSC must have CA=TRUE",
+    "mlscMustSelfSigned": "MLSC must be self-signed",
+    "missingRequiredKeyUsage": "Missing required Key Usage: {{value}}",
+    "hashAlgorithmNotApproved": "Hash algorithm not in Doc 9303 Part 12: {{value}}",
+    "sha1Deprecated": "SHA-1 deprecated per ICAO NTWG (migration to SHA-256+ advised): {{value}}",
+    "sha224BsiSupported": "SHA-224 supported via BSI TR-03110 (outside Doc 9303 Part 12): {{value}}",
+    "pubKeyAlgorithmNotApproved": "Public key algorithm not in Doc 9303 Part 12: {{value}}",
+    "rsaKeySizeBelowMin": "RSA key size below minimum (2048 bits): {{value}}",
+    "rsaKeySizeExceedsMax": "RSA key size exceeds recommended maximum (4096 bits): {{value}}",
+    "ecdsaCurveNotApproved": "ECDSA curve not in Doc 9303/BSI TR-03110: {{value}}",
+    "brainpoolBsiSupported": "Brainpool curve supported via BSI TR-03110 (outside Doc 9303 Part 12): {{value}}",
+    "ecdsaKeySizeBelowMin": "ECDSA key size below minimum (224 bits): {{value}}",
+    "cscaValidityExceeds": "CSCA validity period exceeds ICAO recommendation (15 years): {{value}}",
+    "dscValidityExceeds": "DSC validity period exceeds ICAO recommendation (3 years): {{value}}",
+    "subjectDnMissingCountry": "Subject DN missing required Country (C) attribute",
+    "noSubjectDn": "Certificate has no Subject DN",
+    "dscNcNonConformant": "ICAO PKD non-conformant DSC (classified by ICAO)",
+    "expired": "Expired",
+    "notYetValid": "Not yet valid"
   }
 }

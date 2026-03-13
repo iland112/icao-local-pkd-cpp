@@ -87,6 +87,8 @@ i18n
       caches: ['localStorage'],
       lookupLocalStorage: 'i18nextLng',
     },
+    // Suppress locize promotional console message (offline environment)
+    showSupportNotice: false,
   });
 
 export default i18n;

@@ -21,6 +21,7 @@
     "dscTrustChain": "DSC Trust Chain",
     "crlReport": "CRL Report",
     "nonConformantDsc": "Non-Conformant DSC",
+    "certQuality": "Certificate Quality Report",
     "paStats": "PA Verification Statistics",
     "aiAnalysis": "AI Certificate Analysis",
     "systemMonitoring": "System Monitoring",
