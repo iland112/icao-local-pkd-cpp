@@ -114,6 +114,11 @@ rm -f "$SSL_DIR/server.csr" "$SSL_DIR/server.cnf"
 chmod 600 "$SSL_DIR/server.key"
 chmod 644 "$SSL_DIR/server.crt"
 
+# Create full chain certificate (server + CA) for nginx
+cat "$SSL_DIR/server.crt" "$SSL_DIR/ca.crt" > "$SSL_DIR/server-fullchain.crt"
+chmod 644 "$SSL_DIR/server-fullchain.crt"
+echo "Full chain certificate created: $SSL_DIR/server-fullchain.crt"
+
 # Reload nginx
 echo "Reloading nginx..."
 docker exec icao-local-pkd-api-gateway nginx -s reload 2>/dev/null || {

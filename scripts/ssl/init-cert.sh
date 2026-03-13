@@ -160,6 +160,10 @@ rm -f "$SSL_DIR/server.csr" "$SSL_DIR/server.cnf"
 chmod 600 "$SSL_DIR/ca.key" "$SSL_DIR/server.key"
 chmod 644 "$SSL_DIR/ca.crt" "$SSL_DIR/server.crt"
 
+# Create full chain certificate (server + CA) for nginx
+cat "$SSL_DIR/server.crt" "$SSL_DIR/ca.crt" > "$SSL_DIR/server-fullchain.crt"
+chmod 644 "$SSL_DIR/server-fullchain.crt"
+
 # Verify
 echo ""
 echo "============================================"
