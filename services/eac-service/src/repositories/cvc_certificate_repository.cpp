@@ -53,6 +53,17 @@ bool CvcCertificateRepository::save(const domain::CvcCertificateRecord& r) {
     }
 }
 
+bool CvcCertificateRepository::deleteById(const std::string& id) {
+    try {
+        queryExecutor_->executeCommand(
+            "DELETE FROM cvc_certificate WHERE id = $1", {id});
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("CvcCertificateRepository::deleteById failed: {}", e.what());
+        return false;
+    }
+}
+
 std::optional<domain::CvcCertificateRecord> CvcCertificateRepository::findById(const std::string& id) {
     try {
         auto result = queryExecutor_->executeQuery(

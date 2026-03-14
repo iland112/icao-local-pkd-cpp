@@ -98,6 +98,15 @@ static void registerRoutes(
         },
         {Get});
 
+    // Delete
+    app.registerHandler(
+        "/api/eac/certificates/{id}",
+        [&certHandler](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb,
+                        const std::string& id) {
+            certHandler.handleDelete(req, std::move(cb), id);
+        },
+        {Delete});
+
     // Trust chain
     app.registerHandler(
         "/api/eac/certificates/{id}/chain",
@@ -153,7 +162,7 @@ int main() {
     // CORS
     app().registerPostHandlingAdvice([](const HttpRequestPtr&, const HttpResponsePtr& resp) {
         resp->addHeader("Access-Control-Allow-Origin", "*");
-        resp->addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+        resp->addHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
         resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     });
 

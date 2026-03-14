@@ -24,6 +24,7 @@ public:
 
     // CRUD
     bool save(const domain::CvcCertificateRecord& record);
+    bool deleteById(const std::string& id);
     std::optional<domain::CvcCertificateRecord> findById(const std::string& id);
     std::optional<domain::CvcCertificateRecord> findByFingerprint(const std::string& fingerprint);
     std::optional<domain::CvcCertificateRecord> findByChr(const std::string& chr);

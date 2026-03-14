@@ -18,6 +18,10 @@ public:
                       std::function<void(const drogon::HttpResponsePtr&)>&& callback,
                       const std::string& id);
 
+    void handleDelete(const drogon::HttpRequestPtr& req,
+                      std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+                      const std::string& id);
+
     void handleChain(const drogon::HttpRequestPtr& req,
                      std::function<void(const drogon::HttpResponsePtr&)>&& callback,
                      const std::string& id);

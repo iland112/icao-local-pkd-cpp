@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.0
+**Current Version**: v2.33.1
 **Last Updated**: 2026-03-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,21 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.1 (2026-03-14) - EAC Dashboard UX 개선 — CVC 삭제 + compact TreeViewer 전체 적용
+- **EAC 인증서 삭제 기능**: CVC 인증서 목록에서 2단계 확인 후 삭제 (Trash2 아이콘 → 확인/취소 버튼)
+  - `DELETE /api/eac/certificates/{id}` 엔드포인트 추가 (eac-service)
+  - `CvcCertificateRepository::deleteById()` — `DELETE FROM cvc_certificate WHERE id = $1`
+  - `EacCertificateHandler::handleDelete()` — 404 존재 확인 → 삭제 → 목록 자동 갱신 (`refetch`)
+  - Frontend: `CertRow` 컴포넌트에 `onDeleted` 콜백 + 삭제 진행 상태(spinning) 표시
+  - CORS 헤더 `DELETE` 메서드 추가
+- **Algorithm/OID 공백 표시 수정**: 파서 완성 전 저장된 레코드 대응 — 빈 값은 `(없음)` fallback 표시, copyable 아이콘은 값이 있을 때만 표시
+- **compact TreeViewer 전체 적용** (font `text-[11px]`, rowHeight 24px, indent 18px):
+  - `EacDashboard.tsx` CVC 상세 탭 (이미 적용)
+  - `CertificateDetailDialog.tsx` — Trust Chain 트리(height="200px"), 인증서 필드 트리(height="400px")
+  - `CertificateUpload.tsx` — 파싱결과 카드 인증서 트리(height="320px"), DL 구조 트리(height="500px")
+- **TreeViewer.tsx**: `compact` prop 추가 — 소형 데이터 카드에 최적화된 밀도 높은 레이아웃
+- 10 files changed (0 new, 10 modified)
 
 ### v2.33.0 (2026-03-14) - EAC Service Phase 4 완료 — BSI TR-03110 OID 수정 + Frontend 통합 + Oracle 호환성
 - **EAC Service 실험적 기능 완료 (4개 Phase)**:

@@ -103,6 +103,9 @@ export const uploadCvc = (file: File) => {
   );
 };
 
+export const deleteEacCertificate = (id: string) =>
+  eacApi.delete<{ success: boolean; message: string }>(`/certificates/${id}`);
+
 export const previewCvc = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);

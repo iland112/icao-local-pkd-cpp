@@ -918,6 +918,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                     <TreeViewer
                       data={buildTrustChainTree(validationResult.trustChainPath)}
                       height="200px"
+                      compact
                     />
                   </div>
                   {validationResult.trustChainValid ? (
@@ -940,6 +941,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                 <TreeViewer
                   data={buildCertificateTree(selectedCert)}
                   height="400px"
+                  compact
                 />
               </div>
             </div>

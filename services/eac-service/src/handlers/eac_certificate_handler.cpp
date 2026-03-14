@@ -82,6 +82,41 @@ void EacCertificateHandler::handleDetail(
     callback(drogon::HttpResponse::newHttpJsonResponse(response));
 }
 
+void EacCertificateHandler::handleDelete(
+    const drogon::HttpRequestPtr& /*req*/,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id) {
+
+    auto repo = services_->cvcCertificateRepository();
+
+    // Check existence first
+    auto cert = repo->findById(id);
+    if (!cert) {
+        Json::Value err;
+        err["success"] = false;
+        err["error"] = "Certificate not found";
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+        resp->setStatusCode(drogon::k404NotFound);
+        callback(resp);
+        return;
+    }
+
+    if (!repo->deleteById(id)) {
+        Json::Value err;
+        err["success"] = false;
+        err["error"] = "Failed to delete certificate";
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+        resp->setStatusCode(drogon::k500InternalServerError);
+        callback(resp);
+        return;
+    }
+
+    Json::Value response;
+    response["success"] = true;
+    response["message"] = "Certificate deleted";
+    callback(drogon::HttpResponse::newHttpJsonResponse(response));
+}
+
 void EacCertificateHandler::handleChain(
     const drogon::HttpRequestPtr& /*req*/,
     std::function<void(const drogon::HttpResponsePtr&)>&& callback,
