@@ -20,6 +20,7 @@ option(BUILD_LOGGING_LIB "Build structured logging library" ON)
 option(BUILD_CERTIFICATE_PARSER_LIB "Build certificate parser library" ON)
 option(BUILD_VALIDATION_LIB "Build ICAO validation library" ON)
 option(BUILD_CVC_PARSER_LIB "Build CVC certificate parser library" ON)
+option(BUILD_CVC_PARSER_TESTS "Build CVC parser unit tests (requires GTest)" OFF)
 
 # Add subdirectories
 if(BUILD_AUDIT_LIB)

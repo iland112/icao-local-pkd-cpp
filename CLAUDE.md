@@ -620,7 +620,14 @@ scripts/
   - `GET /api/eac/certificates/{id}/chain` → IS→DV→CVCA 3-depth 체인 검증 `chainValid: true` 확인
   - 통계 API: total=6, CVCA=2, DV_DOMESTIC=2, IS=2
 - **Frontend EAC Dashboard**: 보고서 & 분석 섹션 "EAC 인증서 (실험)" 메뉴 (FlaskConical 아이콘, `/eac/dashboard` 라우트)
-- 8 files changed (2 new, 6 modified): eac_oids.h, chat_decoder.cpp, cvc_certificate_repository.cpp, cvc_service.cpp, App.tsx, Sidebar.tsx, en/nav.json, ko/nav.json, EacDashboard.tsx(new), eacApi.ts(new)
+- **Unit Tests** (`shared/lib/cvc-parser/tests/`, Google Test, 96 test cases, 전체 pass):
+  - `test_tlv.cpp` (20): TlvParser 파싱/OID 디코딩/BCD 날짜, BSI 외부 태그 구조
+  - `test_cvc_parser.cpp` (35): ECDH/DH 체인 전체 파싱, fingerprint 일관성, 에러 처리
+  - `test_chat_decoder.cpp` (26): IS/AT/ST 권한 비트마스크 (BSI Table C.3~C.5), 통합 테스트
+  - `test_cvc_signature.cpp` (15): ECDSA/RSA 서명 검증, 타입 불일치, OID 유틸리티
+  - 빌드: `cmake shared/lib/cvc-parser -DBUILD_CVC_PARSER_TESTS=ON`
+  - 모든 테스트 BSI TR-03110 Worked Example 실제 바이너리 데이터로 실증
+- 13 files changed (7 new, 6 modified): eac_oids.h, chat_decoder.cpp, cvc_certificate_repository.cpp, cvc_service.cpp, App.tsx, Sidebar.tsx, en/nav.json, ko/nav.json, EacDashboard.tsx(new), eacApi.ts(new), test_helpers.h(new), test_tlv.cpp(new), test_cvc_parser.cpp(new), test_chat_decoder.cpp(new), test_cvc_signature.cpp(new)
 
 ### v2.32.0 (2026-03-12) - SOD 파서 ICAO Doc 9303 준수 리팩토링 + PA 검증 Step 순서 수정
 - **CRITICAL FIX — DG 해시 알고리즘 오류**: SOD 파서가 LDSSecurityObject의 hashAlgorithm(DG 해시용, e.g., SHA-256) 대신 CMS SignerInfo의 digestAlgorithm(SOD 서명용, e.g., SHA-512)을 사용 → DG 해시 검증 실패. 대부분의 여권은 두 알고리즘이 동일하여 잠복 버그였으나, NL Specimen 여권(SHA-256 DG + SHA-512 CMS)에서 발견
