@@ -1,6 +1,7 @@
 /**
  * @file main.cpp
  * @brief PKD Relay Service entry point
+ * @version v2.33.1
  *
  * Minimal orchestration layer: config, logging, ServiceContainer,
  * handler registration, scheduler, and server startup.
