@@ -106,7 +106,7 @@ export const uploadCvc = (file: File) => {
 export const previewCvc = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  return eacApi.post<{ success: boolean; certificate: Record<string, unknown>; error?: string }>(
+  return eacApi.post<{ success: boolean; certificate: Partial<CvcCertificate>; error?: string }>(
     '/upload/preview',
     formData,
     { headers: { 'Content-Type': 'multipart/form-data' } }
