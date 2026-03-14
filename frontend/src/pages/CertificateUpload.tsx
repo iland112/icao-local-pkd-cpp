@@ -308,7 +308,7 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
 
           {activeTab === 'details' && (
             <div className="p-4">
-              <TreeViewer data={buildPreviewCertificateTree(cert)} height="320px" />
+              <TreeViewer data={buildPreviewCertificateTree(cert)} height="320px" compact />
             </div>
           )}
 
@@ -643,7 +643,7 @@ export default function CertificateUpload() {
 
               {/* DL Structure tab */}
               {previewTab === 'dl-structure' && isDl && (
-                <TreeViewer data={buildDlStructureTree(previewResult)} height="500px" />
+                <TreeViewer data={buildDlStructureTree(previewResult)} height="500px" compact />
               )}
 
               {/* CRL tab */}

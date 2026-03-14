@@ -2,6 +2,7 @@
 build/
 !scripts/build/
 build_fresh/
+build-cvc-tests/
 cmake-build-*/
 out/
 

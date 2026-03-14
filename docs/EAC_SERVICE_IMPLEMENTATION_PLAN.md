@@ -1,7 +1,7 @@
 # BSI TR-03110 EAC Service 구현 계획서
 
-**버전**: v0.1.0 (초안)
-**작성일**: 2026-03-12
+**버전**: v0.3.0
+**작성일**: 2026-03-14
 **상태**: 계획 수립 (실험 버전)
 **브랜치**: `feature/eac-service`
 
@@ -57,18 +57,66 @@ ICAO 9303 PKI (현재 지원)           BSI TR-03110 EAC PKI (추가)
 | 신뢰 체인 | CSCA → DSC (2단계) | CVCA → DV → IS (3단계) |
 | 인증서 수명 | 수년 | 수일~수주 (짧은 수명) |
 | 주요 목적 | 칩 데이터 무결성 (PA) | 단말기 권한 증명 (TA) |
-| OpenSSL 지원 | 완전 지원 | **미지원** (직접 파싱) |
+| OpenSSL 지원 | 완전 지원 | **미지원** (직접 TLV 파싱) |
 | 권한 제어 | 없음 | CHAT 비트마스크 (DG3/DG4 접근 제어) |
 
-### 1.4 스코프 정의
+### 1.4 EU 여권 처리 시 PKD와 EAC의 관계
+
+EU 여권 처리 시 ICAO PKD와 EAC PKI는 **독립 병렬 시스템**으로 동작하며, 연동이 아닌 순차 실행이다.
+
+#### 처리 단계별 사용 시스템
+
+```
+[1단계] Passive Authentication — ICAO PKD 사용 (모든 국가 공통)
+         여권 SOD 서명 검증: CSCA(PKD 배포) → DSC 신뢰체인
+         DG1(MRZ), DG2(얼굴) 해시 무결성 확인
+         → 본 시스템(icao-local-pkd)이 담당하는 영역
+
+[2단계] Chip Authentication — EAC 없이 수행 가능
+         DH 기반 칩 진위 확인 (DG14 공개키 사용)
+
+[3단계] Terminal Authentication — EAC PKI 필요 (EU 여권 전용)
+         단말기가 CVCA→DV→IS 체인 제시
+         여권 칩이 단말기 권한 검증
+         DG3(지문), DG4(홍채) 접근 인가
+         → eac-service가 담당하는 영역
+```
+
+#### 시스템 간 인증서 비교
+
+| 구분 | ICAO PKD (PA용) | EAC PKI (TA용) |
+|------|----------------|----------------|
+| 인증서 종류 | CSCA, DSC (X.509) | CVCA, DV, IS (CVC) |
+| 배포 방식 | ICAO PKD 서버 (공개) | 양자간 협정 (bilateral) |
+| 접근 보호 대상 | DG1, DG2 무결성 | DG3(지문), DG4(홍채) |
+| 인증서 간 공유 | **없음** | **없음** |
+| 본 시스템 담당 | PKD Management, PA Service | EAC Service (별도) |
+
+#### 핵심 결론
+
+- **PA만 수행하는 경우**: PKD만 사용, EAC 불필요 → 현재 `icao-local-pkd` 범위
+- **DG3/DG4 접근이 필요한 경우**: EAC PKI 추가 필요 (입국 심사 단말기 수준)
+- **두 시스템은 독립적**: 인증서 체계, 프로토콜, 배포 경로가 완전히 다름
+- **eac-service 위치**: PKD 서비스와 DB를 공유하지만, 인증 흐름은 독립적으로 동작
+
+#### 한국의 EAC 적용 현황
+
+한국은 ICAO PKD에 CSCA/DSC를 제출하고 있으나, 공식적인 CVCA(EAC PKI)는 공개되어 있지 않다.
+EU 국가들은 상호 EAC bilateral 협정을 맺고 있으며, 비EU 국가와의 협정은 개별 협상에 따른다.
+국내 출입국 단말기(법무부)는 EU 국가들과의 bilateral 협정을 통해 EAC TA를 수행하는 것으로 알려져 있다.
+
+---
+
+### 1.5 스코프 정의
 
 **포함 (실험 버전):**
-- CVC 인증서 파싱 (TLV 바이트 파싱)
+- CVC 인증서 파싱 (TLV 바이트 파싱, C++ 구현)
 - CVC 업로드/저장/검색/내보내기
 - EAC 신뢰체인 검증 (CVCA → DV → IS)
+- CVC 서명 검증 (OpenSSL EVP API)
 - CHAT 권한 분석 및 시각화
-- DB 저장 (PostgreSQL + Oracle)
-- REST API 제공 (:8086)
+- DB 저장 (PostgreSQL + Oracle, IQueryExecutor 패턴)
+- REST API 제공 (Drogon :8086)
 - 프론트엔드 관리 페이지
 
 **제외 (하드웨어/프로토콜 의존):**
@@ -99,65 +147,91 @@ API Gateway (nginx :80/:443)
 
 | 항목 | 선택 | 근거 |
 |------|------|------|
-| 언어 | Python 3.12 | 빠른 프로토타이핑, CVC 파싱 유연성 |
-| 프레임워크 | FastAPI | AI Analysis 서비스와 동일, 검증된 패턴 |
-| DB ORM | SQLAlchemy 2.0 | 기존 AI 서비스 패턴 재사용 |
-| DB 드라이버 | asyncpg + oracledb | Multi-DBMS 지원 (기존 패턴) |
-| CVC 파싱 | 직접 구현 (TLV) | 표준 라이브러리 부재 |
-| 암호화 | cryptography (pyca) | CVC 서명 검증 (RSA/ECDSA) |
+| 언어 | **C++20** | 프로젝트 메인 언어, 기존 4개 C++ 서비스와 통일 |
+| 프레임워크 | **Drogon** | 기존 서비스와 동일한 HTTP 프레임워크 |
+| DB 추상화 | **IQueryExecutor** | 기존 shared/lib/database 재사용 (PostgreSQL + Oracle) |
+| DB 풀 | **icao::database** | 기존 공유 라이브러리 (RAII 패턴) |
+| CVC 파싱 | **shared/lib/cvc-parser** | 신규 공유 라이브러리 (TLV 직접 파싱) |
+| 서명 검증 | **OpenSSL EVP API** | CVC 서명 검증 (RSA/ECDSA), 기존 의존성 재사용 |
+| 감사 로그 | **icao::audit** | 기존 공유 라이브러리 (operation_audit_log) |
+| 설정 관리 | **icao::config** | 기존 공유 라이브러리 (환경변수 기반) |
+| 로깅 | **spdlog** | 기존 공유 라이브러리 (icao::logging) |
+| DI 패턴 | **ServiceContainer** | 기존 pImpl + non-owning pointer 패턴 |
 
 ### 2.3 디렉토리 구조
 
 ```
-services/eac-service/
+shared/lib/cvc-parser/                     ← 신규 공유 라이브러리
+├── CMakeLists.txt
+├── include/icao/cvc/
+│   ├── tlv.h                              # 범용 TLV (Tag-Length-Value) 파서
+│   ├── cvc_parser.h                       # BSI TR-03110 CVC 인증서 파서
+│   ├── cvc_certificate.h                  # CVC 도메인 모델 (CvcCertificate 구조체)
+│   ├── chat_decoder.h                     # CHAT 비트마스크 디코더
+│   ├── cvc_signature.h                    # CVC 서명 검증 (OpenSSL EVP)
+│   └── eac_oids.h                         # BSI TR-03110 OID 정의
+└── src/
+    ├── tlv.cpp
+    ├── cvc_parser.cpp
+    ├── chat_decoder.cpp
+    └── cvc_signature.cpp
+
+services/eac-service/                      ← 신규 마이크로서비스
+├── CMakeLists.txt
 ├── Dockerfile
-├── requirements.txt
-├── pytest.ini
-├── app/
-│   ├── __init__.py
-│   ├── main.py                     # FastAPI 앱 (:8086)
-│   ├── config.py                   # DB_TYPE 기반 설정 (Settings)
-│   ├── database.py                 # PostgreSQL + Oracle 이중 엔진
+├── src/
+│   ├── main.cpp                           # Drogon 앱 (:8086), 라우트 등록
 │   │
-│   ├── models/                     # SQLAlchemy 모델
-│   │   ├── __init__.py
-│   │   └── cvc_certificate.py      # cvc_certificate 테이블 모델
+│   ├── infrastructure/
+│   │   ├── app_config.h                   # AppConfig 구조체 (환경변수)
+│   │   ├── service_container.h            # ServiceContainer (pImpl 패턴)
+│   │   └── service_container.cpp
 │   │
-│   ├── schemas/                    # Pydantic 응답 스키마
-│   │   ├── __init__.py
-│   │   └── cvc.py                  # CvcCertificateResponse, CvcUploadResponse 등
+│   ├── domain/
+│   │   └── cvc_models.h                   # CvcCertificateRecord, EacTrustChainRecord
 │   │
-│   ├── parsers/                    # CVC 파싱 엔진
-│   │   ├── __init__.py
-│   │   ├── tlv.py                  # 범용 TLV (Tag-Length-Value) 파서
-│   │   ├── cvc_parser.py           # BSI TR-03110 CVC 인증서 파서
-│   │   └── chat_decoder.py         # CHAT 비트마스크 디코더
+│   ├── repositories/
+│   │   ├── cvc_certificate_repository.h   # CVC CRUD (IQueryExecutor)
+│   │   ├── cvc_certificate_repository.cpp
+│   │   ├── eac_trust_chain_repository.h   # 신뢰체인 기록
+│   │   └── eac_trust_chain_repository.cpp
 │   │
-│   ├── services/                   # 비즈니스 로직
-│   │   ├── __init__.py
-│   │   ├── cvc_service.py          # CVC 업로드/검색/CRUD
-│   │   ├── eac_chain_validator.py  # CVCA→DV→IS 신뢰체인 검증
-│   │   └── cvc_signature.py        # CVC 서명 검증 (RSA/ECDSA)
+│   ├── services/
+│   │   ├── cvc_service.h                  # CVC 업로드/검색/CRUD 비즈니스 로직
+│   │   ├── cvc_service.cpp
+│   │   ├── eac_chain_validator.h          # CVCA→DV→IS 체인 검증
+│   │   └── eac_chain_validator.cpp
 │   │
-│   └── routers/                    # API 엔드포인트
-│       ├── __init__.py
-│       ├── health.py               # GET /health
-│       ├── upload.py               # POST /api/eac/upload, /preview
-│       ├── certificates.py         # GET /api/eac/certificates, /{id}
-│       ├── validation.py           # GET /api/eac/trust-chain/{fp}
-│       └── statistics.py           # GET /api/eac/statistics
+│   └── handlers/
+│       ├── eac_upload_handler.h           # POST /api/eac/upload, /preview
+│       ├── eac_upload_handler.cpp
+│       ├── eac_certificate_handler.h      # GET /api/eac/certificates, /{id}
+│       ├── eac_certificate_handler.cpp
+│       ├── eac_validation_handler.h       # GET /api/eac/certificates/{id}/chain
+│       ├── eac_validation_handler.cpp
+│       ├── eac_statistics_handler.h       # GET /api/eac/statistics, /countries
+│       └── eac_statistics_handler.cpp
 │
-├── tests/                          # pytest 테스트
-│   ├── conftest.py
-│   ├── test_tlv_parser.py
-│   ├── test_cvc_parser.py
-│   ├── test_chat_decoder.py
-│   ├── test_chain_validator.py
-│   └── fixtures/                   # 테스트용 CVC 바이너리
-│       └── README.md
-│
-└── docs/
-    └── CVC_FORMAT_REFERENCE.md     # CVC TLV 구조 참조 문서
+└── tests/                                 # GTest 단위 테스트
+    ├── CMakeLists.txt
+    ├── test_tlv_parser.cpp
+    ├── test_cvc_parser.cpp
+    ├── test_chat_decoder.cpp
+    ├── test_cvc_signature.cpp
+    └── fixtures/                          # 테스트용 CVC 바이너리
+        └── README.md
+```
+
+### 2.4 공유 라이브러리 의존 관계
+
+```
+services/eac-service
+├── shared/lib/cvc-parser      ← 신규 (CVC TLV 파싱 + 서명 검증)
+├── shared/lib/database        ← 기존 (IQueryExecutor, DB 풀)
+├── shared/lib/audit           ← 기존 (감사 로그)
+├── shared/lib/config          ← 기존 (설정 관리)
+├── shared/lib/logging         ← 기존 (spdlog)
+└── shared/lib/exception       ← 기존 (커스텀 예외)
 ```
 
 ---
@@ -188,7 +262,72 @@ CV Certificate [0x7F21]
 └── Signature [0x5F37]                             (가변 길이)
 ```
 
-### 3.2 CHAT 역할 및 권한
+### 3.2 C++ 도메인 모델
+
+```cpp
+// shared/lib/cvc-parser/include/icao/cvc/cvc_certificate.h
+
+namespace icao::cvc {
+
+enum class CvcType { CVCA, DV_DOMESTIC, DV_FOREIGN, IS };
+enum class ChatRole { IS, AT, ST, UNKNOWN };
+
+struct ChatInfo {
+    ChatRole role;
+    std::string roleOid;
+    std::vector<uint8_t> authorizationBits;
+    std::vector<std::string> permissions;  // 디코딩된 권한 목록
+};
+
+struct CvcPublicKey {
+    std::string algorithmOid;
+    std::string algorithmName;              // "id-TA-ECDSA-SHA-256" 등
+    std::vector<uint8_t> rawData;           // 공개키 파라미터 원본
+    // RSA
+    std::vector<uint8_t> modulus;
+    std::vector<uint8_t> exponent;
+    // ECDSA
+    std::vector<uint8_t> prime;
+    std::vector<uint8_t> coeffA;
+    std::vector<uint8_t> coeffB;
+    std::vector<uint8_t> generator;
+    std::vector<uint8_t> order;
+    std::vector<uint8_t> cofactor;
+};
+
+struct CvcCertificate {
+    // TLV 식별자
+    std::string car;                        // Certification Authority Reference
+    std::string chr;                        // Certificate Holder Reference
+    uint8_t profileIdentifier = 0x00;
+
+    // 유형 (CAR/CHR 패턴에서 추론)
+    CvcType type;
+    std::string countryCode;                // CAR/CHR 앞 2자리
+
+    // CHAT
+    ChatInfo chat;
+
+    // 공개키
+    CvcPublicKey publicKey;
+
+    // 유효기간
+    std::string effectiveDate;              // "YYYYMMDD"
+    std::string expirationDate;             // "YYYYMMDD"
+
+    // 서명
+    std::vector<uint8_t> signature;
+
+    // 원본 데이터
+    std::vector<uint8_t> bodyRaw;           // Certificate Body 원본 (서명 검증용)
+    std::vector<uint8_t> rawBinary;         // 전체 CVC 바이너리
+    std::string fingerprintSha256;          // SHA-256 해시
+};
+
+} // namespace icao::cvc
+```
+
+### 3.3 CHAT 역할 및 권한
 
 **역할 OID:**
 | OID | 역할 |
@@ -215,7 +354,7 @@ CV Certificate [0x7F21]
 | 6 | Install Certificate | 인증서 설치 |
 | 7 | Install Qualified Certificate | 자격 인증서 설치 |
 
-### 3.3 EAC 알고리즘 OID
+### 3.4 EAC 알고리즘 OID
 
 | OID | 알고리즘 | 용도 |
 |-----|----------|------|
@@ -490,6 +629,8 @@ eac-service:
   build:
     context: ..
     dockerfile: services/eac-service/Dockerfile
+    args:
+      BASE_IMAGE: ${VCPKG_BASE_IMAGE:-icao-vcpkg-base:latest}
   container_name: eac-service
   environment:
     - DB_TYPE=${DB_TYPE:-postgres}
@@ -503,6 +644,7 @@ eac-service:
     - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME:-XEPDB1}
     - ORACLE_USER=${ORACLE_USER:-pkd_user}
     - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+    - THREAD_NUM=${EAC_THREAD_NUM:-8}
   ports:
     - "8086:8086"
   healthcheck:
@@ -515,7 +657,7 @@ eac-service:
     postgres:
       condition: service_healthy
   profiles:
-    - eac  # 선택적 활성화
+    - eac  # 선택적 활성화 (docker compose --profile eac up)
 ```
 
 ### 7.2 nginx API Gateway
@@ -529,7 +671,35 @@ location /api/eac {
 }
 ```
 
-### 7.3 DB 초기화
+### 7.3 Dockerfile (Multi-Stage Build)
+
+```dockerfile
+# services/eac-service/Dockerfile
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
+
+WORKDIR /app
+COPY shared/ shared/
+COPY services/eac-service/ services/eac-service/
+
+WORKDIR /app/services/eac-service
+RUN mkdir -p build && cd build && \
+    cmake .. -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build . -j$(nproc)
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 libpq5 curl && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/services/eac-service/build/eac-service /usr/local/bin/
+EXPOSE 8086
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
+    CMD curl -f http://localhost:8086/api/eac/health || exit 1
+CMD ["eac-service"]
+```
+
+### 7.4 DB 초기화
 
 - PostgreSQL: `docker/init-scripts/20-eac-schema.sql`
 - Oracle: `docker/db-oracle/init/20-eac-schema.sql`
@@ -538,50 +708,53 @@ location /api/eac {
 
 ## 8. 구현 단계
 
-### Phase 1: 서비스 스캐폴딩 + CVC 파서 (1-2주)
+### Phase 1: 공유 라이브러리 + CVC 파서 (1-2주)
 
-**목표**: FastAPI 서비스 기동 + CVC TLV 파서 구현 + 단위 테스트
-
-| 작업 | 파일 | 설명 |
-|------|------|------|
-| 1.1 | `Dockerfile`, `requirements.txt`, `main.py` | AI Analysis 패턴 복제 |
-| 1.2 | `config.py`, `database.py` | Multi-DBMS 설정 |
-| 1.3 | `parsers/tlv.py` | 범용 TLV 파서 (tag, length, value 추출) |
-| 1.4 | `parsers/cvc_parser.py` | CVC 구조 파싱 (Body, Public Key, Signature) |
-| 1.5 | `parsers/chat_decoder.py` | CHAT 비트마스크 → 권한 목록 |
-| 1.6 | `tests/test_*.py` | 파서 단위 테스트 |
-| 1.7 | `routers/health.py` | 헬스 체크 엔드포인트 |
-
-**완료 기준**: `POST /api/eac/upload/preview`로 CVC 바이너리 업로드 시 파싱 결과 반환
-
-### Phase 2: DB + CRUD API (1-2주)
-
-**목표**: CVC 저장/검색/통계 API 완성
+**목표**: `shared/lib/cvc-parser` 공유 라이브러리 구현 + GTest 단위 테스트
 
 | 작업 | 파일 | 설명 |
 |------|------|------|
-| 2.1 | DB 스키마 (PostgreSQL + Oracle) | `cvc_certificate`, `eac_trust_chain` 테이블 |
-| 2.2 | `models/cvc_certificate.py` | SQLAlchemy 모델 |
-| 2.3 | `schemas/cvc.py` | Pydantic 응답 스키마 |
-| 2.4 | `services/cvc_service.py` | CRUD + 중복 체크 + 통계 |
-| 2.5 | `routers/upload.py` | 업로드 + 미리보기 엔드포인트 |
-| 2.6 | `routers/certificates.py` | 검색 + 상세 엔드포인트 |
-| 2.7 | `routers/statistics.py` | 통계 엔드포인트 |
+| 1.1 | `shared/lib/cvc-parser/CMakeLists.txt` | 공유 라이브러리 빌드 설정 |
+| 1.2 | `cvc_certificate.h` | CVC 도메인 모델 (구조체) |
+| 1.3 | `eac_oids.h` | BSI TR-03110 OID 상수 + 알고리즘 매핑 |
+| 1.4 | `tlv.h/.cpp` | 범용 TLV 파서 (tag, length, value 추출, 경계 검증) |
+| 1.5 | `cvc_parser.h/.cpp` | CVC 구조 파싱 (Body, Public Key, Signature, 날짜) |
+| 1.6 | `chat_decoder.h/.cpp` | CHAT 비트마스크 → 역할/권한 목록 디코딩 |
+| 1.7 | `cvc_signature.h/.cpp` | CVC 서명 검증 (OpenSSL EVP, RSA/ECDSA) |
+| 1.8 | `tests/test_*.cpp` | GTest 단위 테스트 (TLV, CVC 파서, CHAT, 서명) |
 
-**완료 기준**: CVC 업로드 → DB 저장 → 검색 → 상세 조회 전 흐름 동작
+**완료 기준**: 테스트 CVC 바이너리를 파싱하여 모든 필드 추출 + 서명 검증 통과
+
+### Phase 2: 서비스 스캐폴딩 + DB + CRUD API (1-2주)
+
+**목표**: Drogon 서비스 기동 + CVC 저장/검색/통계 API 완성
+
+| 작업 | 파일 | 설명 |
+|------|------|------|
+| 2.1 | `Dockerfile`, `CMakeLists.txt`, `main.cpp` | 서비스 기본 구조 (PKD Relay 패턴) |
+| 2.2 | `app_config.h`, `service_container.h/.cpp` | DI 컨테이너 (기존 패턴) |
+| 2.3 | DB 스키마 (PostgreSQL + Oracle) | `cvc_certificate`, `eac_trust_chain` |
+| 2.4 | `domain/cvc_models.h` | DB 레코드 모델 |
+| 2.5 | `repositories/cvc_certificate_repository.h/.cpp` | CRUD (IQueryExecutor) |
+| 2.6 | `services/cvc_service.h/.cpp` | 업로드/검색/중복체크/통계 |
+| 2.7 | `handlers/eac_upload_handler.h/.cpp` | POST /upload, /preview |
+| 2.8 | `handlers/eac_certificate_handler.h/.cpp` | GET /certificates, /{id} |
+| 2.9 | `handlers/eac_statistics_handler.h/.cpp` | GET /statistics, /countries |
+
+**완료 기준**: CVC 업로드 → DB 저장 → 검색 → 상세 조회 → 통계 전체 동작
 
 ### Phase 3: 신뢰체인 검증 (1-2주)
 
-**목표**: CVCA → DV → IS 체인 구축 + CVC 서명 검증
+**목표**: CVCA → DV → IS 체인 구축 + 서명 검증
 
 | 작업 | 파일 | 설명 |
 |------|------|------|
-| 3.1 | `services/cvc_signature.py` | CVC 서명 검증 (RSA/ECDSA) |
-| 3.2 | `services/eac_chain_validator.py` | CAR 기반 발급자 조회 → 체인 구축 |
-| 3.3 | `routers/validation.py` | 신뢰체인 조회 엔드포인트 |
-| 3.4 | 단위/통합 테스트 | 체인 검증 테스트 |
+| 3.1 | `services/eac_chain_validator.h/.cpp` | CAR 기반 발급자 조회 → 체인 구축 |
+| 3.2 | `repositories/eac_trust_chain_repository.h/.cpp` | 체인 기록 저장/조회 |
+| 3.3 | `handlers/eac_validation_handler.h/.cpp` | GET /certificates/{id}/chain |
+| 3.4 | GTest 통합 테스트 | 체인 검증 시나리오 테스트 |
 
-**완료 기준**: IS 인증서 → DV → CVCA 체인 검증 결과 반환
+**완료 기준**: IS 인증서 → DV → CVCA 체인 검증 결과 반환 + DB 기록
 
 ### Phase 4: 프론트엔드 (2-3주)
 
@@ -600,13 +773,13 @@ location /api/eac {
 
 ### Phase 5: 인프라 통합 (1주)
 
-**목표**: Docker Compose 통합, nginx 라우팅, CI/CD
+**목표**: Docker Compose 통합, nginx 라우팅, 문서
 
 | 작업 | 파일 | 설명 |
 |------|------|------|
 | 5.1 | `docker-compose.yaml` | EAC 서비스 추가 (profile: eac) |
 | 5.2 | nginx 설정 | `/api/eac` location 블록 |
-| 5.3 | 헬스 체크 스크립트 | EAC 서비스 포함 |
+| 5.3 | 헬스 체크/빌드 스크립트 | EAC 서비스 포함 |
 | 5.4 | 문서 업데이트 | CLAUDE.md, OpenAPI 스펙 |
 
 ---
@@ -615,10 +788,11 @@ location /api/eac {
 
 | 리스크 | 수준 | 영향 | 대응 |
 |--------|------|------|------|
-| CVC 테스트 데이터 부재 | **높음** | 파서 검증 불가 | 자체 CVCA 생성 도구 구현 또는 BSI 테스트 인증서 활용 |
-| TLV 파싱 복잡성 | **높음** | 구현 지연 | BSI TR-03110 Part 3 Appendix C 철저 참조, 단위 테스트 우선 |
-| CVC 서명 검증 | **중간** | EAC OID → 표준 알고리즘 매핑 오류 | cryptography 라이브러리 활용, 단계적 검증 |
+| CVC 테스트 데이터 부재 | **높음** | 파서 검증 불가 | BSI 공개 테스트 인증서 활용, 자체 테스트 벡터 생성 |
+| TLV 파싱 경계 검증 | **높음** | 버퍼 오버리드 | 모든 오프셋 접근 전 경계 검사, GTest fuzz 테스트 |
+| CVC 서명 검증 복잡성 | **중간** | EAC OID → OpenSSL EVP 매핑 오류 | 기존 algorithm_compliance.cpp 패턴 참조 |
 | Oracle BLOB 처리 | **중간** | 데이터 잘림 | 기존 `RAWTOHEX(DBMS_LOB.SUBSTR(...))` 패턴 적용 |
+| vcpkg 의존성 | **낮음** | 빌드 환경 차이 | 기존 vcpkg-base 이미지 재사용, 추가 의존성 없음 |
 | 프론트엔드 공수 | **낮음** | 기존 패턴 재사용으로 경감 | CertificateSearch/UploadDashboard 패턴 복제 |
 
 ---
@@ -630,8 +804,7 @@ location /api/eac {
 1. **LDAP 저장**: `o=cvca`, `o=dv`, `o=is` OU 추가 + PKD Relay 동기화
 2. **AI 분석 통합**: CVC 이상 탐지 (짧은 유효기간 패턴, CHAT 권한 이상)
 3. **기존 PA 서비스 연동**: PA 검증 시 EAC PKI 상태 참조
-4. **C++ 공유 라이브러리**: 검증된 파서를 `shared/lib/cvc-parser/`로 마이그레이션
-5. **PACE/CA/TA 프로토콜**: 스마트카드 리더 통합 (별도 프로젝트)
+4. **PACE/CA/TA 프로토콜**: 스마트카드 리더 통합 (별도 프로젝트)
 
 ---
 
@@ -648,14 +821,17 @@ location /api/eac {
 | ISO 7816-4 | - | TLV 데이터 구조 기반 |
 | ICAO 9303 Part 11 | - | EAC 보안 메커니즘 (ICAO 관점) |
 
-### B. 관련 기존 코드 참조
+### B. 기존 코드 참조 (C++ 패턴)
 
 | 파일 | 참조 이유 |
 |------|-----------|
-| `services/ai-analysis/app/main.py` | FastAPI 서비스 구조 패턴 |
-| `services/ai-analysis/app/config.py` | Multi-DBMS 설정 패턴 |
-| `services/ai-analysis/app/database.py` | SQLAlchemy 이중 엔진 패턴 |
-| `services/ai-analysis/Dockerfile` | Python 서비스 Docker 빌드 패턴 |
-| `shared/lib/icao-validation/include/icao/validation/providers.h` | Provider 인터페이스 패턴 |
+| `services/pkd-relay/src/main.cpp` | 경량 Drogon 서비스 구조 패턴 |
+| `services/pkd-relay/src/infrastructure/service_container.h` | ServiceContainer pImpl 패턴 |
+| `services/pkd-management/src/handlers/certificate_handler.h` | Handler 패턴 (라우트 등록) |
+| `services/pkd-management/src/repositories/certificate_repository.h` | Repository 패턴 (IQueryExecutor) |
+| `shared/lib/database/include/icao/database/i_query_executor.h` | DB 추상화 인터페이스 |
+| `shared/lib/icao-validation/src/algorithm_compliance.cpp` | 알고리즘 OID 매핑 패턴 |
+| `shared/lib/icao9303/src/sod_parser.cpp` | 바이너리 파싱 패턴 (ASN.1 TLV) |
+| `shared/lib/certificate-parser/` | 인증서 메타데이터 추출 패턴 |
 | `docker/init-scripts/01-core-schema.sql` | PostgreSQL 스키마 패턴 |
 | `docker/db-oracle/init/03-core-schema.sql` | Oracle 스키마 패턴 |

@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.32.0
-**Last Updated**: 2026-03-12
+**Current Version**: v2.33.1
+**Last Updated**: 2026-03-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -595,6 +595,54 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.1 (2026-03-14) - EAC Dashboard UX 개선 — CVC 삭제 + compact TreeViewer 전체 적용
+- **EAC 인증서 삭제 기능**: CVC 인증서 목록에서 2단계 확인 후 삭제 (Trash2 아이콘 → 확인/취소 버튼)
+  - `DELETE /api/eac/certificates/{id}` 엔드포인트 추가 (eac-service)
+  - `CvcCertificateRepository::deleteById()` — `DELETE FROM cvc_certificate WHERE id = $1`
+  - `EacCertificateHandler::handleDelete()` — 404 존재 확인 → 삭제 → 목록 자동 갱신 (`refetch`)
+  - Frontend: `CertRow` 컴포넌트에 `onDeleted` 콜백 + 삭제 진행 상태(spinning) 표시
+  - CORS 헤더 `DELETE` 메서드 추가
+- **Algorithm/OID 공백 표시 수정**: 파서 완성 전 저장된 레코드 대응 — 빈 값은 `(없음)` fallback 표시, copyable 아이콘은 값이 있을 때만 표시
+- **compact TreeViewer 전체 적용** (font `text-[11px]`, rowHeight 24px, indent 18px):
+  - `EacDashboard.tsx` CVC 상세 탭 (이미 적용)
+  - `CertificateDetailDialog.tsx` — Trust Chain 트리(height="200px"), 인증서 필드 트리(height="400px")
+  - `CertificateUpload.tsx` — 파싱결과 카드 인증서 트리(height="320px"), DL 구조 트리(height="500px")
+- **TreeViewer.tsx**: `compact` prop 추가 — 소형 데이터 카드에 최적화된 밀도 높은 레이아웃
+- 10 files changed (0 new, 10 modified)
+
+### v2.33.0 (2026-03-14) - EAC Service Phase 4 완료 — BSI TR-03110 OID 수정 + Frontend 통합 + Oracle 호환성
+- **EAC Service 실험적 기능 완료 (4개 Phase)**:
+  - Phase 1: 도메인 모델 + CVC 파서 공유 라이브러리 (`shared/lib/cvc-parser/`, `icao::cvc` namespace)
+  - Phase 2: C++/Drogon 백엔드 — CvcService, CvcCertificateRepository, CvcChainValidator, EAC Handler (7 endpoints)
+  - Phase 3: 로컬 Docker 통합 — `services/eac-service/`, Docker Compose, nginx 라우팅, Oracle 스키마
+  - Phase 4: 프론트엔드 — `EacDashboard.tsx`, `eacApi.ts`, App.tsx 라우트, Sidebar 메뉴, i18n (ko/en)
+- **CRITICAL FIX — BSI TR-03110-3 OID 수정** (`eac_oids.h`):
+  - 기존 OID 계층 오류: RSA/ECDSA 하위 트리 누락 (e.g., `id-TA-ECDSA-SHA-512`=`.9` → 실제 `0.4.0.127.0.7.2.2.2.2.5`)
+  - `id-TA-RSA` = `id-TA.1` = `0.4.0.127.0.7.2.2.2.1.{n}` (SHA-1/256/512 × v1.5/PSS 6종)
+  - `id-TA-ECDSA` = `id-TA.2` = `0.4.0.127.0.7.2.2.2.2.{n}` (SHA-1/224/256/384/512 5종)
+  - `isRsaAlgorithm()` / `isEcdsaAlgorithm()` 체크도 동기화, BSI Worked Example 실측 OID로 검증
+- **CHAT IS 권한 디코더 수정** (`chat_decoder.cpp`):
+  - Bit 6 (`0x40`) "Install Certificate", Bit 7 (`0x80`) "Install Qualified Certificate" 누락 추가
+  - BSI TR-03110-3 Table C.3 전체 준수
+- **Oracle NUMBER(1) 불리언 변환 수정** (`cvc_certificate_repository.cpp`):
+  - `row.get("signature_valid", false).asBool()` → `common::db::getBool(row, "signature_valid", false)`
+  - Oracle은 NUMBER(1)을 문자열 "0"/"1"로 반환 — jsoncpp `.asBool()` 실패 방지
+- **Oracle SYS_GUID() ID 회수 수정** (`cvc_service.cpp`):
+  - INSERT 후 `SYS_GUID()` 생성 ID 미반환 문제 → `findByFingerprint()` fallback으로 DB 저장 레코드 재조회
+- **BSI Worked Example 실증 테스트** (`data/BSI_TR-03110_EAC-Worked-Example/`):
+  - ECDH 3종(CVCA/DV/IS) + DH 3종 총 6개 CVC 인증서 Oracle에 저장
+  - `GET /api/eac/certificates/{id}/chain` → IS→DV→CVCA 3-depth 체인 검증 `chainValid: true` 확인
+  - 통계 API: total=6, CVCA=2, DV_DOMESTIC=2, IS=2
+- **Frontend EAC Dashboard**: 보고서 & 분석 섹션 "EAC 인증서 (실험)" 메뉴 (FlaskConical 아이콘, `/eac/dashboard` 라우트)
+- **Unit Tests** (`shared/lib/cvc-parser/tests/`, Google Test, 96 test cases, 전체 pass):
+  - `test_tlv.cpp` (20): TlvParser 파싱/OID 디코딩/BCD 날짜, BSI 외부 태그 구조
+  - `test_cvc_parser.cpp` (35): ECDH/DH 체인 전체 파싱, fingerprint 일관성, 에러 처리
+  - `test_chat_decoder.cpp` (26): IS/AT/ST 권한 비트마스크 (BSI Table C.3~C.5), 통합 테스트
+  - `test_cvc_signature.cpp` (15): ECDSA/RSA 서명 검증, 타입 불일치, OID 유틸리티
+  - 빌드: `cmake shared/lib/cvc-parser -DBUILD_CVC_PARSER_TESTS=ON`
+  - 모든 테스트 BSI TR-03110 Worked Example 실제 바이너리 데이터로 실증
+- 13 files changed (7 new, 6 modified): eac_oids.h, chat_decoder.cpp, cvc_certificate_repository.cpp, cvc_service.cpp, App.tsx, Sidebar.tsx, en/nav.json, ko/nav.json, EacDashboard.tsx(new), eacApi.ts(new), test_helpers.h(new), test_tlv.cpp(new), test_cvc_parser.cpp(new), test_chat_decoder.cpp(new), test_cvc_signature.cpp(new)
 
 ### v2.32.0 (2026-03-12) - SOD 파서 ICAO Doc 9303 준수 리팩토링 + PA 검증 Step 순서 수정
 - **CRITICAL FIX — DG 해시 알고리즘 오류**: SOD 파서가 LDSSecurityObject의 hashAlgorithm(DG 해시용, e.g., SHA-256) 대신 CMS SignerInfo의 digestAlgorithm(SOD 서명용, e.g., SHA-512)을 사용 → DG 해시 검증 실패. 대부분의 여권은 두 알고리즘이 동일하여 잠복 버그였으나, NL Specimen 여권(SHA-256 DG + SHA-512 CMS)에서 발견

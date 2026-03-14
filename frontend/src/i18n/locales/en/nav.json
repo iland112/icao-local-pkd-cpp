@@ -24,6 +24,7 @@
     "certQuality": "Certificate Quality Report",
     "paStats": "PA Verification Statistics",
     "aiAnalysis": "AI Certificate Analysis",
+    "eacDashboard": "EAC Certificates (Experimental)",
     "systemMonitoring": "System Monitoring",
     "userManagement": "User Management",
     "apiClients": "API Clients",
