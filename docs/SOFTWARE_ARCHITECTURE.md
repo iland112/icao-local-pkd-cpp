@@ -35,6 +35,22 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 - **Security First**: JWT 인증, RBAC, OWASP 보안 강화
 - **Shared Validation**: icao::validation 공유 라이브러리 (86 단위 테스트)
 
+### PKD와 EAC PKI의 역할 구분
+
+본 시스템은 **ICAO 9303 Passive Authentication(PA)**에 특화되어 있으며, EU 여권의 EAC(Extended Access Control)와는 독립적인 별도 시스템이다.
+
+| 구분 | 본 시스템 (PKD) | EAC PKI (별도) |
+|------|----------------|----------------|
+| **목적** | 칩 데이터 무결성 검증 (PA) | 보호된 생체정보 접근 (TA) |
+| **인증서** | CSCA → DSC (X.509) | CVCA → DV → IS (CVC) |
+| **보호 대상** | DG1(MRZ), DG2(얼굴) | DG3(지문), DG4(홍채) |
+| **배포 방식** | ICAO PKD 서버 (공개) | 양자간 협정 (bilateral) |
+| **EU 여권 처리** | **필수** (모든 국가 공통) | 지문/홍채 접근 시에만 필요 |
+
+EU 여권 처리 시 PA(1단계)는 PKD로 처리하고, 필요 시 EAC TA(3단계)를 EAC PKI로 별도 처리한다.
+두 시스템 간 인증서 공유는 없으며 인증 흐름도 독립적이다.
+자세한 내용은 [EAC_SERVICE_IMPLEMENTATION_PLAN.md](EAC_SERVICE_IMPLEMENTATION_PLAN.md) §1.4 참조.
+
 ---
 
 ## Technical Architecture Diagram

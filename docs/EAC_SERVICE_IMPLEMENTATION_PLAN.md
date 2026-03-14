@@ -1,7 +1,7 @@
 # BSI TR-03110 EAC Service 구현 계획서
 
-**버전**: v0.2.0
-**작성일**: 2026-03-13
+**버전**: v0.3.0
+**작성일**: 2026-03-14
 **상태**: 계획 수립 (실험 버전)
 **브랜치**: `feature/eac-service`
 
@@ -60,7 +60,54 @@ ICAO 9303 PKI (현재 지원)           BSI TR-03110 EAC PKI (추가)
 | OpenSSL 지원 | 완전 지원 | **미지원** (직접 TLV 파싱) |
 | 권한 제어 | 없음 | CHAT 비트마스크 (DG3/DG4 접근 제어) |
 
-### 1.4 스코프 정의
+### 1.4 EU 여권 처리 시 PKD와 EAC의 관계
+
+EU 여권 처리 시 ICAO PKD와 EAC PKI는 **독립 병렬 시스템**으로 동작하며, 연동이 아닌 순차 실행이다.
+
+#### 처리 단계별 사용 시스템
+
+```
+[1단계] Passive Authentication — ICAO PKD 사용 (모든 국가 공통)
+         여권 SOD 서명 검증: CSCA(PKD 배포) → DSC 신뢰체인
+         DG1(MRZ), DG2(얼굴) 해시 무결성 확인
+         → 본 시스템(icao-local-pkd)이 담당하는 영역
+
+[2단계] Chip Authentication — EAC 없이 수행 가능
+         DH 기반 칩 진위 확인 (DG14 공개키 사용)
+
+[3단계] Terminal Authentication — EAC PKI 필요 (EU 여권 전용)
+         단말기가 CVCA→DV→IS 체인 제시
+         여권 칩이 단말기 권한 검증
+         DG3(지문), DG4(홍채) 접근 인가
+         → eac-service가 담당하는 영역
+```
+
+#### 시스템 간 인증서 비교
+
+| 구분 | ICAO PKD (PA용) | EAC PKI (TA용) |
+|------|----------------|----------------|
+| 인증서 종류 | CSCA, DSC (X.509) | CVCA, DV, IS (CVC) |
+| 배포 방식 | ICAO PKD 서버 (공개) | 양자간 협정 (bilateral) |
+| 접근 보호 대상 | DG1, DG2 무결성 | DG3(지문), DG4(홍채) |
+| 인증서 간 공유 | **없음** | **없음** |
+| 본 시스템 담당 | PKD Management, PA Service | EAC Service (별도) |
+
+#### 핵심 결론
+
+- **PA만 수행하는 경우**: PKD만 사용, EAC 불필요 → 현재 `icao-local-pkd` 범위
+- **DG3/DG4 접근이 필요한 경우**: EAC PKI 추가 필요 (입국 심사 단말기 수준)
+- **두 시스템은 독립적**: 인증서 체계, 프로토콜, 배포 경로가 완전히 다름
+- **eac-service 위치**: PKD 서비스와 DB를 공유하지만, 인증 흐름은 독립적으로 동작
+
+#### 한국의 EAC 적용 현황
+
+한국은 ICAO PKD에 CSCA/DSC를 제출하고 있으나, 공식적인 CVCA(EAC PKI)는 공개되어 있지 않다.
+EU 국가들은 상호 EAC bilateral 협정을 맺고 있으며, 비EU 국가와의 협정은 개별 협상에 따른다.
+국내 출입국 단말기(법무부)는 EU 국가들과의 bilateral 협정을 통해 EAC TA를 수행하는 것으로 알려져 있다.
+
+---
+
+### 1.5 스코프 정의
 
 **포함 (실험 버전):**
 - CVC 인증서 파싱 (TLV 바이트 파싱, C++ 구현)
