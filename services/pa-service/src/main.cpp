@@ -1,6 +1,7 @@
 /**
  * @file main.cpp
  * @brief PA Service - ICAO 9303 Passive Authentication Entry Point
+ * @version v2.33.1
  */
 
 #include <drogon/drogon.h>
