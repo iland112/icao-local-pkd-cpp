@@ -16,6 +16,7 @@ import {
   type CvcCertificate, type ChainResult,
 } from '../api/eacApi';
 import { cn } from '@/utils/cn';
+import { TreeViewer, type TreeNode } from '@/components/TreeViewer';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,23 +71,95 @@ function InfoRow({ label, value, mono = false }: { label: string; value?: string
   );
 }
 
+// ─── CVC tree builder ─────────────────────────────────────────────────────────
+
+function buildCvcTree(cert: Partial<CvcCertificate>): TreeNode[] {
+  let parsedPermissions: Record<string, boolean> | null = null;
+  if (cert.chat_permissions) {
+    try { parsedPermissions = JSON.parse(cert.chat_permissions); } catch { /* ignore */ }
+  }
+  const grantedPerms = parsedPermissions
+    ? Object.entries(parsedPermissions).filter(([, v]) => v).map(([k]) => k)
+    : [];
+  const deniedPerms = parsedPermissions
+    ? Object.entries(parsedPermissions).filter(([, v]) => !v).map(([k]) => k)
+    : [];
+
+  const chatChildren: TreeNode[] = [
+    { id: 'chat-oid',  name: 'Role OID',  value: cert.chat_oid,  icon: 'hash', copyable: true },
+    { id: 'chat-role', name: 'Role',       value: cert.chat_role, icon: 'shield' },
+  ];
+  if (grantedPerms.length > 0) {
+    chatChildren.push({
+      id: 'chat-granted', name: `Granted Permissions (${grantedPerms.length})`, icon: 'check-circle',
+      children: grantedPerms.map((p, i) => ({ id: `gp-${i}`, name: p, icon: 'check' })),
+    });
+  }
+  if (deniedPerms.length > 0) {
+    chatChildren.push({
+      id: 'chat-denied', name: `Denied Permissions (${deniedPerms.length})`, icon: 'x-circle',
+      children: deniedPerms.map((p, i) => ({ id: `dp-${i}`, name: p, icon: 'x' })),
+    });
+  }
+
+  const bodyChildren: TreeNode[] = [
+    { id: 'car',  name: 'CAR (Certification Authority Reference)', value: cert.car,  icon: 'user', copyable: true },
+    {
+      id: 'pk', name: 'Public Key', icon: 'key',
+      children: [
+        { id: 'pk-algo',     name: 'Algorithm',     value: cert.public_key_algorithm, icon: 'shield' },
+        { id: 'pk-algo-oid', name: 'Algorithm OID', value: cert.public_key_oid,       icon: 'hash', copyable: true },
+      ],
+    },
+    { id: 'chr',  name: 'CHR (Certificate Holder Reference)', value: cert.chr, icon: 'user', copyable: true },
+    { id: 'chat', name: 'CHAT (Certificate Holder Authorization Template)', icon: 'shield', children: chatChildren },
+    {
+      id: 'validity', name: 'Validity', icon: 'calendar',
+      children: [
+        { id: 'eff-date', name: 'Effective Date',  value: cert.effective_date  },
+        { id: 'exp-date', name: 'Expiration Date', value: cert.expiration_date },
+      ],
+    },
+  ];
+
+  const rootChildren: TreeNode[] = [
+    { id: 'body', name: 'Certificate Body (7F4E)', icon: 'file-text', children: bodyChildren },
+    {
+      id: 'sig', name: 'Signature', icon: 'shield',
+      children: [
+        { id: 'sig-valid', name: 'Signature Valid', value: cert.signature_valid !== undefined ? (cert.signature_valid ? 'true' : 'false') : '-' },
+      ],
+    },
+  ];
+
+  if (cert.fingerprint_sha256) {
+    rootChildren.push({ id: 'fp', name: 'Fingerprint (SHA-256)', value: cert.fingerprint_sha256, icon: 'hash', copyable: true });
+  }
+
+  return [{ id: 'cvc', name: 'CV Certificate (7F21)', icon: 'file-text', children: rootChildren }];
+}
+
 // ─── CVC Preview Card ─────────────────────────────────────────────────────────
 
+type CvcTab = 'general' | 'detail';
+
 function CvcPreviewCard({ cert }: { cert: Partial<CvcCertificate> }) {
-  const [showPermissions, setShowPermissions] = useState(false);
+  const [tab, setTab] = useState<CvcTab>('general');
 
   let parsedPermissions: Record<string, boolean> | null = null;
   if (cert.chat_permissions) {
-    try {
-      parsedPermissions = JSON.parse(cert.chat_permissions);
-    } catch {
-      /* ignore */
-    }
+    try { parsedPermissions = JSON.parse(cert.chat_permissions); } catch { /* ignore */ }
   }
-
   const grantedPermissions = parsedPermissions
     ? Object.entries(parsedPermissions).filter(([, v]) => v).map(([k]) => k)
     : [];
+
+  const tabClass = (active: boolean) => cn(
+    'px-4 py-2 text-xs font-medium rounded-t-lg transition-colors border-b-2',
+    active
+      ? 'border-indigo-600 text-indigo-600 bg-white'
+      : 'border-transparent text-gray-500 hover:text-gray-800'
+  );
 
   return (
     <div className="rounded-xl bg-white border border-gray-200 shadow-sm overflow-hidden">
@@ -113,44 +186,52 @@ function CvcPreviewCard({ cert }: { cert: Partial<CvcCertificate> }) {
         </div>
       </div>
 
-      {/* Fields */}
-      <div className="px-4 py-3 space-y-0">
-        <InfoRow label="CAR" value={cert.car} mono />
-        <InfoRow label="국가" value={cert.country_code} />
-        <InfoRow label="알고리즘" value={cert.public_key_algorithm} />
-        <InfoRow label="알고리즘 OID" value={cert.public_key_oid} mono />
-        <InfoRow label="유효 시작일" value={cert.effective_date} />
-        <InfoRow label="만료일" value={cert.expiration_date} />
-        <InfoRow label="CHAT 역할" value={cert.chat_role} />
-        <InfoRow label="CHAT OID" value={cert.chat_oid} mono />
-        {cert.fingerprint_sha256 && (
-          <div className="flex items-start gap-2 py-1.5">
-            <span className="text-xs text-gray-500 w-28 flex-shrink-0 pt-0.5 flex items-center gap-1">
-              <Hash className="w-3 h-3" /> SHA-256
-            </span>
-            <span className="text-[10px] font-mono text-gray-600 break-all">{cert.fingerprint_sha256}</span>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 px-4 bg-gray-50">
+        <button onClick={() => setTab('general')} className={tabClass(tab === 'general')}>일반</button>
+        <button onClick={() => setTab('detail')}  className={tabClass(tab === 'detail')}>상세</button>
       </div>
 
-      {/* CHAT permissions */}
-      {grantedPermissions.length > 0 && (
-        <div className="border-t border-gray-100 px-4 py-3">
-          <button
-            onClick={() => setShowPermissions(p => !p)}
-            className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-800"
-          >
-            <Key className="w-3.5 h-3.5" />
-            CHAT 권한 ({grantedPermissions.length}개)
-            {showPermissions ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-          </button>
-          {showPermissions && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {grantedPermissions.map(p => (
-                <span key={p} className="px-1.5 py-0.5 text-[10px] bg-indigo-50 text-indigo-700 rounded font-mono">{p}</span>
-              ))}
+      {/* Tab: 일반 */}
+      {tab === 'general' && (
+        <div className="px-4 py-3 space-y-0">
+          <InfoRow label="CHR" value={cert.chr} mono />
+          <InfoRow label="CAR" value={cert.car} mono />
+          <InfoRow label="국가" value={cert.country_code} />
+          <InfoRow label="유형" value={cert.cvc_type ? (CVC_TYPE_LABELS[cert.cvc_type] ?? cert.cvc_type) : undefined} />
+          <InfoRow label="알고리즘" value={cert.public_key_algorithm} />
+          <InfoRow label="알고리즘 OID" value={cert.public_key_oid} mono />
+          <InfoRow label="유효 시작일" value={cert.effective_date} />
+          <InfoRow label="만료일" value={cert.expiration_date} />
+          <InfoRow label="CHAT 역할" value={cert.chat_role} />
+          <InfoRow label="CHAT OID" value={cert.chat_oid} mono />
+          {cert.fingerprint_sha256 && (
+            <div className="flex items-start gap-2 py-1.5">
+              <span className="text-xs text-gray-500 w-28 flex-shrink-0 pt-0.5 flex items-center gap-1">
+                <Hash className="w-3 h-3" /> SHA-256
+              </span>
+              <span className="text-[10px] font-mono text-gray-600 break-all">{cert.fingerprint_sha256}</span>
             </div>
           )}
+          {grantedPermissions.length > 0 && (
+            <div className="pt-2 mt-1 border-t border-gray-50">
+              <p className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
+                <Key className="w-3 h-3" /> CHAT 부여 권한 ({grantedPermissions.length}개)
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {grantedPermissions.map(p => (
+                  <span key={p} className="px-1.5 py-0.5 text-[10px] bg-indigo-50 text-indigo-700 rounded font-mono">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: 상세 (TreeViewer) */}
+      {tab === 'detail' && (
+        <div className="p-3">
+          <TreeViewer data={buildCvcTree(cert)} height="380px" />
         </div>
       )}
     </div>
