@@ -24,6 +24,7 @@
     "certQuality": "인증서 품질 보고서",
     "paStats": "PA 검증 통계",
     "aiAnalysis": "AI 인증서 분석",
+    "eacDashboard": "EAC 인증서 (실험)",
     "systemMonitoring": "시스템 모니터링",
     "userManagement": "사용자 관리",
     "apiClients": "API 클라이언트",

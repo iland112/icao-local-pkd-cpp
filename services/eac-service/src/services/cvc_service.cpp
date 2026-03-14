@@ -44,6 +44,10 @@ std::optional<domain::CvcCertificateRecord> CvcService::uploadCvc(
     }
 
     spdlog::info("CVC saved: {} ({}, {})", cert->chr, record.cvcType, cert->countryCode);
+
+    // Fetch back from DB to get the DB-generated ID (SYS_GUID() on Oracle)
+    auto saved = repo_->findByFingerprint(cert->fingerprintSha256);
+    if (saved) return *saved;
     return record;
 }
 

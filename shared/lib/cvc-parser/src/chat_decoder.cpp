@@ -29,11 +29,13 @@ std::vector<std::string> ChatDecoder::decodeIsPermissions(const std::vector<uint
     std::vector<std::string> perms;
     if (authBits.empty()) return perms;
 
-    // IS CHAT: 1 byte, bits in the last byte
+    // IS CHAT: 1 byte. BSI TR-03110-3 Table C.3
     uint8_t b = authBits.back();
 
     if (b & 0x01) perms.emplace_back("Read DG3 (Fingerprint)");
     if (b & 0x02) perms.emplace_back("Read DG4 (Iris)");
+    if (b & 0x40) perms.emplace_back("Install Certificate");
+    if (b & 0x80) perms.emplace_back("Install Qualified Certificate");
 
     return perms;
 }

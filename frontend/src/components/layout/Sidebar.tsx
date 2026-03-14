@@ -29,6 +29,7 @@ import {
   FolderKey,
   Fingerprint,
   Settings,
+  FlaskConical,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 
@@ -103,6 +104,7 @@ function buildNavSections(): NavSection[] {
         },
         { path: '/pa/dashboard', labelKey: 'menu.paStats', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },
         { path: '/ai/analysis', labelKey: 'menu.aiAnalysis', icon: <Brain className="w-4 h-4" />, permission: 'ai:read' },
+        { path: '/eac/dashboard', labelKey: 'menu.eacDashboard', icon: <FlaskConical className="w-4 h-4" /> },
       ],
     },
     {

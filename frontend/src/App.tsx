@@ -32,6 +32,7 @@ const AuditLog = lazy(() => import('./pages/AuditLog'));
 const PendingDscApproval = lazy(() => import('./pages/PendingDscApproval'));
 const ApiClientRequest = lazy(() => import('./pages/ApiClientRequest'));
 const CertificateQualityReport = lazy(() => import('./pages/CertificateQualityReport'));
+const EacDashboard = lazy(() => import('./pages/EacDashboard'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -105,6 +106,7 @@ function App() {
             <Route path="icao" element={<Suspense fallback={<PageLoader />}><IcaoStatus /></Suspense>} />
             <Route path="monitoring" element={<Suspense fallback={<PageLoader />}><MonitoringDashboard /></Suspense>} />
             <Route path="ai/analysis" element={<Suspense fallback={<PageLoader />}><AiAnalysisDashboard /></Suspense>} />
+            <Route path="eac/dashboard" element={<Suspense fallback={<PageLoader />}><EacDashboard /></Suspense>} />
 
             <Route path="profile" element={<Suspense fallback={<PageLoader />}><Profile /></Suspense>} />
             <Route path="admin/users" element={<AdminRoute><Suspense fallback={<PageLoader />}><UserManagement /></Suspense></AdminRoute>} />

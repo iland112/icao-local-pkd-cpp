@@ -232,7 +232,7 @@ domain::CvcCertificateRecord CvcCertificateRepository::rowToModel(const Json::Va
     r.effectiveDate = row.get("effective_date", "").asString();
     r.expirationDate = row.get("expiration_date", "").asString();
     r.fingerprintSha256 = row["fingerprint_sha256"].asString();
-    r.signatureValid = row.get("signature_valid", false).asBool();
+    r.signatureValid = common::db::getBool(row, "signature_valid", false);
     r.validationStatus = row.get("validation_status", "PENDING").asString();
     r.validationMessage = row.get("validation_message", "").asString();
     r.issuerCvcId = row.get("issuer_cvc_id", "").asString();

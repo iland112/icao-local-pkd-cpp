@@ -26,17 +26,21 @@ namespace icao::cvc {
 namespace oid {
 
 // --- Terminal Authentication Signature Algorithms ---
-// id-TA: 0.4.0.127.0.7.2.2.2.{n}
+// BSI TR-03110-3 Appendix A: id-TA = 0.4.0.127.0.7.2.2.2
+// id-TA-RSA  = id-TA.1 = 0.4.0.127.0.7.2.2.2.1
+// id-TA-ECDSA = id-TA.2 = 0.4.0.127.0.7.2.2.2.2
 
-inline constexpr std::string_view TA_RSA_V1_5_SHA_1     = "0.4.0.127.0.7.2.2.2.1";
-inline constexpr std::string_view TA_RSA_V1_5_SHA_256   = "0.4.0.127.0.7.2.2.2.2";
-inline constexpr std::string_view TA_RSA_PSS_SHA_1      = "0.4.0.127.0.7.2.2.2.3";
-inline constexpr std::string_view TA_RSA_PSS_SHA_256    = "0.4.0.127.0.7.2.2.2.4";
-inline constexpr std::string_view TA_ECDSA_SHA_1        = "0.4.0.127.0.7.2.2.2.5";
-inline constexpr std::string_view TA_ECDSA_SHA_224      = "0.4.0.127.0.7.2.2.2.6";
-inline constexpr std::string_view TA_ECDSA_SHA_256      = "0.4.0.127.0.7.2.2.2.7";
-inline constexpr std::string_view TA_ECDSA_SHA_384      = "0.4.0.127.0.7.2.2.2.8";
-inline constexpr std::string_view TA_ECDSA_SHA_512      = "0.4.0.127.0.7.2.2.2.9";
+inline constexpr std::string_view TA_RSA_V1_5_SHA_1     = "0.4.0.127.0.7.2.2.2.1.1";
+inline constexpr std::string_view TA_RSA_V1_5_SHA_256   = "0.4.0.127.0.7.2.2.2.1.2";
+inline constexpr std::string_view TA_RSA_PSS_SHA_1      = "0.4.0.127.0.7.2.2.2.1.3";
+inline constexpr std::string_view TA_RSA_PSS_SHA_256    = "0.4.0.127.0.7.2.2.2.1.4";
+inline constexpr std::string_view TA_RSA_V1_5_SHA_512   = "0.4.0.127.0.7.2.2.2.1.5";
+inline constexpr std::string_view TA_RSA_PSS_SHA_512    = "0.4.0.127.0.7.2.2.2.1.6";
+inline constexpr std::string_view TA_ECDSA_SHA_1        = "0.4.0.127.0.7.2.2.2.2.1";
+inline constexpr std::string_view TA_ECDSA_SHA_224      = "0.4.0.127.0.7.2.2.2.2.2";
+inline constexpr std::string_view TA_ECDSA_SHA_256      = "0.4.0.127.0.7.2.2.2.2.3";
+inline constexpr std::string_view TA_ECDSA_SHA_384      = "0.4.0.127.0.7.2.2.2.2.4";
+inline constexpr std::string_view TA_ECDSA_SHA_512      = "0.4.0.127.0.7.2.2.2.2.5";
 
 // --- Certificate Holder Roles ---
 // id-roles: 0.4.0.127.0.7.3.1.2.{n}
@@ -95,6 +99,8 @@ inline std::string getAlgorithmName(std::string_view oidStr) {
         {oid::TA_RSA_V1_5_SHA_256, "id-TA-RSA-v1-5-SHA-256"},
         {oid::TA_RSA_PSS_SHA_1,    "id-TA-RSA-PSS-SHA-1"},
         {oid::TA_RSA_PSS_SHA_256,  "id-TA-RSA-PSS-SHA-256"},
+        {oid::TA_RSA_V1_5_SHA_512, "id-TA-RSA-v1-5-SHA-512"},
+        {oid::TA_RSA_PSS_SHA_512,  "id-TA-RSA-PSS-SHA-512"},
         {oid::TA_ECDSA_SHA_1,      "id-TA-ECDSA-SHA-1"},
         {oid::TA_ECDSA_SHA_224,    "id-TA-ECDSA-SHA-224"},
         {oid::TA_ECDSA_SHA_256,    "id-TA-ECDSA-SHA-256"},
@@ -128,7 +134,9 @@ inline bool isRsaAlgorithm(std::string_view oidStr) {
     return oidStr == oid::TA_RSA_V1_5_SHA_1
         || oidStr == oid::TA_RSA_V1_5_SHA_256
         || oidStr == oid::TA_RSA_PSS_SHA_1
-        || oidStr == oid::TA_RSA_PSS_SHA_256;
+        || oidStr == oid::TA_RSA_PSS_SHA_256
+        || oidStr == oid::TA_RSA_V1_5_SHA_512
+        || oidStr == oid::TA_RSA_PSS_SHA_512;
 }
 
 /**
@@ -139,7 +147,9 @@ inline bool isEcdsaAlgorithm(std::string_view oidStr) {
         || oidStr == oid::TA_ECDSA_SHA_224
         || oidStr == oid::TA_ECDSA_SHA_256
         || oidStr == oid::TA_ECDSA_SHA_384
-        || oidStr == oid::TA_ECDSA_SHA_512;
+        || oidStr == oid::TA_ECDSA_SHA_512
+        // Also check without the sub-grouping (some implementations omit the .1/.2 subtree)
+        ;
 }
 
 } // namespace icao::cvc
