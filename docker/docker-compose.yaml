@@ -75,6 +75,7 @@ services:
       - "13080:80"
     environment:
       - TZ=Asia/Seoul
+      - ENABLE_EAC_MENU=true   # Local/dev: show EAC certificate menu
     depends_on:
       - pkd-management
       - pa-service
