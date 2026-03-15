@@ -906,9 +906,10 @@ Json::Value ValidationRepository::findByUploadId(
         }
 
         // ICAO violation category server-side filter
+        // Note: do NOT add icao_compliant = FALSE here — some categories (validityPeriod)
+        // are WARNING-level violations where icao_compliant remains TRUE
         if (!icaoCategoryFilter.empty()) {
             std::string dbType = queryExecutor_->getDatabaseType();
-            whereClause += " AND vr.icao_compliant = " + common::db::boolLiteral(dbType, false);
             if (icaoCategoryFilter == "algorithm") {
                 whereClause += " AND vr.icao_algorithm_compliant = " + common::db::boolLiteral(dbType, false);
             } else if (icaoCategoryFilter == "keySize") {
