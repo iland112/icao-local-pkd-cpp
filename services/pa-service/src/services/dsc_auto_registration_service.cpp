@@ -54,10 +54,10 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
 
         result.countryCode = countryCode;
 
-        // 2. Check if DSC already exists in certificate table
+        // 2. Check if DSC already exists in certificate table (DSC or DSC_NC)
         const char* checkCertQuery =
             "SELECT id FROM certificate "
-            "WHERE certificate_type = 'DSC' AND fingerprint_sha256 = $1 "
+            "WHERE certificate_type IN ('DSC', 'DSC_NC') AND fingerprint_sha256 = $1 "
             "FETCH FIRST 1 ROWS ONLY";
 
         std::vector<std::string> checkParams = {result.fingerprint};
