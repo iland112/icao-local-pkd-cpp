@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.4
+**Current Version**: v2.33.5
 **Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.5 (2026-03-15) - ICAO Doc 9303 미준수 상세 다이얼로그 카테고리 필터 + DSC_NC 부적합 사유 표시 수정
+
+- **Bug fix — validityPeriod 카테고리 인증서 목록 0건 표시**: ICAO Doc 9303 미준수 상세 다이얼로그에서 유효기간(validityPeriod) 카테고리 클릭 시 해당 인증서 목록이 비어있는 문제 수정
+- **Root cause**: `validation_repository.cpp` ICAO 카테고리 필터에 `icao_compliant = FALSE` 공통 조건이 포함 — 유효기간 위반은 WARNING 레벨로 `icao_compliant`이 TRUE로 유지되므로 교집합이 공집합
+- **Fix**: ICAO 카테고리 필터 블록에서 `icao_compliant = FALSE` 공통 조건 제거 — 개별 카테고리 컬럼(`icao_validity_period_compliant = FALSE`)만으로 필터링
+- **Bug fix — DSC_NC 미준수 상세 다이얼로그 미표시**: collection-003 LDIF(DSC_NC) 업로드 후 ICAO Doc 9303 미준수 수치 클릭 시 상세 다이얼로그가 표시되지 않는 문제 수정
+- **Root cause**: `checkIcaoCompliance()`가 DSC_NC에 대해 개별 카테고리 체크 없이 `NON_CONFORMANT` 조기 반환 → 모든 개별 카테고리 컬럼이 TRUE → `complianceViolations` 집계 결과 전체 0 → 다이얼로그 미렌더링
+- **Fix (3단계)**:
+  - Backend: `getStatisticsByUploadId()`에 `complianceViolations` DB 집계 쿼리 추가 (5개 카테고리 SUM)
+  - Backend: `nonConformant` icaoCategory 필터 추가 — `icao_compliant = FALSE` 조건으로 DSC_NC 필터링
+  - Frontend: `IcaoViolationDetailDialog`에 `nonConformant` 카테고리 추가 — violations 비어있고 `totalNonCompliantCount > 0`일 때 합성 카테고리 생성, NC Code/Description 컬럼 표시
+  - Frontend: `ValidationSummaryPanel` 다이얼로그 렌더 조건 `complianceViolations` → `icaoNonCompliantCount > 0`으로 변경
+  - Frontend: `UploadHistory`에서 `validation-statistics` API 호출하여 `complianceViolations` 데이터 획득
+- **DSC_NC LDIF 속성 활용**: `pkdConformanceCode`/`pkdConformanceText` 속성이 `icao_violations` 필드에 파이프 구분으로 저장되며, 미준수 상세 테이블의 NC 사유 컬럼에 표시
+- 4 files changed (0 new, 4 modified: validation_repository.cpp, IcaoViolationDetailDialog.tsx, ValidationSummaryPanel.tsx, UploadHistory.tsx)
 
 ### v2.33.4 (2026-03-15) - RSA-PSS 해시 알고리즘 추출 수정 (ICAO Doc 9303 준수 검사 정확도 개선)
 - **Bug fix — RSA-PSS 인증서 해시 알고리즘 "unknown" 표시**: RSA-PSS(`rsassaPss`) 서명 알고리즘 사용 인증서 3,019개가 ICAO Doc 9303 미준수 상세에서 "미충족 해시 알고리즘: Unknown"으로 잘못 표시되는 문제 수정

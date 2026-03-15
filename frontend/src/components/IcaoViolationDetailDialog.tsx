@@ -15,7 +15,7 @@ import { getUploadValidations } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
 
 /** ICAO 9303 violation category key */
-type ViolationCategory = 'algorithm' | 'keySize' | 'validityPeriod' | 'keyUsage' | 'extensions' | 'dnFormat';
+type ViolationCategory = 'algorithm' | 'keySize' | 'validityPeriod' | 'keyUsage' | 'extensions' | 'dnFormat' | 'nonConformant';
 
 /** Map backend violation message to i18n key + interpolation params */
 type ViolationMapping = [RegExp, string, ((m: RegExpMatchArray) => Record<string, string>)?];
@@ -141,6 +141,18 @@ function buildCategoryColumnConfig(t: (key: string, opts?: Record<string, string
         return '-';
       },
     },
+    nonConformant: {
+      header: 'NC 사유',
+      getValue: (cert: ValidationResult) => {
+        // Extract NC Code and Description from icaoViolations (format: "...|NC Code: ERR:...|NC Description: ...")
+        const violations = cert.icaoViolations || '';
+        const codeMatch = violations.match(/NC Code:\s*([^|]+)/);
+        const descMatch = violations.match(/NC Description:\s*([^|]+)/);
+        if (codeMatch) return codeMatch[1].trim();
+        if (descMatch) return descMatch[1].trim().substring(0, 60);
+        return violations.substring(0, 60) || '-';
+      },
+    },
   } as Record<string, { header: string; getValue: (cert: ValidationResult) => string }>;
 }
 
@@ -149,6 +161,8 @@ interface IcaoViolationDetailDialogProps {
   onClose: () => void;
   uploadId: string;
   violations: Record<string, number>;
+  /** Total non-compliant count (used when violations breakdown is empty, e.g., DSC_NC) */
+  totalNonCompliantCount?: number;
   /** Pre-selected category to expand on open */
   initialCategory?: string;
 }
@@ -196,6 +210,12 @@ const categoryInfo: Record<ViolationCategory, {
     reference: 'Doc 9303 Part 12, Section 7.1.1',
     detail: '여권 인증서에는 발급 국가를 식별하기 위해 Subject DN에 국가 코드(C=XX)가 반드시 포함되어야 합니다. 국가 코드가 없으면 어느 국가의 인증서인지 확인할 수 없습니다.',
   },
+  nonConformant: {
+    icon: '🚫',
+    description: 'ICAO PKD에서 표준 미준수(Non-Conformant)로 분류된 DSC 인증서',
+    reference: 'ICAO PKD Collection 003',
+    detail: 'ICAO PKD가 자체 검증 과정에서 표준 미준수로 판정한 DSC 인증서입니다. 각 인증서에는 부적합 코드(NC Code)와 상세 사유가 포함되어 있습니다. 이 인증서들은 nc-data 영역에 별도 저장됩니다.',
+  },
 };
 
 
@@ -204,6 +224,7 @@ export function IcaoViolationDetailDialog({
   onClose,
   uploadId,
   violations,
+  totalNonCompliantCount = 0,
   initialCategory,
 }: IcaoViolationDetailDialogProps) {
   const { t } = useTranslation(['upload', 'common', 'certificate']);
@@ -213,8 +234,15 @@ export function IcaoViolationDetailDialog({
   const [certificates, setCertificates] = useState<ValidationResult[]>([]);
   const [loadedForCategory, setLoadedForCategory] = useState<string | null>(null);
 
+  // If no category breakdown exists but there are non-compliant certificates (e.g., DSC_NC),
+  // create a synthetic "nonConformant" category
+  const effectiveViolations = Object.keys(violations).length > 0
+    ? violations
+    : { nonConformant: totalNonCompliantCount };
+
   // Sort categories by count desc
-  const sortedCategories = Object.entries(violations)
+  const sortedCategories = Object.entries(effectiveViolations)
+    .filter(([, count]) => count > 0)
     .sort(([, a], [, b]) => b - a);
 
   const totalNonCompliant = sortedCategories.reduce((sum, [, count]) => sum + count, 0);
@@ -274,6 +302,7 @@ export function IcaoViolationDetailDialog({
     validityPeriod: t('upload:validationSummary.violationValidityPeriod'),
     dnFormat: t('upload:validationSummary.violationDnFormat'),
     extensions: t('upload:validationSummary.violationExtensions'),
+    nonConformant: 'ICAO PKD 부적합 (DSC_NC)',
   };
 
   if (!open) return null;

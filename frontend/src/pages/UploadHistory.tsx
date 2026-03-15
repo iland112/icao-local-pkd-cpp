@@ -26,6 +26,7 @@ import {
   Download,
 } from 'lucide-react';
 import { uploadApi, uploadHistoryApi } from '@/services/api';
+import pkdApi from '@/services/pkdApi';
 import type { UploadedFile, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
 import { formatDateTime } from '@/utils/dateFormat';
@@ -74,6 +75,7 @@ export function UploadHistory() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadIssues, setUploadIssues] = useState<UploadIssues | null>(null);
   const [loadingIssues, setLoadingIssues] = useState(false);
+  const [complianceViolations, setComplianceViolations] = useState<Record<string, number> | undefined>();
 
   // Duplicate certificate detail dialog state
   const [selectedDuplicate, setSelectedDuplicate] = useState<UploadDuplicate | null>(null);
@@ -279,12 +281,21 @@ export function UploadHistory() {
       setSelectedUpload(fullUploadData ?? null);
       setActiveTab('details'); // Reset to details tab
       setDialogOpen(true);
+      // Fetch compliance violations from validation statistics (not stored in uploaded_file)
+      try {
+        const statsResp = await pkdApi.get(`/upload/${upload.id}/validation-statistics`);
+        const cv = statsResp.data?.data?.complianceViolations;
+        setComplianceViolations(cv && Object.keys(cv).length > 0 ? cv : undefined);
+      } catch {
+        setComplianceViolations(undefined);
+      }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to fetch upload details:', error);
       // Fallback to basic upload data from history list
       setSelectedUpload(upload);
       setActiveTab('details'); // Reset to details tab
       setDialogOpen(true);
+      setComplianceViolations(undefined);
     }
   };
 
@@ -997,6 +1008,7 @@ export function UploadHistory() {
                         duplicateCount: uploadIssues?.totalDuplicates,
                         totalCertificates: selectedUpload.totalEntries,
                         processedCount: selectedUpload.processedEntries,
+                        complianceViolations,
                       }}
                       uploadId={selectedUpload.id}
                     />

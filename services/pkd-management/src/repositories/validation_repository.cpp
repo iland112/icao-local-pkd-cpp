@@ -927,6 +927,9 @@ Json::Value ValidationRepository::findByUploadId(
                 } else {
                     whereClause += " AND (LOWER(vr.icao_violations) LIKE '%subject dn%' OR LOWER(vr.icao_violations) LIKE '%issuer dn%' OR LOWER(vr.icao_violations) LIKE '%country code%')";
                 }
+            } else if (icaoCategoryFilter == "nonConformant") {
+                // DSC_NC: all non-compliant certificates (no specific category column)
+                whereClause += " AND vr.icao_compliant = " + common::db::boolLiteral(dbType, false);
             }
         }
 
@@ -1219,7 +1222,12 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             "  SUM(CASE WHEN trust_chain_valid " + trueCheck + " THEN 1 ELSE 0 END) as trust_chain_valid_count, "
             "  SUM(CASE WHEN trust_chain_valid " + falseCheck + " THEN 1 ELSE 0 END) as trust_chain_invalid_count, "
             "  SUM(CASE WHEN icao_compliant " + trueCheck + " THEN 1 ELSE 0 END) as icao_compliant_count, "
-            "  SUM(CASE WHEN icao_compliant " + falseCheck + " THEN 1 ELSE 0 END) as icao_non_compliant_count "
+            "  SUM(CASE WHEN icao_compliant " + falseCheck + " THEN 1 ELSE 0 END) as icao_non_compliant_count, "
+            "  SUM(CASE WHEN icao_algorithm_compliant " + falseCheck + " THEN 1 ELSE 0 END) as cv_algorithm, "
+            "  SUM(CASE WHEN icao_key_size_compliant " + falseCheck + " THEN 1 ELSE 0 END) as cv_key_size, "
+            "  SUM(CASE WHEN icao_key_usage_compliant " + falseCheck + " THEN 1 ELSE 0 END) as cv_key_usage, "
+            "  SUM(CASE WHEN icao_validity_period_compliant " + falseCheck + " THEN 1 ELSE 0 END) as cv_validity_period, "
+            "  SUM(CASE WHEN icao_extensions_compliant " + falseCheck + " THEN 1 ELSE 0 END) as cv_extensions "
             "FROM validation_result "
             "WHERE upload_id = $1";
 
@@ -1255,6 +1263,20 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             stats["trustChainSuccessRate"] = trustChainSuccessRate;
             stats["icaoCompliantCount"] = icaoCompliantCount;
             stats["icaoNonCompliantCount"] = icaoNonCompliantCount;
+
+            // ICAO compliance violation breakdown by category
+            Json::Value cv(Json::objectValue);
+            int cvAlgorithm = safeInt(result[0].get("cv_algorithm", 0));
+            int cvKeySize = safeInt(result[0].get("cv_key_size", 0));
+            int cvKeyUsage = safeInt(result[0].get("cv_key_usage", 0));
+            int cvValidityPeriod = safeInt(result[0].get("cv_validity_period", 0));
+            int cvExtensions = safeInt(result[0].get("cv_extensions", 0));
+            if (cvAlgorithm > 0) cv["algorithm"] = cvAlgorithm;
+            if (cvKeySize > 0) cv["keySize"] = cvKeySize;
+            if (cvKeyUsage > 0) cv["keyUsage"] = cvKeyUsage;
+            if (cvValidityPeriod > 0) cv["validityPeriod"] = cvValidityPeriod;
+            if (cvExtensions > 0) cv["extensions"] = cvExtensions;
+            if (!cv.empty()) stats["complianceViolations"] = cv;
 
             spdlog::debug("[ValidationRepository] Statistics: total={}, valid={}, invalid={}, pending={}, error={}",
                 totalCount, validCount, invalidCount, pendingCount, errorCount);

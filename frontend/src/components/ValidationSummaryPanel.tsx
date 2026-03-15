@@ -476,12 +476,13 @@ export function ValidationSummaryPanel({
       })()}
 
       {/* ICAO Violation Detail Dialog */}
-      {data.complianceViolations && Object.keys(data.complianceViolations).length > 0 && uploadId && (
+      {(data.icaoNonCompliantCount ?? 0) > 0 && uploadId && (
         <IcaoViolationDetailDialog
           open={violationDialogOpen}
           onClose={() => setViolationDialogOpen(false)}
           uploadId={uploadId}
-          violations={data.complianceViolations}
+          violations={data.complianceViolations ?? {}}
+          totalNonCompliantCount={data.icaoNonCompliantCount ?? 0}
           initialCategory={violationDialogCategory}
         />
       )}
