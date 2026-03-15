@@ -1,9 +1,11 @@
 -- =============================================================================
 -- ICAO Local PKD - Core Database Schema
 -- =============================================================================
--- Version: 2.0.0
+-- Version: 2.34.0
 -- Created: 2026-01-25
--- Description: Core tables for certificate storage, validation, and duplicates
+-- Updated: 2026-03-15
+-- Description: Core tables for certificate storage, validation, duplicates,
+--              and pending DSC registration
 -- =============================================================================
 
 -- =============================================================================
@@ -86,6 +88,23 @@ CREATE TABLE IF NOT EXISTS certificate (
     not_after TIMESTAMP WITH TIME ZONE,
     certificate_data BYTEA NOT NULL,
 
+    -- X.509 metadata fields
+    version INTEGER DEFAULT 2,
+    signature_algorithm VARCHAR(50),
+    signature_hash_algorithm VARCHAR(20),
+    public_key_algorithm VARCHAR(30),
+    public_key_size INTEGER,
+    public_key_curve VARCHAR(50),
+    key_usage TEXT[],
+    extended_key_usage TEXT[],
+    is_ca BOOLEAN DEFAULT FALSE,
+    path_len_constraint INTEGER,
+    subject_key_identifier VARCHAR(128),
+    authority_key_identifier VARCHAR(128),
+    crl_distribution_points TEXT[],
+    ocsp_responder_url TEXT,
+    is_self_signed BOOLEAN DEFAULT FALSE,
+
     -- Validation status
     validation_status VARCHAR(20) DEFAULT 'PENDING',
     validation_message TEXT,
@@ -113,7 +132,10 @@ CREATE TABLE IF NOT EXISTS certificate (
 
     CONSTRAINT chk_certificate_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
     CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'EXPIRED_VALID', 'REVOKED', 'UNKNOWN')),
-    CONSTRAINT chk_cert_source_type CHECK (source_type IN ('FILE_UPLOAD', 'PA_EXTRACTED', 'LDIF_PARSED', 'ML_PARSED', 'DL_PARSED', 'API_REGISTERED', 'SYSTEM_GENERATED'))
+    CONSTRAINT chk_cert_source_type CHECK (source_type IN ('FILE_UPLOAD', 'PA_EXTRACTED', 'LDIF_PARSED', 'ML_PARSED', 'DL_PARSED', 'API_REGISTERED', 'SYSTEM_GENERATED')),
+    CONSTRAINT chk_certificate_version CHECK (version IN (0, 1, 2)),
+    CONSTRAINT chk_public_key_size_positive CHECK (public_key_size IS NULL OR public_key_size > 0),
+    CONSTRAINT chk_path_len_nonnegative CHECK (path_len_constraint IS NULL OR path_len_constraint >= 0)
 );
 
 CREATE INDEX idx_certificate_upload_id ON certificate(upload_id);
@@ -130,7 +152,16 @@ CREATE UNIQUE INDEX idx_certificate_unique ON certificate(certificate_type, fing
 CREATE INDEX idx_certificate_source_type ON certificate(source_type);
 CREATE INDEX idx_certificate_extracted_from ON certificate(extracted_from);
 
--- Composite indexes for multi-column queries (v2.25.8)
+-- X.509 metadata indexes
+CREATE INDEX idx_certificate_signature_algorithm ON certificate(signature_algorithm);
+CREATE INDEX idx_certificate_public_key_algorithm ON certificate(public_key_algorithm);
+CREATE INDEX idx_certificate_public_key_size ON certificate(public_key_size);
+CREATE INDEX idx_certificate_is_ca ON certificate(is_ca) WHERE is_ca = TRUE;
+CREATE INDEX idx_certificate_is_self_signed ON certificate(is_self_signed) WHERE is_self_signed = TRUE;
+CREATE INDEX idx_certificate_subject_key_identifier ON certificate(subject_key_identifier) WHERE subject_key_identifier IS NOT NULL;
+CREATE INDEX idx_certificate_authority_key_identifier ON certificate(authority_key_identifier) WHERE authority_key_identifier IS NOT NULL;
+
+-- Composite indexes for multi-column queries
 CREATE INDEX idx_certificate_stored_created ON certificate(stored_in_ldap, created_at ASC);
 CREATE INDEX idx_certificate_country_type ON certificate(country_code, certificate_type);
 CREATE INDEX idx_certificate_type_created ON certificate(certificate_type, created_at DESC);
@@ -157,22 +188,22 @@ CREATE TABLE IF NOT EXISTS crl (
 
     -- LDAP storage
     ldap_dn TEXT,
+    ldap_dn_v2 VARCHAR(512),
     stored_in_ldap BOOLEAN DEFAULT FALSE,
     stored_at TIMESTAMP WITH TIME ZONE,
 
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
-    CONSTRAINT chk_crl_validation CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED'))
+    CONSTRAINT chk_crl_validation CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED')),
+    CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256)
 );
-
--- v2.2.2 FIX: Add UNIQUE constraint to prevent CRL duplicates
-ALTER TABLE crl ADD CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256);
 
 CREATE INDEX idx_crl_upload_id ON crl(upload_id);
 CREATE INDEX idx_crl_country ON crl(country_code);
 CREATE INDEX idx_crl_issuer ON crl(issuer_dn);
 CREATE INDEX idx_crl_fingerprint ON crl(fingerprint_sha256);
 CREATE INDEX idx_crl_stored_created ON crl(stored_in_ldap, created_at ASC);
+CREATE INDEX idx_crl_ldap_dn_v2 ON crl(ldap_dn_v2);
 
 -- Revoked certificates (from CRL)
 CREATE TABLE IF NOT EXISTS revoked_certificate (
@@ -215,6 +246,7 @@ CREATE TABLE IF NOT EXISTS master_list (
 
     -- LDAP storage
     ldap_dn TEXT,
+    ldap_dn_v2 VARCHAR(512),
     stored_in_ldap BOOLEAN DEFAULT FALSE,
     stored_at TIMESTAMP WITH TIME ZONE,
 
@@ -224,6 +256,7 @@ CREATE TABLE IF NOT EXISTS master_list (
 CREATE INDEX idx_ml_upload_id ON master_list(upload_id);
 CREATE INDEX idx_ml_signer_country ON master_list(signer_country);
 CREATE INDEX idx_ml_fingerprint ON master_list(fingerprint_sha256);
+CREATE INDEX idx_ml_ldap_dn_v2 ON master_list(ldap_dn_v2);
 
 -- =============================================================================
 -- Deviation List Tables
@@ -317,6 +350,9 @@ CREATE TABLE IF NOT EXISTS validation_result (
     icao_key_size_compliant BOOLEAN DEFAULT NULL,
     icao_validity_period_compliant BOOLEAN DEFAULT NULL,
     icao_extensions_compliant BOOLEAN DEFAULT NULL,
+
+    -- Trust chain path (Link Certificate support)
+    trust_chain_path JSONB DEFAULT '[]'::jsonb,
 
     validation_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
@@ -438,6 +474,65 @@ CREATE TABLE IF NOT EXISTS pa_data_group (
 );
 
 CREATE INDEX idx_pa_dg_verification_id ON pa_data_group(verification_id);
+
+-- =============================================================================
+-- Duplicate Certificate Tracking (per-upload)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS duplicate_certificate (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    upload_id UUID NOT NULL REFERENCES uploaded_file(id) ON DELETE CASCADE,
+    first_upload_id UUID REFERENCES uploaded_file(id) ON DELETE SET NULL,
+    fingerprint_sha256 VARCHAR(64) NOT NULL,
+    certificate_type VARCHAR(20) NOT NULL CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC', 'CRL')),
+    subject_dn TEXT,
+    issuer_dn TEXT,
+    country_code VARCHAR(2),
+    serial_number VARCHAR(255),
+    duplicate_count INTEGER DEFAULT 1,
+    detection_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT duplicate_certificate_upload_fingerprint_unique UNIQUE (upload_id, fingerprint_sha256, certificate_type)
+);
+
+CREATE INDEX idx_duplicate_certificate_upload_id ON duplicate_certificate(upload_id);
+CREATE INDEX idx_duplicate_certificate_fingerprint ON duplicate_certificate(fingerprint_sha256);
+CREATE INDEX idx_duplicate_certificate_first_upload ON duplicate_certificate(first_upload_id);
+CREATE INDEX idx_duplicate_certificate_country ON duplicate_certificate(country_code);
+CREATE INDEX idx_duplicate_certificate_type ON duplicate_certificate(certificate_type);
+
+-- =============================================================================
+-- Pending DSC Registration (PA auto-registration approval workflow)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS pending_dsc_registration (
+    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+    fingerprint_sha256 VARCHAR(64) NOT NULL,
+    country_code VARCHAR(10) NOT NULL,
+    subject_dn TEXT NOT NULL,
+    issuer_dn TEXT NOT NULL,
+    serial_number VARCHAR(128),
+    not_before TIMESTAMP,
+    not_after TIMESTAMP,
+    certificate_data BYTEA NOT NULL,
+    signature_algorithm VARCHAR(50),
+    public_key_algorithm VARCHAR(20),
+    public_key_size INTEGER,
+    is_self_signed BOOLEAN DEFAULT FALSE,
+    validation_status VARCHAR(20) DEFAULT 'UNKNOWN',
+    pa_verification_id VARCHAR(36),
+    verification_status VARCHAR(20),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING'
+        CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
+    reviewed_by VARCHAR(255),
+    reviewed_at TIMESTAMP,
+    review_comment TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uq_pending_dsc_fingerprint UNIQUE (fingerprint_sha256)
+);
+
+CREATE INDEX idx_pending_dsc_status ON pending_dsc_registration(status);
+CREATE INDEX idx_pending_dsc_country ON pending_dsc_registration(country_code);
+CREATE INDEX idx_pending_dsc_created ON pending_dsc_registration(created_at DESC);
 
 -- =============================================================================
 -- Audit Log

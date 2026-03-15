@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.6
+**Current Version**: v2.34.0
 **Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.34.0 (2026-03-15) - DB 초기화 스크립트 통합 정리
+- **PostgreSQL init scripts 통합**: 18개 → 8개 파일로 축소 — 10개 마이그레이션 파일(05~09, 10-missing, 13~16)을 기본 스키마 파일(01~04, 11)에 흡수
+  - `01-core-schema.sql`: X.509 메타데이터 15개 컬럼(06), duplicate_certificate 테이블(07), pending_dsc_registration 테이블(15), trust_chain_path 컬럼, ldap_dn_v2 컬럼(crl/master_list), CRL UNIQUE 인라인 제약 흡수
+  - `02-services-schema.sql`: MLSC sync 컬럼(08), reconciliation 컬럼 리네임(09), revalidation_history/sync_config/crl_revocation_log 테이블(10-missing), trust chain/CRL 9개 컬럼(14) 흡수
+  - `04-advanced-features.sql`: ldap_dn_v2 컬럼 + ldap_dn_migration_status 테이블(05) 흡수, ALTER TABLE trust_chain_path 제거(01로 이동)
+  - `11-ai-analysis.sql`: forensic 컬럼 마이그레이션 블록 제거(이미 CREATE TABLE에 포함)
+  - 삭제: 05, 06, 07, 08, 09, 10-missing, 13, 14, 15, 16
+- **Oracle init scripts 통합**: 13개 → 9개 파일로 축소 — 4개 마이그레이션 파일 흡수/삭제
+  - `03-core-schema.sql`: pending_dsc_registration 테이블(15) 흡수
+  - `04-services-schema.sql`: revalidation_history trust chain/CRL 9개 컬럼(14) 흡수
+  - 삭제: 02-schema.sql(빈 placeholder), 13(인덱스, 이미 기본 스키마에 존재), 14, 15
+- **clean-and-init.sh Oracle fallback 수정**: 삭제된 `15-pending-dsc-registration.sql` → `03-core-schema.sql`로 변경 (Docker + Podman 양쪽)
+- **Podman clean-and-init.sh 동기화**: Docker 버전과 동일한 Oracle init script 완료 대기 로직 추가 (PENDING_DSC_REGISTRATION + CVC_CERTIFICATE 테이블 확인)
+- PostgreSQL 8개 파일, Oracle 9개 파일, Docker/Podman 스크립트 2개 수정
+- local clean-and-init 검증 완료 (Oracle, 전체 서비스 healthy, pending-dsc stats 200 OK)
 
 ### v2.33.6 (2026-03-15) - UploadHistory 상세 다이얼로그 i18n 수정
 - **Bug fix — Stepper 라벨 i18n 키 미번역**: UploadHistory 상세 다이얼로그의 진행 상태 Stepper에서 i18n 키가 번역되지 않고 그대로 표시되는 문제 수정 (예: "monitoring.pool.idle", "common.label.processing")

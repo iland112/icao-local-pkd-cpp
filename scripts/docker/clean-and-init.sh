@@ -140,6 +140,25 @@ if [ "$DB_TYPE" = "oracle" ]; then
                 if [ "$INIT_CHECK" -ge 1 ] 2>/dev/null; then
                     echo ""
                     echo -e "${GREEN}✓ Oracle pkd_user is ready${NC}"
+                    # Wait for all init scripts to complete (check last table in sequence)
+                    echo -n "  Waiting for Oracle init scripts to complete"
+                    for k in {1..60}; do
+                        TABLE_COUNT=$(docker exec icao-local-pkd-oracle bash -c "echo \"SELECT COUNT(*) FROM user_tables WHERE table_name IN ('PENDING_DSC_REGISTRATION','CVC_CERTIFICATE');\" | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 2>/dev/null | grep -E '^\s*[0-9]+' | tr -d ' '" 2>/dev/null || echo "0")
+                        if [ "$TABLE_COUNT" -ge 2 ] 2>/dev/null; then
+                            echo ""
+                            echo -e "${GREEN}✓ Oracle init scripts completed (all tables created)${NC}"
+                            break
+                        fi
+                        echo -n "."
+                        sleep 2
+                        if [ $k -eq 60 ]; then
+                            echo ""
+                            echo -e "${YELLOW}⚠ Some Oracle init scripts may not have completed, running manually...${NC}"
+                            docker exec icao-local-pkd-oracle bash -c "sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 @/opt/oracle/scripts/startup/03-core-schema.sql" 2>/dev/null || true
+                            docker exec icao-local-pkd-oracle bash -c "sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 @/opt/oracle/scripts/startup/20-eac-schema.sql" 2>/dev/null || true
+                            echo -e "${GREEN}✓ Oracle migration scripts executed${NC}"
+                        fi
+                    done
                     break 2  # break both loops
                 fi
                 echo -n "."

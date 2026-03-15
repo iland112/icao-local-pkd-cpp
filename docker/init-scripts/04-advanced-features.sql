@@ -1,9 +1,10 @@
 -- =============================================================================
 -- ICAO Local PKD - Advanced Features Schema
 -- =============================================================================
--- Version: 2.0.0
+-- Version: 2.34.0
 -- Created: 2026-01-25
--- Description: ICAO Auto Sync, Link Certificate, and Trust Chain enhancements
+-- Updated: 2026-03-15
+-- Description: ICAO Auto Sync, Link Certificate, and LDAP DN migration
 -- =============================================================================
 
 -- =============================================================================
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS link_certificate (
     authority_key_identifier VARCHAR(255),
     subject_key_identifier VARCHAR(255),
     ldap_dn VARCHAR(512),
+    ldap_dn_v2 VARCHAR(512),
     stored_in_ldap BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -70,6 +72,7 @@ CREATE INDEX idx_lc_fingerprint ON link_certificate(fingerprint_sha256);
 CREATE INDEX idx_lc_issuer_dn ON link_certificate(issuer_dn);
 CREATE INDEX idx_lc_subject_dn ON link_certificate(subject_dn);
 CREATE INDEX idx_lc_upload_id ON link_certificate(upload_id);
+CREATE INDEX idx_lc_ldap_dn_v2 ON link_certificate(ldap_dn_v2);
 
 -- Link Certificate issuers (CSCA old keys)
 CREATE TABLE IF NOT EXISTS link_certificate_issuers (
@@ -88,12 +91,20 @@ CREATE INDEX idx_lc_issuers_link_cert ON link_certificate_issuers(link_cert_id);
 CREATE INDEX idx_lc_issuers_csca ON link_certificate_issuers(issuer_csca_id);
 
 -- =============================================================================
--- Trust Chain Validation Enhancements
+-- LDAP DN Migration Status
 -- =============================================================================
 
--- Add trust_chain_path column to validation_result for Link Certificate support
-ALTER TABLE validation_result
-ADD COLUMN IF NOT EXISTS trust_chain_path JSONB DEFAULT '[]'::jsonb;
+CREATE TABLE IF NOT EXISTS ldap_dn_migration_status (
+    id SERIAL PRIMARY KEY,
+    table_name VARCHAR(50) NOT NULL,
+    total_records INTEGER NOT NULL DEFAULT 0,
+    migrated_records INTEGER NOT NULL DEFAULT 0,
+    failed_records INTEGER NOT NULL DEFAULT 0,
+    migration_started_at TIMESTAMP WITH TIME ZONE,
+    migration_completed_at TIMESTAMP WITH TIME ZONE,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    error_message TEXT,
+    UNIQUE(table_name)
+);
 
-COMMENT ON COLUMN validation_result.trust_chain_path IS
-'Trust chain path array: [{"type": "DSC|LC|CSCA", "subject": "...", "fingerprint": "..."}]';
+CREATE INDEX idx_ldap_migration_status ON ldap_dn_migration_status(status);

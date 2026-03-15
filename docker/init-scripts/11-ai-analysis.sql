@@ -1,5 +1,5 @@
 -- =============================================================================
--- AI Analysis Engine Schema (v2.18.0)
+-- AI Analysis Engine Schema (v2.34.0)
 -- ML-based certificate anomaly detection and pattern analysis results
 -- =============================================================================
 
@@ -49,17 +49,3 @@ CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic ON ai_analysis_result(forens
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic_score ON ai_analysis_result(forensic_risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_label_score ON ai_analysis_result(anomaly_label, anomaly_score DESC);
 
--- Migration: Add forensic columns to existing table (safe for re-runs)
-DO $$
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ai_analysis_result' AND column_name='forensic_risk_score') THEN
-        ALTER TABLE ai_analysis_result ADD COLUMN forensic_risk_score FLOAT;
-        ALTER TABLE ai_analysis_result ADD COLUMN forensic_risk_level VARCHAR(20);
-        ALTER TABLE ai_analysis_result ADD COLUMN forensic_findings JSONB;
-        ALTER TABLE ai_analysis_result ADD COLUMN structural_anomaly_score FLOAT;
-        ALTER TABLE ai_analysis_result ADD COLUMN issuer_anomaly_score FLOAT;
-        ALTER TABLE ai_analysis_result ADD COLUMN temporal_anomaly_score FLOAT;
-        CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic ON ai_analysis_result(forensic_risk_level);
-        CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic_score ON ai_analysis_result(forensic_risk_score DESC);
-    END IF;
-END $$;

@@ -223,7 +223,18 @@ CREATE TABLE revalidation_history (
     newly_valid NUMBER(10) DEFAULT 0 NOT NULL,
     unchanged NUMBER(10) DEFAULT 0 NOT NULL,
     errors NUMBER(10) DEFAULT 0 NOT NULL,
-    duration_ms NUMBER(10) DEFAULT 0 NOT NULL
+    duration_ms NUMBER(10) DEFAULT 0 NOT NULL,
+    -- Trust Chain re-validation
+    tc_processed NUMBER(10) DEFAULT 0,
+    tc_newly_valid NUMBER(10) DEFAULT 0,
+    tc_still_pending NUMBER(10) DEFAULT 0,
+    tc_errors NUMBER(10) DEFAULT 0,
+    -- CRL re-check
+    crl_checked NUMBER(10) DEFAULT 0,
+    crl_revoked NUMBER(10) DEFAULT 0,
+    crl_unavailable NUMBER(10) DEFAULT 0,
+    crl_expired NUMBER(10) DEFAULT 0,
+    crl_errors NUMBER(10) DEFAULT 0
 );
 
 CREATE OR REPLACE TRIGGER trg_revalidation_history_id
