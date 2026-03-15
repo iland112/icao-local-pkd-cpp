@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.5
+**Current Version**: v2.33.6
 **Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,13 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.6 (2026-03-15) - UploadHistory 상세 다이얼로그 i18n 수정
+- **Bug fix — Stepper 라벨 i18n 키 미번역**: UploadHistory 상세 다이얼로그의 진행 상태 Stepper에서 i18n 키가 번역되지 않고 그대로 표시되는 문제 수정 (예: "monitoring.pool.idle", "common.label.processing")
+- **Root cause**: `STATUS_STEPS` labelKey에서 i18next 네임스페이스 구분자로 `.`을 사용 — 올바른 구분자는 `:` (예: `monitoring:pool.idle`)
+- **Fix**: 8개 labelKey 모두 `.` → `:` 네임스페이스 구분자로 수정, `common.label.processing` → `common:status.processing` (존재하는 키로 변경)
+- **Fix**: `useTranslation`에 `monitoring` 네임스페이스 추가
+- 1 file changed (0 new, 1 modified: UploadHistory.tsx)
 
 ### v2.33.5 (2026-03-15) - ICAO Doc 9303 미준수 상세 다이얼로그 카테고리 필터 + DSC_NC 부적합 사유 표시 수정
 

@@ -42,13 +42,13 @@ import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/c
 // Full status step definition (for dialog detail view)
 // Uses labelKey instead of label — resolved via t() at render time
 const STATUS_STEPS: { key: UploadStatus; labelKey: string; icon: React.ReactNode }[] = [
-  { key: 'PENDING', labelKey: 'monitoring.pool.idle', icon: <Clock className="w-4 h-4" /> },
-  { key: 'UPLOADING', labelKey: 'upload.stepper.upload', icon: <Upload className="w-4 h-4" /> },
-  { key: 'PARSING', labelKey: 'upload.stepper.parsing', icon: <FileCheck className="w-4 h-4" /> },
-  { key: 'PROCESSING', labelKey: 'common.label.processing', icon: <Loader2 className="w-4 h-4" /> },
-  { key: 'VALIDATING', labelKey: 'upload.stepper.validation', icon: <ShieldCheck className="w-4 h-4" /> },
-  { key: 'SAVING_DB', labelKey: 'upload.stepper.dbSaving', icon: <Database className="w-4 h-4" /> },
-  { key: 'SAVING_LDAP', labelKey: 'upload.stepper.ldapSaving', icon: <Server className="w-4 h-4" /> },
+  { key: 'PENDING', labelKey: 'monitoring:pool.idle', icon: <Clock className="w-4 h-4" /> },
+  { key: 'UPLOADING', labelKey: 'upload:stepper.upload', icon: <Upload className="w-4 h-4" /> },
+  { key: 'PARSING', labelKey: 'upload:stepper.parsing', icon: <FileCheck className="w-4 h-4" /> },
+  { key: 'PROCESSING', labelKey: 'common:status.processing', icon: <Loader2 className="w-4 h-4" /> },
+  { key: 'VALIDATING', labelKey: 'upload:stepper.validation', icon: <ShieldCheck className="w-4 h-4" /> },
+  { key: 'SAVING_DB', labelKey: 'upload:stepper.dbSaving', icon: <Database className="w-4 h-4" /> },
+  { key: 'SAVING_LDAP', labelKey: 'upload:stepper.ldapSaving', icon: <Server className="w-4 h-4" /> },
   { key: 'COMPLETED', labelKey: 'common:status.completed', icon: <CheckCircle className="w-4 h-4" /> },
 ];
 
@@ -56,7 +56,7 @@ const STATUS_STEPS: { key: UploadStatus; labelKey: string; icon: React.ReactNode
 const IN_PROGRESS_STATUSES: UploadStatus[] = ['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'];
 
 export function UploadHistory() {
-  const { t } = useTranslation(['upload', 'common']);
+  const { t } = useTranslation(['upload', 'common', 'monitoring']);
   const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
