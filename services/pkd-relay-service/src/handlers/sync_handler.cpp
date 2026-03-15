@@ -14,6 +14,7 @@
 #include "query_helpers.h"
 
 #include <icao/audit/audit_log.h>
+#include "../common/notification_manager.h"
 #include "handler_utils.h"
 #include <spdlog/spdlog.h>
 #include <numeric>
@@ -374,6 +375,15 @@ void SyncHandler::handleRevalidate(const HttpRequestPtr& req,
         }
 
         callback(resp);
+
+        // Broadcast notification to all connected SSE clients
+        if (response.get("success", false).asBool()) {
+            icao::relay::notification::NotificationManager::getInstance().broadcast(
+                "REVALIDATION_COMPLETE",
+                "\uc778\uc99d\uc11c \uc7ac\uac80\uc99d \uc644\ub8cc",
+                std::to_string(response.get("totalProcessed", 0).asInt()) + "\uac74 \ucc98\ub9ac\ub428",
+                response);
+        }
 
         // Audit log
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::REVALIDATE);

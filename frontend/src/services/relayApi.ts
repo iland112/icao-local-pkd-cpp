@@ -435,7 +435,7 @@ export const syncApi = {
    * Trigger certificate re-validation
    * Re-checks validity periods for all certificates
    */
-  triggerRevalidation: () => relayApi.post<RevalidationResult>('/sync/revalidate'),
+  triggerRevalidation: () => relayApi.post<RevalidationResult>('/sync/revalidate', null, { timeout: 600000 }),
 
   /**
    * Get re-validation history
