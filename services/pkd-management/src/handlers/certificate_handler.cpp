@@ -2270,84 +2270,113 @@ void CertificateHandler::handlePendingDscApprove(
 
         std::string newCertId;
 
-        if (dbType == "oracle") {
-            // Generate UUID for Oracle
-            std::string oracleId;
-            {
-                Json::Value uuidResult = queryExecutor_->executeQuery(
-                    "SELECT uuid_generate_v4() AS id FROM DUAL", {});
-                if (!uuidResult.empty()) {
-                    oracleId = uuidResult[0]["id"].asString();
+        auto fetchExistingCertId = [&]() {
+            // Re-query to get existing certificate ID after unique violation
+            try {
+                std::string fetchQ =
+                    "SELECT id FROM certificate WHERE fingerprint_sha256 = $1 "
+                    "FETCH FIRST 1 ROWS ONLY";
+                Json::Value row = queryExecutor_->executeQuery(fetchQ, {fingerprint});
+                if (!row.empty()) return row[0]["id"].asString();
+            } catch (...) {}
+            return std::string{};
+        };
+
+        try {
+            if (dbType == "oracle") {
+                // Generate UUID for Oracle
+                std::string oracleId;
+                {
+                    Json::Value uuidResult = queryExecutor_->executeQuery(
+                        "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+                    if (!uuidResult.empty()) {
+                        oracleId = uuidResult[0]["id"].asString();
+                    }
+                }
+                if (oracleId.empty()) oracleId = id; // fallback
+
+                // Fix: Oracle boolean
+                std::string boolVal = (isSelfSigned == "1" || isSelfSigned == "true" || isSelfSigned == "TRUE")
+                    ? "1" : "0";
+
+                std::string insertQuery =
+                    "INSERT INTO certificate ("
+                    "id, certificate_type, country_code, "
+                    "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    "not_before, not_after, certificate_data, "
+                    "validation_status, stored_in_ldap, is_self_signed, "
+                    "signature_algorithm, public_key_algorithm, public_key_size, "
+                    "duplicate_count, created_at, "
+                    "source_type, source_context, extracted_from, registered_at"
+                    ") VALUES ("
+                    "$1, 'DSC', $2, $3, $4, $5, $6, "
+                    "CASE WHEN $7 IS NULL OR $7 = '' THEN NULL ELSE TO_TIMESTAMP($7, 'YYYY-MM-DD HH24:MI:SS') END, "
+                    "CASE WHEN $8 IS NULL OR $8 = '' THEN NULL ELSE TO_TIMESTAMP($8, 'YYYY-MM-DD HH24:MI:SS') END, "
+                    "$9, $10, 0, $11, "
+                    "$12, $13, $14, "
+                    "0, SYSTIMESTAMP, "
+                    "'PA_EXTRACTED', $15, $16, SYSTIMESTAMP"
+                    ")";
+
+                std::vector<std::string> insertParams = {
+                    oracleId, countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
+                    notBefore, notAfter, certDataHex, validationStatus, boolVal,
+                    signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
+                    sourceContext, paVerificationId
+                };
+
+                queryExecutor_->executeCommand(insertQuery, insertParams);
+                newCertId = oracleId;
+
+            } else {
+                // PostgreSQL
+                std::string boolVal = (isSelfSigned == "true" || isSelfSigned == "t" || isSelfSigned == "1")
+                    ? "TRUE" : "FALSE";
+
+                std::string insertQuery =
+                    "INSERT INTO certificate ("
+                    "certificate_type, country_code, "
+                    "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    "not_before, not_after, certificate_data, "
+                    "validation_status, stored_in_ldap, is_self_signed, "
+                    "signature_algorithm, public_key_algorithm, public_key_size, "
+                    "duplicate_count, created_at, "
+                    "source_type, source_context, extracted_from, registered_at"
+                    ") VALUES ("
+                    "'DSC', $1, $2, $3, $4, $5, "
+                    "$6, $7, $8, "
+                    "$9, FALSE, " + boolVal + ", "
+                    "$10, $11, $12, "
+                    "0, CURRENT_TIMESTAMP, "
+                    "'PA_EXTRACTED', $13::jsonb, $14, CURRENT_TIMESTAMP"
+                    ") RETURNING id";
+
+                std::vector<std::string> insertParams = {
+                    countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
+                    notBefore, notAfter, certDataHex, validationStatus,
+                    signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
+                    sourceContext, paVerificationId
+                };
+
+                Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+                if (!insertResult.empty()) {
+                    newCertId = insertResult[0]["id"].asString();
                 }
             }
-            if (oracleId.empty()) oracleId = id; // fallback
-
-            // Fix: Oracle boolean
-            std::string boolVal = (isSelfSigned == "1" || isSelfSigned == "true" || isSelfSigned == "TRUE")
-                ? "1" : "0";
-
-            std::string insertQuery =
-                "INSERT INTO certificate ("
-                "id, certificate_type, country_code, "
-                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                "not_before, not_after, certificate_data, "
-                "validation_status, stored_in_ldap, is_self_signed, "
-                "signature_algorithm, public_key_algorithm, public_key_size, "
-                "duplicate_count, created_at, "
-                "source_type, source_context, extracted_from, registered_at"
-                ") VALUES ("
-                "$1, 'DSC', $2, $3, $4, $5, $6, "
-                "CASE WHEN $7 IS NULL OR $7 = '' THEN NULL ELSE TO_TIMESTAMP($7, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "CASE WHEN $8 IS NULL OR $8 = '' THEN NULL ELSE TO_TIMESTAMP($8, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "$9, $10, 0, $11, "
-                "$12, $13, $14, "
-                "0, SYSTIMESTAMP, "
-                "'PA_EXTRACTED', $15, $16, SYSTIMESTAMP"
-                ")";
-
-            std::vector<std::string> insertParams = {
-                oracleId, countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
-                notBefore, notAfter, certDataHex, validationStatus, boolVal,
-                signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
-                sourceContext, paVerificationId
-            };
-
-            queryExecutor_->executeCommand(insertQuery, insertParams);
-            newCertId = oracleId;
-
-        } else {
-            // PostgreSQL
-            std::string boolVal = (isSelfSigned == "true" || isSelfSigned == "t" || isSelfSigned == "1")
-                ? "TRUE" : "FALSE";
-
-            std::string insertQuery =
-                "INSERT INTO certificate ("
-                "certificate_type, country_code, "
-                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                "not_before, not_after, certificate_data, "
-                "validation_status, stored_in_ldap, is_self_signed, "
-                "signature_algorithm, public_key_algorithm, public_key_size, "
-                "duplicate_count, created_at, "
-                "source_type, source_context, extracted_from, registered_at"
-                ") VALUES ("
-                "'DSC', $1, $2, $3, $4, $5, "
-                "$6, $7, $8, "
-                "$9, FALSE, " + boolVal + ", "
-                "$10, $11, $12, "
-                "0, CURRENT_TIMESTAMP, "
-                "'PA_EXTRACTED', $13::jsonb, $14, CURRENT_TIMESTAMP"
-                ") RETURNING id";
-
-            std::vector<std::string> insertParams = {
-                countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
-                notBefore, notAfter, certDataHex, validationStatus,
-                signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
-                sourceContext, paVerificationId
-            };
-
-            Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
-            if (!insertResult.empty()) {
-                newCertId = insertResult[0]["id"].asString();
+        } catch (const std::exception& certE) {
+            // Race condition: two concurrent approvals or a duplicate fingerprint.
+            // Detect unique violation and resolve by re-querying existing certificate.
+            std::string errMsg = certE.what();
+            bool isUnique = errMsg.find("ORA-00001") != std::string::npos ||
+                            errMsg.find("23505") != std::string::npos ||
+                            errMsg.find("unique constraint") != std::string::npos ||
+                            errMsg.find("UNIQUE constraint") != std::string::npos;
+            if (isUnique) {
+                newCertId = fetchExistingCertId();
+                spdlog::info("[PendingDsc] Certificate already registered (unique violation), using existing id={}, fingerprint={}...",
+                    newCertId.empty() ? "?" : newCertId.substr(0, 8), fingerprint.substr(0, 16));
+            } else {
+                throw; // rethrow unexpected errors
             }
         }
 
@@ -2389,7 +2418,9 @@ void CertificateHandler::handlePendingDscApprove(
         }
 
         // 4. Mark pending entry as APPROVED
-        pendingDscRepository_->updateStatus(id, "APPROVED", reviewedBy, reviewComment);
+        if (!pendingDscRepository_->updateStatus(id, "APPROVED", reviewedBy, reviewComment)) {
+            spdlog::warn("[PendingDsc] Failed to update status to APPROVED for id={} — entry may have been concurrently processed", id);
+        }
 
         // 5. Audit log
         try {

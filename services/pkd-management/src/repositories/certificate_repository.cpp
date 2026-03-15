@@ -1088,7 +1088,7 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
             "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, CURRENT_TIMESTAMP) "
             "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) "
-            "DO UPDATE SET duplicate_count = duplicate_certificate.duplicate_count + 1";
+            "DO NOTHING";
 
         std::vector<std::string> params = {
             uploadId,
@@ -1517,10 +1517,14 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
 
     } catch (const std::exception& e) {
         std::string errMsg = e.what();
-        // ORA-00001: unique constraint violated — treat as duplicate (race condition)
-        // This is equivalent to PostgreSQL's ON CONFLICT DO NOTHING behavior
-        if (errMsg.find("ORA-00001") != std::string::npos) {
-            spdlog::debug("[CertificateRepository] Concurrent duplicate detected (ORA-00001): type={}, fingerprint={}",
+        // ORA-00001 (Oracle) or "23505" / "unique" (PostgreSQL): unique constraint violated
+        // Treat as duplicate — race condition between concurrent uploads
+        bool isUniqueViolation = errMsg.find("ORA-00001") != std::string::npos ||
+                                 errMsg.find("23505") != std::string::npos ||
+                                 (errMsg.find("unique") != std::string::npos &&
+                                  errMsg.find("certificate") != std::string::npos);
+        if (isUniqueViolation) {
+            spdlog::debug("[CertificateRepository] Concurrent duplicate detected: type={}, fingerprint={}",
                          certType, fingerprint.substr(0, 16) + "...");
             // Re-query to get the existing certificate ID
             try {

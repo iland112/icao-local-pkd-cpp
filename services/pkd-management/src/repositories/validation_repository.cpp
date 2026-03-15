@@ -238,9 +238,24 @@ bool ValidationRepository::copyForUpload(const std::string& fingerprint, const s
         std::string dbType = queryExecutor_->getDatabaseType();
 
         if (dbType == "oracle") {
-            // Oracle: INSERT with SYS_GUID(), copy from existing record by fingerprint
+            // Oracle: MERGE to copy from existing record by fingerprint (idempotent — WHEN NOT MATCHED only)
             std::string query =
-                "INSERT INTO validation_result ("
+                "MERGE INTO validation_result dst "
+                "USING (SELECT certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant "
+                "FROM validation_result "
+                "WHERE certificate_id = $2 AND ROWNUM = 1) src "
+                "ON (dst.upload_id = $1 AND dst.certificate_id = src.certificate_id) "
+                "WHEN NOT MATCHED THEN INSERT ("
                 "id, upload_id, certificate_id, certificate_type, country_code, "
                 "subject_dn, issuer_dn, serial_number, "
                 "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
@@ -252,21 +267,18 @@ bool ValidationRepository::copyForUpload(const std::string& fingerprint, const s
                 "icao_key_usage_compliant, icao_algorithm_compliant, "
                 "icao_key_size_compliant, icao_validity_period_compliant, "
                 "icao_extensions_compliant, validation_timestamp"
-                ") SELECT "
-                "SYS_GUID(), $1, certificate_id, certificate_type, country_code, "
-                "subject_dn, issuer_dn, serial_number, "
-                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
-                "signature_valid, signature_algorithm, "
-                "validity_period_valid, not_before, not_after, "
-                "crl_checked, revocation_status, "
-                "validation_status, "
-                "icao_compliant, icao_compliance_level, icao_violations, "
-                "icao_key_usage_compliant, icao_algorithm_compliant, "
-                "icao_key_size_compliant, icao_validity_period_compliant, "
-                "icao_extensions_compliant, SYSTIMESTAMP "
-                "FROM validation_result "
-                "WHERE certificate_id = $2 "
-                "AND ROWNUM = 1";
+                ") VALUES ("
+                "SYS_GUID(), $1, src.certificate_id, src.certificate_type, src.country_code, "
+                "src.subject_dn, src.issuer_dn, src.serial_number, "
+                "src.trust_chain_valid, src.trust_chain_message, src.csca_subject_dn, src.csca_found, "
+                "src.signature_valid, src.signature_algorithm, "
+                "src.validity_period_valid, src.not_before, src.not_after, "
+                "src.crl_checked, src.revocation_status, "
+                "src.validation_status, "
+                "src.icao_compliant, src.icao_compliance_level, src.icao_violations, "
+                "src.icao_key_usage_compliant, src.icao_algorithm_compliant, "
+                "src.icao_key_size_compliant, src.icao_validity_period_compliant, "
+                "src.icao_extensions_compliant, SYSTIMESTAMP)";
 
             queryExecutor_->executeCommand(query, {newUploadId, fingerprint});
         } else {

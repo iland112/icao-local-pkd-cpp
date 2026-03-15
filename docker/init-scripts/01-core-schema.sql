@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS uploaded_file (
 CREATE INDEX idx_uploaded_file_status ON uploaded_file(status);
 CREATE INDEX idx_uploaded_file_upload_timestamp ON uploaded_file(upload_timestamp DESC);
 CREATE INDEX idx_uploaded_file_file_hash ON uploaded_file(file_hash);
+-- Partial unique index: prevents duplicate uploads of the same file (empty hash allowed for FORCE re-upload reset)
+CREATE UNIQUE INDEX uq_uploaded_file_nonempty_hash ON uploaded_file(file_hash) WHERE file_hash != '';
 
 -- =============================================================================
 -- Certificate Tables
@@ -180,7 +182,9 @@ CREATE TABLE IF NOT EXISTS revoked_certificate (
     revocation_date TIMESTAMP WITH TIME ZONE NOT NULL,
     revocation_reason VARCHAR(50),
 
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    CONSTRAINT uq_revoked_cert_crl_serial UNIQUE (crl_id, serial_number)
 );
 
 CREATE INDEX idx_revoked_cert_crl_id ON revoked_certificate(crl_id);

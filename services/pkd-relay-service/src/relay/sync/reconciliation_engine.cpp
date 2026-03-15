@@ -71,16 +71,16 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
     std::vector<CertificateInfo> result;
 
     try {
-        // Use database-specific boolean literal for stored_in_ldap filter
+        // Use database-specific boolean literal and pagination for stored_in_ldap filter
         std::string query =
             "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
             "fingerprint_sha256, certificate_data, is_self_signed "
             "FROM certificate "
             "WHERE certificate_type = $1 AND stored_in_ldap = " + boolLiteral(false) + " "
-            "ORDER BY id "
-            "LIMIT $2";
+            "ORDER BY id" +
+            common::db::limitClause(dbType_, limit);
 
-        std::vector<std::string> params = {certType, std::to_string(limit)};
+        std::vector<std::string> params = {certType};
         Json::Value rows = queryExecutor_->executeQuery(query, params);
 
         if (rows.empty()) {
@@ -452,15 +452,15 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
     std::vector<CrlInfo> result;
 
     try {
-        // Use database-specific boolean literal
+        // Use database-specific boolean literal and pagination
         std::string query =
             "SELECT id, country_code, issuer_dn, fingerprint_sha256, crl_binary "
             "FROM crl "
             "WHERE stored_in_ldap = " + boolLiteral(false) + " "
-            "ORDER BY id "
-            "LIMIT $1";
+            "ORDER BY id" +
+            common::db::limitClause(dbType_, limit);
 
-        std::vector<std::string> params = {std::to_string(limit)};
+        std::vector<std::string> params = {};
         Json::Value rows = queryExecutor_->executeQuery(query, params);
 
         if (rows.empty()) {

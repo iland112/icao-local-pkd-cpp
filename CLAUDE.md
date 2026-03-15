@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.1
-**Last Updated**: 2026-03-14
+**Current Version**: v2.33.2
+**Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -595,6 +595,35 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.2 (2026-03-15) - 전체 코드 멱등성 전수 수정 (Idempotency Hardening)
+
+#### 멱등성 수정 배경
+- Luckfox 배포 환경 초기화 과정에서 재시도/재처리 시 중복 삽입, race condition, 오류 처리 누락 등 멱등성 관련 이슈들을 전수 조사 후 수정
+
+#### 1차 수정 — 주요 이슈 (HIGH)
+- **reconciliation_engine.cpp**: `findMissingInLdap` / `findMissingCrlsInLdap` — PostgreSQL `LIMIT $N` 문법이 Oracle에서 동작하지 않아 reconciliation 완전 불동작 → `common::db::limitClause()` 헬퍼로 수정
+- **certificate_repository.cpp**: INSERT unique violation 처리 — PostgreSQL `23505`/`unique` 키워드 미처리(ORA-00001만 감지) → 두 DB 모두 처리, `duplicate_certificate` DO UPDATE → DO NOTHING 수정
+- **validation_repository.cpp**: Oracle `copyForUpload` — INSERT...SELECT 단순 실행 → MERGE INTO WHEN NOT MATCHED 패턴으로 수정 (재시도 시 중복 삽입 방지)
+- **crl_repository.cpp**: Oracle INSERT 후 ID 미반환 → unique violation 감지 후 re-query로 기존 ID 반환, `saveRevokedCertificate` ON CONFLICT DO NOTHING 추가
+- **postgresql_query_executor.cpp**: `endBatch()` COMMIT 실패 시 경고 로그만 → `throw std::runtime_error` (호출자가 배치 실패 인지 가능, batchMode_ 선재 리셋)
+
+#### 스키마 수정
+- **01-core-schema.sql**: `revoked_certificate(crl_id, serial_number)` UNIQUE 제약 추가 (ON CONFLICT DO NOTHING 지원)
+- **01-core-schema.sql**: `uploaded_file(file_hash)` partial UNIQUE index 추가 (`WHERE file_hash != ''`) — 동시 업로드 race condition 방지, FORCE re-upload 빈문자열 리셋과 호환
+- **16-idempotency-fixes.sql** (신규): 기존 DB 안전 마이그레이션 — 중복 행 제거 후 UNIQUE 제약 추가 (revoked_certificate), partial unique index 추가 (uploaded_file)
+
+#### 2차 수정 — race condition 방지 (MEDIUM)
+- **dsc_auto_registration_service.cpp**: PA 검증 동시 요청 시 SELECT-then-INSERT race condition → INSERT unique violation 감지 후 re-query로 기존 pending 항목 반환 (ORA-00001/23505/unique constraint 키워드 감지)
+- **certificate_handler.cpp**: `handlePendingDscApprove` — 동시 승인 race condition 시 certificate INSERT unique violation → 기존 인증서 ID re-query 후 정상 승인 진행, `updateStatus()` 반환값 검증 및 실패 시 warn 로그 추가
+
+#### 스크립트 수정 (Luckfox)
+- **scripts/luckfox/clean.sh**: `sudo rm -rf .docker-data/postgres/*` 권한 실패 시 조용히 넘어가는 버그 → docker alpine 방식으로 교체 (postgres 데이터 완전 삭제 보장)
+- **scripts/luckfox/clean-and-init.sh** (신규): Luckfox 전용 완전 초기화 스크립트 — 컨테이너 중지 → postgres 데이터 삭제(docker alpine) → host slapd LDAP DIT 재초기화(ldapdelete -r + ldapadd) → start.sh → 헬스체크
+
+#### 빌드 검증
+- `pkd-management`, `pa-service`, `pkd-relay` 3개 서비스 Docker 빌드 성공
+- 14 files changed (2 new, 12 modified)
 
 ### v2.33.1 (2026-03-14) - EAC Dashboard UX 개선 — CVC 삭제 + compact TreeViewer 전체 적용
 - **EAC 인증서 삭제 기능**: CVC 인증서 목록에서 2단계 확인 후 삭제 (Trash2 아이콘 → 확인/취소 버튼)

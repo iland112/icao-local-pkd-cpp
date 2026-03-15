@@ -116,7 +116,22 @@ std::string CrlRepository::save(const std::string& uploadId,
         queryExecutor_->executeCommand(query, params);
         return crlId;
     } catch (const std::exception& e) {
-        spdlog::error("[CrlRepository] save failed: {}", e.what());
+        std::string errMsg = e.what();
+        // ORA-00001 or PostgreSQL 23505: unique constraint violation — race condition duplicate
+        bool isUniqueViolation = errMsg.find("ORA-00001") != std::string::npos ||
+                                 errMsg.find("23505") != std::string::npos;
+        if (isUniqueViolation) {
+            spdlog::debug("[CrlRepository] Concurrent duplicate detected, re-querying: fingerprint={}...",
+                         fingerprint.substr(0, 16));
+            try {
+                auto reResult = queryExecutor_->executeQuery(
+                    "SELECT id FROM crl WHERE fingerprint_sha256 = $1", {fingerprint});
+                if (!reResult.empty()) {
+                    return reResult[0]["id"].asString();
+                }
+            } catch (...) {}
+        }
+        spdlog::error("[CrlRepository] save failed: {}", errMsg);
         return "";
     }
 }
@@ -138,7 +153,8 @@ void CrlRepository::saveRevokedCertificate(const std::string& crlId,
         std::string query =
             "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
             "revocation_date, revocation_reason, created_at) VALUES ("
-            "$1, $2, $3, $4, $5, NOW())";
+            "$1, $2, $3, $4, $5, NOW()) "
+            "ON CONFLICT (crl_id, serial_number) DO NOTHING";
 
         std::vector<std::string> params = {
             id, crlId, serialNumber, revocationDate, reason

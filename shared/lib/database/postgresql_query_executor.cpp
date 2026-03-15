@@ -178,18 +178,23 @@ void PostgreSQLQueryExecutor::beginBatch() {
 void PostgreSQLQueryExecutor::endBatch() {
     if (!batchMode_) return;
 
-    // Commit transaction
+    // Reset state first so re-entry is safe even if we throw
+    batchMode_ = false;
+
     if (batchConn_ && batchConn_->isValid()) {
         PGresult* res = PQexec(batchConn_->get(), "COMMIT");
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            spdlog::error("[PostgreSQLQueryExecutor] COMMIT failed: {}", PQerrorMessage(batchConn_->get()));
-        }
+        ExecStatusType status = PQresultStatus(res);
+        std::string error = (status != PGRES_COMMAND_OK) ? PQerrorMessage(batchConn_->get()) : "";
         PQclear(res);
+        batchConn_.reset();  // Release connection back to pool
+
+        if (status != PGRES_COMMAND_OK) {
+            throw std::runtime_error("[PostgreSQLQueryExecutor] COMMIT failed: " + error);
+        }
+    } else {
+        batchConn_.reset();
     }
 
-    // Release connection back to pool (RAII via unique_ptr reset)
-    batchConn_.reset();
-    batchMode_ = false;
     spdlog::info("[PostgreSQLQueryExecutor] Batch mode ended (committed + connection released)");
 }
 

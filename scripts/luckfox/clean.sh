@@ -41,11 +41,13 @@ docker compose -f docker-compose-luckfox.yaml down
 
 echo ""
 echo "[2/3] Deleting data directories..."
-sudo rm -rf ./.docker-data/postgres/* 2>/dev/null || rm -rf ./.docker-data/postgres/* 2>/dev/null || true
-sudo rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || true
-sudo rm -rf ./.docker-data/pkd-logs/* 2>/dev/null || rm -rf ./.docker-data/pkd-logs/* 2>/dev/null || true
-sudo rm -rf ./.docker-data/pa-logs/* 2>/dev/null || rm -rf ./.docker-data/pa-logs/* 2>/dev/null || true
-sudo rm -rf ./.docker-data/sync-logs/* 2>/dev/null || rm -rf ./.docker-data/sync-logs/* 2>/dev/null || true
+# postgres data is owned by postgres user inside container, use docker to delete
+docker run --rm -v "${PROJECT_DIR}/.docker-data/postgres:/data" \
+    alpine sh -c "rm -rf /data/* /data/.[!.]*" 2>/dev/null || true
+rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || true
+rm -rf ./.docker-data/pkd-logs/* ./.docker-data/pa-logs/* \
+       ./.docker-data/sync-logs/* ./.docker-data/ai-logs/* \
+       ./.docker-data/monitoring-logs/* 2>/dev/null || true
 echo "  Data directories cleaned."
 
 echo ""

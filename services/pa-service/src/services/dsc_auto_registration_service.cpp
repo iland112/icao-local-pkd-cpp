@@ -281,6 +281,32 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
             newId.substr(0, 8), countryCode, result.fingerprint.substr(0, 16), verificationId.substr(0, 8));
 
     } catch (const std::exception& e) {
+        std::string errMsg = e.what();
+        // Race condition: concurrent PA requests may both pass the SELECT check and race to INSERT.
+        // Detect unique violation and re-query to return the existing pending entry.
+        bool isUniqueViolation = errMsg.find("ORA-00001") != std::string::npos ||
+                                 errMsg.find("23505") != std::string::npos ||
+                                 errMsg.find("unique constraint") != std::string::npos ||
+                                 errMsg.find("UNIQUE constraint") != std::string::npos;
+
+        if (isUniqueViolation && !result.fingerprint.empty()) {
+            try {
+                const char* recheck =
+                    "SELECT id, status FROM pending_dsc_registration "
+                    "WHERE fingerprint_sha256 = $1 "
+                    "FETCH FIRST 1 ROWS ONLY";
+                Json::Value existing = queryExecutor_->executeQuery(recheck, {result.fingerprint});
+                if (!existing.empty()) {
+                    result.success = true;
+                    result.pendingId = existing[0]["id"].asString();
+                    result.pendingApproval = (existing[0]["status"].asString() == "PENDING");
+                    spdlog::debug("[DscAutoReg] Concurrent insert resolved: DSC already pending, id={}, fingerprint={}...",
+                        result.pendingId.substr(0, 8), result.fingerprint.substr(0, 16));
+                    return result;
+                }
+            } catch (...) {}
+        }
+
         spdlog::error("[DscAutoReg] Failed to save pending DSC: {}", e.what());
         // Don't rethrow — pending save failure should not affect PA verification
     }
