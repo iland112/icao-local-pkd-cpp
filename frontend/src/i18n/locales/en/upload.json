@@ -571,7 +571,7 @@
     "fullFileAnalysis": "Full file analysis ({{num}} items, incl. duplicates)",
     "trustChain": "Trust Chain",
     "cscaNotFound": "CSCA Not Found",
-    "icaoCompliance": "Doc 9303 Conformance",
+    "icaoCompliance": "ICAO Doc 9303 Conformance Check Results",
     "revoked": "Revoked",
     "violationAlgorithm": "Signature Algorithm",
     "violationKeySize": "Key Size",

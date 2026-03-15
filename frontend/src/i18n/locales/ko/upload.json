@@ -571,7 +571,7 @@
     "fullFileAnalysis": "전체 파일 분석 ({{num}}개, 중복 포함)",
     "trustChain": "신뢰 체인",
     "cscaNotFound": "CSCA 미발견",
-    "icaoCompliance": "Doc 9303 권고 준수",
+    "icaoCompliance": "ICAO Doc 9303 권고 준수 여부 검사 결과",
     "revoked": "해지",
     "violationAlgorithm": "서명 알고리즘",
     "violationKeySize": "키 크기",

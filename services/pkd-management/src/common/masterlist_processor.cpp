@@ -303,7 +303,8 @@ bool parseMasterListEntryV2(
                 }
 
                 // Save validation_result for MLSC (ICAO compliance + metadata)
-                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                // Note: save for ALL certificates (including duplicates) so the ICAO compliance dialog can display per-certificate details
+                if (!certId.empty() && g_services && g_services->validationRepository()) {
                     try {
                         domain::models::ValidationResult valRecord;
                         valRecord.certificateId = certId;
@@ -583,7 +584,8 @@ bool parseMasterListEntryV2(
                 }
 
                 // Save validation_result for CSCA/LC (ICAO compliance + metadata)
-                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                // Note: save for ALL certificates (including duplicates) so the ICAO compliance dialog can display per-certificate details
+                if (!certId.empty() && g_services && g_services->validationRepository()) {
                     try {
                         domain::models::ValidationResult valRecord;
                         valRecord.certificateId = certId;
@@ -864,7 +866,8 @@ bool processMasterListFile(
                     }
 
                     // Save validation_result for MLSC
-                    if (!isDuplicate && g_services && g_services->validationRepository()) {
+                    // Note: save for ALL certificates (including duplicates) so the ICAO compliance dialog can display per-certificate details
+                    if (g_services && g_services->validationRepository()) {
                         try {
                             domain::models::ValidationResult valRecord;
                             valRecord.certificateId = certId;
@@ -1137,7 +1140,8 @@ bool processMasterListFile(
                 }
 
                 // Save validation_result for CSCA/LC (ICAO compliance + metadata)
-                if (!isDuplicate && !certId.empty() && g_services && g_services->validationRepository()) {
+                // Note: save for ALL certificates (including duplicates) so the ICAO compliance dialog can display per-certificate details
+                if (!certId.empty() && g_services && g_services->validationRepository()) {
                     try {
                         domain::models::ValidationResult valRecord;
                         valRecord.certificateId = certId;

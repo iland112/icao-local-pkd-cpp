@@ -141,8 +141,8 @@
   },
   "doc9303": {
     "title": "ICAO Doc 9303 권고 준수 검사",
-    "compliant": "적합",
-    "nonCompliant": "부적합",
+    "compliant": "준수",
+    "nonCompliant": "미준수",
     "warning": "주의",
     "notApplicable": "해당 없음",
     "passed": "통과",
@@ -222,9 +222,9 @@
     "violationItems": "위반 항목:"
   },
   "compliance": {
-    "doc9303Pass": "Doc 9303 적합",
+    "doc9303Pass": "Doc 9303 준수",
     "doc9303Warning": "Doc 9303 경고",
-    "doc9303Fail": "Doc 9303 부적합",
+    "doc9303Fail": "Doc 9303 미준수",
     "icaoWarning": "ICAO 경고",
     "icaoUnknown": "ICAO 미확인",
     "icaoCompliant": "ICAO 준수",

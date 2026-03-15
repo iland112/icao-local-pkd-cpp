@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.2
+**Current Version**: v2.33.3
 **Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,17 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.3 (2026-03-15) - ICAO Doc 9303 미준수 상세 다이얼로그 데이터 표시 수정 + 용어 변경
+- **Bug fix — 미준수 상세 다이얼로그 인증서 목록 미표시**: Master List 업로드 후 ICAO Doc 9303 미준수 상세 다이얼로그에서 카테고리별 인증서 목록이 0건으로 표시되는 문제 수정
+- **Root cause**: `masterlist_processor.cpp`에서 `validation_result` 레코드를 신규 인증서(`!isDuplicate`)에만 저장 → 중복 인증서(100%)로 업로드 시 해당 upload_id에 대한 `validation_result` 행이 0건이어서 다이얼로그 API 조회 결과 비어있음
+- **Fix**: 4곳의 `!isDuplicate &&` 조건 제거 — MLSC/CSCA/LC 인증서에 대해 중복 여부와 무관하게 `validation_result` 레코드 저장 (LDIF 형식 2곳 + 파일 형식 2곳)
+- **안전성**: `validation_result` 테이블 `ON CONFLICT (certificate_id, upload_id) DO NOTHING` (PostgreSQL) / `MERGE WHEN NOT MATCHED` (Oracle) 로 중복 삽입 방지 보장
+- **용어 변경 (i18n)**: 업로드 결과 페이지 ICAO 준수 카드 라벨 수정
+  - "Doc 9303 권고 준수" → "ICAO Doc 9303 권고 준수 여부 검사 결과"
+  - "적합" → "준수", "부적합" → "미준수"
+  - "Doc 9303 적합" → "Doc 9303 준수", "Doc 9303 부적합" → "Doc 9303 미준수"
+- 5 files changed (0 new, 5 modified: masterlist_processor.cpp, ko/upload.json, ko/certificate.json, en/upload.json, CLAUDE.md)
 
 ### v2.33.2 (2026-03-15) - 전체 코드 멱등성 전수 수정 (Idempotency Hardening)
 
