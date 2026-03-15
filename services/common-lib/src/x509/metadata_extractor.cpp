@@ -14,6 +14,7 @@
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>
 #include <openssl/x509v3.h>
+#include <openssl/rsa.h>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
@@ -96,6 +97,10 @@ std::optional<std::string> getSignatureHashAlgorithm(X509* cert) {
         case NID_ecdsa_with_SHA1:
             hash_nid = NID_sha1;
             break;
+        case NID_sha224WithRSAEncryption:
+        case NID_ecdsa_with_SHA224:
+            hash_nid = NID_sha224;
+            break;
         case NID_sha256WithRSAEncryption:
         case NID_ecdsa_with_SHA256:
             hash_nid = NID_sha256;
@@ -108,6 +113,35 @@ std::optional<std::string> getSignatureHashAlgorithm(X509* cert) {
         case NID_ecdsa_with_SHA512:
             hash_nid = NID_sha512;
             break;
+        case NID_rsassaPss: {
+            // RSA-PSS: hash algorithm is in the PSS parameters, not in the NID
+            const X509_ALGOR* sig_alg = X509_get0_tbs_sigalg(cert);
+            if (sig_alg) {
+                int ptype = 0;
+                const void* pval = nullptr;
+                X509_ALGOR_get0(nullptr, &ptype, &pval, sig_alg);
+                if (ptype == V_ASN1_SEQUENCE && pval) {
+                    const ASN1_STRING* pstr = static_cast<const ASN1_STRING*>(pval);
+                    const unsigned char* p = ASN1_STRING_get0_data(pstr);
+                    int plen = ASN1_STRING_length(pstr);
+                    RSA_PSS_PARAMS* pss = d2i_RSA_PSS_PARAMS(nullptr, &p, plen);
+                    if (pss) {
+                        if (pss->hashAlgorithm && pss->hashAlgorithm->algorithm) {
+                            hash_nid = OBJ_obj2nid(pss->hashAlgorithm->algorithm);
+                        } else {
+                            // Default hash for RSA-PSS per RFC 8017 is SHA-1
+                            hash_nid = NID_sha1;
+                        }
+                        RSA_PSS_PARAMS_free(pss);
+                    }
+                }
+            }
+            if (hash_nid == NID_undef) {
+                // Fallback: if PSS params parsing failed, try to extract from signature OID name
+                return std::nullopt;
+            }
+            break;
+        }
         default:
             return std::nullopt;
     }

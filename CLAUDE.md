@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.33.3
+**Current Version**: v2.33.4
 **Last Updated**: 2026-03-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -595,6 +595,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.33.4 (2026-03-15) - RSA-PSS 해시 알고리즘 추출 수정 (ICAO Doc 9303 준수 검사 정확도 개선)
+- **Bug fix — RSA-PSS 인증서 해시 알고리즘 "unknown" 표시**: RSA-PSS(`rsassaPss`) 서명 알고리즘 사용 인증서 3,019개가 ICAO Doc 9303 미준수 상세에서 "미충족 해시 알고리즘: Unknown"으로 잘못 표시되는 문제 수정
+- **Root cause**: RSA-PSS는 기존 RSA/ECDSA와 달리 해시 알고리즘이 서명 알고리즘 이름(`rsassaPss`)에 포함되지 않고 ASN.1 PSS 파라미터에 별도 지정됨. `extractHashAlgorithm()`이 문자열 매칭만 수행하여 "sha"를 찾지 못하고 `"unknown"` 반환
+- **Fix (2개 파일)**: RSA-PSS 감지 시 `X509_get0_tbs_sigalg()` → `d2i_RSA_PSS_PARAMS()` → `hashAlgorithm` OID에서 실제 해시 추출 (SHA-256/384/512 등)
+  - `x509_metadata_extractor.cpp`: pkd-management 로컬 extractor에 RSA-PSS PSS 파라미터 파싱 추가
+  - `common-lib/src/x509/metadata_extractor.cpp`: 공유 라이브러리에 RSA-PSS + SHA-224 NID 지원 추가
+- **영향 범위**: Master List 업로드 시 ICAO 준수 검사(`checkIcaoCompliance`)에서 RSA-PSS 인증서가 정확한 해시로 평가 — 대부분 SHA-256/SHA-512 사용으로 ICAO 준수로 재분류
+- **알고리즘 지원 문서 업데이트**: `BSI_TR03110_ALGORITHM_SUPPORT.md`에 RSA-PSS 해시 추출 방법, 구현 파일별 알고리즘 커버리지, deprecated 알고리즘 하위 호환성 정책 추가
+- 3 files changed (0 new, 3 modified: x509_metadata_extractor.cpp, common-lib metadata_extractor.cpp, BSI_TR03110_ALGORITHM_SUPPORT.md)
 
 ### v2.33.3 (2026-03-15) - ICAO Doc 9303 미준수 상세 다이얼로그 데이터 표시 수정 + 용어 변경
 - **Bug fix — 미준수 상세 다이얼로그 인증서 목록 미표시**: Master List 업로드 후 ICAO Doc 9303 미준수 상세 다이얼로그에서 카테고리별 인증서 목록이 0건으로 표시되는 문제 수정

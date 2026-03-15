@@ -8,6 +8,7 @@
 #include <openssl/bn.h>
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>
+#include <openssl/rsa.h>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
@@ -31,6 +32,35 @@ CertificateMetadata extractMetadata(X509* cert)
         metadata.version = getVersion(cert);
         metadata.signatureAlgorithm = getSignatureAlgorithm(cert);
         metadata.signatureHashAlgorithm = extractHashAlgorithm(metadata.signatureAlgorithm);
+
+        // RSA-PSS: hash algorithm is in ASN.1 parameters, not in the algorithm name
+        if (metadata.signatureHashAlgorithm == "unknown" && metadata.signatureAlgorithm == "rsassaPss") {
+            const X509_ALGOR* sig_alg = X509_get0_tbs_sigalg(cert);
+            if (sig_alg) {
+                int ptype = 0;
+                const void* pval = nullptr;
+                X509_ALGOR_get0(nullptr, &ptype, &pval, sig_alg);
+                if (ptype == V_ASN1_SEQUENCE && pval) {
+                    const ASN1_STRING* pstr = static_cast<const ASN1_STRING*>(pval);
+                    const unsigned char* p = ASN1_STRING_get0_data(pstr);
+                    int plen = ASN1_STRING_length(pstr);
+                    RSA_PSS_PARAMS* pss = d2i_RSA_PSS_PARAMS(nullptr, &p, plen);
+                    if (pss) {
+                        int hash_nid = NID_sha1; // default per RFC 8017
+                        if (pss->hashAlgorithm && pss->hashAlgorithm->algorithm) {
+                            hash_nid = OBJ_obj2nid(pss->hashAlgorithm->algorithm);
+                        }
+                        const char* hash_name = OBJ_nid2sn(hash_nid);
+                        if (hash_name) {
+                            std::string h(hash_name);
+                            std::transform(h.begin(), h.end(), h.begin(), ::toupper);
+                            metadata.signatureHashAlgorithm = h;
+                        }
+                        RSA_PSS_PARAMS_free(pss);
+                    }
+                }
+            }
+        }
 
         // Public Key Info
         metadata.publicKeyAlgorithm = getPublicKeyAlgorithm(cert);
