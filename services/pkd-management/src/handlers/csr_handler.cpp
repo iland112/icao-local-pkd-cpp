@@ -1,6 +1,7 @@
 #include "csr_handler.h"
 #include "../services/csr_service.h"
 #include "handler_utils.h"
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 
 namespace handlers {
@@ -11,135 +12,71 @@ CsrHandler::CsrHandler(services::CsrService* csrService,
 {
 }
 
-// Helper: extract username from JWT header (set by auth middleware)
-static std::string getUsername(const drogon::HttpRequestPtr& req) {
-    std::string username = req->getHeader("X-User-Name");
-    return username.empty() ? "system" : username;
+// Helper: create audit entry from request with full context (user, IP, path, etc.)
+static icao::audit::AuditLogEntry makeAudit(const drogon::HttpRequestPtr& req,
+                                             icao::audit::OperationType opType) {
+    return icao::audit::createAuditEntryFromRequest(req, opType);
+}
+
+static void audit(common::IQueryExecutor* qe, const drogon::HttpRequestPtr& req,
+                  icao::audit::OperationType opType, const std::string& resourceId,
+                  bool success = true, const std::string& errorMsg = "",
+                  const Json::Value& meta = Json::nullValue) {
+    try {
+        auto entry = makeAudit(req, opType);
+        entry.resourceId = resourceId;
+        entry.success = success;
+        if (!errorMsg.empty()) entry.errorMessage = errorMsg;
+        if (!meta.isNull()) entry.metadata = meta;
+        icao::audit::logOperation(qe, entry);
+    } catch (...) {
+        spdlog::warn("[CsrHandler] Audit log failed");
+    }
 }
 
 void CsrHandler::registerRoutes(drogon::HttpAppFramework& app)
 {
-    // POST /api/csr/generate
-    app.registerHandler(
-        "/api/csr/generate",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handleGenerate(req, std::move(callback));
-        },
-        {drogon::Post}
-    );
+    app.registerHandler("/api/csr/generate",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) { handleGenerate(req, std::move(cb)); }, {drogon::Post});
 
-    // GET /api/csr
-    app.registerHandler(
-        "/api/csr",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handleList(req, std::move(callback));
-        },
-        {drogon::Get}
-    );
+    app.registerHandler("/api/csr/import",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) { handleImport(req, std::move(cb)); }, {drogon::Post});
 
-    // GET /api/csr/{id}
-    app.registerHandler(
-        "/api/csr/{id}",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-               const std::string& id) {
-            handleGetById(req, std::move(callback), id);
-        },
-        {drogon::Get}
-    );
+    app.registerHandler("/api/csr",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) { handleList(req, std::move(cb)); }, {drogon::Get});
 
-    // POST /api/csr/import — import external CSR + private key
-    app.registerHandler(
-        "/api/csr/import",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handleImport(req, std::move(callback));
-        },
-        {drogon::Post}
-    );
+    app.registerHandler("/api/csr/{id}",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleGetById(req, std::move(cb), id); }, {drogon::Get});
 
-    // GET /api/csr/{id}/export/pem
-    app.registerHandler(
-        "/api/csr/{id}/export/pem",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-               const std::string& id) {
-            handleExportPem(req, std::move(callback), id);
-        },
-        {drogon::Get}
-    );
+    app.registerHandler("/api/csr/{id}/export/pem",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleExportPem(req, std::move(cb), id); }, {drogon::Get});
 
-    // GET /api/csr/{id}/export/der
-    app.registerHandler(
-        "/api/csr/{id}/export/der",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-               const std::string& id) {
-            handleExportDer(req, std::move(callback), id);
-        },
-        {drogon::Get}
-    );
+    app.registerHandler("/api/csr/{id}/certificate",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleRegisterCertificate(req, std::move(cb), id); }, {drogon::Post});
 
-    // POST /api/csr/{id}/certificate — register ICAO-issued certificate
-    app.registerHandler(
-        "/api/csr/{id}/certificate",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-               const std::string& id) {
-            handleRegisterCertificate(req, std::move(callback), id);
-        },
-        {drogon::Post}
-    );
+    app.registerHandler("/api/csr/{id}",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleDelete(req, std::move(cb), id); }, {drogon::Delete});
 
-    // DELETE /api/csr/{id}
-    app.registerHandler(
-        "/api/csr/{id}",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-               const std::string& id) {
-            handleDelete(req, std::move(callback), id);
-        },
-        {drogon::Delete}
-    );
-
-    spdlog::info("CsrHandler routes registered (8 endpoints)");
+    spdlog::info("CsrHandler routes registered (7 endpoints)");
 }
 
-// POST /api/csr/generate
-void CsrHandler::handleGenerate(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+void CsrHandler::handleGenerate(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback)
 {
     try {
         auto json = req->getJsonObject();
-        if (!json) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "Invalid JSON body";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
-        }
+        if (!json) { auto r = drogon::HttpResponse::newHttpJsonResponse(Json::Value()); r->setStatusCode(drogon::k400BadRequest); callback(r); return; }
 
         services::CsrGenerateRequest csrReq;
         csrReq.countryCode = (*json).get("countryCode", "").asString();
         csrReq.organization = (*json).get("organization", "").asString();
         csrReq.commonName = (*json).get("commonName", "").asString();
         csrReq.memo = (*json).get("memo", "").asString();
-        csrReq.createdBy = getUsername(req);
+        auto [userId, username] = icao::audit::extractUserFromRequest(req);
+        csrReq.createdBy = username.value_or("system");
 
-        // Validate: at least one DN field
         if (csrReq.countryCode.empty() && csrReq.organization.empty() && csrReq.commonName.empty()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "At least one Subject DN field is required (countryCode, organization, or commonName)";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
+            Json::Value err; err["success"] = false; err["error"] = "At least one Subject DN field is required";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k400BadRequest); callback(r); return;
         }
 
         auto result = csrService_->generate(csrReq);
@@ -153,166 +90,35 @@ void CsrHandler::handleGenerate(
             response["data"]["publicKeyFingerprint"] = result.publicKeyFingerprint;
             response["data"]["keyAlgorithm"] = "RSA-2048";
             response["data"]["signatureAlgorithm"] = "SHA256withRSA";
+            Json::Value meta; meta["subjectDn"] = result.subjectDn; meta["fingerprint"] = result.publicKeyFingerprint;
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, result.id, true, "", meta);
         } else {
-            response["success"] = false;
-            response["error"] = result.errorMessage;
+            response["success"] = false; response["error"] = result.errorMessage;
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, "", false, result.errorMessage);
         }
 
         auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
         if (!result.success) resp->setStatusCode(drogon::k500InternalServerError);
         callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::generate", e));
-    }
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::generate", e)); }
 }
 
-// GET /api/csr
-void CsrHandler::handleList(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback)
-{
-    try {
-        int page = 1, pageSize = 20;
-        auto pageParam = req->getParameter("page");
-        auto sizeParam = req->getParameter("pageSize");
-        auto statusParam = req->getParameter("status");
-
-        if (!pageParam.empty()) {
-            try { page = std::max(1, std::stoi(pageParam)); } catch (...) {}
-        }
-        if (!sizeParam.empty()) {
-            try { pageSize = std::max(1, std::min(100, std::stoi(sizeParam))); } catch (...) {}
-        }
-
-        Json::Value response = csrService_->list(page, pageSize, statusParam);
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-        callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::list", e));
-    }
-}
-
-// GET /api/csr/{id}
-void CsrHandler::handleGetById(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-    const std::string& id)
-{
-    try {
-        Json::Value data = csrService_->getById(id, getUsername(req));
-        if (data.isNull()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "CSR not found";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k404NotFound);
-            callback(resp);
-            return;
-        }
-
-        Json::Value response;
-        response["success"] = true;
-        response["data"] = data;
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-        callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::getById", e));
-    }
-}
-
-// GET /api/csr/{id}/export/pem
-void CsrHandler::handleExportPem(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-    const std::string& id)
-{
-    try {
-        std::string pem = csrService_->getPemById(id, getUsername(req));
-        if (pem.empty()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "CSR not found";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k404NotFound);
-            callback(resp);
-            return;
-        }
-
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setBody(pem);
-        resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-        resp->addHeader("Content-Disposition", "attachment; filename=\"request.csr\"");
-        callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::exportPem", e));
-    }
-}
-
-// GET /api/csr/{id}/export/der
-void CsrHandler::handleExportDer(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-    const std::string& id)
-{
-    try {
-        std::vector<uint8_t> der = csrService_->getDerById(id, getUsername(req));
-        if (der.empty()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "CSR not found";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k404NotFound);
-            callback(resp);
-            return;
-        }
-
-        auto resp = drogon::HttpResponse::newHttpResponse();
-        resp->setBody(std::string(reinterpret_cast<const char*>(der.data()), der.size()));
-        resp->setContentTypeCode(drogon::CT_APPLICATION_OCTET_STREAM);
-        resp->addHeader("Content-Disposition", "attachment; filename=\"request.der\"");
-        callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::exportDer", e));
-    }
-}
-
-// POST /api/csr/import — import external CSR + private key
-void CsrHandler::handleImport(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+void CsrHandler::handleImport(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback)
 {
     try {
         auto json = req->getJsonObject();
-        if (!json) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "Invalid JSON body";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
-        }
+        if (!json) { auto r = drogon::HttpResponse::newHttpJsonResponse(Json::Value()); r->setStatusCode(drogon::k400BadRequest); callback(r); return; }
 
         std::string csrPem = (*json).get("csrPem", "").asString();
         std::string privateKeyPem = (*json).get("privateKeyPem", "").asString();
         std::string memo = (*json).get("memo", "").asString();
-
         if (csrPem.empty() || privateKeyPem.empty()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "csrPem and privateKeyPem fields are required";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
+            Json::Value err; err["success"] = false; err["error"] = "csrPem and privateKeyPem fields are required";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k400BadRequest); callback(r); return;
         }
 
-        auto result = csrService_->importCsr(csrPem, privateKeyPem, memo, getUsername(req));
+        auto [userId, username] = icao::audit::extractUserFromRequest(req);
+        auto result = csrService_->importCsr(csrPem, privateKeyPem, memo, username.value_or("system"));
 
         Json::Value response;
         if (result.success) {
@@ -320,105 +126,111 @@ void CsrHandler::handleImport(
             response["data"]["id"] = result.id;
             response["data"]["subjectDn"] = result.subjectDn;
             response["data"]["publicKeyFingerprint"] = result.publicKeyFingerprint;
+            Json::Value meta; meta["subjectDn"] = result.subjectDn; meta["source"] = "IMPORT";
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, result.id, true, "", meta);
         } else {
-            response["success"] = false;
-            response["error"] = result.errorMessage;
+            response["success"] = false; response["error"] = result.errorMessage;
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, "", false, result.errorMessage);
         }
 
         auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
         if (!result.success) resp->setStatusCode(drogon::k400BadRequest);
         callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::import", e));
-    }
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::import", e)); }
 }
 
-// POST /api/csr/{id}/certificate — register ICAO-issued certificate
-void CsrHandler::handleRegisterCertificate(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-    const std::string& id)
+void CsrHandler::handleList(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+{
+    try {
+        int page = 1, pageSize = 20;
+        try { if (!req->getParameter("page").empty()) page = std::max(1, std::stoi(req->getParameter("page"))); } catch (...) {}
+        try { if (!req->getParameter("pageSize").empty()) pageSize = std::max(1, std::min(100, std::stoi(req->getParameter("pageSize")))); } catch (...) {}
+        callback(drogon::HttpResponse::newHttpJsonResponse(csrService_->list(page, pageSize, req->getParameter("status"))));
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::list", e)); }
+}
+
+void CsrHandler::handleGetById(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, const std::string& id)
+{
+    try {
+        Json::Value data = csrService_->getById(id);
+        if (data.isNull()) {
+            Json::Value err; err["success"] = false; err["error"] = "CSR not found";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k404NotFound); callback(r); return;
+        }
+        Json::Value response; response["success"] = true; response["data"] = data;
+        audit(queryExecutor_, req, icao::audit::OperationType::CSR_VIEW, id);
+        callback(drogon::HttpResponse::newHttpJsonResponse(response));
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::getById", e)); }
+}
+
+void CsrHandler::handleExportPem(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, const std::string& id)
+{
+    try {
+        std::string pem = csrService_->getPemById(id);
+        if (pem.empty()) {
+            Json::Value err; err["success"] = false; err["error"] = "CSR not found";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k404NotFound); callback(r); return;
+        }
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setBody(pem); resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
+        resp->addHeader("Content-Disposition", "attachment; filename=\"request.csr\"");
+        Json::Value meta; meta["format"] = "PEM";
+        audit(queryExecutor_, req, icao::audit::OperationType::CSR_EXPORT, id, true, "", meta);
+        callback(resp);
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::exportPem", e)); }
+}
+
+void CsrHandler::handleRegisterCertificate(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, const std::string& id)
 {
     try {
         auto json = req->getJsonObject();
-        if (!json) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "Invalid JSON body";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
-        }
-
+        if (!json) { auto r = drogon::HttpResponse::newHttpJsonResponse(Json::Value()); r->setStatusCode(drogon::k400BadRequest); callback(r); return; }
         std::string certPem = (*json).get("certificatePem", "").asString();
         if (certPem.empty()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "certificatePem field is required";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
-            return;
+            Json::Value err; err["success"] = false; err["error"] = "certificatePem field is required";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k400BadRequest); callback(r); return;
         }
 
-        auto result = csrService_->registerCertificate(id, certPem, getUsername(req));
+        auto [userId, username] = icao::audit::extractUserFromRequest(req);
+        auto result = csrService_->registerCertificate(id, certPem, username.value_or("system"));
 
         Json::Value response;
-        response["success"] = result.success;
         if (result.success) {
+            response["success"] = true;
             response["data"]["id"] = result.id;
             response["data"]["subjectDn"] = result.subjectDn;
             response["data"]["fingerprint"] = result.publicKeyFingerprint;
+            Json::Value meta; meta["certSubjectDn"] = result.subjectDn; meta["certFingerprint"] = result.publicKeyFingerprint;
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, id, true, "", meta);
         } else {
-            response["error"] = result.errorMessage;
+            response["success"] = false; response["error"] = result.errorMessage;
+            audit(queryExecutor_, req, icao::audit::OperationType::CSR_GENERATE, id, false, result.errorMessage);
         }
 
         auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-        if (!result.success) {
-            resp->setStatusCode(
-                result.errorMessage.find("not found") != std::string::npos
-                    ? drogon::k404NotFound
-                    : drogon::k400BadRequest);
-        }
+        if (!result.success) resp->setStatusCode(result.errorMessage.find("not found") != std::string::npos ? drogon::k404NotFound : drogon::k400BadRequest);
         callback(resp);
-
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::registerCertificate", e));
-    }
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::registerCertificate", e)); }
 }
 
-// DELETE /api/csr/{id}
-void CsrHandler::handleDelete(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-    const std::string& id)
+void CsrHandler::handleDelete(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback, const std::string& id)
 {
     try {
-        // Check existence first
-        Json::Value existing = csrService_->getById(id, getUsername(req));
+        Json::Value existing = csrService_->getById(id);
         if (existing.isNull()) {
-            Json::Value err;
-            err["success"] = false;
-            err["error"] = "CSR not found";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
-            resp->setStatusCode(drogon::k404NotFound);
-            callback(resp);
-            return;
+            Json::Value err; err["success"] = false; err["error"] = "CSR not found";
+            auto r = drogon::HttpResponse::newHttpJsonResponse(err); r->setStatusCode(drogon::k404NotFound); callback(r); return;
         }
 
-        bool deleted = csrService_->deleteById(id, getUsername(req));
-
-        Json::Value response;
-        response["success"] = deleted;
+        bool deleted = csrService_->deleteById(id);
+        Json::Value response; response["success"] = deleted;
         if (!deleted) response["error"] = "Failed to delete CSR";
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-        callback(resp);
 
-    } catch (const std::exception& e) {
-        callback(common::handler::internalError("CsrHandler::delete", e));
-    }
+        Json::Value meta; meta["subjectDn"] = existing.get("subject_dn", "").asString();
+        audit(queryExecutor_, req, icao::audit::OperationType::CSR_DELETE, id, deleted, deleted ? "" : "Delete failed", meta);
+
+        callback(drogon::HttpResponse::newHttpJsonResponse(response));
+    } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::delete", e)); }
 }
 
 } // namespace handlers
