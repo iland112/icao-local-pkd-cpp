@@ -278,10 +278,11 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 **CSR Management** (ICAO PKD CSR generation, JWT required):
 - `POST /api/csr/generate` - Generate RSA-2048 CSR (SHA256withRSA)
+- `POST /api/csr/import` - Import external CSR + private key PEM
 - `GET /api/csr` - List CSRs (pagination, status filter)
-- `GET /api/csr/{id}` - CSR detail
+- `GET /api/csr/{id}` - CSR detail (with issued certificate metadata)
 - `GET /api/csr/{id}/export/pem` - Export CSR as PEM (Base64)
-- `GET /api/csr/{id}/export/der` - Export CSR as DER (binary)
+- `POST /api/csr/{id}/certificate` - Register ICAO-issued certificate (public key matching)
 - `DELETE /api/csr/{id}` - Delete CSR
 
 ### PA Service (via :8080/api/pa)
@@ -331,7 +332,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
 - **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), AI Analysis (all endpoints), Static files
-- **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE)
+- **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE), CSR Management (all endpoints)
 
 ---
 
@@ -565,6 +566,7 @@ scripts/
 - Audit tables: operation_audit_log, auth_audit_log
 - Sync tables: sync_status, reconciliation_summary, reconciliation_log
 - Reference data: code_master (21 categories, ~150 codes)
+- CSR management: csr_request (CSR + encrypted private key + issued certificate metadata)
 
 ### LDAP Strategy
 - Read: Software Load Balancing (openldap1:389, openldap2:389) — **현재 openldap2(192.168.100.11) 하드웨어 장애로 단일 노드(openldap1) 운영 중**
@@ -606,18 +608,21 @@ scripts/
 
 ## Version History
 
-### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈
-- **CSR 생성 기능**: ICAO PKD 요구사항 준수 — RSA 2048 bit 공개키, SHA256withRSA 서명, Base64(PEM) 인코딩
-- **ICAO 요구사항**: "The CSR must contain an RSA 2048 bit public key and be signed using SHA256withRSA and should be Base64 encoded. There are no restrictions on the subjectDN included in the CSR"
-- **Backend**: `CsrService` (OpenSSL EVP API 키 생성 + X509_REQ CSR), `CsrRepository` (PostgreSQL + Oracle), `CsrHandler` (6 endpoints)
-- **6 API 엔드포인트**: `POST /api/csr/generate`, `GET /api/csr` (목록), `GET /api/csr/{id}` (상세), `GET /api/csr/{id}/export/pem`, `GET /api/csr/{id}/export/der`, `DELETE /api/csr/{id}`
-- **개인키 보안**: AES-256-GCM 암호화 저장 (`PII_ENCRYPTION_KEY` 활용), API 응답에 개인키 미포함
-- **DB 스키마**: `csr_request` 테이블 (PostgreSQL `13-csr-management.sql` + Oracle `13-csr-management.sql`)
-- **Frontend**: `CsrManagement.tsx` 페이지 — CSR 생성 다이얼로그 (DN 필드 입력), 목록 테이블, 상세 다이얼로그, PEM/DER 다운로드, 삭제
-- **사이드바**: 인증서 관리 섹션 "CSR 관리" 메뉴 추가 (adminOnly, FileKey 아이콘)
+### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈 + 인증서 등록 + 감사 강화
+- **ICAO PKD CSR 생성**: RSA 2048 bit 공개키 + SHA256withRSA 서명 + Base64(PEM) 인코딩 — ICAO PKD 요구사항 완전 준수
+- **ICAO 요구사항 원문**: "The CSR must contain an RSA 2048 bit public key and be signed using SHA256withRSA and should be Base64 encoded. There are no restrictions on the subjectDN included in the CSR"
+- **7 API 엔드포인트**: `POST /api/csr/generate` (생성), `POST /api/csr/import` (외부 CSR+개인키 가져오기), `GET /api/csr` (목록), `GET /api/csr/{id}` (상세), `GET /api/csr/{id}/export/pem` (PEM 내보내기), `POST /api/csr/{id}/certificate` (ICAO 발급 인증서 등록), `DELETE /api/csr/{id}` (삭제)
+- **CSR Import**: 외부 생성 CSR + 개인키 PEM 가져오기 — CSR 서명 검증(`X509_REQ_verify`) + 개인키-CSR 공개키 매칭 검증(`EVP_PKEY_eq`)
+- **ICAO 발급 인증서 등록**: `POST /api/csr/{id}/certificate` — X.509 파싱, 공개키 매칭 검증(CSR 핑거프린트 비교), 메타데이터 자동 추출(serial, issuer, validity, fingerprint), 중복 등록 차단
+- **데이터 암호화**: CSR PEM + 개인키 모두 AES-256-GCM 암호화 저장 (`PII_ENCRYPTION_KEY`), API 응답에 개인키 미포함
+- **감사 로그 강화**: `OperationType` 4개 추가(CSR_GENERATE, CSR_EXPORT, CSR_VIEW, CSR_DELETE), `createAuditEntryFromRequest()` 기반 request 컨텍스트 포함(사용자, IP, 요청경로, User-Agent)
+- **Logout 감사 로그 수정**: JWT 만료 시에도 토큰 payload에서 username 추출(best-effort base64 디코딩) 후 LOGOUT 이벤트 기록
+- **DB 스키마**: `csr_request` 테이블 — CSR + 개인키 + 발급 인증서 메타데이터 10개 컬럼 (PostgreSQL + Oracle)
+- **Frontend**: `CsrManagement.tsx` — CSR 생성/Import/상세/PEM Export/인증서 등록/삭제 다이얼로그, 발급 인증서 정보 표시
+- **사이드바 재배치**: CSR 관리 → 시스템 관리 섹션, DSC 등록 승인 → 위·변조 검사 섹션, 감사 로그 2개 → "감사" 하위 그룹
 - **nginx**: 3개 설정 파일에 `/api/csr` location 블록 추가
-- **감사 로그**: CSR 생성/삭제 시 `operation_audit_log` 기록
-- 11 files changed (8 new, 3 modified)
+- API 단위 테스트 11건 × 3회 반복 전체 통과
+- ~30 files changed (10 new, ~20 modified)
 
 ### v2.34.0 (2026-03-15) - DB 초기화 스크립트 통합 정리
 - **PostgreSQL init scripts 통합**: 18개 → 8개 파일로 축소 — 10개 마이그레이션 파일(05~09, 10-missing, 13~16)을 기본 스키마 파일(01~04, 11)에 흡수
@@ -834,9 +839,9 @@ scripts/
 - **사이드바 서브메뉴 인덴트**: `ml-3 pl-3 border-l border-gray-200` 트리형 시각 계층 구조
 - **사이드바 섹션 재구성** (4섹션 체계):
   - 인증서 관리: ICAO 버전 상태, 파일 업로드, 인증서 업로드, 인증서 조회, 업로드 이력, 동기화 상태
-  - 위·변조 검사: PA 검증 수행, 검증 이력
+  - 위·변조 검사: PA 검증 수행, 검증 이력, DSC 등록 승인
   - 보고서 & 분석: 인증서 보고서(인증서 통계/DSC Trust Chain/CRL 보고서/표준 부적합 DSC), PA 검증 통계, AI 인증서 분석
-  - 시스템 관리: 시스템 모니터링, 사용자 관리, API 클라이언트, 운영 감사 로그, 인증 감사 로그, API Docs
+  - 시스템 관리: 시스템 모니터링, 사용자 관리, API 클라이언트, CSR 관리, 감사(운영 감사 로그/인증 감사 로그), API Docs
 - **API Docs 이동**: 별도 섹션 → 시스템 관리 하위 그룹으로 이동
 - **통계 대시보드 이동**: 인증서 관리 → 보고서 & 분석 섹션 "인증서 통계"로 이동 (라벨 변경)
 - **검증 이력/통계 분리**: PA 검증 이력 → 위·변조 검사, PA 검증 통계 → 보고서 & 분석
