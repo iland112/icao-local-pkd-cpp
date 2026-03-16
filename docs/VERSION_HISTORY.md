@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.30.0
-**Period**: 2026-01-21 ~ 2026-03-09
-**Total Releases**: 68+
+**Current Version**: v2.35.0
+**Period**: 2026-01-21 ~ 2026-03-16
+**Total Releases**: 75+
 
 ---
 
@@ -10,6 +10,17 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.35.0 | 03-16 | Feature | ICAO PKD CSR 관리 (생성/Import/인증서 등록/암호화/감사 로그) |
+| v2.34.0 | 03-15 | Refactor | DB 초기화 스크립트 통합 (PostgreSQL 18→8, Oracle 13→9) |
+| v2.33.5 | 03-15 | Fix | ICAO Doc 9303 미준수 카테고리 필터 + DSC_NC 부적합 사유 표시 수정 |
+| v2.33.3 | 03-15 | Fix | RSA-PSS 해시 알고리즘 추출 + ICAO 미준수 상세 다이얼로그 수정 |
+| v2.33.2 | 03-15 | Fix | 전체 코드 멱등성 전수 수정 (Idempotency Hardening) |
+| v2.33.0 | 03-14 | Feature | EAC Service Phase 4 완료 (BSI TR-03110 OID + Frontend + Oracle) |
+| v2.32.0 | 03-12 | Refactor | SOD 파서 ICAO Doc 9303 준수 리팩토링 + PA 검증 Step 순서 수정 |
+| v2.31.3 | 03-12 | Fix | Reconciliation 후 동기화 상태 자동 갱신 |
+| v2.31.2 | 03-11 | Feature | 개인정보 암호화 (AES-256-GCM, 개인정보보호법 제29조) |
+| v2.31.1 | 03-11 | Feature | 전체 프론트엔드 반응형 디자인 개선 (13개 페이지) |
+| v2.31.0 | 03-10 | Feature | DSC 등록 승인 워크플로우 (PA 자동 등록 → 관리자 승인) |
 | v2.30.0 | 03-09 | Feature | 로그인 페이지 모던 리디자인 + 사이드바 4섹션 재구성 + 클라이언트 정렬 |
 | v2.29.8 | 03-09 | Feature | 로그인 페이지 리브랜딩 + 동적 통계 + 업로드 중복 파일 UX 개선 |
 | v2.29.7 | 03-09 | Fix | SSE Heartbeat + Recharts null guard + HTML 표준 접근성 개선 |

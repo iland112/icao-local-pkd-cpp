@@ -1,8 +1,8 @@
 # ICAO Local PKD 프론트엔드 페이지 기능 상세 가이드
 
-**프로젝트**: ICAO Local PKD v2.30.0
-**작성일**: 2026-03-09
-**총 페이지 수**: 24개
+**프로젝트**: ICAO Local PKD v2.35.0
+**작성일**: 2026-03-16
+**총 페이지 수**: 27개
 
 ---
 
@@ -961,3 +961,48 @@ ML 기반 인증서 이상 탐지 및 포렌식 분석 대시보드.
 | `toBool(v)` | true/1/"1"/"true" 처리 | UserManagement |
 | `parsePermissions(v)` | 배열/JSON 문자열/null 처리 | UserManagement |
 | `stored_in_ldap` 문자열 | "1"/"0" boolean 처리 | CrlReport |
+
+---
+
+## 25. CSR 관리 (CsrManagement) — v2.35.0
+
+| 항목 | 내용 |
+|------|------|
+| **라우트** | `/admin/csr` |
+| **파일** | `frontend/src/pages/CsrManagement.tsx` |
+| **인증** | JWT 필수 (관리자) |
+| **위치** | 시스템 관리 섹션 |
+
+### 기능 설명
+
+ICAO PKD CSR(Certificate Signing Request) 생성, 외부 CSR Import, ICAO 발급 인증서 등록을 관리하는 페이지.
+
+- **CSR 생성 다이얼로그**: Country(C)/Organization(O)/CommonName(CN) 입력 → RSA-2048 + SHA256withRSA CSR 자동 생성
+  - ICAO 요구사항 (알고리즘/키 크기) 읽기 전용 표시
+  - 생성 완료 후 PEM 텍스트 표시 + 복사 + 다운로드
+  - Country는 재입력 시 유지, 나머지 필드 초기화
+- **CSR Import 다이얼로그**: 외부 생성 CSR PEM + 개인키 PEM 붙여넣기 → 서명 검증 + 키 매칭 후 저장
+- **CSR 목록 테이블**: Subject DN, 알고리즘, 상태(생성됨/제출됨/발급됨/폐기됨), 생성일, 생성자
+- **상세 다이얼로그**: CSR 메타데이터, PEM 텍스트(복사), PEM 다운로드
+  - ISSUED 상태: 발급 인증서 정보 표시 (발급자, 일련번호, 유효기간)
+  - CREATED/SUBMITTED 상태: "ICAO 발급 인증서 등록" 버튼
+- **인증서 등록 다이얼로그**: ICAO 발급 인증서 PEM 붙여넣기 → 공개키 매칭 검증 → 등록
+- **삭제 다이얼로그**: 2단계 확인 (개인키 영구 파기 경고)
+
+### 사용 API
+
+| 메서드 | 엔드포인트 | 용도 |
+|--------|-----------|------|
+| POST | `/api/csr/generate` | CSR 생성 (RSA-2048) |
+| POST | `/api/csr/import` | 외부 CSR + 개인키 가져오기 |
+| GET | `/api/csr` | CSR 목록 (페이지네이션) |
+| GET | `/api/csr/{id}` | CSR 상세 |
+| GET | `/api/csr/{id}/export/pem` | PEM 다운로드 |
+| POST | `/api/csr/{id}/certificate` | ICAO 발급 인증서 등록 |
+| DELETE | `/api/csr/{id}` | CSR 삭제 |
+
+### 보안
+
+- 모든 데이터 AES-256-GCM 암호화 저장 (개인키 + CSR PEM)
+- API 응답에 개인키 미포함
+- 모든 작업 감사 로그 기록 (사용자, IP, 요청경로)
