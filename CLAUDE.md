@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.34.0
-**Last Updated**: 2026-03-15
+**Current Version**: v2.35.0
+**Last Updated**: 2026-03-16
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -131,6 +131,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Core Functionality
 
 - **API Client Authentication**: External client API Key authentication (X-API-Key header, SHA-256 hash, per-client Rate Limiting, Permission/IP/Endpoint access control, nginx auth_request for cross-service tracking)
+- **CSR Management**: ICAO PKD Certificate Signing Request generation (RSA-2048, SHA256withRSA, PKCS#10), DB storage with AES-256-GCM encrypted private key, PEM/DER export
 - **Code Master**: DB-based centralized code/status/enum management (21 categories, ~150 codes, CRUD API + frontend hook)
 - LDIF/Master List upload (AUTO mode, LDAP-resilient with retry)
 - Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
@@ -275,6 +276,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `PUT /api/code-master/{id}` - Update code (JWT required)
 - `DELETE /api/code-master/{id}` - Deactivate code (JWT required)
 
+**CSR Management** (ICAO PKD CSR generation, JWT required):
+- `POST /api/csr/generate` - Generate RSA-2048 CSR (SHA256withRSA)
+- `GET /api/csr` - List CSRs (pagination, status filter)
+- `GET /api/csr/{id}` - CSR detail
+- `GET /api/csr/{id}/export/pem` - Export CSR as PEM (Base64)
+- `GET /api/csr/{id}/export/der` - Export CSR as DER (binary)
+- `DELETE /api/csr/{id}` - Delete CSR
+
 ### PA Service (via :8080/api/pa)
 
 - `POST /api/pa/verify` - PA verification (full 8-step process)
@@ -328,7 +337,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (26 total)
+### Pages (27 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -357,6 +366,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | ApiClientManagement | `/admin/api-clients` | API Client management (CRUD, key regeneration) |
 | ApiClientRequest | `/api-client-request` | External API client access request (public) |
 | PendingDscApproval | `/admin/pending-dsc` | DSC registration approval workflow |
+| CsrManagement | `/admin/csr` | ICAO PKD CSR generation & management |
 | Profile | `/profile` | User profile & account info |
 
 ### Key Components
@@ -595,6 +605,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈
+- **CSR 생성 기능**: ICAO PKD 요구사항 준수 — RSA 2048 bit 공개키, SHA256withRSA 서명, Base64(PEM) 인코딩
+- **ICAO 요구사항**: "The CSR must contain an RSA 2048 bit public key and be signed using SHA256withRSA and should be Base64 encoded. There are no restrictions on the subjectDN included in the CSR"
+- **Backend**: `CsrService` (OpenSSL EVP API 키 생성 + X509_REQ CSR), `CsrRepository` (PostgreSQL + Oracle), `CsrHandler` (6 endpoints)
+- **6 API 엔드포인트**: `POST /api/csr/generate`, `GET /api/csr` (목록), `GET /api/csr/{id}` (상세), `GET /api/csr/{id}/export/pem`, `GET /api/csr/{id}/export/der`, `DELETE /api/csr/{id}`
+- **개인키 보안**: AES-256-GCM 암호화 저장 (`PII_ENCRYPTION_KEY` 활용), API 응답에 개인키 미포함
+- **DB 스키마**: `csr_request` 테이블 (PostgreSQL `13-csr-management.sql` + Oracle `13-csr-management.sql`)
+- **Frontend**: `CsrManagement.tsx` 페이지 — CSR 생성 다이얼로그 (DN 필드 입력), 목록 테이블, 상세 다이얼로그, PEM/DER 다운로드, 삭제
+- **사이드바**: 인증서 관리 섹션 "CSR 관리" 메뉴 추가 (adminOnly, FileKey 아이콘)
+- **nginx**: 3개 설정 파일에 `/api/csr` location 블록 추가
+- **감사 로그**: CSR 생성/삭제 시 `operation_audit_log` 기록
+- 11 files changed (8 new, 3 modified)
 
 ### v2.34.0 (2026-03-15) - DB 초기화 스크립트 통합 정리
 - **PostgreSQL init scripts 통합**: 18개 → 8개 파일로 축소 — 10개 마이그레이션 파일(05~09, 10-missing, 13~16)을 기본 스키마 파일(01~04, 11)에 흡수

@@ -151,6 +151,11 @@ add_executable(${PROJECT_NAME}
     # Pending DSC Registration Approval (v2.31.0)
     src/repositories/pending_dsc_repository.cpp
 
+    # CSR Management (v2.35.0 - ICAO PKD CSR generation)
+    src/repositories/csr_repository.cpp
+    src/services/csr_service.cpp
+    src/handlers/csr_handler.cpp
+
     # Infrastructure
     src/infrastructure/service_container.cpp
 )

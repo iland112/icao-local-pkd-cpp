@@ -39,6 +39,7 @@ namespace repositories {
     class ApiClientRepository;
     class ApiClientRequestRepository;
     class PendingDscRepository;
+    class CsrRepository;
 }
 
 // Forward declarations - Services
@@ -50,6 +51,7 @@ namespace services {
     class CertificateService;
     class IcaoSyncService;
     class LdapStorageService;
+    class CsrService;
 }
 
 // Forward declarations - Handlers
@@ -62,6 +64,7 @@ namespace handlers {
     class CodeMasterHandler;
     class ApiClientHandler;
     class ApiClientRequestHandler;
+    class CsrHandler;
 }
 
 namespace infrastructure {
@@ -118,6 +121,7 @@ public:
     repositories::ApiClientRepository* apiClientRepository() const;
     repositories::ApiClientRequestRepository* apiClientRequestRepository() const;
     repositories::PendingDscRepository* pendingDscRepository() const;
+    repositories::CsrRepository* csrRepository() const;
 
     // --- Service Accessors ---
     services::UploadService* uploadService() const;
@@ -127,6 +131,7 @@ public:
     services::CertificateService* certificateService() const;
     services::IcaoSyncService* icaoSyncService() const;
     services::LdapStorageService* ldapStorageService() const;
+    services::CsrService* csrService() const;
 
     // --- Handler Accessors ---
     handlers::IcaoHandler* icaoHandler() const;
@@ -137,6 +142,7 @@ public:
     handlers::CodeMasterHandler* codeMasterHandler() const;
     handlers::ApiClientHandler* apiClientHandler() const;
     handlers::ApiClientRequestHandler* apiClientRequestHandler() const;
+    handlers::CsrHandler* csrHandler() const;
 
 private:
     struct Impl;

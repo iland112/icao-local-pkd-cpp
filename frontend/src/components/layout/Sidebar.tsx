@@ -30,6 +30,7 @@ import {
   Fingerprint,
   Settings,
   FlaskConical,
+  FileKey,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 
@@ -78,6 +79,7 @@ function buildNavSections(): NavSection[] {
         { path: '/upload-history', labelKey: 'menu.uploadHistory', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
         { path: '/admin/pending-dsc', labelKey: 'menu.pendingDsc', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
         { path: '/sync', labelKey: 'menu.syncStatus', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
+        { path: '/admin/csr', labelKey: 'menu.csrManagement', icon: <FileKey className="w-4 h-4" />, adminOnly: true },
       ],
     },
     {

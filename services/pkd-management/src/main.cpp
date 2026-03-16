@@ -51,6 +51,7 @@
 #include "handlers/code_master_handler.h"
 #include "handlers/api_client_handler.h"
 #include "handlers/api_client_request_handler.h"
+#include "handlers/csr_handler.h"
 
 // Authentication middleware
 #include "middleware/auth_middleware.h"
@@ -263,6 +264,11 @@ void registerRoutes() {
     // --- API Client Request Routes (public submit + admin approval) ---
     if (g_services && g_services->apiClientRequestHandler()) {
         g_services->apiClientRequestHandler()->registerRoutes(app);
+    }
+
+    // --- CSR Management Routes ---
+    if (g_services && g_services->csrHandler()) {
+        g_services->csrHandler()->registerRoutes(app);
     }
 
     // --- ICAO Routes ---

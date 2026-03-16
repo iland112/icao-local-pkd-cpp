@@ -33,6 +33,7 @@ const PendingDscApproval = lazy(() => import('./pages/PendingDscApproval'));
 const ApiClientRequest = lazy(() => import('./pages/ApiClientRequest'));
 const CertificateQualityReport = lazy(() => import('./pages/CertificateQualityReport'));
 const EacDashboard = lazy(() => import('./pages/EacDashboard'));
+const CsrManagement = lazy(() => import('./pages/CsrManagement'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -114,6 +115,7 @@ function App() {
             <Route path="admin/operation-audit" element={<AdminRoute><Suspense fallback={<PageLoader />}><OperationAuditLog /></Suspense></AdminRoute>} />
             <Route path="admin/audit-log" element={<AdminRoute><Suspense fallback={<PageLoader />}><AuditLog /></Suspense></AdminRoute>} />
             <Route path="admin/pending-dsc" element={<AdminRoute><Suspense fallback={<PageLoader />}><PendingDscApproval /></Suspense></AdminRoute>} />
+            <Route path="admin/csr" element={<AdminRoute><Suspense fallback={<PageLoader />}><CsrManagement /></Suspense></AdminRoute>} />
           </Route>
         </Routes>
         <ToastContainer />
