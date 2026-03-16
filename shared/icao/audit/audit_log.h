@@ -82,6 +82,12 @@ enum class OperationType {
     DSC_APPROVE,        // Admin approved pending DSC registration
     DSC_REJECT,         // Admin rejected pending DSC registration
 
+    // CSR Management
+    CSR_GENERATE,       // CSR key pair generation
+    CSR_EXPORT,         // CSR export (PEM/DER download)
+    CSR_DELETE,         // CSR deletion
+    CSR_VIEW,           // CSR detail view
+
     // Common Operations
     CONFIG_UPDATE,      // Configuration update
     SYSTEM_HEALTH,      // Health check
@@ -140,6 +146,12 @@ inline std::string operationTypeToString(OperationType type) {
         case OperationType::DSC_PENDING_SAVE: return "DSC_PENDING_SAVE";
         case OperationType::DSC_APPROVE: return "DSC_APPROVE";
         case OperationType::DSC_REJECT: return "DSC_REJECT";
+
+        // CSR Management
+        case OperationType::CSR_GENERATE: return "CSR_GENERATE";
+        case OperationType::CSR_EXPORT: return "CSR_EXPORT";
+        case OperationType::CSR_DELETE: return "CSR_DELETE";
+        case OperationType::CSR_VIEW: return "CSR_VIEW";
 
         // Common
         case OperationType::CONFIG_UPDATE: return "CONFIG_UPDATE";

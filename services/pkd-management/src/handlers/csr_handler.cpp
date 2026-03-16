@@ -11,6 +11,12 @@ CsrHandler::CsrHandler(services::CsrService* csrService,
 {
 }
 
+// Helper: extract username from JWT header (set by auth middleware)
+static std::string getUsername(const drogon::HttpRequestPtr& req) {
+    std::string username = req->getHeader("X-User-Name");
+    return username.empty() ? "system" : username;
+}
+
 void CsrHandler::registerRoutes(drogon::HttpAppFramework& app)
 {
     // POST /api/csr/generate
@@ -102,12 +108,7 @@ void CsrHandler::handleGenerate(
         csrReq.organization = (*json).get("organization", "").asString();
         csrReq.commonName = (*json).get("commonName", "").asString();
         csrReq.memo = (*json).get("memo", "").asString();
-
-        // Extract username from JWT (set by auth middleware)
-        csrReq.createdBy = req->getHeader("X-User-Name");
-        if (csrReq.createdBy.empty()) {
-            csrReq.createdBy = "system";
-        }
+        csrReq.createdBy = getUsername(req);
 
         // Validate: at least one DN field
         if (csrReq.countryCode.empty() && csrReq.organization.empty() && csrReq.commonName.empty()) {
@@ -179,7 +180,7 @@ void CsrHandler::handleGetById(
     const std::string& id)
 {
     try {
-        Json::Value data = csrService_->getById(id);
+        Json::Value data = csrService_->getById(id, getUsername(req));
         if (data.isNull()) {
             Json::Value err;
             err["success"] = false;
@@ -208,7 +209,7 @@ void CsrHandler::handleExportPem(
     const std::string& id)
 {
     try {
-        std::string pem = csrService_->getPemById(id);
+        std::string pem = csrService_->getPemById(id, getUsername(req));
         if (pem.empty()) {
             Json::Value err;
             err["success"] = false;
@@ -237,7 +238,7 @@ void CsrHandler::handleExportDer(
     const std::string& id)
 {
     try {
-        std::vector<uint8_t> der = csrService_->getDerById(id);
+        std::vector<uint8_t> der = csrService_->getDerById(id, getUsername(req));
         if (der.empty()) {
             Json::Value err;
             err["success"] = false;
@@ -267,7 +268,7 @@ void CsrHandler::handleDelete(
 {
     try {
         // Check existence first
-        Json::Value existing = csrService_->getById(id);
+        Json::Value existing = csrService_->getById(id, getUsername(req));
         if (existing.isNull()) {
             Json::Value err;
             err["success"] = false;
@@ -278,7 +279,7 @@ void CsrHandler::handleDelete(
             return;
         }
 
-        bool deleted = csrService_->deleteById(id);
+        bool deleted = csrService_->deleteById(id, getUsername(req));
 
         Json::Value response;
         response["success"] = deleted;

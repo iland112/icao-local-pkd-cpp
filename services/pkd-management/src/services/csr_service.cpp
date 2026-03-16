@@ -19,6 +19,28 @@ CsrService::CsrService(repositories::CsrRepository* csrRepo,
 {
 }
 
+// --- Helper: Audit log ---
+void CsrService::logAudit(icao::audit::OperationType opType,
+                           const std::string& username,
+                           const std::string& resourceId,
+                           const Json::Value& metadata,
+                           bool success,
+                           const std::string& errorMessage)
+{
+    try {
+        icao::audit::AuditLogEntry entry;
+        entry.operationType = opType;
+        entry.username = username;
+        entry.success = success;
+        entry.resourceId = resourceId;
+        if (!errorMessage.empty()) entry.errorMessage = errorMessage;
+        if (!metadata.isNull()) entry.metadata = metadata;
+        icao::audit::logOperation(queryExecutor_, entry);
+    } catch (...) {
+        spdlog::warn("[CsrService] Audit log failed for {}", icao::audit::operationTypeToString(opType));
+    }
+}
+
 std::string CsrService::buildSubjectDn(const std::string& countryCode,
                                         const std::string& organization,
                                         const std::string& commonName)
@@ -49,6 +71,7 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     if (!keyCtx) {
         result.errorMessage = "Failed to create key context";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
 
@@ -56,6 +79,7 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
         EVP_PKEY_CTX_set_rsa_keygen_bits(keyCtx.get(), 2048) <= 0) {
         result.errorMessage = "Failed to initialize key generation";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
 
@@ -63,6 +87,7 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     if (EVP_PKEY_keygen(keyCtx.get(), &rawKey) <= 0) {
         result.errorMessage = "RSA-2048 key generation failed";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
     std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(rawKey, EVP_PKEY_free);
@@ -72,6 +97,7 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     if (!x509Req) {
         result.errorMessage = "Failed to create X509_REQ";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
 
@@ -101,6 +127,7 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     if (X509_REQ_sign(x509Req.get(), pkey.get(), EVP_sha256()) <= 0) {
         result.errorMessage = "CSR signing failed (SHA256withRSA)";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
 
@@ -152,10 +179,11 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     long keyLen = BIO_get_mem_data(keyBio.get(), &keyData);
     std::string privateKeyPem(keyData, keyLen);
 
-    // Encrypt private key with PII encryption module
+    // Encrypt all sensitive data with AES-256-GCM (PII_ENCRYPTION_KEY)
     std::string privateKeyEncrypted = auth::pii::encrypt(privateKeyPem);
+    std::string csrPemEncrypted = auth::pii::encrypt(result.csrPem);
 
-    // --- 7. Save to DB ---
+    // --- 7. Save to DB (all sensitive fields encrypted) ---
     std::string csrId = csrRepo_->save(
         result.subjectDn,
         req.countryCode,
@@ -163,8 +191,8 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
         req.commonName,
         "RSA-2048",
         "SHA256withRSA",
-        result.csrPem,
-        csrDer,
+        csrPemEncrypted,   // CSR PEM encrypted
+        csrDer,            // DER binary (for export, encrypted at rest via DB TDE or storage encryption)
         fpHex,
         privateKeyEncrypted,
         req.memo,
@@ -174,37 +202,42 @@ CsrGenerateResult CsrService::generate(const CsrGenerateRequest& req)
     if (csrId.empty()) {
         result.errorMessage = "Failed to save CSR to database";
         spdlog::error("[CsrService] {}", result.errorMessage);
+        logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, "", Json::nullValue, false, result.errorMessage);
         return result;
     }
 
     result.id = csrId;
     result.success = true;
 
-    // Audit log
-    try {
-        icao::audit::AuditLogEntry entry;
-        entry.operationType = icao::audit::OperationType::UNKNOWN;
-        entry.operationSubtype = "CSR_GENERATE";
-        entry.username = req.createdBy;
-        entry.success = true;
-        entry.resourceId = csrId;
-        Json::Value meta;
-        meta["subjectDn"] = result.subjectDn;
-        meta["fingerprint"] = fpHex;
-        entry.metadata = meta;
-        icao::audit::logOperation(queryExecutor_, entry);
-    } catch (...) {
-        spdlog::warn("[CsrService] Audit log failed for CSR_GENERATE");
-    }
+    // Audit log — success
+    Json::Value meta;
+    meta["subjectDn"] = result.subjectDn;
+    meta["fingerprint"] = fpHex;
+    meta["keyAlgorithm"] = "RSA-2048";
+    meta["signatureAlgorithm"] = "SHA256withRSA";
+    logAudit(icao::audit::OperationType::CSR_GENERATE, req.createdBy, csrId, meta);
 
     spdlog::info("[CsrService] CSR generated successfully: id={}, dn={}, fingerprint={}",
         csrId, result.subjectDn, fpHex);
     return result;
 }
 
-Json::Value CsrService::getById(const std::string& id)
+Json::Value CsrService::getById(const std::string& id, const std::string& username)
 {
-    return csrRepo_->findById(id);
+    Json::Value data = csrRepo_->findById(id);
+    if (!data.isNull()) {
+        // Decrypt CSR PEM for display
+        std::string encryptedPem = data.get("csr_pem", "").asString();
+        if (!encryptedPem.empty()) {
+            data["csr_pem"] = auth::pii::decrypt(encryptedPem);
+        }
+
+        // Audit log — view
+        Json::Value meta;
+        meta["subjectDn"] = data.get("subject_dn", "").asString();
+        logAudit(icao::audit::OperationType::CSR_VIEW, username, id, meta);
+    }
+    return data;
 }
 
 Json::Value CsrService::list(int page, int pageSize, const std::string& statusFilter)
@@ -221,7 +254,7 @@ Json::Value CsrService::list(int page, int pageSize, const std::string& statusFi
     return response;
 }
 
-std::vector<uint8_t> CsrService::getDerById(const std::string& id)
+std::vector<uint8_t> CsrService::getDerById(const std::string& id, const std::string& username)
 {
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
@@ -251,6 +284,12 @@ std::vector<uint8_t> CsrService::getDerById(const std::string& id)
                  (c2 >= 'a' ? c2 - 'a' + 10 : c2 - '0'));
             der.push_back(byte);
         }
+
+        // Audit log — export DER
+        Json::Value meta;
+        meta["format"] = "DER";
+        logAudit(icao::audit::OperationType::CSR_EXPORT, username, id, meta);
+
         return der;
     } catch (const std::exception& e) {
         spdlog::error("[CsrService] getDerById failed: {}", e.what());
@@ -258,7 +297,7 @@ std::vector<uint8_t> CsrService::getDerById(const std::string& id)
     }
 }
 
-std::string CsrService::getPemById(const std::string& id)
+std::string CsrService::getPemById(const std::string& id, const std::string& username)
 {
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
@@ -273,28 +312,36 @@ std::string CsrService::getPemById(const std::string& id)
         Json::Value result = queryExecutor_->executeQuery(query, {id});
         if (result.empty()) return "";
 
-        return result[0].get("csr_pem", "").asString();
+        // Decrypt CSR PEM
+        std::string encryptedPem = result[0].get("csr_pem", "").asString();
+        std::string pem = auth::pii::decrypt(encryptedPem);
+
+        // Audit log — export PEM
+        Json::Value meta;
+        meta["format"] = "PEM";
+        logAudit(icao::audit::OperationType::CSR_EXPORT, username, id, meta);
+
+        return pem;
     } catch (const std::exception& e) {
         spdlog::error("[CsrService] getPemById failed: {}", e.what());
         return "";
     }
 }
 
-bool CsrService::deleteById(const std::string& id)
+bool CsrService::deleteById(const std::string& id, const std::string& username)
 {
+    // Get info before deletion for audit
+    Json::Value existing = csrRepo_->findById(id);
+    std::string subjectDn = existing.isNull() ? "" : existing.get("subject_dn", "").asString();
+
     bool deleted = csrRepo_->deleteById(id);
-    if (deleted) {
-        try {
-            icao::audit::AuditLogEntry entry;
-            entry.operationType = icao::audit::OperationType::UNKNOWN;
-            entry.operationSubtype = "CSR_DELETE";
-            entry.success = true;
-            entry.resourceId = id;
-            icao::audit::logOperation(queryExecutor_, entry);
-        } catch (...) {
-            spdlog::warn("[CsrService] Audit log failed for CSR_DELETE");
-        }
-    }
+
+    // Audit log — delete (success or failure)
+    Json::Value meta;
+    meta["subjectDn"] = subjectDn;
+    logAudit(icao::audit::OperationType::CSR_DELETE, username, id, meta, deleted,
+             deleted ? "" : "Delete failed");
+
     return deleted;
 }
 
