@@ -1392,7 +1392,7 @@ void UploadHandler::handleGetValidationStatistics(
     const std::string& uploadId)
 {
     try {
-        spdlog::info("GET /api/upload/{}/validation-statistics", uploadId);
+        spdlog::debug("GET /api/upload/{}/validation-statistics", uploadId);
 
         // Call ValidationService (Repository Pattern)
         Json::Value response = validationService_->getValidationStatistics(uploadId);
