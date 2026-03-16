@@ -46,6 +46,10 @@ private:
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
 
+    void handleImport(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
     void handleRegisterCertificate(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,

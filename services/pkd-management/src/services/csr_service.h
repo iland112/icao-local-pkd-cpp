@@ -84,6 +84,15 @@ public:
     std::string getPemById(const std::string& id, const std::string& username = "");
 
     /**
+     * @brief Import externally generated CSR + private key pair.
+     * Validates CSR signature, extracts metadata, encrypts and stores.
+     */
+    CsrGenerateResult importCsr(const std::string& csrPem,
+                                 const std::string& privateKeyPem,
+                                 const std::string& memo,
+                                 const std::string& createdBy);
+
+    /**
      * @brief Register ICAO-issued certificate for a CSR.
      * Parses X.509 cert, verifies public key matches CSR, encrypts and stores.
      * @param id CSR ID

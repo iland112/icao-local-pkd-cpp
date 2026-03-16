@@ -328,6 +328,182 @@ std::string CsrService::getPemById(const std::string& id, const std::string& use
     }
 }
 
+CsrGenerateResult CsrService::importCsr(
+    const std::string& csrPem,
+    const std::string& privateKeyPem,
+    const std::string& memo,
+    const std::string& createdBy)
+{
+    CsrGenerateResult result;
+    result.success = false;
+
+    spdlog::info("[CsrService] Importing external CSR");
+
+    // --- 1. Parse CSR ---
+    std::unique_ptr<BIO, decltype(&BIO_free)> csrBio(
+        BIO_new_mem_buf(csrPem.data(), static_cast<int>(csrPem.size())), BIO_free);
+    if (!csrBio) {
+        result.errorMessage = "Failed to create BIO for CSR";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    std::unique_ptr<X509_REQ, decltype(&X509_REQ_free)> x509Req(
+        PEM_read_bio_X509_REQ(csrBio.get(), nullptr, nullptr, nullptr), X509_REQ_free);
+    if (!x509Req) {
+        result.errorMessage = "Invalid CSR PEM format";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 2. Parse private key ---
+    std::unique_ptr<BIO, decltype(&BIO_free)> keyBio(
+        BIO_new_mem_buf(privateKeyPem.data(), static_cast<int>(privateKeyPem.size())), BIO_free);
+    if (!keyBio) {
+        result.errorMessage = "Failed to create BIO for private key";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> pkey(
+        PEM_read_bio_PrivateKey(keyBio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
+    if (!pkey) {
+        result.errorMessage = "Invalid private key PEM format";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 3. Verify CSR signature with private key's public key ---
+    EVP_PKEY* csrPubKey = X509_REQ_get0_pubkey(x509Req.get());
+    if (!csrPubKey) {
+        result.errorMessage = "Failed to extract public key from CSR";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    if (X509_REQ_verify(x509Req.get(), csrPubKey) != 1) {
+        result.errorMessage = "CSR signature verification failed";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // Verify private key matches CSR public key
+    if (EVP_PKEY_eq(pkey.get(), csrPubKey) != 1) {
+        result.errorMessage = "Private key does not match CSR public key";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 4. Extract subject DN ---
+    X509_NAME* name = X509_REQ_get_subject_name(x509Req.get());
+    char subjectBuf[1024] = {};
+    X509_NAME_oneline(name, subjectBuf, sizeof(subjectBuf));
+    result.subjectDn = std::string(subjectBuf);
+
+    // Extract individual DN components
+    std::string countryCode, organization, commonName;
+    int idx = X509_NAME_get_index_by_NID(name, NID_countryName, -1);
+    if (idx >= 0) {
+        X509_NAME_ENTRY* entry = X509_NAME_get_entry(name, idx);
+        ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+        countryCode = std::string(reinterpret_cast<const char*>(ASN1_STRING_get0_data(data)), ASN1_STRING_length(data));
+    }
+    idx = X509_NAME_get_index_by_NID(name, NID_organizationName, -1);
+    if (idx >= 0) {
+        X509_NAME_ENTRY* entry = X509_NAME_get_entry(name, idx);
+        ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+        organization = std::string(reinterpret_cast<const char*>(ASN1_STRING_get0_data(data)), ASN1_STRING_length(data));
+    }
+    idx = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
+    if (idx >= 0) {
+        X509_NAME_ENTRY* entry = X509_NAME_get_entry(name, idx);
+        ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+        commonName = std::string(reinterpret_cast<const char*>(ASN1_STRING_get0_data(data)), ASN1_STRING_length(data));
+    }
+
+    // --- 5. Export CSR to DER ---
+    int derLen = i2d_X509_REQ(x509Req.get(), nullptr);
+    std::vector<uint8_t> csrDer(derLen);
+    unsigned char* derPtr = csrDer.data();
+    i2d_X509_REQ(x509Req.get(), &derPtr);
+
+    // --- 6. Compute public key fingerprint ---
+    unsigned char fingerprint[32];
+    unsigned int fpLen = 0;
+    {
+        std::unique_ptr<BIO, decltype(&BIO_free)> pubBio(BIO_new(BIO_s_mem()), BIO_free);
+        i2d_PUBKEY_bio(pubBio.get(), csrPubKey);
+        char* pubData = nullptr;
+        long pubLen = BIO_get_mem_data(pubBio.get(), &pubData);
+
+        std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> mdCtx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+        if (mdCtx) {
+            EVP_DigestInit_ex(mdCtx.get(), EVP_sha256(), nullptr);
+            EVP_DigestUpdate(mdCtx.get(), pubData, pubLen);
+            EVP_DigestFinal_ex(mdCtx.get(), fingerprint, &fpLen);
+        }
+    }
+
+    std::string fpHex;
+    fpHex.reserve(64);
+    static const char hexChars[] = "0123456789abcdef";
+    for (unsigned int i = 0; i < fpLen; i++) {
+        fpHex += hexChars[fingerprint[i] >> 4];
+        fpHex += hexChars[fingerprint[i] & 0x0F];
+    }
+    result.publicKeyFingerprint = fpHex;
+
+    // --- 7. Detect algorithm ---
+    int keyType = EVP_PKEY_base_id(pkey.get());
+    int keyBits = EVP_PKEY_bits(pkey.get());
+    std::string keyAlgorithm = (keyType == EVP_PKEY_RSA) ? "RSA-" + std::to_string(keyBits) : "UNKNOWN-" + std::to_string(keyBits);
+
+    // Get signature algorithm from CSR
+    const X509_ALGOR* sigAlg = nullptr;
+    X509_REQ_get0_signature(x509Req.get(), nullptr, &sigAlg);
+    int sigNid = OBJ_obj2nid(sigAlg->algorithm);
+    std::string signatureAlgorithm = (sigNid != NID_undef) ? OBJ_nid2sn(sigNid) : "unknown";
+
+    // --- 8. Encrypt and save ---
+    std::string privateKeyEncrypted = auth::pii::encrypt(privateKeyPem);
+    std::string csrPemEncrypted = auth::pii::encrypt(csrPem);
+
+    std::string csrId = csrRepo_->save(
+        result.subjectDn,
+        countryCode,
+        organization,
+        commonName,
+        keyAlgorithm,
+        signatureAlgorithm,
+        csrPemEncrypted,
+        csrDer,
+        fpHex,
+        privateKeyEncrypted,
+        memo,
+        createdBy
+    );
+
+    if (csrId.empty()) {
+        result.errorMessage = "Failed to save imported CSR to database";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, "", Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    result.id = csrId;
+    result.csrPem = csrPem;
+    result.success = true;
+
+    Json::Value meta;
+    meta["subjectDn"] = result.subjectDn;
+    meta["fingerprint"] = fpHex;
+    meta["source"] = "IMPORT";
+    meta["keyAlgorithm"] = keyAlgorithm;
+    logAudit(icao::audit::OperationType::CSR_GENERATE, createdBy, csrId, meta);
+
+    spdlog::info("[CsrService] CSR imported successfully: id={}, dn={}", csrId, result.subjectDn);
+    return result;
+}
+
 CsrGenerateResult CsrService::registerCertificate(
     const std::string& id,
     const std::string& certPem,

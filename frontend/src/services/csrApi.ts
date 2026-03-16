@@ -30,23 +30,23 @@ csrApi.interceptors.response.use(
   }
 );
 
-export interface CsrRequest {
+/** CSR record — all fields snake_case matching backend JSON */
+export interface CsrRecord {
   id: string;
-  subjectDn: string;
-  countryCode: string;
+  subject_dn: string;
+  country_code: string;
   organization: string;
-  commonName: string;
-  keyAlgorithm: string;
-  signatureAlgorithm: string;
-  publicKeyFingerprint: string;
+  common_name: string;
+  key_algorithm: string;
+  signature_algorithm: string;
+  public_key_fingerprint: string;
   status: 'CREATED' | 'SUBMITTED' | 'ISSUED' | 'REVOKED';
-  memo: string;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-  csrPem?: string;
-  csrDerHex?: string;
-  // Issued certificate fields (snake_case from backend JSON)
+  memo: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  csr_pem?: string;
+  // Issued certificate fields
   certificate_serial?: string;
   certificate_subject_dn?: string;
   certificate_issuer_dn?: string;
@@ -82,12 +82,21 @@ export interface CsrListResponse {
   total: number;
   page: number;
   pageSize: number;
-  data: CsrRequest[];
+  data: CsrRecord[];
+}
+
+export interface CsrImportRequest {
+  csrPem: string;
+  privateKeyPem: string;
+  memo?: string;
 }
 
 export const csrApiService = {
   generate: (data: CsrGenerateRequest) =>
     csrApi.post<CsrGenerateResponse>('/generate', data),
+
+  import: (data: CsrImportRequest) =>
+    csrApi.post<{ success: boolean; data?: { id: string; subjectDn: string; publicKeyFingerprint: string }; error?: string }>('/import', data),
 
   list: (page = 1, pageSize = 20, status?: string) =>
     csrApi.get<CsrListResponse>('', {
@@ -95,13 +104,10 @@ export const csrApiService = {
     }),
 
   getById: (id: string) =>
-    csrApi.get<{ success: boolean; data: CsrRequest }>(`/${id}`),
+    csrApi.get<{ success: boolean; data: CsrRecord }>(`/${id}`),
 
   exportPem: (id: string) =>
     csrApi.get(`/${id}/export/pem`, { responseType: 'blob' }),
-
-  exportDer: (id: string) =>
-    csrApi.get(`/${id}/export/der`, { responseType: 'blob' }),
 
   registerCertificate: (id: string, certificatePem: string) =>
     csrApi.post<{ success: boolean; data?: { id: string; subjectDn: string; fingerprint: string }; error?: string }>(
