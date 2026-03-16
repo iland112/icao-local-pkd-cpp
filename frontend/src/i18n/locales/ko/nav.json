@@ -29,6 +29,7 @@
     "systemMonitoring": "시스템 모니터링",
     "userManagement": "사용자 관리",
     "apiClients": "API 클라이언트",
+    "audit": "감사",
     "operationAudit": "운영 감사 로그",
     "authAudit": "인증 감사 로그",
     "apiDocs": "API Docs"

@@ -29,6 +29,7 @@
     "systemMonitoring": "System Monitoring",
     "userManagement": "User Management",
     "apiClients": "API Clients",
+    "audit": "Audit",
     "operationAudit": "Operation Audit Log",
     "authAudit": "Auth Audit Log",
     "apiDocs": "API Docs"

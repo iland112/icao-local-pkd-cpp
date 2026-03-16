@@ -118,9 +118,16 @@ function buildNavSections(): NavSection[] {
         { path: '/monitoring', labelKey: 'menu.systemMonitoring', icon: <Activity className="w-4 h-4" /> },
         { path: '/admin/users', labelKey: 'menu.userManagement', icon: <Users className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/api-clients', labelKey: 'menu.apiClients', icon: <KeyRound className="w-4 h-4" />, adminOnly: true },
-        { path: '/admin/operation-audit', labelKey: 'menu.operationAudit', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
-        { path: '/admin/audit-log', labelKey: 'menu.authAudit', icon: <Key className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/csr', labelKey: 'menu.csrManagement', icon: <FileKey className="w-4 h-4" />, adminOnly: true },
+        {
+          labelKey: 'menu.audit',
+          icon: <ClipboardList className="w-4 h-4" />,
+          adminOnly: true,
+          children: [
+            { path: '/admin/operation-audit', labelKey: 'menu.operationAudit', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
+            { path: '/admin/audit-log', labelKey: 'menu.authAudit', icon: <Key className="w-4 h-4" />, adminOnly: true },
+          ],
+        },
         {
           labelKey: 'menu.apiDocs',
           icon: <BookOpen className="w-4 h-4" />,
