@@ -337,29 +337,43 @@ void AuthHandler::handleLogout(
     std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
 
     try {
-        // Validate JWT token and get claims
+        // Try to validate JWT — but even if expired, still log the logout
         auto claims = validateRequestToken(req);
-        if (!claims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Unauthorized";
-            resp["message"] = "Invalid or missing authentication token";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k401Unauthorized);
-            callback(response);
-            return;
+        std::string username = claims ? claims->username : "";
+        std::string userId = claims ? claims->userId : "";
+
+        // If JWT invalid/expired, try to extract username from token payload (best-effort)
+        if (username.empty()) {
+            std::string authHeader = req->getHeader("Authorization");
+            if (authHeader.size() > 7) {
+                try {
+                    std::string token = authHeader.substr(7);
+                    auto dot1 = token.find('.');
+                    auto dot2 = (dot1 != std::string::npos) ? token.find('.', dot1 + 1) : std::string::npos;
+                    if (dot1 != std::string::npos && dot2 != std::string::npos) {
+                        std::string payload = token.substr(dot1 + 1, dot2 - dot1 - 1);
+                        // Base64url → Base64
+                        for (auto& c : payload) { if (c == '-') c = '+'; else if (c == '_') c = '/'; }
+                        while (payload.size() % 4 != 0) payload += '=';
+                        // Decode using drogon's utility
+                        std::string decoded = drogon::utils::base64Decode(payload);
+                        Json::Value payloadJson;
+                        Json::Reader reader;
+                        if (!decoded.empty() && reader.parse(decoded, payloadJson)) {
+                            username = payloadJson.get("username", "").asString();
+                            userId = payloadJson.get("sub", "").asString();
+                        }
+                    }
+                } catch (...) {}
+            }
         }
 
-        // Get user from claims
-        std::string username = claims->username;
-        std::string userId = claims->userId;
-
-        // Log logout event
-        logAuthEvent(userId, username, "LOGOUT", true,
+        // Log logout event (even with expired token)
+        logAuthEvent(userId, username.empty() ? "unknown" : username, "LOGOUT", true,
                      req->peerAddr().toIp(),
                      req->getHeader("User-Agent"));
 
-        spdlog::info("[AuthHandler] Logout: username={}", username);
+        spdlog::info("[AuthHandler] Logout: username={}", username.empty() ? "unknown" : username);
 
         Json::Value resp;
         resp["success"] = true;
