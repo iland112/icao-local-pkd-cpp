@@ -77,9 +77,7 @@ function buildNavSections(): NavSection[] {
         { path: '/upload/certificate', labelKey: 'menu.certUpload', icon: <FileText className="w-4 h-4" />, permission: 'upload:write' },
         { path: '/pkd/certificates', labelKey: 'menu.certSearch', icon: <Key className="w-4 h-4" />, permission: 'cert:read' },
         { path: '/upload-history', labelKey: 'menu.uploadHistory', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
-        { path: '/admin/pending-dsc', labelKey: 'menu.pendingDsc', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
         { path: '/sync', labelKey: 'menu.syncStatus', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
-        { path: '/admin/csr', labelKey: 'menu.csrManagement', icon: <FileKey className="w-4 h-4" />, adminOnly: true },
       ],
     },
     {
@@ -88,6 +86,7 @@ function buildNavSections(): NavSection[] {
       items: [
         { path: '/pa/verify', labelKey: 'menu.paVerify', icon: <ShieldCheck className="w-4 h-4" />, permission: 'pa:verify' },
         { path: '/pa/history', labelKey: 'menu.verifyHistory', icon: <History className="w-4 h-4" />, permission: 'pa:read' },
+        { path: '/admin/pending-dsc', labelKey: 'menu.pendingDsc', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
       ],
     },
     {
@@ -121,6 +120,7 @@ function buildNavSections(): NavSection[] {
         { path: '/admin/api-clients', labelKey: 'menu.apiClients', icon: <KeyRound className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/operation-audit', labelKey: 'menu.operationAudit', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/audit-log', labelKey: 'menu.authAudit', icon: <Key className="w-4 h-4" />, adminOnly: true },
+        { path: '/admin/csr', labelKey: 'menu.csrManagement', icon: <FileKey className="w-4 h-4" />, adminOnly: true },
         {
           labelKey: 'menu.apiDocs',
           icon: <BookOpen className="w-4 h-4" />,
