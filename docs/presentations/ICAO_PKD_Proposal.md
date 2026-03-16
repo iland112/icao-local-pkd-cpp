@@ -12,8 +12,8 @@ backgroundImage: url('https://marp.app/assets/hero-background.svg')
 # **ICAO Local PKD Solution**
 ## 전자여권 인증서 관리 및 검증 통합 솔루션
 
-**Version 1.7.0** | Enterprise Ready
-**2026년 1월**
+**Version 2.35.0** | Enterprise Ready
+**2026년 3월**
 
 **SmartCore Inc.**
 
@@ -48,7 +48,9 @@ backgroundImage: url('https://marp.app/assets/hero-background.svg')
    - 3. 인증서 검색 및 조회 (p.34-36)
    - 4. Export 및 통합 (p.37-39)
    - 5. 동기화 및 모니터링 (p.40-43)
-   - 6. ICAO Auto Sync - 자동 버전 감지 (p.44-46) ⭐ NEW
+   - 6. ICAO Auto Sync - 자동 버전 감지 (p.44-46)
+   - 7. ICAO PKD CSR 관리 ⭐ NEW
+   - 8. 개인정보 암호화 (AES-256-GCM) ⭐ NEW
 
 ## Part 4: 기술 상세 및 가치 ······································· p.47
 7. **기술적 우수성** ················································ p.47
@@ -818,9 +820,10 @@ graph LR
 |------|-------------|------|
 | 복잡한 인증서 관리 | **원클릭 업로드 및 자동 처리** | 운영 시간 **90% 단축** |
 | 신뢰성 검증 어려움 | **ICAO 9303 완벽 준수** | 검증 정확도 **99.9%** |
-| 느린 조회 속도 | **최적화된 검색 엔진** | 응답 시간 **40ms** (1,975배 개선) |
+| 느린 조회 속도 | **최적화된 검색 엔진** | 응답 시간 **40ms** |
 | 데이터 불일치 | **자동 동기화 및 조정** | 데이터 일관성 **100%** |
-| 운영 가시성 부족 | **실시간 모니터링 대시보드** | 실시간 현황 파악 |
+| ICAO PKD 연계 | **CSR 기반 인증서 발급 관리** | PKD 전환 대응 완료 |
+| 개인정보 보호 | **AES-256-GCM 암호화** | 법적 준수 (개인정보보호법) |
 
 ---
 
@@ -1905,6 +1908,57 @@ flowchart LR
 
 ---
 
+# 7. ICAO PKD CSR 관리 ⭐ NEW
+
+## CSR(Certificate Signing Request) 기반 PKD 연계
+
+**2026년 3월부터 ICAO PKD는 CSR 방식으로 인증서 발급 체계를 전환합니다.**
+
+### ICAO 요구사항
+> "The CSR must contain an **RSA 2048 bit** public key and be signed using **SHA256withRSA** and should be **Base64 encoded**."
+
+### 주요 기능
+
+| 기능 | 설명 |
+|------|------|
+| **CSR 생성** | RSA-2048 키 쌍 자동 생성 + PKCS#10 CSR (SHA256withRSA) |
+| **외부 CSR Import** | 외부 도구 생성 CSR + 개인키 가져오기 (서명 검증 + 키 매칭) |
+| **인증서 등록** | ICAO 발급 인증서 등록 (공개키 매칭 자동 검증) |
+| **PEM Export** | CSR PEM 파일 다운로드 (ICAO 제출용) |
+
+### 보안
+- 🔐 개인키: **AES-256-GCM** 암호화 저장
+- 📋 모든 작업: 감사 로그 기록 (사용자, IP, 시간)
+- 🚫 API 응답에 개인키 미포함
+
+---
+
+# 8. 개인정보 암호화 ⭐ NEW
+
+## 개인정보보호법 제29조 안전조치 준수
+
+### AES-256-GCM 인증 암호화
+
+```
+평문 → AES-256-GCM 암호화 → "ENC:" + hex(IV + ciphertext + tag) → DB 저장
+DB 조회 → "ENC:" 접두사 감지 → AES-256-GCM 복호화 → 평문 반환
+```
+
+### 암호화 대상 필드
+
+| 서비스 | 필드 | 법적 근거 |
+|--------|------|----------|
+| CSR 관리 | 개인키, CSR PEM | 전자서명법 |
+| PA 검증 | 여권번호, IP, User-Agent | 개인정보보호법 제24조 |
+| API 클라이언트 | 성명, 이메일, 전화번호 | 개인정보보호법 제29조 |
+
+### 특징
+- ✅ `PII_ENCRYPTION_KEY` 환경변수 기반 키 관리
+- ✅ `"ENC:"` 접두사로 암호화 여부 자동 판별 (기존 데이터 하위 호환)
+- ✅ Public API 응답 시 PII 마스킹 (홍*동, h***@example.com)
+
+---
+
 <!-- _class: lead -->
 
 # 기술적 우수성
@@ -1922,9 +1976,9 @@ graph TD
     end
 
     subgraph "Data Layer (안정성)"
-        DL1[PostgreSQL 15<br/>관계형 DB]
+        DL1[PostgreSQL 15 / Oracle<br/>Multi-DBMS]
         DL2[OpenLDAP MMR<br/>이중화 저장소]
-        DL3[HAProxy<br/>로드 밸런싱]
+        DL3[AES-256-GCM<br/>데이터 암호화]
     end
 
     subgraph "Frontend (사용성)"
@@ -1954,15 +2008,15 @@ graph TD
     Gateway[API 게이트웨이<br/>통합 진입점]
 
     subgraph "독립 서비스들"
-        PKD[인증서 관리<br/>업로드/검색]
-        PA[검증 서비스<br/>전자여권 검증]
-        Sync[동기화 서비스<br/>데이터 일치]
+        PKD[인증서 관리<br/>업로드/검색/CSR]
+        PA[검증 서비스<br/>전자여권 PA 검증]
+        Sync[동기화 서비스<br/>DB↔LDAP 동기화]
         Mon[모니터링<br/>시스템 현황]
     end
 
     subgraph "데이터 레이어"
-        DB[(데이터베이스<br/>PostgreSQL)]
-        LDAP[(인증서 저장소<br/>OpenLDAP)]
+        DB[(데이터베이스<br/>PostgreSQL / Oracle)]
+        LDAP[(인증서 저장소<br/>OpenLDAP MMR)]
     end
 
     Client --> Gateway
@@ -2049,7 +2103,9 @@ graph TD
 ```
 
 **보안 표준**: ICAO 9303 보안 요구사항 준수
-**감사 추적**: 모든 작업 로그 기록 및 추적 가능
+**PII 암호화**: AES-256-GCM 인증 암호화 (개인정보보호법 제29조)
+**CSR 개인키**: AES-256-GCM 암호화 저장, API 미노출
+**감사 추적**: 모든 작업 로그 기록 및 추적 가능 (사용자, IP, 요청경로)
 
 ---
 
@@ -2062,27 +2118,28 @@ graph TD
 # 현재 운영 중인 시스템 규모
 
 ```mermaid
-pie title 인증서 구성 (총 30,637개)
-    "문서 서명 인증서 (DSC)" : 29610
-    "국가 인증 기관 (CSCA)" : 525
+pie title 인증서 구성 (총 31,212개)
+    "문서 서명 인증서 (DSC)" : 29838
+    "국가 인증 기관 (CSCA)" : 845
     "비표준 인증서 (DSC_NC)" : 502
+    "마스터리스트 서명 (MLSC)" : 27
 ```
 
 ```mermaid
 graph LR
     subgraph "글로벌 커버리지"
-        Countries[92개 국가]
-        Top[최다: EU 3,245개]
-        Asia[아시아 포함]
+        Countries[139개 국가]
+        Certs[31,212 인증서]
+        CRL[69 CRL]
     end
 
-    subgraph "검증 성과"
-        Valid[검증 성공<br/>5,868개 (19.8%)]
-        Processing[처리 중<br/>24,244개]
+    subgraph "DB↔LDAP 동기화"
+        Sync[100% 동기화]
+        DBMS[PostgreSQL + Oracle]
     end
 
     style Countries fill:#0288D1,stroke:#01579B,stroke-width:2px,color:#fff
-    style Valid fill:#43A047,stroke:#2E7D32,stroke-width:2px,color:#fff
+    style Sync fill:#43A047,stroke:#2E7D32,stroke-width:2px,color:#fff
 ```
 
 ---
@@ -2554,10 +2611,11 @@ graph TD
 |---------|---------|
 | **효율성** | 처리 시간 **90% 단축**, 연간 **1,200시간** 절감 |
 | **정확성** | 데이터 검증 **99.9%** 정확도 |
-| **성능** | 검색 응답 **0.04초** (1,975배 빠름) |
+| **성능** | 검색 응답 **0.04초**, Multi-DBMS (PostgreSQL + Oracle) |
 | **신뢰성** | ICAO 9303 **완벽 준수**, 국제 표준 |
 | **확장성** | 마이크로서비스 아키텍처, **무한 확장** 가능 |
-| **안정성** | **99.9%** 시스템 가용성, 이중화 구성 |
+| **보안** | **AES-256-GCM** 개인정보 암호화, CSR 개인키 보호, 감사 추적 |
+| **PKD 연계** | ICAO CSR 생성/Import/인증서 등록, **2026년 PKD 전환 대응** |
 | **ROI** | **6-12개월** 내 투자금 회수 |
 
 ---
