@@ -23,13 +23,25 @@ CREATE TABLE csr_request (
     key_algorithm VARCHAR2(20) DEFAULT 'RSA-2048' NOT NULL,
     signature_algorithm VARCHAR2(30) DEFAULT 'SHA256withRSA' NOT NULL,
 
-    -- CSR data
+    -- CSR data (AES-256-GCM encrypted)
     csr_pem CLOB NOT NULL,
     csr_der BLOB NOT NULL,
     public_key_fingerprint VARCHAR2(64) NOT NULL,
 
     -- Private key (AES-256-GCM encrypted via PII_ENCRYPTION_KEY)
     private_key_encrypted VARCHAR2(4000) NOT NULL,
+
+    -- Issued certificate (registered after ICAO issues cert from CSR)
+    issued_certificate_pem CLOB,
+    issued_certificate_der BLOB,
+    certificate_serial VARCHAR2(128),
+    certificate_subject_dn VARCHAR2(1024),
+    certificate_issuer_dn VARCHAR2(1024),
+    certificate_not_before TIMESTAMP,
+    certificate_not_after TIMESTAMP,
+    certificate_fingerprint VARCHAR2(64),
+    issued_at TIMESTAMP,
+    registered_by VARCHAR2(100),
 
     -- Status workflow
     status VARCHAR2(20) DEFAULT 'CREATED' NOT NULL,

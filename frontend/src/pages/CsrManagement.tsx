@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileKey, Plus, Download, Trash2, Copy, Check, Loader2,
-  ShieldCheck, X, Eye,
+  ShieldCheck, X, Eye, Upload, Award,
 } from 'lucide-react';
 import { csrApiService, type CsrRequest, type CsrGenerateRequest } from '@/services/csrApi';
 
@@ -37,6 +37,13 @@ export default function CsrManagement() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedCsr, setSelectedCsr] = useState<CsrRequest | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // Certificate registration dialog
+  const [certRegOpen, setCertRegOpen] = useState(false);
+  const [certRegCsrId, setCertRegCsrId] = useState<string>('');
+  const [certPemInput, setCertPemInput] = useState('');
+  const [registering, setRegistering] = useState(false);
+  const [certRegError, setCertRegError] = useState('');
 
   // Delete confirm
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -90,6 +97,31 @@ export default function CsrManagement() {
       /* silent */
     } finally {
       setDetailLoading(false);
+    }
+  };
+
+  const handleRegisterCert = async () => {
+    if (!certRegCsrId || !certPemInput.trim()) return;
+    setRegistering(true);
+    setCertRegError('');
+    try {
+      const resp = await csrApiService.registerCertificate(certRegCsrId, certPemInput.trim());
+      if (resp.data.success) {
+        setCertRegOpen(false);
+        setCertPemInput('');
+        fetchList();
+        // Refresh detail if open
+        if (selectedCsr?.id === certRegCsrId) {
+          handleViewDetail(certRegCsrId);
+        }
+      } else {
+        setCertRegError(resp.data.error || '인증서 등록 실패');
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      setCertRegError(axiosErr.response?.data?.error || '인증서 등록 중 오류 발생');
+    } finally {
+      setRegistering(false);
     }
   };
 
@@ -407,6 +439,31 @@ export default function CsrManagement() {
                       <Download className="w-3.5 h-3.5" /> DER 다운로드
                     </button>
                   </div>
+
+                  {/* Issued certificate info */}
+                  {selectedCsr.status === 'ISSUED' && selectedCsr.certificate_issuer_dn && (
+                    <div className="border border-green-200 dark:border-green-800 rounded-lg p-3 bg-green-50 dark:bg-green-900/20 space-y-1">
+                      <div className="flex items-center gap-1.5 text-green-700 dark:text-green-300 text-xs font-medium">
+                        <Award className="w-3.5 h-3.5" /> 발급된 인증서
+                      </div>
+                      <div className="grid grid-cols-2 gap-1 text-[10px]">
+                        <div><span className="text-gray-500">발급자</span><p className="font-mono">{selectedCsr.certificate_issuer_dn}</p></div>
+                        <div><span className="text-gray-500">일련번호</span><p className="font-mono">{selectedCsr.certificate_serial}</p></div>
+                        <div><span className="text-gray-500">유효 시작</span><p>{selectedCsr.certificate_not_before?.substring(0, 19)}</p></div>
+                        <div><span className="text-gray-500">유효 만료</span><p>{selectedCsr.certificate_not_after?.substring(0, 19)}</p></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Register certificate button (only for CREATED/SUBMITTED) */}
+                  {selectedCsr.status !== 'ISSUED' && selectedCsr.status !== 'REVOKED' && (
+                    <button
+                      onClick={() => { setCertRegCsrId(selectedCsr.id); setCertRegOpen(true); setCertPemInput(''); setCertRegError(''); }}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:hover:bg-amber-900/30 text-amber-700 dark:text-amber-300 text-xs rounded-lg border border-amber-200 dark:border-amber-800 transition-colors"
+                    >
+                      <Upload className="w-3.5 h-3.5" /> ICAO 발급 인증서 등록
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -428,6 +485,61 @@ export default function CsrManagement() {
               <button onClick={handleDelete} disabled={deleting} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-700 text-white rounded-lg disabled:opacity-50">
                 {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
                 삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Certificate Registration Dialog */}
+      {certRegOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={() => setCertRegOpen(false)}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700 bg-amber-50 dark:bg-amber-900/20 rounded-t-lg">
+              <div className="flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-600" />
+                <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">ICAO 발급 인증서 등록</h2>
+              </div>
+              <button onClick={() => setCertRegOpen(false)} className="p-1 hover:bg-amber-100 dark:hover:bg-amber-800/30 rounded">
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3">
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2.5 text-xs text-blue-700 dark:text-blue-300">
+                ICAO에서 발급받은 인증서를 PEM 형식으로 붙여넣으세요. 인증서의 공개키가 CSR의 공개키와 일치하는지 자동 검증됩니다.
+              </div>
+
+              <div>
+                <label htmlFor="cert-pem" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">인증서 PEM</label>
+                <textarea
+                  id="cert-pem"
+                  rows={10}
+                  value={certPemInput}
+                  onChange={(e) => setCertPemInput(e.target.value)}
+                  className="w-full px-3 py-2 text-[11px] font-mono border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:ring-1 focus:ring-amber-500 resize-none"
+                  placeholder="-----BEGIN CERTIFICATE-----&#10;MIIDxTCCAq2gAwIBAgI...&#10;-----END CERTIFICATE-----"
+                />
+              </div>
+
+              {certRegError && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2.5 text-xs text-red-700 dark:text-red-300">
+                  {certRegError}
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button onClick={() => setCertRegOpen(false)} className="px-3 py-1.5 text-xs bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 rounded-lg text-gray-700 dark:text-gray-300">
+                취소
+              </button>
+              <button
+                onClick={handleRegisterCert}
+                disabled={registering || !certPemInput.trim()}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {registering ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Award className="w-3.5 h-3.5" />}
+                {registering ? '등록 중...' : '인증서 등록'}
               </button>
             </div>
           </div>

@@ -328,6 +328,184 @@ std::string CsrService::getPemById(const std::string& id, const std::string& use
     }
 }
 
+CsrGenerateResult CsrService::registerCertificate(
+    const std::string& id,
+    const std::string& certPem,
+    const std::string& username)
+{
+    CsrGenerateResult result;
+    result.success = false;
+    result.id = id;
+
+    spdlog::info("[CsrService] Registering certificate for CSR: {}", id);
+
+    // --- 1. Verify CSR exists and is in correct state ---
+    Json::Value csrData = csrRepo_->findById(id);
+    if (csrData.isNull()) {
+        result.errorMessage = "CSR not found";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    std::string currentStatus = csrData.get("status", "").asString();
+    if (currentStatus == "ISSUED") {
+        result.errorMessage = "Certificate already registered for this CSR";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 2. Parse X.509 certificate ---
+    std::unique_ptr<BIO, decltype(&BIO_free)> certBio(
+        BIO_new_mem_buf(certPem.data(), static_cast<int>(certPem.size())), BIO_free);
+    if (!certBio) {
+        result.errorMessage = "Failed to create BIO for certificate";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    std::unique_ptr<X509, decltype(&X509_free)> cert(
+        PEM_read_bio_X509(certBio.get(), nullptr, nullptr, nullptr), X509_free);
+    if (!cert) {
+        // Try DER format
+        BIO_reset(certBio.get());
+        cert.reset(d2i_X509_bio(certBio.get(), nullptr));
+    }
+    if (!cert) {
+        result.errorMessage = "Failed to parse certificate (invalid PEM or DER format)";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 3. Verify public key matches CSR ---
+    // Get CSR's public key fingerprint from DB
+    std::string csrFingerprint = csrData.get("public_key_fingerprint", "").asString();
+
+    // Compute certificate's public key fingerprint
+    EVP_PKEY* certPubKey = X509_get0_pubkey(cert.get());
+    if (!certPubKey) {
+        result.errorMessage = "Failed to extract public key from certificate";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    unsigned char certFp[32];
+    unsigned int certFpLen = 0;
+    {
+        std::unique_ptr<BIO, decltype(&BIO_free)> pubBio(BIO_new(BIO_s_mem()), BIO_free);
+        i2d_PUBKEY_bio(pubBio.get(), certPubKey);
+        char* pubData = nullptr;
+        long pubLen = BIO_get_mem_data(pubBio.get(), &pubData);
+
+        std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> mdCtx(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+        if (mdCtx) {
+            EVP_DigestInit_ex(mdCtx.get(), EVP_sha256(), nullptr);
+            EVP_DigestUpdate(mdCtx.get(), pubData, pubLen);
+            EVP_DigestFinal_ex(mdCtx.get(), certFp, &certFpLen);
+        }
+    }
+
+    std::string certFpHex;
+    certFpHex.reserve(64);
+    static const char hexChars[] = "0123456789abcdef";
+    for (unsigned int i = 0; i < certFpLen; i++) {
+        certFpHex += hexChars[certFp[i] >> 4];
+        certFpHex += hexChars[certFp[i] & 0x0F];
+    }
+
+    if (certFpHex != csrFingerprint) {
+        result.errorMessage = "Certificate public key does not match CSR (fingerprint mismatch)";
+        Json::Value meta;
+        meta["csrFingerprint"] = csrFingerprint;
+        meta["certFingerprint"] = certFpHex;
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, meta, false, result.errorMessage);
+        return result;
+    }
+
+    // --- 4. Extract certificate metadata ---
+    // Serial number
+    ASN1_INTEGER* serialAsn1 = X509_get_serialNumber(cert.get());
+    BIGNUM* serialBn = ASN1_INTEGER_to_BN(serialAsn1, nullptr);
+    char* serialHex = serialBn ? BN_bn2hex(serialBn) : nullptr;
+    std::string serial = serialHex ? serialHex : "unknown";
+    if (serialHex) OPENSSL_free(serialHex);
+    if (serialBn) BN_free(serialBn);
+
+    // Subject DN
+    char subjectBuf[1024] = {};
+    X509_NAME_oneline(X509_get_subject_name(cert.get()), subjectBuf, sizeof(subjectBuf));
+    std::string certSubjectDn(subjectBuf);
+
+    // Issuer DN
+    char issuerBuf[1024] = {};
+    X509_NAME_oneline(X509_get_issuer_name(cert.get()), issuerBuf, sizeof(issuerBuf));
+    std::string certIssuerDn(issuerBuf);
+
+    // Validity dates (format: YYYY-MM-DD HH:MM:SS)
+    auto asn1TimeToString = [](const ASN1_TIME* t) -> std::string {
+        if (!t) return "";
+        struct tm tm_val = {};
+        if (ASN1_TIME_to_tm(t, &tm_val) != 1) return "";
+        char buf[32];
+        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm_val);
+        return std::string(buf);
+    };
+
+    std::string notBefore = asn1TimeToString(X509_get0_notBefore(cert.get()));
+    std::string notAfter = asn1TimeToString(X509_get0_notAfter(cert.get()));
+
+    // Certificate fingerprint (SHA-256 of DER)
+    unsigned char certDigest[32];
+    unsigned int certDigestLen = 0;
+    X509_digest(cert.get(), EVP_sha256(), certDigest, &certDigestLen);
+    std::string certDigestHex;
+    certDigestHex.reserve(64);
+    for (unsigned int i = 0; i < certDigestLen; i++) {
+        certDigestHex += hexChars[certDigest[i] >> 4];
+        certDigestHex += hexChars[certDigest[i] & 0x0F];
+    }
+
+    // --- 5. Export certificate to DER ---
+    int derLen = i2d_X509(cert.get(), nullptr);
+    std::vector<uint8_t> certDer(derLen);
+    unsigned char* derPtr = certDer.data();
+    i2d_X509(cert.get(), &derPtr);
+
+    // --- 6. Encrypt certificate PEM ---
+    std::string certPemEncrypted = auth::pii::encrypt(certPem);
+
+    // --- 7. Save to DB ---
+    bool saved = csrRepo_->registerCertificate(
+        id, certPemEncrypted, certDer,
+        serial, certSubjectDn, certIssuerDn,
+        notBefore, notAfter, certDigestHex,
+        username
+    );
+
+    if (!saved) {
+        result.errorMessage = "Failed to save certificate to database";
+        logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, Json::nullValue, false, result.errorMessage);
+        return result;
+    }
+
+    result.success = true;
+    result.subjectDn = certSubjectDn;
+    result.publicKeyFingerprint = certDigestHex;
+
+    // Audit log — success
+    Json::Value meta;
+    meta["certSubjectDn"] = certSubjectDn;
+    meta["certIssuerDn"] = certIssuerDn;
+    meta["certSerial"] = serial;
+    meta["certFingerprint"] = certDigestHex;
+    meta["notBefore"] = notBefore;
+    meta["notAfter"] = notAfter;
+    logAudit(icao::audit::OperationType::CSR_GENERATE, username, id, meta);
+
+    spdlog::info("[CsrService] Certificate registered for CSR: id={}, issuer={}, serial={}, expires={}",
+        id, certIssuerDn, serial, notAfter);
+    return result;
+}
+
 bool CsrService::deleteById(const std::string& id, const std::string& username)
 {
     // Get info before deletion for audit

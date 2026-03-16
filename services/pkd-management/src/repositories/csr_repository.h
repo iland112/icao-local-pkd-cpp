@@ -57,6 +57,20 @@ public:
     bool updateStatus(const std::string& id, const std::string& status);
 
     /**
+     * @brief Register issued certificate for a CSR
+     */
+    bool registerCertificate(const std::string& id,
+                             const std::string& certPemEncrypted,
+                             const std::vector<uint8_t>& certDer,
+                             const std::string& serial,
+                             const std::string& subjectDn,
+                             const std::string& issuerDn,
+                             const std::string& notBefore,
+                             const std::string& notAfter,
+                             const std::string& fingerprint,
+                             const std::string& registeredBy);
+
+    /**
      * @brief Delete CSR by ID
      */
     bool deleteById(const std::string& id);

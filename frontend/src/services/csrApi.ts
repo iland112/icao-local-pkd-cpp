@@ -46,6 +46,15 @@ export interface CsrRequest {
   updatedAt: string;
   csrPem?: string;
   csrDerHex?: string;
+  // Issued certificate fields (snake_case from backend JSON)
+  certificate_serial?: string;
+  certificate_subject_dn?: string;
+  certificate_issuer_dn?: string;
+  certificate_not_before?: string;
+  certificate_not_after?: string;
+  certificate_fingerprint?: string;
+  issued_at?: string;
+  registered_by?: string;
 }
 
 export interface CsrGenerateRequest {
@@ -93,6 +102,10 @@ export const csrApiService = {
 
   exportDer: (id: string) =>
     csrApi.get(`/${id}/export/der`, { responseType: 'blob' }),
+
+  registerCertificate: (id: string, certificatePem: string) =>
+    csrApi.post<{ success: boolean; data?: { id: string; subjectDn: string; fingerprint: string }; error?: string }>(
+      `/${id}/certificate`, { certificatePem }),
 
   deleteById: (id: string) =>
     csrApi.delete<{ success: boolean }>(`/${id}`),

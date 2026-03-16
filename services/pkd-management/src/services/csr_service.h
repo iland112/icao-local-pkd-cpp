@@ -84,6 +84,18 @@ public:
     std::string getPemById(const std::string& id, const std::string& username = "");
 
     /**
+     * @brief Register ICAO-issued certificate for a CSR.
+     * Parses X.509 cert, verifies public key matches CSR, encrypts and stores.
+     * @param id CSR ID
+     * @param certPem PEM-encoded certificate from ICAO
+     * @param username User performing the registration
+     * @return Result with success flag and error message
+     */
+    CsrGenerateResult registerCertificate(const std::string& id,
+                                           const std::string& certPem,
+                                           const std::string& username);
+
+    /**
      * @brief Delete CSR by ID. Audit logged.
      */
     bool deleteById(const std::string& id, const std::string& username = "");

@@ -72,6 +72,17 @@ void CsrHandler::registerRoutes(drogon::HttpAppFramework& app)
         {drogon::Get}
     );
 
+    // POST /api/csr/{id}/certificate — register ICAO-issued certificate
+    app.registerHandler(
+        "/api/csr/{id}/certificate",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+               const std::string& id) {
+            handleRegisterCertificate(req, std::move(callback), id);
+        },
+        {drogon::Post}
+    );
+
     // DELETE /api/csr/{id}
     app.registerHandler(
         "/api/csr/{id}",
@@ -83,7 +94,7 @@ void CsrHandler::registerRoutes(drogon::HttpAppFramework& app)
         {drogon::Delete}
     );
 
-    spdlog::info("CsrHandler routes registered (6 endpoints)");
+    spdlog::info("CsrHandler routes registered (7 endpoints)");
 }
 
 // POST /api/csr/generate
@@ -257,6 +268,61 @@ void CsrHandler::handleExportDer(
 
     } catch (const std::exception& e) {
         callback(common::handler::internalError("CsrHandler::exportDer", e));
+    }
+}
+
+// POST /api/csr/{id}/certificate — register ICAO-issued certificate
+void CsrHandler::handleRegisterCertificate(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id)
+{
+    try {
+        auto json = req->getJsonObject();
+        if (!json) {
+            Json::Value err;
+            err["success"] = false;
+            err["error"] = "Invalid JSON body";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        std::string certPem = (*json).get("certificatePem", "").asString();
+        if (certPem.empty()) {
+            Json::Value err;
+            err["success"] = false;
+            err["error"] = "certificatePem field is required";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        auto result = csrService_->registerCertificate(id, certPem, getUsername(req));
+
+        Json::Value response;
+        response["success"] = result.success;
+        if (result.success) {
+            response["data"]["id"] = result.id;
+            response["data"]["subjectDn"] = result.subjectDn;
+            response["data"]["fingerprint"] = result.publicKeyFingerprint;
+        } else {
+            response["error"] = result.errorMessage;
+        }
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        if (!result.success) {
+            resp->setStatusCode(
+                result.errorMessage.find("not found") != std::string::npos
+                    ? drogon::k404NotFound
+                    : drogon::k400BadRequest);
+        }
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        callback(common::handler::internalError("CsrHandler::registerCertificate", e));
     }
 }
 
