@@ -190,7 +190,7 @@ export default function CsrManagement() {
             CSR 가져오기
           </button>
           <button
-            onClick={() => { setGenerateOpen(true); setGenResult(null); }}
+            onClick={() => { setGenerateOpen(true); setGenResult(null); setGenForm(f => ({ ...f, organization: '', commonName: '', memo: '' })); }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
