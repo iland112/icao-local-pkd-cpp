@@ -133,7 +133,7 @@ export default function IssuerProfileCard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-100 dark:bg-gray-700">
-                <tr className="text-gray-500 dark:text-gray-400 text-left">
+                <tr className="text-gray-500 dark:text-gray-400 text-center">
                   <SortableHeader label={t('ai:issuerProfile.issuerDn')} sortKey="issuer_dn" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium" />
                   <SortableHeader label={t('upload:certUpload.certificates')} sortKey="cert_count" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}

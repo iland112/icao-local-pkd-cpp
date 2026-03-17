@@ -180,13 +180,13 @@ export default function PendingDscApproval() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('common:label.country')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.subjectDn')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.algorithm')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('common:label.validPeriod')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.paResult')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('common:label.status')}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.registeredDate')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('common:label.country')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.subjectDn')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.algorithm')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('common:label.validPeriod')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.paResult')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('common:label.status')}</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.registeredDate')}</th>
                 <th className="text-center px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.actions')}</th>
               </tr>
             </thead>

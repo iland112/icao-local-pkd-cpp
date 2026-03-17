@@ -415,10 +415,10 @@ export function IcaoViolationDetailDialog({
                           <table className="w-full text-xs">
                             <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                               <tr>
-                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">국가</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">유형</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">Subject</th>
-                                <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">{categoryColumnConfig[cat]?.header ?? '상세'}</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">국가</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">유형</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">Subject</th>
+                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">{categoryColumnConfig[cat]?.header ?? '상세'}</th>
                                 <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">상태</th>
                               </tr>
                             </thead>

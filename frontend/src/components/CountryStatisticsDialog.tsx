@@ -149,7 +149,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
               <table className="w-full border-collapse text-xs">
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-center font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
                       #
                     </th>
                     <SortableHeader label={t('common:label.country')} sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort}

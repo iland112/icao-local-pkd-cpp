@@ -799,7 +799,7 @@ export default function AiAnalysisDashboard() {
                 <SortableHeader label={t('ai:dashboard.anomalyLevel')} sortKey="anomaly_label" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('ai:issuerProfile.riskScore')} sortKey="risk_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('ai:dashboard.riskLevel')} sortKey="risk_level" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">{t('ai:dashboard.riskFactors')}</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">{t('ai:dashboard.riskFactors')}</th>
                 <SortableHeader label={t('ai:dashboard.analysisTime')} sortKey="analyzed_at" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
               </tr>
             </thead>

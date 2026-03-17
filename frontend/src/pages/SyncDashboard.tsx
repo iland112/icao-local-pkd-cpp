@@ -472,22 +472,22 @@ export function SyncDashboard() {
               <table className="w-full text-xs">
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
+                    <th className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                       {t('dashboard.certType')}
                     </th>
-                    <th className="text-right py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                    <th className="text-center py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <Database className="w-3.5 h-3.5" />
                         DB
                       </div>
                     </th>
-                    <th className="text-right py-2.5 px-3 font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
+                    <th className="text-center py-2.5 px-3 font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <Server className="w-3.5 h-3.5" />
                         LDAP
                       </div>
                     </th>
-                    <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
+                    <th className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                       {t('dashboard.difference')}
                     </th>
                   </tr>
@@ -1098,10 +1098,10 @@ export function SyncDashboard() {
                   <table className="w-full text-xs">
                     <thead className="bg-slate-100 dark:bg-gray-700">
                       <tr>
-                        <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('ai:dashboard.filterType') }</th>
-                        <th className="text-right py-2 px-3 font-semibold text-blue-600 dark:text-blue-400">DB</th>
-                        <th className="text-right py-2 px-3 font-semibold text-green-600 dark:text-green-400">LDAP</th>
-                        <th className="text-right py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('sync:dashboard.difference') }</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('ai:dashboard.filterType') }</th>
+                        <th className="text-center py-2 px-3 font-semibold text-blue-600 dark:text-blue-400">DB</th>
+                        <th className="text-center py-2 px-3 font-semibold text-green-600 dark:text-green-400">LDAP</th>
+                        <th className="text-center py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('sync:dashboard.difference') }</th>
                       </tr>
                     </thead>
                     <tbody>

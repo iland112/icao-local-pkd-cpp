@@ -858,9 +858,9 @@ function UsageDialog({ client, onClose }: {
               <table className="w-full text-xs">
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="text-left px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">{t('admin:apiClient.usageDialog.endpoint')}</th>
-                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">{t('admin:apiClient.usageDialog.requests')}</th>
-                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-16">{t('admin:apiClient.usageDialog.percentage')}</th>
+                    <th className="text-center px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">{t('admin:apiClient.usageDialog.endpoint')}</th>
+                    <th className="text-center px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">{t('admin:apiClient.usageDialog.requests')}</th>
+                    <th className="text-center px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-16">{t('admin:apiClient.usageDialog.percentage')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">

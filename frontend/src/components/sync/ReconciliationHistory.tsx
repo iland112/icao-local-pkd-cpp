@@ -138,9 +138,9 @@ export function ReconciliationHistory() {
             <table className="w-full text-sm">
               <thead className="bg-slate-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium">{ t('admin:apiClient.status') }</th>
-                  <th className="px-4 py-3 text-left font-medium">{t('reconciliation.startedAt')}</th>
-                  <th className="px-4 py-3 text-left font-medium">{t('sync:reconciliation.trigger')}</th>
+                  <th className="px-4 py-3 text-center font-medium">{ t('admin:apiClient.status') }</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('reconciliation.startedAt')}</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('sync:reconciliation.trigger')}</th>
                   <th className="px-4 py-3 text-center font-medium">{ t('common:label.processing') }</th>
                   <th className="px-4 py-3 text-center font-medium">{t('common:toast.success')}</th>
                   <th className="px-4 py-3 text-center font-medium">{t('common:status.failed')}</th>
@@ -308,16 +308,16 @@ export function ReconciliationHistory() {
                   <table className="w-full text-sm">
                     <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                       <tr>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('common:label.action')}
                         </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('sync:reconciliation.logType')}
                         </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('pa:history.country')}
                         </th>
-                        <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
+                        <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
                           Subject
                         </th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
