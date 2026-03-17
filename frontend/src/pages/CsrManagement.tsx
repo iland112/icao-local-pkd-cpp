@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileKey, Plus, Download, Trash2, Copy, Check, Loader2,
-  ShieldCheck, X, Eye, Upload, Award, Import,
+  ShieldCheck, X, Eye, Upload, Award, Import, RotateCcw,
 } from 'lucide-react';
 import { csrApiService, type CsrRecord, type CsrGenerateRequest } from '@/services/csrApi';
 
@@ -57,6 +57,12 @@ export default function CsrManagement() {
   const [deleting, setDeleting] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // Filters
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCreatedBy, setFilterCreatedBy] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+
   const pageSize = 10;
 
   const fetchList = useCallback(async () => {
@@ -107,6 +113,18 @@ export default function CsrManagement() {
   };
 
   const handleCopy = (text: string) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+
+  const resetFilters = () => { setFilterStatus(''); setFilterCreatedBy(''); setFilterDateFrom(''); setFilterDateTo(''); };
+  const hasFilters = filterStatus || filterCreatedBy || filterDateFrom || filterDateTo;
+
+  const filteredList = csrList.filter((csr) => {
+    if (filterStatus && csr.status !== filterStatus) return false;
+    if (filterCreatedBy && !(csr.created_by || '').toLowerCase().includes(filterCreatedBy.toLowerCase())) return false;
+    if (filterDateFrom && csr.created_at && csr.created_at.substring(0, 10) < filterDateFrom) return false;
+    if (filterDateTo && csr.created_at && csr.created_at.substring(0, 10) > filterDateTo) return false;
+    return true;
+  });
+
   const totalPages = Math.ceil(total / pageSize);
 
   return (
@@ -143,6 +161,44 @@ export default function CsrManagement() {
         </div>
       </div>
 
+      {/* ── Filters ── */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex-1 min-w-[120px]">
+            <label htmlFor="filter-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상태</label>
+            <select id="filter-status" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+              className={inputClass}>
+              <option value="">전체</option>
+              <option value="CREATED">생성됨</option>
+              <option value="SUBMITTED">제출됨</option>
+              <option value="ISSUED">발급됨</option>
+              <option value="REVOKED">폐기됨</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[120px]">
+            <label htmlFor="filter-created-by" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">생성자</label>
+            <input id="filter-created-by" type="text" value={filterCreatedBy} onChange={(e) => setFilterCreatedBy(e.target.value)}
+              className={inputClass} placeholder="검색..." />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <label htmlFor="filter-date-from" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">생성일 (시작)</label>
+            <input id="filter-date-from" type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)}
+              className={inputClass} />
+          </div>
+          <div className="flex-1 min-w-[130px]">
+            <label htmlFor="filter-date-to" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">생성일 (종료)</label>
+            <input id="filter-date-to" type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
+              className={inputClass} />
+          </div>
+          {hasFilters && (
+            <button onClick={resetFilters}
+              className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> 초기화
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* ── Table Card ── */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
         <div className="overflow-x-auto">
@@ -160,9 +216,9 @@ export default function CsrManagement() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={6} className="py-12 text-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto" /></td></tr>
-              ) : csrList.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-gray-500 dark:text-gray-400">생성된 CSR이 없습니다</td></tr>
-              ) : csrList.map((csr) => (
+              ) : filteredList.length === 0 ? (
+                <tr><td colSpan={6} className="py-12 text-center text-gray-500 dark:text-gray-400">{hasFilters ? '필터 조건에 맞는 CSR이 없습니다' : '생성된 CSR이 없습니다'}</td></tr>
+              ) : filteredList.map((csr) => (
                 <tr key={csr.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors border-b border-gray-100 dark:border-gray-700">
                   <td className="px-6 py-3">
                     <button onClick={() => handleViewDetail(csr.id)} className="text-indigo-600 dark:text-indigo-400 hover:underline text-left font-medium">
@@ -192,7 +248,7 @@ export default function CsrManagement() {
         </div>
         {totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
-            <span className="text-xs text-gray-500">총 {total}건</span>
+            <span className="text-xs text-gray-500">총 {hasFilters ? `${filteredList.length}/${total}` : total}건</span>
             <div className="flex gap-1">
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
                 <button key={p} onClick={() => setPage(p)}

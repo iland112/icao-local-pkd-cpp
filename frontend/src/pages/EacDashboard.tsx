@@ -750,25 +750,25 @@ function CertListTab({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
-              <tr className="bg-gray-50 text-center text-[11px] text-gray-500 uppercase tracking-wide">
-                <th className="px-4 py-2.5">국가</th>
-                <th className="px-4 py-2.5">유형</th>
-                <th className="px-4 py-2.5 whitespace-nowrap">
-                  <span className="flex items-center gap-1">
+              <tr className="text-[11px] text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-2.5 text-center">국가</th>
+                <th className="px-4 py-2.5 text-center">유형</th>
+                <th className="px-4 py-2.5 text-center whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1">
                     CHR <InfoTooltip content={CHR_TOOLTIP} side="bottom" />
                   </span>
                 </th>
-                <th className="px-4 py-2.5 whitespace-nowrap">
-                  <span className="flex items-center gap-1">
+                <th className="px-4 py-2.5 text-center whitespace-nowrap">
+                  <span className="inline-flex items-center gap-1">
                     CAR <InfoTooltip content={CAR_TOOLTIP} side="bottom" />
                   </span>
                 </th>
-                <th className="px-4 py-2.5">알고리즘</th>
-                <th className="px-4 py-2.5">유효 시작일</th>
-                <th className="px-4 py-2.5">만료일</th>
-                <th className="px-4 py-2.5">상태</th>
-                <th className="px-4 py-2.5">신뢰체인</th>
-                <th className="px-4 py-2.5"></th>
+                <th className="px-4 py-2.5 text-center">알고리즘</th>
+                <th className="px-4 py-2.5 text-center">유효 시작일</th>
+                <th className="px-4 py-2.5 text-center">만료일</th>
+                <th className="px-4 py-2.5 text-center">상태</th>
+                <th className="px-4 py-2.5 text-center">신뢰체인</th>
+                <th className="px-4 py-2.5 text-center"></th>
               </tr>
             </thead>
             <tbody>
