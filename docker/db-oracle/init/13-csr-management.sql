@@ -5,6 +5,7 @@
 
 CONNECT pkd_user/pkd_password@XEPDB1;
 SET SQLBLANKLINES ON;
+SET DEFINE OFF;
 
 -- Allow re-runs (skip "already exists" errors)
 WHENEVER SQLERROR CONTINUE;
