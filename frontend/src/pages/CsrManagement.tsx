@@ -4,6 +4,7 @@ import {
   ShieldCheck, X, Eye, Upload, Award, Import, RotateCcw,
 } from 'lucide-react';
 import { csrApiService, type CsrRecord, type CsrGenerateRequest } from '@/services/csrApi';
+import { toast } from '@/stores/toastStore';
 
 const STATUS_COLORS: Record<string, string> = {
   CREATED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -75,7 +76,18 @@ export default function CsrManagement() {
   const handleGenerate = async () => {
     if (!genForm.countryCode && !genForm.organization && !genForm.commonName) return;
     setGenerating(true);
-    try { const r = await csrApiService.generate(genForm); if (r.data.success && r.data.data) { setGenResult({ csrPem: r.data.data.csrPem, id: r.data.data.id }); fetchList(); } } catch {} finally { setGenerating(false); }
+    try {
+      const r = await csrApiService.generate(genForm);
+      if (r.data.success && r.data.data) {
+        setGenResult({ csrPem: r.data.data.csrPem, id: r.data.data.id });
+        fetchList();
+        toast.success('CSR 생성 완료', `Subject DN: ${r.data.data.subjectDn}`);
+      } else {
+        toast.error('CSR 생성 실패', r.data.error || '알 수 없는 오류');
+      }
+    } catch (e: unknown) {
+      toast.error('CSR 생성 실패', (e as { response?: { data?: { error?: string } } }).response?.data?.error || '서버 오류가 발생했습니다');
+    } finally { setGenerating(false); }
   };
 
   const handleImport = async () => {
@@ -83,9 +95,18 @@ export default function CsrManagement() {
     setImporting(true); setImportError('');
     try {
       const r = await csrApiService.import({ csrPem: importCsrPem.trim(), privateKeyPem: importKeyPem.trim(), memo: importMemo });
-      if (r.data.success) { setImportOpen(false); setImportCsrPem(''); setImportKeyPem(''); setImportMemo(''); fetchList(); }
-      else setImportError(r.data.error || 'Import 실패');
-    } catch (e: unknown) { setImportError((e as { response?: { data?: { error?: string } } }).response?.data?.error || 'Import 중 오류 발생'); } finally { setImporting(false); }
+      if (r.data.success) {
+        setImportOpen(false); setImportCsrPem(''); setImportKeyPem(''); setImportMemo(''); fetchList();
+        toast.success('CSR 가져오기 완료', 'CSR과 개인키가 성공적으로 등록되었습니다');
+      } else {
+        setImportError(r.data.error || 'Import 실패');
+        toast.error('CSR 가져오기 실패', r.data.error || 'Import 실패');
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error || 'Import 중 오류 발생';
+      setImportError(msg);
+      toast.error('CSR 가져오기 실패', msg);
+    } finally { setImporting(false); }
   };
 
   const handleViewDetail = async (id: string) => {
@@ -98,21 +119,47 @@ export default function CsrManagement() {
     setRegistering(true); setCertRegError('');
     try {
       const r = await csrApiService.registerCertificate(certRegCsrId, certPemInput.trim());
-      if (r.data.success) { setCertRegOpen(false); setCertPemInput(''); fetchList(); if (selectedCsr?.id === certRegCsrId) handleViewDetail(certRegCsrId); }
-      else setCertRegError(r.data.error || '인증서 등록 실패');
-    } catch (e: unknown) { setCertRegError((e as { response?: { data?: { error?: string } } }).response?.data?.error || '인증서 등록 중 오류 발생'); } finally { setRegistering(false); }
+      if (r.data.success) {
+        setCertRegOpen(false); setCertPemInput(''); fetchList();
+        if (selectedCsr?.id === certRegCsrId) handleViewDetail(certRegCsrId);
+        toast.success('인증서 등록 완료', 'ICAO 발급 인증서가 성공적으로 등록되었습니다');
+      } else {
+        setCertRegError(r.data.error || '인증서 등록 실패');
+        toast.error('인증서 등록 실패', r.data.error || '인증서 등록 실패');
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error || '인증서 등록 중 오류 발생';
+      setCertRegError(msg);
+      toast.error('인증서 등록 실패', msg);
+    } finally { setRegistering(false); }
   };
 
   const handleExportPem = async (id: string) => {
-    try { const r = await csrApiService.exportPem(id); const u = URL.createObjectURL(new Blob([r.data])); const a = document.createElement('a'); a.href = u; a.download = 'request.csr'; a.click(); URL.revokeObjectURL(u); } catch {}
+    try {
+      const r = await csrApiService.exportPem(id);
+      const u = URL.createObjectURL(new Blob([r.data]));
+      const a = document.createElement('a'); a.href = u; a.download = 'request.csr'; a.click(); URL.revokeObjectURL(u);
+      toast.success('PEM 다운로드 완료', 'CSR 파일이 다운로드되었습니다');
+    } catch {
+      toast.error('PEM 다운로드 실패', '파일 다운로드 중 오류가 발생했습니다');
+    }
   };
 
   const handleDelete = async () => {
     if (!deleteId) return; setDeleting(true);
-    try { await csrApiService.deleteById(deleteId); setDeleteId(null); fetchList(); } catch {} finally { setDeleting(false); }
+    try {
+      await csrApiService.deleteById(deleteId);
+      setDeleteId(null); fetchList();
+      toast.success('CSR 삭제 완료', 'CSR과 개인키가 영구 삭제되었습니다');
+    } catch {
+      toast.error('CSR 삭제 실패', '삭제 중 오류가 발생했습니다');
+    } finally { setDeleting(false); }
   };
 
-  const handleCopy = (text: string) => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000);
+    toast.info('클립보드 복사', 'CSR PEM이 클립보드에 복사되었습니다');
+  };
 
   const resetFilters = () => { setFilterStatus(''); setFilterCreatedBy(''); setFilterDateFrom(''); setFilterDateTo(''); };
   const hasFilters = filterStatus || filterCreatedBy || filterDateFrom || filterDateTo;
