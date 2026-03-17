@@ -856,7 +856,7 @@ function UsageDialog({ client, onClose }: {
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('common:label.detailedHistory')}</h4>
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
               <table className="w-full text-xs">
-                <thead className="bg-gray-50 dark:bg-gray-700/80">
+                <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
                     <th className="text-left px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">{t('admin:apiClient.usageDialog.endpoint')}</th>
                     <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">{t('admin:apiClient.usageDialog.requests')}</th>

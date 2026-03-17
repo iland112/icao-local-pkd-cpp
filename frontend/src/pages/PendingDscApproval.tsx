@@ -178,7 +178,7 @@ export default function PendingDscApproval() {
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t('common:label.country')}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t('admin:pendingDsc.subjectDn')}</th>

@@ -749,7 +749,7 @@ function CertListTab({
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr className="bg-gray-50 text-left text-[11px] text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-2.5">국가</th>
                 <th className="px-4 py-2.5">유형</th>

@@ -588,7 +588,7 @@ export default function CertificateQualityReport() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr className="bg-gray-100 dark:bg-gray-900/70 border-b-2 border-gray-300 dark:border-gray-600 [&>th]:px-3 [&>th]:py-2.5 [&>th]:text-center [&>th]:text-xs [&>th]:font-semibold [&>th]:text-gray-600 [&>th]:dark:text-gray-300 [&>th]:whitespace-nowrap">
                 <SortableHeader label={t('certificate:search.country')} sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort} />
                 <SortableHeader label={t('certificate:search.certType')} sortKey="certificateType" sortConfig={sortConfig} onSort={requestSort} />

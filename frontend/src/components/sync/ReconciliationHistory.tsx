@@ -136,7 +136,7 @@ export function ReconciliationHistory() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+              <thead className="bg-slate-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                 <tr>
                   <th className="px-4 py-3 text-left font-medium">{ t('admin:apiClient.status') }</th>
                   <th className="px-4 py-3 text-left font-medium">{t('reconciliation.startedAt')}</th>
@@ -227,7 +227,7 @@ export function ReconciliationHistory() {
           <div className="space-y-6">
             {/* Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-4 bg-slate-100 dark:bg-gray-700 rounded-lg">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{ t('admin:apiClient.status') }</div>
                 <div className="flex items-center gap-2">
                   {getStatusIcon(selectedItem.status)}
@@ -236,7 +236,7 @@ export function ReconciliationHistory() {
                   </span>
                 </div>
               </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-4 bg-slate-100 dark:bg-gray-700 rounded-lg">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('sync:reconciliation.trigger')}</div>
                 <div className="flex items-center gap-2">
                   {getTriggeredByIcon(selectedItem.triggeredBy)}
@@ -245,13 +245,13 @@ export function ReconciliationHistory() {
                   </span>
                 </div>
               </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-4 bg-slate-100 dark:bg-gray-700 rounded-lg">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{ t('sync:revalidation.totalProcessed') }</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {selectedItem.totalProcessed}
                 </div>
               </div>
-              <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+              <div className="p-4 bg-slate-100 dark:bg-gray-700 rounded-lg">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('reconciliation.duration')}</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {formatDuration(selectedItem.durationMs)}
@@ -306,7 +306,7 @@ export function ReconciliationHistory() {
               ) : (
                 <div className="max-h-96 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg">
                   <table className="w-full text-sm">
-                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
+                    <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('common:label.action')}

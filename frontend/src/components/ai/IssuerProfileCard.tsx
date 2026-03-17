@@ -132,7 +132,7 @@ export default function IssuerProfileCard() {
           </h4>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr className="text-gray-500 dark:text-gray-400 text-left">
                   <SortableHeader label={t('ai:issuerProfile.issuerDn')} sortKey="issuer_dn" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium" />

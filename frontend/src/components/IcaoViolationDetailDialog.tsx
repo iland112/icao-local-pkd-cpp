@@ -413,7 +413,7 @@ export function IcaoViolationDetailDialog({
                       ) : certificates.length > 0 ? (
                         <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
                           <table className="w-full text-xs">
-                            <thead className="bg-gray-100 dark:bg-gray-700/50 sticky top-0">
+                            <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                               <tr>
                                 <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">국가</th>
                                 <th className="px-2 py-1.5 text-left font-medium text-gray-500 dark:text-gray-400">유형</th>
