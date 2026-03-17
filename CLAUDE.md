@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.35.0
-**Last Updated**: 2026-03-16
+**Current Version**: v2.36.0
+**Last Updated**: 2026-03-17
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -608,6 +608,18 @@ scripts/
 
 ## Version History
 
+### v2.36.0 (2026-03-17) - 제품 브랜드 리네이밍 (SPKD → FastSPKD) + 로그인 페이지 개선
+- **브랜드 리네이밍**: 제품명 SPKD → FastSPKD 전체 변경 (SmartCore 제품 네이밍 컨벤션: FastPass, FastFinger, FastPhoto)
+- **favicon.svg 리디자인**: Shield + "S" → Shield + "F" + Speed Lines (SmartCore 브랜딩 스타일 반영)
+- **전체 브랜드 반영**: 16개 파일 일괄 수정 — Login, Sidebar, Header, Dashboard, index.html, i18n(ko/en) 4쌍, hero-bg.svg, 테스트, 문서
+- **표준 배지 추가**: BSI TR-03110 배지 추가 (기존 ICAO Doc 9303, RFC 5280, RFC 5652 + BSI TR-03110)
+- **기능 카드 추가**: "보안 관리 및 감사" 카드 신규 (JWT+RBAC, API Key, AES-256-GCM, 감사 로그) — 기존 3개 → 4개, 1행 4열 배치
+- **로그인 페이지 레이아웃 개선**: 히어로:로그인 비율 55:45 → 68:32 (스크롤 없이 한 화면 표시)
+- **로그인 폼 컴팩트화**: 브랜딩/폼/푸터 영역 여백 전반 축소 (py, mb, mt, space-y)
+- **설명 문구 개선**: "FastSPKD 인증서 관리" → "ICAO Local PKD 구성·관리 및 PA 검증을 위한 종합 솔루션" (한국어/영어)
+- **줄바꿈 자동화**: description `max-w-lg` 제거 → 부모 컨테이너 폭 기준 자동 줄바꿈
+- 16+ files changed (frontend 코드 + i18n + 문서)
+
 ### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈 + 인증서 등록 + 감사 강화
 - **ICAO PKD CSR 생성**: RSA 2048 bit 공개키 + SHA256withRSA 서명 + Base64(PEM) 인코딩 — ICAO PKD 요구사항 완전 준수
 - **ICAO 요구사항 원문**: "The CSR must contain an RSA 2048 bit public key and be signed using SHA256withRSA and should be Base64 encoded. There are no restrictions on the subjectDN included in the CSR"
@@ -832,7 +844,7 @@ scripts/
 
 ### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 섹션 재구성 + 클라이언트 사이드 정렬
 - **로그인 폼 모던 리디자인**: 카드 래퍼 제거(flat layout), `ring-1 ring-gray-200` 입력 필드, `group-focus-within:text-[#02385e]` 아이콘 포커스 색상, 단색 `bg-[#02385e]` 버튼 + `active:scale-[0.98]` 프레스 효과, `radial-gradient` 도트 패턴 배경
-- **로그인 텍스트 변경**: "시스템 로그인" → "SPKD 로그인", 하단 SPKD 부제 제거, 버전 번호 제거, 푸터 `© 2026 SmartCore Inc.` 만 표시
+- **로그인 텍스트 변경**: "시스템 로그인" → "FastSPKD 로그인", 하단 부제 제거, 버전 번호 제거, 푸터 `© 2026 SmartCore Inc.` 만 표시
 - **Hero 배경 가시성 향상**: `hero-bg.svg` 전 레이어 opacity ~2.5배 증가 (0.03~0.06 → 0.08~0.25), 비네팅 오버레이 감소
 - **사이드바 섹션 collapsible 전환**: 인증서 관리/위·변조 검사/보고서 & 분석/시스템 관리 4개 섹션을 접기/펼치기 가능한 버튼으로 변환 (Chevron 회전 애니메이션, 활성 자식 메뉴 자동 확장)
 - **사이드바 섹션 아이콘**: FolderKey(인증서 관리), Fingerprint(위·변조 검사), ClipboardList(보고서 & 분석), Settings(시스템 관리) — Home 메뉴와 동일한 스타일 통일

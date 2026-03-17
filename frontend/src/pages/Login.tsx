@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   Languages,
+  Shield,
 } from 'lucide-react';
 import { authApi } from '@/services/api';
 import { uploadHistoryApi } from '@/services/pkdApi';
@@ -35,6 +36,7 @@ const standards = [
   { icon: GraduationCap, label: 'ICAO Doc 9303' },
   { icon: FileText, label: 'RFC 5280 X.509' },
   { icon: Key, label: 'RFC 5652 CMS' },
+  { icon: Shield, label: 'BSI TR-03110' },
 ];
 
 export function Login() {
@@ -68,6 +70,13 @@ export function Login() {
       title: t('login.features.certManagement'),
       desc: t('login.features.certManagementDesc'),
       items: t('login.features.certManagementItems', { returnObjects: true }) as string[],
+    },
+    {
+      icon: Shield,
+      color: 'amber',
+      title: t('login.features.securityAudit'),
+      desc: t('login.features.securityAuditDesc'),
+      items: t('login.features.securityAuditItems', { returnObjects: true }) as string[],
     },
   ];
 
@@ -117,7 +126,7 @@ export function Login() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row">
       {/* ===== LEFT PANEL: HERO (hidden on mobile) ===== */}
-      <div className="hidden md:flex md:w-1/2 lg:w-[55%] relative overflow-hidden">
+      <div className="hidden md:flex md:w-[60%] lg:w-[68%] relative overflow-hidden">
         {/* Gradient background */}
         <div className="absolute inset-0 bg-gradient-to-br from-[#02385e] via-[#0a4a7a] to-[#1a1a2e]" />
 
@@ -139,15 +148,15 @@ export function Login() {
           {/* Branding */}
           <div style={stagger(0.1)}>
             <div className="inline-flex mb-6">
-              <img src="/favicon.svg" alt="SPKD" className="w-16 h-16 drop-shadow-lg" />
+              <img src="/favicon.svg" alt="FastSPKD" className="w-16 h-16 drop-shadow-lg" />
             </div>
             <h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold text-white mb-3 tracking-tight">
-              SPKD
+              FastSPKD
             </h1>
             <p className="text-lg lg:text-xl text-sky-200 mb-2 font-medium">
               {t('login.systemName')}
             </p>
-            <p className="text-sm text-gray-300/70 max-w-lg leading-relaxed">
+            <p className="text-sm text-gray-300/70 leading-relaxed">
               {t('login.description')}
             </p>
           </div>
@@ -170,7 +179,7 @@ export function Login() {
           </div>
 
           {/* Feature cards */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 mt-8" style={stagger(0.3)}>
+          <div className="grid grid-cols-1 xl:grid-cols-4 gap-3 mt-8" style={stagger(0.3)}>
             {featureCards.map((card) => (
               <div
                 key={card.title}
@@ -218,7 +227,7 @@ export function Login() {
       </div>
 
       {/* ===== RIGHT PANEL: LOGIN ===== */}
-      <div className="w-full md:w-1/2 lg:w-[45%] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 lg:py-12 bg-white dark:bg-gray-900 relative min-h-screen md:min-h-0">
+      <div className="w-full md:w-[40%] lg:w-[32%] flex items-center justify-center px-4 sm:px-6 lg:px-8 py-5 lg:py-6 bg-white dark:bg-gray-900 relative min-h-screen md:min-h-0">
         {/* Subtle background pattern */}
         <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.03]" style={{
           backgroundImage: 'radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)',
@@ -251,25 +260,25 @@ export function Login() {
 
         <div className="w-full max-w-[380px] relative">
           {/* Mobile-only branding */}
-          <div className="md:hidden text-center mb-8" style={stagger(0.1)}>
-            <div className="inline-flex items-center justify-center mb-4">
-              <img src="/favicon.svg" alt="SPKD" className="w-14 h-14 drop-shadow-lg" />
+          <div className="md:hidden text-center mb-5" style={stagger(0.1)}>
+            <div className="inline-flex items-center justify-center mb-3">
+              <img src="/favicon.svg" alt="FastSPKD" className="w-12 h-12 drop-shadow-lg" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-              SPKD
+              FastSPKD
             </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {t('login.systemName')}
             </p>
           </div>
 
           {/* Desktop: logo + title */}
-          <div className="hidden md:flex flex-col items-center mb-8" style={stagger(0.1)}>
-            <div className="inline-flex items-center justify-center mb-4">
-              <img src="/favicon.svg" alt="SPKD" className="w-11 h-11" />
+          <div className="hidden md:flex flex-col items-center mb-5" style={stagger(0.1)}>
+            <div className="inline-flex items-center justify-center mb-2.5">
+              <img src="/favicon.svg" alt="FastSPKD" className="w-10 h-10" />
             </div>
-            <h2 className="text-[22px] font-bold text-gray-900 dark:text-white tracking-tight">{t('login.title')}</h2>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('login.enterCredentials')}</p>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">{t('login.title')}</h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('login.enterCredentials')}</p>
           </div>
 
           {/* Login Card */}
@@ -288,7 +297,7 @@ export function Login() {
             )}
 
             {/* Login Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               {/* Username Field */}
               <div>
                 <label
@@ -367,7 +376,7 @@ export function Login() {
                 type="submit"
                 disabled={loading || !username || !password}
                 className={cn(
-                  'w-full py-2.5 px-4 rounded-lg font-semibold text-sm mt-2',
+                  'w-full py-2.5 px-4 rounded-lg font-semibold text-sm mt-1',
                   'bg-[#02385e] hover:bg-[#024b7a]',
                   'text-white',
                   'focus:outline-none focus:ring-2 focus:ring-[#02385e] focus:ring-offset-2 dark:focus:ring-offset-gray-900',
@@ -390,7 +399,7 @@ export function Login() {
 
             {/* Help Text - Only shown in development mode */}
             {import.meta.env.DEV && (
-              <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
                   {t('login.defaultAccount')}: <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin</span> / <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin123</span>
                 </p>
@@ -399,7 +408,7 @@ export function Login() {
           </div>
 
           {/* API Client Request Link */}
-          <div className="mt-6 text-center" style={stagger(0.3)}>
+          <div className="mt-4 text-center" style={stagger(0.3)}>
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('login.apiClientRequest')}</p>
             <button
               type="button"
@@ -412,7 +421,7 @@ export function Login() {
           </div>
 
           {/* Footer */}
-          <p className="mt-4 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
+          <p className="mt-3 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
             {t('login.copyright')}
           </p>
         </div>

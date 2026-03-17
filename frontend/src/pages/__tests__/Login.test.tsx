@@ -189,10 +189,10 @@ describe('Login page', () => {
     });
   });
 
-  it('should display SPKD branding', () => {
+  it('should display FastSPKD branding', () => {
     render(<Login />);
 
     // Mobile branding or desktop branding should be present
-    expect(screen.getAllByText('SPKD').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('FastSPKD').length).toBeGreaterThanOrEqual(1);
   });
 });
