@@ -1568,4 +1568,4 @@ ICAO Local PKD v2.35.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**
 **Document Created**: 2026-01-20
 **Last Rewrite**: 2026-03-16
 **Author**: ICAO Local PKD Development Team
-**Organization**: SmartCore Inc.
+**Organization**: SMARTCORE Inc.

@@ -6,7 +6,7 @@
  * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
  * Uses 100% parameterized queries for security.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  * @updated 2026-02-05
  */

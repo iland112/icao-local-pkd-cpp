@@ -623,11 +623,11 @@ cmake --build build -j$(nproc)
 
 ## 라이선스
 
-Proprietary - SmartCore Inc.
+Proprietary - SMARTCORE Inc.
 
 ---
 
 **Version**: v2.6.3
 **Project Owner**: kbjung
-**Organization**: SmartCore Inc.
+**Organization**: SMARTCORE Inc.
 **Last Updated**: 2026-02-11

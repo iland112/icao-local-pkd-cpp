@@ -519,4 +519,4 @@ docker compose exec postgres psql -U pkd -d localpkd -c "SELECT version();"
 
 Project: ICAO Local PKD C++ Implementation
 Feature: ICAO Auto Sync Tier 1
-Organization: SmartCore Inc.
+Organization: SMARTCORE Inc.

@@ -5,7 +5,7 @@
  * Thread-safe SOD parsing for ICAO 9303 compliant electronic passports.
  * Handles SOD parsing, DSC extraction, and data group hash extraction.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

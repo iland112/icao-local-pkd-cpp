@@ -114,7 +114,7 @@ void printBanner() {
 )" << std::endl;
     std::cout << "  ICAO Local PKD Management & Passive Authentication System" << std::endl;
     std::cout << "  Version: 1.0.0" << std::endl;
-    std::cout << "  (C) 2025 SmartCore Inc." << std::endl;
+    std::cout << "  (C) 2025 SMARTCORE Inc." << std::endl;
     std::cout << std::endl;
 }
 

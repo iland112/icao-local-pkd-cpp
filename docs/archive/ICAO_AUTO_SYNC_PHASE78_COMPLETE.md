@@ -779,7 +779,7 @@ All planned features have been successfully implemented, tested, and documented.
 ---
 
 **Project Owner**: kbjung
-**Organization**: SmartCore Inc.
+**Organization**: SMARTCORE Inc.
 **Feature**: ICAO PKD Auto Sync Tier 1
 **Version**: v1.7.0
 **Completion Date**: 2026-01-20

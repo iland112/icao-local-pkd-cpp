@@ -4,7 +4,7 @@
  *
  * Creates appropriate connection pool based on database type
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

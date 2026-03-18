@@ -6,7 +6,7 @@
  * Follows Repository Pattern with Query Executor abstraction.
  * Supports both PostgreSQL and Oracle.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  * @updated 2026-02-05
  */

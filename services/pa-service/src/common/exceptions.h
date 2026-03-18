@@ -4,7 +4,7 @@
  *
  * Provides typed exceptions with error codes for better error handling
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 

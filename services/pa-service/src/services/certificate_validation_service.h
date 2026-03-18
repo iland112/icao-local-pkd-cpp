@@ -6,7 +6,7 @@
  * Handles PA-specific orchestration: point-in-time validation, CRL messaging,
  * DSC conformance checking, domain model conversion.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-16
  */
 

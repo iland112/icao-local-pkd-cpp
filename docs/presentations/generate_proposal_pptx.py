@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ICAO Local PKD 기술제안서 PPTX 생성 스크립트
-- 템플릿: 전자여권위변조검사시스템(FASTpassSPKD).pptx
+- 템플릿: 전자여권위변조검사시스템(FASTpassPKD).pptx
 - 디자인 참조: icao-local-pkd-proposal.html (21 slides)
 """
 
@@ -175,7 +175,7 @@ def add_page_header(slide, title, tag=None):
 def add_footer(slide):
     add_rect(slide, Cm(0), SLIDE_H - Cm(0.8), SLIDE_W, Cm(0.8), RGBColor(0xF1, 0xF5, 0xF9))
     add_textbox(slide, Cm(1.5), SLIDE_H - Cm(0.7), Cm(10), Cm(0.5),
-                "FASTpass\u00ae SPKD \u2014 \uc804\uc790\uc5ec\uad8c \uc704\xb7\ubcc0\uc870 \uac80\uc0ac \uc2dc\uc2a4\ud15c",
+                "FASTpass\u00ae PKD \u2014 \uc804\uc790\uc5ec\uad8c \uc704\xb7\ubcc0\uc870 \uac80\uc0ac \uc2dc\uc2a4\ud15c",
                 font_size=7, font_color=GRAY)
     add_textbox(slide, Cm(20), SLIDE_H - Cm(0.7), Cm(6), Cm(0.5),
                 "\u00a9 2026 SMARTCORE Inc.",
@@ -228,7 +228,7 @@ def add_part_divider(prs, blank_layout, part_num, title, subtitle):
 
 def build():
     template_path = os.path.join(os.path.dirname(__file__),
-                                 "../references/\uc804\uc790\uc5ec\uad8c\uc704\ubcc0\uc870\uac80\uc0ac\uc2dc\uc2a4\ud15c(FASTpassSPKD).pptx")
+                                 "../references/\uc804\uc790\uc5ec\uad8c\uc704\ubcc0\uc870\uac80\uc0ac\uc2dc\uc2a4\ud15c(FASTpassPKD).pptx")
     prs = Presentation(template_path)
 
     # Remove all existing slides
@@ -270,7 +270,7 @@ def build():
 
     # Product name
     add_textbox(slide, Cm(3), Cm(10.5), Cm(20), Cm(1.5),
-                "FASTpass\u00ae SPKD",
+                "FASTpass\u00ae PKD",
                 font_size=24, font_color=BLUE_ACCENT, bold=True)
 
     # Meta: 발주처 / 제안사 / 제출일
@@ -428,7 +428,7 @@ def build():
     add_page_header(slide, "\uc0ac\uc5c5 \uacfc\uc81c \ub300\uc751 \ubc94\uc704", "Part 1 \u2014 \uc0ac\uc5c5 \uc774\ud574")
 
     add_textbox(slide, Cm(1.5), Cm(3.5), Cm(24), Cm(0.5),
-                "\uc804\uc790\uc5ec\uad8c\uc2dc\uc2a4\ud15c \uc7ac\uad6c\ucd95 \uc0ac\uc5c5\uacc4\ud68d\uc11c 22\uac1c \uacfc\uc81c \uc911 FASTpass\u00ae SPKD \uc9c1\uc811 \ub300\uc751 \ud56d\ubaa9",
+                "\uc804\uc790\uc5ec\uad8c\uc2dc\uc2a4\ud15c \uc7ac\uad6c\ucd95 \uc0ac\uc5c5\uacc4\ud68d\uc11c 22\uac1c \uacfc\uc81c \uc911 FASTpass\u00ae PKD \uc9c1\uc811 \ub300\uc751 \ud56d\ubaa9",
                 font_size=9, font_color=GRAY)
 
     task_rows = [
@@ -452,7 +452,7 @@ def build():
     tbl.columns[1].width = Cm(10.5)
     tbl.columns[2].width = Cm(5)
     set_cell(tbl, 0, 0, "\uc0ac\uc5c5 \uacfc\uc81c", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
-    set_cell(tbl, 0, 1, "FASTpass\u00ae SPKD \ub300\uc751 \uae30\ub2a5", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
+    set_cell(tbl, 0, 1, "FASTpass\u00ae PKD \ub300\uc751 \uae30\ub2a5", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
     set_cell(tbl, 0, 2, "\uc0c1\ud0dc", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
     for i, (task, func, status) in enumerate(task_rows):
         r = i + 1
@@ -558,9 +558,9 @@ def build():
     slide = add_part_divider(prs, blank_layout, 2,
                      "\uae30\uc220 \ubc29\uc548",
                      "\ub9c8\uc774\ud06c\ub85c\uc11c\ube44\uc2a4 \uc544\ud0a4\ud14d\ucc98 \xb7 ICAO Doc 9303 \ub4f1 \uad00\ub828 \uad6d\uc81c \ud45c\uc900 \uc900\uc218 \xb7 \ucee8\ud14c\uc774\ub108 \uae30\ubc18 \ubc30\ud3ec \xb7 HA \uc774\uc911\ud654 \uad6c\uc131")
-    # Add FASTpass SPKD title
+    # Add FASTpass® PKD title
     add_textbox(slide, Cm(3), Cm(9.5), Cm(20), Cm(1.5),
-                "FASTpass\u00ae SPKD",
+                "FASTpass\u00ae PKD",
                 font_size=22, font_color=BLUE_ACCENT, bold=True)
 
     # ================================================================
@@ -1124,7 +1124,7 @@ def build():
     tbl.columns[2].width = Cm(10)
     set_cell(tbl, 0, 0, "\ud3c9\uac00 \ud56d\ubaa9", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
     set_cell(tbl, 0, 1, "\uc77c\ubc18 PKD \uc194\ub8e8\uc158", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
-    set_cell(tbl, 0, 2, "FASTpass\u00ae SPKD", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
+    set_cell(tbl, 0, 2, "FASTpass\u00ae PKD", bold=True, fill_color=NAVY, font_color=WHITE, font_size=8, alignment=PP_ALIGN.CENTER)
     for i, (item, gen, fast) in enumerate(comp_data):
         r = i + 1
         is_highlight = r % 2 == 1
@@ -1165,13 +1165,13 @@ def build():
 
     # Version
     add_textbox(slide, Cm(0), Cm(15.5), SLIDE_W, Cm(0.8),
-                "(\uc8fc)\uc2a4\ub9c8\ud2b8\ucf54\uc5b4 \u2014 FASTpass\u00ae SPKD v2.36.0",
+                "(\uc8fc)\uc2a4\ub9c8\ud2b8\ucf54\uc5b4 \u2014 FASTpass\u00ae PKD v2.36.0",
                 font_size=8, font_color=RGBColor(0x64, 0x74, 0x8B),
                 alignment=PP_ALIGN.CENTER)
 
     # ── Save ──
     output_path = os.path.join(os.path.dirname(__file__),
-                               "FASTpass_SPKD_\uae30\uc220\uc81c\uc548\uc11c.pptx")
+                               "FASTpass_PKD_\uae30\uc220\uc81c\uc548\uc11c.pptx")
     prs.save(output_path)
     print(f"PPTX generated: {output_path}")
     print(f"   Total slides: {len(prs.slides)}")

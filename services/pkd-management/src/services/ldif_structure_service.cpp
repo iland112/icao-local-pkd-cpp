@@ -2,7 +2,7 @@
  * @file ldif_structure_service.cpp
  * @brief LDIF Structure Service Implementation
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-01-31
  */
 

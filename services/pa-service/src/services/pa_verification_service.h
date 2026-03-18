@@ -2,7 +2,7 @@
  * @file pa_verification_service.h
  * @brief Service for PA verification orchestration
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

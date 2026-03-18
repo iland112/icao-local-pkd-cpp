@@ -5,7 +5,7 @@
  * Provides consistent logging interface across all services
  * Wraps spdlog with standardized configuration
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

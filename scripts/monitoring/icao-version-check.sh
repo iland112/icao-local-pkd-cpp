@@ -5,7 +5,7 @@
 #
 # Purpose: Automatically check for new ICAO PKD versions daily
 # Schedule: 0 8 * * * (Every day at 8:00 AM)
-# Author: SmartCore Inc.
+# Author: SMARTCORE Inc.
 # Version: 1.0.0
 # Date: 2026-01-20
 ###############################################################################

@@ -15,7 +15,7 @@ backgroundImage: url('https://marp.app/assets/hero-background.svg')
 **Version 2.35.0** | Enterprise Ready
 **2026년 3월**
 
-**SmartCore Inc.**
+**SMARTCORE Inc.**
 
 ---
 
@@ -2682,7 +2682,7 @@ graph LR
 
 # 문의하기
 
-**SmartCore Inc.**
+**SMARTCORE Inc.**
 ICAO Local PKD Solution
 
 📧 **Email**: sales@smartcore.com

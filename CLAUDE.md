@@ -609,7 +609,7 @@ scripts/
 ## Version History
 
 ### v2.36.0 (2026-03-17~18) - 브랜드 리네이밍 + UI/UX 전면 일관성 개선 + GlossaryTerm + Link Certificate 버그 수정
-- **브랜드 리네이밍**: SPKD → FastSPKD (SmartCore 네이밍: FastPass, FastFinger, FastPhoto)
+- **브랜드 리네이밍**: SPKD → FASTpass® PKD (SmartCore 네이밍: FastPass, FastFinger, FastPhoto)
 - **favicon.svg 리디자인**: Shield + "S" → Shield + "F" + Speed Lines
 - **로그인 페이지**: BSI TR-03110 배지 추가, 보안 관리/감사 기능 카드 추가, 히어로:로그인 68:32, 설명 문구 ICAO Local PKD 종합 솔루션으로 개선
 - **UI/UX 일관성 전면 개선 (50+ 파일)**:
@@ -853,7 +853,7 @@ scripts/
 
 ### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 섹션 재구성 + 클라이언트 사이드 정렬
 - **로그인 폼 모던 리디자인**: 카드 래퍼 제거(flat layout), `ring-1 ring-gray-200` 입력 필드, `group-focus-within:text-[#02385e]` 아이콘 포커스 색상, 단색 `bg-[#02385e]` 버튼 + `active:scale-[0.98]` 프레스 효과, `radial-gradient` 도트 패턴 배경
-- **로그인 텍스트 변경**: "시스템 로그인" → "FastSPKD 로그인", 하단 부제 제거, 버전 번호 제거, 푸터 `© 2026 SmartCore Inc.` 만 표시
+- **로그인 텍스트 변경**: "시스템 로그인" → "FASTpass® PKD 로그인", 하단 부제 제거, 버전 번호 제거, 푸터 `© 2026 SMARTCORE Inc.` 만 표시
 - **Hero 배경 가시성 향상**: `hero-bg.svg` 전 레이어 opacity ~2.5배 증가 (0.03~0.06 → 0.08~0.25), 비네팅 오버레이 감소
 - **사이드바 섹션 collapsible 전환**: 인증서 관리/위·변조 검사/보고서 & 분석/시스템 관리 4개 섹션을 접기/펼치기 가능한 버튼으로 변환 (Chevron 회전 애니메이션, 활성 자식 메뉴 자동 확장)
 - **사이드바 섹션 아이콘**: FolderKey(인증서 관리), Fingerprint(위·변조 검사), ClipboardList(보고서 & 분석), Settings(시스템 관리) — Home 메뉴와 동일한 스타일 통일

@@ -5,7 +5,7 @@
  * Handles LDAP queries for certificate retrieval.
  * Follows Repository Pattern with constructor-based dependency injection.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

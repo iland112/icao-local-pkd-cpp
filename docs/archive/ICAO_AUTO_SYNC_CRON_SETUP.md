@@ -565,4 +565,4 @@ For issues or questions:
 
 **Document Version**: 1.0.0
 **Last Updated**: 2026-01-20
-**Author**: SmartCore Inc.
+**Author**: SMARTCORE Inc.

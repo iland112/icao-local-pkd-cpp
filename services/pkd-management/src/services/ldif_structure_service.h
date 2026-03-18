@@ -5,7 +5,7 @@
  * Handles LDIF file structure visualization business logic.
  * Provides validation, error handling, and response formatting.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-01-31
  */
 

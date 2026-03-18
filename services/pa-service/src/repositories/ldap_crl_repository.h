@@ -5,7 +5,7 @@
  * Handles LDAP queries for CRL retrieval and revocation checking.
  * Follows Repository Pattern with constructor-based dependency injection.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

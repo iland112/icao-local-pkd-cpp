@@ -55,7 +55,7 @@ void printBanner() {
 )" << std::endl;
     std::cout << "  PA Service - ICAO Passive Authentication" << std::endl;
     std::cout << "  Version: 2.1.0" << std::endl;
-    std::cout << "  (C) 2026 SmartCore Inc." << std::endl;
+    std::cout << "  (C) 2026 SMARTCORE Inc." << std::endl;
     std::cout << std::endl;
 }
 

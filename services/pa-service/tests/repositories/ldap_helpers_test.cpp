@@ -5,7 +5,7 @@
  * Tests DN normalization, filter escaping, and LDAP utility functions
  * These tests don't require actual LDAP connection - they test pure logic
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 
@@ -110,8 +110,8 @@ TEST_F(DnAttributeExtractionTest, ExtractCountry) {
 }
 
 TEST_F(DnAttributeExtractionTest, ExtractOrganization) {
-    std::string dn = "CN=Test,O=SmartCore Inc.,C=KR";
-    EXPECT_EQ(extractDnAttribute(dn, "O"), "SmartCore Inc.");
+    std::string dn = "CN=Test,O=SMARTCORE Inc.,C=KR";
+    EXPECT_EQ(extractDnAttribute(dn, "O"), "SMARTCORE Inc.");
 }
 
 TEST_F(DnAttributeExtractionTest, ExtractMissingAttribute) {
@@ -125,7 +125,7 @@ TEST_F(DnAttributeExtractionTest, ExtractLastAttribute) {
 }
 
 TEST_F(DnAttributeExtractionTest, ExtractWithSpaces) {
-    std::string dn = "CN=Test Certificate, O=SmartCore Inc., C=KR";
+    std::string dn = "CN=Test Certificate, O=SMARTCORE Inc., C=KR";
     EXPECT_EQ(extractDnAttribute(dn, "CN"), "Test Certificate");
 }
 

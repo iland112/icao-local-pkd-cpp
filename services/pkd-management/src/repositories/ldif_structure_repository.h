@@ -5,7 +5,7 @@
  * Handles file system operations and LDIF parsing for structure visualization.
  * Does NOT interact with database (read-only file access).
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-01-31
  */
 

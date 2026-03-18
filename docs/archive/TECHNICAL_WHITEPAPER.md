@@ -3,7 +3,7 @@
 **문서 번호**: WP-PKD-2026-001
 **버전**: 2.1
 **발행일**: 2026년 1월 7일
-**작성자**: SmartCore Inc.
+**작성자**: SMARTCORE Inc.
 
 ---
 
@@ -145,4 +145,4 @@ graph TD
 2. ICAO Doc 9303 Part 12 - Public Key Infrastructure for MRTDs
 3. ICAO PKD Interface Specifications
 
-**Copyright © 2026 SmartCore Inc. All rights reserved.**
+**Copyright © 2026 SMARTCORE Inc. All rights reserved.**

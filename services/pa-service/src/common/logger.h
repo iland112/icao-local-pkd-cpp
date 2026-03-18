@@ -8,7 +8,7 @@
  * - Performance timing utilities
  * - Error logging with stack context
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 

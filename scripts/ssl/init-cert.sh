@@ -94,7 +94,7 @@ openssl req -x509 -new -nodes \
     -sha256 \
     -days "$CA_DAYS" \
     -out "$SSL_DIR/ca.crt" \
-    -subj "/C=KR/O=SmartCore Inc./OU=PKD Operations/CN=ICAO Local PKD Private CA"
+    -subj "/C=KR/O=SMARTCORE Inc./OU=PKD Operations/CN=ICAO Local PKD Private CA"
 
 # Step 3: Generate server key + CSR
 echo "[3/4] Generating server key and CSR..."
@@ -110,7 +110,7 @@ req_extensions = v3_req
 
 [dn]
 C = KR
-O = SmartCore Inc.
+O = SMARTCORE Inc.
 OU = PKD Operations
 CN = $DOMAIN
 

@@ -9,7 +9,7 @@
  * - Configuration validation
  * - Thread-safe singleton pattern
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

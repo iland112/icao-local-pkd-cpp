@@ -4,7 +4,7 @@
  *
  * Provides consistent exception types across all services
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

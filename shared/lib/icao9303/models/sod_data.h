@@ -5,7 +5,7 @@
  * Represents parsed SOD data from CMS SignedData structure.
  * Used for passing SOD information between Service layers.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

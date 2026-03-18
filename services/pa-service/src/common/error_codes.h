@@ -5,7 +5,7 @@
  * Provides consistent error codes across all components
  * Format: COMPONENT_ERROR_TYPE_DETAIL
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 

@@ -4,7 +4,7 @@
  *
  * Tests data group CRUD operations and binary data handling
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 

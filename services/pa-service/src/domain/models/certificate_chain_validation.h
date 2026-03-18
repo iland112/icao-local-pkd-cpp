@@ -4,7 +4,7 @@
  *
  * Represents the result of DSC → CSCA trust chain validation with CRL checking.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

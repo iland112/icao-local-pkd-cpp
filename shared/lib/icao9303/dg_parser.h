@@ -2,7 +2,7 @@
  * @file data_group_parser_service.h
  * @brief Service for Data Group parsing and verification
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

@@ -492,7 +492,7 @@ The shared database connection pool library successfully resolves critical threa
 
 ---
 
-**Author**: SmartCore Inc.
+**Author**: SMARTCORE Inc.
 **Date**: 2026-02-04
 **Version**: 1.0.0
 **Status**: ✅ Production Ready

@@ -1759,4 +1759,4 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 
 ---
 
-**Copyright 2026 SmartCore Inc. All rights reserved.**
+**Copyright 2026 SMARTCORE Inc. All rights reserved.**

@@ -254,7 +254,7 @@ icao::models::SodData sodData;
 
 ## License
 
-Copyright © 2026 SmartCore Inc. All rights reserved.
+Copyright © 2026 SMARTCORE Inc. All rights reserved.
 
 ## See Also
 

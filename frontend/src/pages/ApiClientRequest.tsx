@@ -314,7 +314,7 @@ export default function ApiClientRequest() {
 
         {/* Footer */}
         <p className="mt-4 text-center text-xs text-gray-300 dark:text-gray-600">
-          &copy; 2026 SmartCore Inc.
+          &copy; 2026 SMARTCORE Inc.
         </p>
       </div>
     </div>

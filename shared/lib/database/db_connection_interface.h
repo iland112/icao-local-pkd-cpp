@@ -5,7 +5,7 @@
  * Provides abstract interfaces for database connections and connection pools
  * to support multiple database backends (PostgreSQL, Oracle, etc.)
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

@@ -10,7 +10,7 @@
  * - Connection recycling
  * - Thread-safe acquire/release
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

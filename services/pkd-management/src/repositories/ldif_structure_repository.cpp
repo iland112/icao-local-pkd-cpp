@@ -2,7 +2,7 @@
  * @file ldif_structure_repository.cpp
  * @brief LDIF Structure Repository Implementation
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-01-31
  */
 

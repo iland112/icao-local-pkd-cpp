@@ -6,7 +6,7 @@
  * This is a plain Data Transfer Object (DTO) used for passing data between
  * Repository and Service layers.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-01
  */
 

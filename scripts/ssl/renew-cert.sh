@@ -69,7 +69,7 @@ req_extensions = v3_req
 
 [dn]
 C = KR
-O = SmartCore Inc.
+O = SMARTCORE Inc.
 OU = PKD Operations
 CN = $DOMAIN
 

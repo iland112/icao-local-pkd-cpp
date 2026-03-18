@@ -4,7 +4,7 @@
  *
  * Represents a single data group with hash verification result.
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-04
  */
 

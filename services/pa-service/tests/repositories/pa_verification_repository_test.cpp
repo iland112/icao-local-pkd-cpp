@@ -4,7 +4,7 @@
  *
  * Tests CRUD operations and parameterized query execution
  *
- * @author SmartCore Inc.
+ * @author SMARTCORE Inc.
  * @date 2026-02-02
  */
 
