@@ -1901,9 +1901,10 @@ scripts/
 - [docs/DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md) - Build cache troubleshooting
 
 ### API Specifications
-- [docs/openapi/pkd-management.yaml](docs/openapi/pkd-management.yaml) - PKD Management OpenAPI
-- [docs/openapi/pa-service.yaml](docs/openapi/pa-service.yaml) - PA Service OpenAPI
-- [docs/openapi/pkd-relay.yaml](docs/openapi/pkd-relay.yaml) - PKD Relay OpenAPI
+- [docs/openapi/pkd-management.yaml](docs/openapi/pkd-management.yaml) - PKD Management OpenAPI (v2.36.0, 74 paths)
+- [docs/openapi/pa-service.yaml](docs/openapi/pa-service.yaml) - PA Service OpenAPI (v2.1.7)
+- [docs/openapi/pkd-relay-service.yaml](docs/openapi/pkd-relay-service.yaml) - PKD Relay OpenAPI (v2.36.0)
+- [docs/openapi/monitoring-service.yaml](docs/openapi/monitoring-service.yaml) - Monitoring Service OpenAPI (v1.2.0)
 
 ### Archive
 - [docs/archive/](docs/archive/) - 100+ historical phase/completion/plan documents

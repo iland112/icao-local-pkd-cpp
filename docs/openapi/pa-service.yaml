@@ -6,6 +6,7 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
+    - **v2.1.7** (2026-03-18): dscAutoRegistration 응답에 pendingApproval, alreadyRegistered, pendingId 필드 추가 (v2.31.0 DSC 승인 워크플로우 대응)
     - **v2.1.6** (2026-02-19): Country code DG1 MRZ fallback (request param → MRZ → DSC C= → XX), requestedBy field
     - **v2.1.5** (2026-02-19): requestedBy field, pkdConformanceText DB persistence, country code "XX" fallback
     - **v2.1.4** (2026-02-14): DSC Non-Conformant status fields (dscNonConformant, pkdConformanceCode, pkdConformanceText)
@@ -15,7 +16,7 @@ info:
     - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 2.1.6
+  version: 2.1.7
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -385,7 +386,7 @@ components:
           description: CSCA certificate SHA-256 fingerprint
         countryCode:
           type: string
-          description: Country code (priority: request param → DG1 MRZ → DSC issuer C= → "XX")
+          description: 'Country code (priority: request param → DG1 MRZ → DSC issuer C= → XX)'
         notBefore:
           type: string
           description: DSC certificate validity start (ISO 8601)
@@ -428,13 +429,26 @@ components:
 
     DscAutoRegistration:
       type: object
-      description: DSC auto-registration result (included only when registration attempted)
+      description: |
+        DSC auto-registration result (included only when registration attempted).
+        Since v2.31.0, DSC is saved to pending_dsc_registration table (not directly to certificate table).
+        Admin approval is required before the DSC becomes active.
       properties:
         registered:
           type: boolean
         newlyRegistered:
           type: boolean
           description: "true: newly registered, false: already existed"
+        pendingApproval:
+          type: boolean
+          description: "true: saved to pending_dsc_registration, awaiting admin approval (v2.31.0+)"
+        alreadyRegistered:
+          type: boolean
+          description: "true: DSC already exists in certificate table"
+        pendingId:
+          type: string
+          format: uuid
+          description: "pending_dsc_registration ID (present when pendingApproval=true)"
         certificateId:
           type: string
           format: uuid

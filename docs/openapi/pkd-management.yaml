@@ -6,6 +6,9 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.36.0** (2026-03-18): UI/UX 일관성 개선, GlossaryTerm, CountryFlag, Link Certificate Doc 9303 버그 수정
+    - **v2.35.0** (2026-03-16): CSR 관리 모듈 7개 엔드포인트 (생성/Import/목록/상세/Export/인증서등록/삭제), 감사 로그 강화
+    - **v2.31.0** (2026-03-10): DSC 등록 승인 워크플로우 4개 엔드포인트 (목록/통계/승인/거부), PA 자동 등록 → 관리자 승인 전환
     - **v2.30.0** (2026-03-09): 로그인 페이지 모던 리디자인, 사이드바 4섹션 collapsible 재구성, 클라이언트 사이드 테이블 정렬, 페이지네이션 z-index 수정
     - **v2.29.1** (2026-03-05): LDIF 중복 인증서 totalCertificates 통계 수정, source_type 컬럼 정확한 저장
     - **v2.25.5** (2026-03-01): Code Master 6 endpoints, Link Certificate 3 endpoints, Upload parse/retry, Validation reasons, Internal auth check 추가
@@ -24,7 +27,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.30.0
+  version: 2.36.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -56,6 +59,10 @@ tags:
     description: Centralized code/status/enum management (21 categories, ~150 codes)
   - name: LinkCertificate
     description: Link Certificate validation and search (CSCA key rollover)
+  - name: CSR
+    description: ICAO PKD CSR generation and management (RSA-2048, SHA256withRSA)
+  - name: PendingDsc
+    description: DSC registration approval workflow (PA-extracted DSC → admin approval)
   - name: Progress
     description: Upload progress tracking (SSE)
 
@@ -2033,6 +2040,365 @@ paths:
           description: Progress status
 
   # ============================================
+  # CSR Management (v2.35.0)
+  # ============================================
+  /api/csr/generate:
+    post:
+      tags: [CSR]
+      summary: Generate RSA-2048 CSR
+      description: |
+        Generate a new ICAO PKD compliant CSR (PKCS#10).
+        RSA 2048 bit public key, SHA256withRSA signature, Base64 (PEM) encoding.
+        Private key is encrypted with AES-256-GCM before storage.
+      operationId: generateCsr
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [countryCode, organization, commonName]
+              properties:
+                countryCode:
+                  type: string
+                  example: KR
+                  description: ISO 3166-1 alpha-2 country code
+                organization:
+                  type: string
+                  example: Ministry of Justice
+                commonName:
+                  type: string
+                  example: Korea Immigration Service
+      responses:
+        '200':
+          description: CSR generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrResponse'
+        '401':
+          description: Unauthorized
+
+  /api/csr/import:
+    post:
+      tags: [CSR]
+      summary: Import external CSR + private key
+      description: |
+        Import an externally generated CSR and private key PEM.
+        Validates CSR signature (X509_REQ_verify) and public key matching (EVP_PKEY_eq).
+        Private key is encrypted with AES-256-GCM before storage.
+      operationId: importCsr
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [csrFile, keyFile]
+              properties:
+                csrFile:
+                  type: string
+                  format: binary
+                  description: CSR PEM file
+                keyFile:
+                  type: string
+                  format: binary
+                  description: Private key PEM file
+      responses:
+        '200':
+          description: CSR imported successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrResponse'
+        '400':
+          description: Invalid CSR or key mismatch
+
+  /api/csr:
+    get:
+      tags: [CSR]
+      summary: List CSRs
+      operationId: listCsrs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, ISSUED, EXPIRED, REVOKED]
+      responses:
+        '200':
+          description: CSR list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CsrSummary'
+                  totalCount:
+                    type: integer
+
+  /api/csr/{id}:
+    get:
+      tags: [CSR]
+      summary: Get CSR detail
+      operationId: getCsrDetail
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CSR detail with issued certificate metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrDetail'
+        '404':
+          description: CSR not found
+    delete:
+      tags: [CSR]
+      summary: Delete CSR
+      operationId: deleteCsr
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CSR deleted
+        '404':
+          description: CSR not found
+
+  /api/csr/{id}/export/pem:
+    get:
+      tags: [CSR]
+      summary: Export CSR as PEM (Base64)
+      operationId: exportCsrPem
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CSR PEM content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrPem:
+                    type: string
+                    description: Base64 encoded CSR PEM
+
+  /api/csr/{id}/certificate:
+    post:
+      tags: [CSR]
+      summary: Register ICAO-issued certificate
+      description: |
+        Register an ICAO-issued certificate against an existing CSR.
+        Validates public key matching (CSR fingerprint comparison).
+        Extracts metadata: serial, issuer, validity, fingerprint.
+      operationId: registerCsrCertificate
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [certificateFile]
+              properties:
+                certificateFile:
+                  type: string
+                  format: binary
+                  description: ICAO-issued certificate file (PEM or DER)
+      responses:
+        '200':
+          description: Certificate registered successfully
+        '400':
+          description: Public key mismatch or invalid certificate
+        '409':
+          description: Certificate already registered
+
+  # ============================================
+  # Pending DSC Approval (v2.31.0)
+  # ============================================
+  /api/certificates/pending-dsc:
+    get:
+      tags: [PendingDsc]
+      summary: List pending DSC registrations
+      description: DSC certificates extracted from PA verification, awaiting admin approval.
+      operationId: listPendingDsc
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: pageSize
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+        - name: country
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pending DSC list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PendingDscItem'
+                  totalCount:
+                    type: integer
+
+  /api/certificates/pending-dsc/stats:
+    get:
+      tags: [PendingDsc]
+      summary: Get pending DSC statistics
+      operationId: getPendingDscStats
+      responses:
+        '200':
+          description: Pending DSC statistics by status and country
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalPending:
+                    type: integer
+                  totalApproved:
+                    type: integer
+                  totalRejected:
+                    type: integer
+                  byCountry:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        countryCode:
+                          type: string
+                        count:
+                          type: integer
+
+  /api/certificates/pending-dsc/{id}/approve:
+    post:
+      tags: [PendingDsc]
+      summary: Approve pending DSC registration
+      description: |
+        Approve a pending DSC certificate for registration.
+        Inserts into certificate table, stores in LDAP, updates status to APPROVED.
+      operationId: approvePendingDsc
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  description: Optional reviewer comment
+      responses:
+        '200':
+          description: DSC approved and registered
+        '404':
+          description: Pending DSC not found
+        '409':
+          description: Already approved or rejected
+
+  /api/certificates/pending-dsc/{id}/reject:
+    post:
+      tags: [PendingDsc]
+      summary: Reject pending DSC registration
+      operationId: rejectPendingDsc
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  description: Rejection reason
+      responses:
+        '200':
+          description: DSC rejected
+        '404':
+          description: Pending DSC not found
+
+  # ============================================
   # Validation
   # ============================================
   /api/validation/revalidate:
@@ -3108,5 +3474,136 @@ components:
           type: string
           enum: [DETECTED, NOTIFIED, DOWNLOADED, IMPORTED, FAILED]
         detected_at:
+          type: string
+          format: date-time
+
+    # ── CSR Schemas (v2.35.0) ──
+    CsrResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        id:
+          type: string
+          format: uuid
+        csrPem:
+          type: string
+          description: Base64 encoded CSR PEM (private key NOT included in response)
+        subjectDn:
+          type: string
+          example: "C=KR, O=Ministry of Justice, CN=Korea Immigration Service"
+        algorithm:
+          type: string
+          example: SHA256withRSA
+        keySize:
+          type: integer
+          example: 2048
+
+    CsrSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        countryCode:
+          type: string
+        organization:
+          type: string
+        commonName:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, ISSUED, EXPIRED, REVOKED]
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        hasCertificate:
+          type: boolean
+
+    CsrDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        countryCode:
+          type: string
+        organization:
+          type: string
+        commonName:
+          type: string
+        csrPem:
+          type: string
+          description: Base64 encoded CSR PEM
+        status:
+          type: string
+          enum: [PENDING, ISSUED, EXPIRED, REVOKED]
+        createdAt:
+          type: string
+          format: date-time
+        createdBy:
+          type: string
+        certificateSerial:
+          type: string
+          description: Issued certificate serial number (null if not yet issued)
+        certificateSubjectDn:
+          type: string
+        certificateIssuerDn:
+          type: string
+        certificateFingerprint:
+          type: string
+        certificateNotBefore:
+          type: string
+          format: date-time
+        certificateNotAfter:
+          type: string
+          format: date-time
+
+    # ── Pending DSC Schemas (v2.31.0) ──
+    PendingDscItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fingerprintSha256:
+          type: string
+        countryCode:
+          type: string
+        subjectDn:
+          type: string
+        issuerDn:
+          type: string
+        serialNumber:
+          type: string
+        notBefore:
+          type: string
+          format: date-time
+        notAfter:
+          type: string
+          format: date-time
+        signatureAlgorithm:
+          type: string
+        publicKeyAlgorithm:
+          type: string
+        publicKeySize:
+          type: integer
+        isSelfSigned:
+          type: boolean
+        validationStatus:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED]
+        reviewedBy:
+          type: string
+        comment:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+        createdAt:
           type: string
           format: date-time

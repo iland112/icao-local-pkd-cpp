@@ -7,6 +7,7 @@ info:
     performs auto-reconciliation, and certificate expiration re-validation.
 
     ## Changelog
+    - **v2.36.0** (2026-03-18): 버전 동기화 (API 시그니처 변경 없음, reconciliation 후 sync check 자동 실행 내부 개선)
     - **v2.30.0** (2026-03-09): SSE heartbeat 30초 간격 추가 (HTTP/2 유휴 연결 에러 방지), 프론트엔드 SSE 재연결 최대 20회 제한
     - **v2.29.1** (2026-03-05): SSE HTTP/2 호환성 수정, 알림 스트림 chunked_transfer_encoding off
     - **v2.29.0** (2026-03-05): 실시간 알림 시스템 (SSE Notification stream), 3단계 DSC 재검증 (만료+Trust Chain+CRL), revalidation-history 확장
@@ -16,7 +17,7 @@ info:
     - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
     - **v1.1.0** (2026-01-06): Daily scheduler, certificate re-validation
     - **v1.0.0** (2026-01-03): Initial release
-  version: 2.30.0
+  version: 2.36.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com

@@ -82,3 +82,6 @@ github-artifacts/
 
 # Claude Code
 .claude/
+
+# Reference Documents
+docs/references/
