@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>전자여권 위·변조 검사 시스템 — H/W 네트워크 구성도</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    html.theme-dark {
+      --bg: #0a0f1a; --surface: #111827; --surface-hover: #1f2937;
+      --border: rgba(255,255,255,0.08);
+      --text: #f1f5f9; --text-secondary: #94a3b8;
+      --accent: #60a5fa; --accent-secondary: #818cf8;
+      --positive: #34d399; --negative: #fb7185; --warning: #fbbf24;
+      --navy: #1e3a5f; --navy-deep: #0f1d32;
+      --zone-internal: rgba(37,99,235,0.08); --zone-dmz: rgba(245,158,11,0.08); --zone-external: rgba(139,92,246,0.08);
+      --zone-internal-border: rgba(37,99,235,0.25); --zone-dmz-border: rgba(245,158,11,0.25); --zone-external-border: rgba(139,92,246,0.25);
+      --server-bg: #1a2744; --server-border: #2d4a7a; --storage-bg: #1a3a2a; --storage-border: #2a6a4a;
+      --ha-color: #f59e0b; --fc-color: #a78bfa; --mgmt-color: #6b7280;
+    }
+    html.theme-light {
+      --bg: #f0f4f8; --surface: #ffffff; --surface-hover: #f1f5f9;
+      --border: rgba(0,0,0,0.08);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #2563eb; --accent-secondary: #6366f1;
+      --positive: #059669; --negative: #e11d48; --warning: #d97706;
+      --navy: #02385e; --navy-deep: #011d33;
+      --zone-internal: rgba(37,99,235,0.06); --zone-dmz: rgba(245,158,11,0.06); --zone-external: rgba(139,92,246,0.06);
+      --zone-internal-border: rgba(37,99,235,0.3); --zone-dmz-border: rgba(245,158,11,0.3); --zone-external-border: rgba(139,92,246,0.3);
+      --server-bg: #eef2ff; --server-border: #a5b4fc; --storage-bg: #ecfdf5; --storage-border: #6ee7b7;
+      --ha-color: #d97706; --fc-color: #7c3aed; --mgmt-color: #9ca3af;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.5; -webkit-font-smoothing: antialiased;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      padding: 24px;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .diagram-wrapper {
+      width: 100%; max-width: 1400px; margin: 0 auto;
+    }
+
+    /* Header */
+    .diagram-header {
+      text-align: center; margin-bottom: 32px;
+    }
+    .diagram-header h1 {
+      font-size: 1.8rem; font-weight: 800; color: var(--text); letter-spacing: -0.03em; margin-bottom: 6px;
+    }
+    .diagram-header p {
+      font-size: 0.85rem; color: var(--text-secondary);
+    }
+
+    /* Main grid */
+    .diagram-grid {
+      display: grid;
+      grid-template-columns: 200px 1fr 200px;
+      grid-template-rows: auto auto auto;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Zone containers */
+    .zone {
+      border-radius: 16px; padding: 16px; position: relative;
+    }
+    .zone-label {
+      position: absolute; top: -10px; left: 20px;
+      font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+      padding: 2px 10px; border-radius: 4px;
+    }
+    .zone-internal { background: var(--zone-internal); border: 1.5px dashed var(--zone-internal-border); }
+    .zone-internal .zone-label { background: rgba(37,99,235,0.15); color: var(--accent); }
+    .zone-dmz { background: var(--zone-dmz); border: 1.5px dashed var(--zone-dmz-border); }
+    .zone-dmz .zone-label { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .zone-external { background: var(--zone-external); border: 1.5px dashed var(--zone-external-border); }
+    .zone-external .zone-label { background: rgba(139,92,246,0.15); color: var(--accent-secondary); }
+
+    /* Server box */
+    .server {
+      background: var(--server-bg); border: 1.5px solid var(--server-border);
+      border-radius: 10px; padding: 12px; text-align: center; position: relative;
+      transition: box-shadow 0.2s;
+    }
+    .server:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    .server-icon {
+      width: 40px; height: 32px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center;
+    }
+    .server-name { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .server-role { font-size: 0.65rem; color: var(--text-secondary); margin-bottom: 4px; }
+    .server-spec { font-size: 0.58rem; color: var(--text-secondary); line-height: 1.4; }
+    .server-sw {
+      margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);
+      font-size: 0.6rem; color: var(--accent); font-weight: 600;
+    }
+
+    /* HA badge */
+    .ha-badge {
+      position: absolute; top: -8px; right: -8px;
+      font-size: 0.55rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      background: var(--ha-color); color: #fff; white-space: nowrap;
+    }
+
+    /* HA group */
+    .ha-group {
+      display: flex; gap: 10px; align-items: center; justify-content: center;
+      position: relative;
+    }
+    .ha-line {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 50px; height: 0; border-top: 2px dashed var(--ha-color);
+      z-index: 0;
+    }
+    .ha-label {
+      position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+      font-size: 0.55rem; font-weight: 700; color: var(--ha-color);
+      background: var(--bg); padding: 0 4px; white-space: nowrap;
+    }
+
+    /* Storage */
+    .storage {
+      background: var(--storage-bg); border: 1.5px solid var(--storage-border);
+      border-radius: 10px; padding: 12px; text-align: center;
+      transition: box-shadow 0.2s;
+    }
+    .storage:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
+    .storage-name { font-size: 0.78rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .storage-spec { font-size: 0.58rem; color: var(--text-secondary); line-height: 1.4; }
+
+    /* SAN switch */
+    .san-switch {
+      background: var(--surface); border: 1.5px solid var(--fc-color);
+      border-radius: 8px; padding: 8px 12px; text-align: center;
+      font-size: 0.65rem; font-weight: 600; color: var(--fc-color);
+    }
+
+    /* Client box */
+    .client-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px; text-align: center;
+    }
+    .client-box .client-icon { font-size: 1.5rem; margin-bottom: 4px; }
+    .client-box .client-name { font-size: 0.78rem; font-weight: 700; color: var(--text); }
+    .client-box .client-desc { font-size: 0.6rem; color: var(--text-secondary); }
+
+    /* Connection lines (CSS-based) */
+    .conn-arrow {
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem; color: var(--text-secondary); gap: 4px;
+      padding: 4px 0;
+    }
+    .conn-arrow .line { flex: 1; height: 0; border-top: 1.5px solid var(--border); }
+    .conn-arrow .label { white-space: nowrap; font-weight: 600; font-size: 0.55rem; }
+    .conn-arrow.fc .line { border-color: var(--fc-color); border-style: solid; }
+    .conn-arrow.fc .label { color: var(--fc-color); }
+    .conn-arrow.mgmt .line { border-color: var(--mgmt-color); border-style: dotted; }
+    .conn-arrow.mgmt .label { color: var(--mgmt-color); }
+    .conn-arrow.net10g .line { border-color: var(--accent); border-width: 2px; }
+    .conn-arrow.net10g .label { color: var(--accent); }
+
+    /* Section layout helpers */
+    .service-tier { display: flex; gap: 16px; align-items: stretch; justify-content: center; flex-wrap: wrap; }
+    .data-tier { display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap; }
+    .vertical-conn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0; }
+    .vertical-conn .vline { width: 0; height: 20px; border-left: 1.5px solid var(--border); }
+    .vertical-conn .vlabel { font-size: 0.55rem; color: var(--text-secondary); font-weight: 600; }
+    .vertical-conn.fc .vline { border-color: var(--fc-color); }
+    .vertical-conn.net10g .vline { border-color: var(--accent); border-width: 2px; }
+
+    /* Full layout */
+    .full-layout { display: flex; flex-direction: column; gap: 16px; width: 100%; }
+
+    .tier-row {
+      display: flex; gap: 20px; align-items: stretch; width: 100%;
+    }
+    .tier-left { width: 180px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+    .tier-center { flex: 1; }
+    .tier-right { width: 200px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; justify-content: center; }
+
+    /* Legend */
+    .legend {
+      display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+      padding: 12px; margin-top: 20px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      font-size: 0.65rem; color: var(--text-secondary);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-line { width: 24px; height: 0; }
+    .legend-line.net10g { border-top: 2.5px solid var(--accent); }
+    .legend-line.fc { border-top: 2px solid var(--fc-color); }
+    .legend-line.ha { border-top: 2px dashed var(--ha-color); }
+    .legend-line.mgmt { border-top: 1.5px dotted var(--mgmt-color); }
+    .legend-box { width: 14px; height: 14px; border-radius: 3px; }
+
+    /* Spec tables */
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .spec-table th {
+      text-align: left; padding: 10px 12px; font-weight: 700; font-size: 0.7rem;
+      text-transform: uppercase; letter-spacing: 0.05em;
+      background: var(--navy); color: #fff; border-bottom: 2px solid var(--navy-deep);
+    }
+    .spec-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .spec-table tr:hover td { background: var(--surface-hover); }
+    .spec-table .sw-section-header td {
+      background: var(--surface-hover); font-weight: 700; font-size: 0.72rem;
+      text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary);
+      padding: 6px 12px; border-bottom: 2px solid var(--border);
+    }
+
+    /* Animations */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+    .animate.delay-5 { animation-delay: 0.5s; }
+
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media print {
+      body { background: white !important; color: black !important; padding: 12px; }
+      .viz-menu { display: none !important; }
+      .zone { border: 1px solid #ccc; }
+      .server, .storage { border: 1px solid #999; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+    @media (max-width: 768px) {
+      .tier-row { flex-direction: column; }
+      .tier-left, .tier-right { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    }
+    @media (max-width: 375px) { body { overflow-x: hidden; padding: 12px; } }
+
+    /* Menu */
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle { width: 40px; height: 40px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(12px); transition: all 0.2s; }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown { position: absolute; top: 48px; right: 0; min-width: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 6px; opacity: 0; visibility: hidden; transform: translateY(-8px); transition: all 0.2s; backdrop-filter: blur(16px); }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button { width: 100%; padding: 8px 12px; border: none; border-radius: 8px; background: transparent; color: var(--text); font-size: 0.82rem; font-family: inherit; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 8px; transition: background 0.15s; }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    /* Firewall */
+    .firewall {
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 6px 0; font-size: 0.6rem; font-weight: 700; color: var(--negative);
+    }
+    .fw-line { flex: 1; height: 0; border-top: 2px solid var(--negative); border-style: double; }
+
+    /* Rack label */
+    .rack-label {
+      font-size: 0.6rem; font-weight: 600; color: var(--text-secondary);
+      text-align: center; padding: 4px 0;
+      border-bottom: 1px solid var(--border); margin-bottom: 8px;
+    }
+
+    .server-icon svg { width: 36px; height: 28px; }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link" style="position:absolute;left:-9999px;">Skip to content</a>
+
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">☀️</span> <span id="themeLabel">Light</span></button>
+      <button onclick="downloadImage()">📸 PNG 다운로드</button>
+      <button onclick="window.print()">🖨️ 인쇄</button>
+    </div>
+  </div>
+
+  <main id="main-content" role="main">
+    <div class="diagram-wrapper">
+
+      <!-- Header -->
+      <section class="diagram-header animate">
+        <h1>전자여권 위·변조 검사 시스템 H/W 네트워크 구성도</h1>
+        <p>High Availability 이중화 구성 · 사업계획서 도입 장비 사양 기준</p>
+      </section>
+
+      <!-- Main Diagram -->
+      <section class="full-layout" aria-label="네트워크 다이어그램">
+
+        <!-- === ROW 1: 관리자 PC + 서비스 계층 + 외부 연계 === -->
+        <div class="tier-row animate delay-1">
+
+          <!-- LEFT: ICRM 심사 단말 -->
+          <div class="tier-left">
+            <div class="client-box">
+              <div style="font-size:0.6rem;font-weight:700;color:var(--accent);margin-bottom:6px">ICRM 심사 단말</div>
+              <div style="display:flex;gap:8px;justify-content:center;margin-bottom:6px">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              </div>
+              <div class="client-desc">입·출국심사 / 자동심사(SES)<br>체류관리 / 사법처리 / 국적심사</div>
+              <div style="margin-top:6px;font-size:0.55rem;color:var(--accent);font-weight:600">PKI Toolkit (1,500대)</div>
+            </div>
+            <div class="conn-arrow net10g" style="transform:rotate(0deg)">
+              <span class="label">PA 검증</span>
+              <span class="line"></span>
+              <span style="font-size:0.7rem">→</span>
+            </div>
+            <div class="client-box" style="margin-top:4px">
+              <div style="font-size:0.6rem;font-weight:700;color:var(--positive);margin-bottom:4px">연계기관</div>
+              <div class="client-desc">관세청 · 외교부 · 인천공항공사<br>재외공관 · 크루즈 터미널</div>
+              <div style="margin-top:4px;font-size:0.55rem;color:var(--accent);font-weight:600">REST API (X-API-Key)</div>
+            </div>
+          </div>
+
+          <!-- CENTER: 서비스 계층 + DMZ -->
+          <div class="tier-center">
+            <div style="display:flex;gap:16px;">
+
+              <!-- 내부 서비스 영역 -->
+              <div class="zone zone-internal" style="flex:1;padding-top:24px">
+                <span class="zone-label">내부망 — 서비스 계층</span>
+
+                <!-- 관리자 PC -->
+                <div style="text-align:center;margin-bottom:12px">
+                  <div style="display:inline-flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 14px">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    <div style="text-align:left">
+                      <div style="font-size:0.7rem;font-weight:700">Local PKD 관리자 PC</div>
+                      <div style="font-size:0.55rem;color:var(--text-secondary)">인증서 업로드 · 관리 · 모니터링</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 관리서버 -->
+                <div style="display:flex;justify-content:center;margin-bottom:10px">
+                  <div class="server" style="width:200px">
+                    <div class="server-icon">
+                      <svg viewBox="0 0 36 28" fill="none" stroke="var(--accent)" stroke-width="1.2">
+                        <rect x="2" y="1" width="32" height="8" rx="2"/><circle cx="28" cy="5" r="1.5" fill="var(--positive)"/>
+                        <rect x="2" y="11" width="32" height="8" rx="2"/><circle cx="28" cy="15" r="1.5" fill="var(--positive)"/>
+                        <rect x="2" y="21" width="32" height="6" rx="2"/><circle cx="28" cy="24" r="1.5" fill="var(--positive)"/>
+                      </svg>
+                    </div>
+                    <div class="server-name">관리서버</div>
+                    <div class="server-role">API Gateway · 모니터링 · 관리 UI</div>
+                    <div class="server-spec">16Core 3.2GHz · 32GB · 960GB SSD×2<br>10GbE×2 · 1GbE×4 (관리)</div>
+                    <div class="server-sw">nginx · Monitoring · React UI</div>
+                    <div class="ha-badge" style="background:var(--accent)">×1식</div>
+                  </div>
+                </div>
+
+                <div class="vertical-conn net10g"><span class="vlabel">10GbE</span><span class="vline" style="height:12px"></span></div>
+
+                <!-- PKD서버 HA 그룹 -->
+                <div style="position:relative;margin-bottom:10px">
+                  <div class="ha-label" style="top:-12px">Active — Active</div>
+                  <div class="ha-group">
+                    <div class="server" style="width:180px;z-index:1">
+                      <div class="server-icon">
+                        <svg viewBox="0 0 36 28" fill="none" stroke="var(--accent)" stroke-width="1.2">
+                          <rect x="2" y="1" width="32" height="8" rx="2"/><circle cx="28" cy="5" r="1.5" fill="var(--positive)"/>
+                          <rect x="2" y="11" width="32" height="8" rx="2"/><circle cx="28" cy="15" r="1.5" fill="var(--positive)"/>
+                          <rect x="2" y="21" width="32" height="6" rx="2"/><circle cx="28" cy="24" r="1.5" fill="var(--accent)"/>
+                        </svg>
+                      </div>
+                      <div class="server-name">PKD서버 #1</div>
+                      <div class="server-role">PA Server · Local PKD 관리</div>
+                      <div class="server-spec">16Core · 32GB · 960GB SSD×2<br>10GbE×2 · 1GbE×4</div>
+                      <div class="server-sw">PKD Manager · PKI Toolkit<br>LDAP Server (Primary)</div>
+                      <div class="ha-badge">Active</div>
+                    </div>
+                    <div class="ha-line"></div>
+                    <div class="server" style="width:180px;z-index:1">
+                      <div class="server-icon">
+                        <svg viewBox="0 0 36 28" fill="none" stroke="var(--accent)" stroke-width="1.2">
+                          <rect x="2" y="1" width="32" height="8" rx="2"/><circle cx="28" cy="5" r="1.5" fill="var(--positive)"/>
+                          <rect x="2" y="11" width="32" height="8" rx="2"/><circle cx="28" cy="15" r="1.5" fill="var(--positive)"/>
+                          <rect x="2" y="21" width="32" height="6" rx="2"/><circle cx="28" cy="24" r="1.5" fill="var(--accent)"/>
+                        </svg>
+                      </div>
+                      <div class="server-name">PKD서버 #2</div>
+                      <div class="server-role">PA Server · Local PKD 관리</div>
+                      <div class="server-spec">16Core · 32GB · 960GB SSD×2<br>10GbE×2 · 1GbE×4</div>
+                      <div class="server-sw">PKD Manager · PKI Toolkit<br>LDAP Server (Replica)</div>
+                      <div class="ha-badge">Active</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DMZ 영역 -->
+              <div class="zone zone-dmz" style="width:220px;padding-top:24px;display:flex;flex-direction:column;justify-content:center;gap:12px">
+                <span class="zone-label">DMZ</span>
+
+                <div class="firewall">
+                  <span class="fw-line"></span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>방화벽</span>
+                  <span class="fw-line"></span>
+                </div>
+
+                <!-- 중계서버 HA 그룹 -->
+                <div style="position:relative">
+                  <div class="ha-label">Active — Standby</div>
+                  <div style="display:flex;flex-direction:column;gap:8px;align-items:center">
+                    <div class="server" style="width:170px">
+                      <div class="server-icon">
+                        <svg viewBox="0 0 36 28" fill="none" stroke="var(--warning)" stroke-width="1.2">
+                          <rect x="2" y="1" width="32" height="12" rx="2"/><circle cx="28" cy="7" r="1.5" fill="var(--positive)"/>
+                          <rect x="2" y="15" width="32" height="12" rx="2"/><circle cx="28" cy="21" r="1.5" fill="var(--positive)"/>
+                        </svg>
+                      </div>
+                      <div class="server-name">중계서버 #1</div>
+                      <div class="server-role">ICAO PKD 연계 (CSR인증+LDAP/REST)</div>
+                      <div class="server-spec">16Core · 32GB · 960GB SSD×2</div>
+                      <div class="server-sw">PKD 중계 에이전트</div>
+                      <div class="ha-badge">Active</div>
+                    </div>
+                    <div style="border-left:2px dashed var(--ha-color);height:8px"></div>
+                    <div class="server" style="width:170px">
+                      <div class="server-icon">
+                        <svg viewBox="0 0 36 28" fill="none" stroke="var(--warning)" stroke-width="1.2">
+                          <rect x="2" y="1" width="32" height="12" rx="2"/><circle cx="28" cy="7" r="1.5" fill="var(--mgmt-color)"/>
+                          <rect x="2" y="15" width="32" height="12" rx="2"/><circle cx="28" cy="21" r="1.5" fill="var(--mgmt-color)"/>
+                        </svg>
+                      </div>
+                      <div class="server-name">중계서버 #2</div>
+                      <div class="server-role">ICAO PKD 연계 (CSR인증+LDAP/REST)</div>
+                      <div class="server-spec">16Core · 32GB · 960GB SSD×2</div>
+                      <div class="server-sw">PKD 중계 에이전트</div>
+                      <div class="ha-badge" style="background:var(--mgmt-color)">Standby</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="firewall">
+                  <span class="fw-line"></span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span>방화벽</span>
+                  <span class="fw-line"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: 외부 연계 -->
+          <div class="tier-right">
+            <div class="zone zone-external" style="padding-top:24px">
+              <span class="zone-label">외부망</span>
+              <div class="client-box" style="margin-bottom:12px;border-color:var(--accent-secondary)">
+                <div style="font-size:0.65rem;font-weight:700;color:var(--accent-secondary);margin-bottom:6px">ICAO PKD</div>
+                <div class="client-desc" style="font-size:0.58rem">
+                  CSCA Master Lists<br>
+                  DSCs · CRLs<br>
+                  DL · NC-DATA
+                </div>
+                <div style="margin-top:6px;font-size:0.5rem;color:var(--text-secondary)">pkddownloadsg.icao.int</div>
+                <div style="margin-top:4px;display:flex;flex-direction:column;gap:2px">
+                  <span style="font-size:0.5rem;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,0.12);color:var(--accent-secondary);font-weight:600">CSR 인증 로그인</span>
+                  <span style="font-size:0.5rem;padding:1px 5px;border-radius:3px;background:rgba(139,92,246,0.12);color:var(--accent-secondary);font-weight:600">LDAP + REST/Web API</span>
+                </div>
+                <div style="margin-top:3px;font-size:0.45rem;color:var(--text-secondary)">2026.03~ 신규 인터페이스</div>
+              </div>
+              <div class="client-box" style="border-color:var(--positive)">
+                <div style="font-size:0.65rem;font-weight:700;color:var(--positive);margin-bottom:6px">외교부</div>
+                <div class="client-desc" style="font-size:0.58rem">
+                  전자여권시스템<br>
+                  CSCA Master Lists<br>
+                  DSCs · CRLs · NC-DATA
+                </div>
+                <div style="margin-top:6px;font-size:0.5rem;color:var(--text-secondary)">양자 협정 경로<br>공문 · 저장매체 수신</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- === ROW 2: SAN Fabric + Data 계층 === -->
+        <div class="tier-row animate delay-3">
+          <div class="tier-left"></div>
+          <div class="tier-center">
+            <div class="zone zone-internal" style="padding-top:24px">
+              <span class="zone-label">내부망 — Data 계층</span>
+
+              <div class="vertical-conn fc"><span class="vlabel">32Gb FC (HBA×4)</span><span class="vline"></span></div>
+
+              <!-- SAN Fabric 이중화 -->
+              <div style="display:flex;gap:12px;justify-content:center;margin-bottom:10px">
+                <div class="san-switch" style="position:relative">
+                  <svg width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="var(--fc-color)" stroke-width="1.2" style="margin-bottom:2px">
+                    <rect x="1" y="1" width="22" height="14" rx="3"/>
+                    <circle cx="5" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="21" cy="8" r="1.5"/>
+                  </svg>
+                  <div>SAN 스위치 #1</div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary)">24port 32Gb FC</div>
+                  <div class="ha-badge" style="background:var(--fc-color)">Fabric A</div>
+                </div>
+                <div style="display:flex;align-items:center">
+                  <div style="border-top:2px dashed var(--ha-color);width:30px"></div>
+                </div>
+                <div class="san-switch" style="position:relative">
+                  <svg width="20" height="14" viewBox="0 0 24 16" fill="none" stroke="var(--fc-color)" stroke-width="1.2" style="margin-bottom:2px">
+                    <rect x="1" y="1" width="22" height="14" rx="3"/>
+                    <circle cx="5" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/><circle cx="13" cy="8" r="1.5"/><circle cx="17" cy="8" r="1.5"/><circle cx="21" cy="8" r="1.5"/>
+                  </svg>
+                  <div>SAN 스위치 #2</div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary)">24port 32Gb FC</div>
+                  <div class="ha-badge" style="background:var(--fc-color)">Fabric B</div>
+                </div>
+              </div>
+
+              <div class="vertical-conn fc"><span class="vline"></span></div>
+
+              <!-- 스토리지 + DBMS -->
+              <div style="display:flex;gap:16px;justify-content:center;align-items:stretch">
+                <div class="storage" style="flex:1;max-width:280px">
+                  <div style="display:flex;justify-content:center;margin-bottom:6px">
+                    <svg width="44" height="32" viewBox="0 0 48 32" fill="none" stroke="var(--positive)" stroke-width="1.2">
+                      <rect x="2" y="2" width="44" height="8" rx="2"/><circle cx="40" cy="6" r="2" fill="var(--positive)"/>
+                      <rect x="2" y="12" width="44" height="8" rx="2"/><circle cx="40" cy="16" r="2" fill="var(--positive)"/>
+                      <rect x="2" y="22" width="44" height="8" rx="2"/><circle cx="40" cy="26" r="2" fill="var(--positive)"/>
+                    </svg>
+                  </div>
+                  <div class="storage-name">공유 스토리지</div>
+                  <div class="storage-spec">
+                    NVMe SSD 7.68TB × 28EA<br>
+                    Usable 150.42 TiB · RaidB<br>
+                    32G FC HBA × 4port<br>
+                    3년 TCE DMR 보증
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;justify-content:center">
+                  <div class="server" style="width:200px;background:var(--storage-bg);border-color:var(--storage-border)">
+                    <div class="server-name" style="color:var(--positive)">LDAP Server (이중화)</div>
+                    <div class="server-spec">LDAP v2/v3 · UTF-8<br>CSCA · DS · CRL 게시<br>3,000 Entry 이상</div>
+                    <div class="ha-badge" style="background:var(--positive)">×2식</div>
+                  </div>
+                  <div class="server" style="width:200px;background:var(--storage-bg);border-color:var(--storage-border)">
+                    <div class="server-name" style="color:var(--positive)">Oracle RDBMS</div>
+                    <div class="server-spec">8 Core · Named 200 Users<br>Java VM · Stored Procedure<br>통계 · 이력/감사 · 인증서 백업</div>
+                    <div class="ha-badge" style="background:var(--positive)">×1식</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="tier-right"></div>
+        </div>
+
+      </section>
+
+      <!-- Legend -->
+      <section class="legend animate delay-4" aria-label="범례">
+        <div class="legend-item"><span class="legend-line net10g"></span> 10GbE (서버 간 통신)</div>
+        <div class="legend-item"><span class="legend-line fc"></span> 32Gb FC (SAN Fabric)</div>
+        <div class="legend-item"><span class="legend-line ha"></span> HA Heartbeat</div>
+        <div class="legend-item"><span class="legend-line mgmt"></span> 1GbE 관리 네트워크</div>
+        <div class="legend-item"><span class="legend-box" style="background:var(--zone-internal);border:1px dashed var(--zone-internal-border)"></span> 내부망</div>
+        <div class="legend-item"><span class="legend-box" style="background:var(--zone-dmz);border:1px dashed var(--zone-dmz-border)"></span> DMZ</div>
+        <div class="legend-item"><span class="legend-box" style="background:var(--zone-external);border:1px dashed var(--zone-external-border)"></span> 외부망</div>
+      </section>
+
+      <!-- HW Summary -->
+      <section class="animate delay-5" style="margin-top:16px;display:flex;gap:12px;flex-wrap:wrap;justify-content:center">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center">
+          <div style="font-size:1.2rem;font-weight:800;color:var(--accent)">5</div>
+          <div style="font-size:0.65rem;color:var(--text-secondary)">서버 (이중화)</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center">
+          <div style="font-size:1.2rem;font-weight:800;color:var(--fc-color)">2</div>
+          <div style="font-size:0.65rem;color:var(--text-secondary)">SAN 스위치</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;text-align:center">
+          <div style="font-size:1.2rem;font-weight:800;color:var(--positive)">150.4TiB</div>
+          <div style="font-size:0.65rem;color:var(--text-secondary)">스토리지</div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- H/W 도입 사양 테이블 -->
+      <!-- ============================================================ -->
+      <section class="animate delay-5" style="margin-top:40px" aria-label="하드웨어 도입 사양">
+        <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:16px;letter-spacing:-0.03em">도입 H/W 사양 및 수량</h2>
+        <div style="overflow-x:auto">
+          <table class="spec-table">
+            <thead>
+              <tr>
+                <th style="width:14%">품명</th>
+                <th style="width:56%">세부 사양</th>
+                <th style="width:10%">수량</th>
+                <th style="width:20%">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>중계서버</strong></td>
+                <td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · 이중화 · Windows 라이선스</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td>DMZ · Active-Standby</td>
+              </tr>
+              <tr>
+                <td><strong>PKD서버</strong></td>
+                <td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · 이중화 · Windows 라이선스</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td>서비스 계층 · Active-Active</td>
+              </tr>
+              <tr>
+                <td><strong>관리서버</strong></td>
+                <td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · Windows 라이선스</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>API Gateway · 관리 UI</td>
+              </tr>
+              <tr>
+                <td><strong>스토리지</strong></td>
+                <td>NVMe SSD 7.68TB ×28EA · Usable 150.42TiB · RaidB 지원 · 32G 4p HBA ×4ea · 3년 TCE DMR 보증</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>SAN 공유 스토리지</td>
+              </tr>
+              <tr>
+                <td><strong>SAN 스위치</strong></td>
+                <td>24port 32Gb FC Switch</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td>Fabric A/B 이중화</td>
+              </tr>
+              <tr>
+                <td><strong>랙 및 KVM</strong></td>
+                <td>Deep Rack · 16port KVM 지원</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- S/W 도입 사양 테이블 -->
+      <!-- ============================================================ -->
+      <section class="animate delay-5" style="margin-top:32px" aria-label="소프트웨어 도입 사양">
+        <h2 style="font-size:1.3rem;font-weight:800;margin-bottom:16px;letter-spacing:-0.03em">도입 S/W 사양 및 수량</h2>
+        <div style="overflow-x:auto">
+          <table class="spec-table">
+            <thead>
+              <tr>
+                <th style="width:14%">품명</th>
+                <th style="width:52%">규격 및 기능</th>
+                <th style="width:10%">수량</th>
+                <th style="width:24%">설치 위치</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="sw-section-header"><td colspan="4">통합 발주</td></tr>
+              <tr>
+                <td><strong>PKD 중계 에이전트</strong></td>
+                <td>ICAO PKD 서버 연계 · DS인증서/CRL 자동 다운로드 · CSR 기반 인증 로그인 · LDAP V3 + REST/Web API 이중 인터페이스</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td>중계서버 #1, #2</td>
+              </tr>
+              <tr>
+                <td><strong>PKD Manager</strong></td>
+                <td>PKI 기반 DS인증서/CRL 관리 · ICAO 규정 PA 인증 · 사용자/인증서 관리 · 통계 및 감시</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>PKD서버</td>
+              </tr>
+              <tr>
+                <td><strong>ICAO PKI Toolkit</strong></td>
+                <td>전자여권 판독 기능 제공 (단말별 라이선스 1,500대) · PA/BAC/AA 인증 · ICAO 표준 및 EU EAC 지원</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>PKD서버 + 심사 단말</td>
+              </tr>
+              <tr>
+                <td><strong>LDAP Server</strong></td>
+                <td>CSCA, DS, CRL 게시 · LDAP v2/v3 완벽 지원 · UTF-8 한글/외국어 (3,000 Entry)</td>
+                <td style="text-align:center;font-weight:700">2식</td>
+                <td>PKD서버 #1, #2</td>
+              </tr>
+              <tr>
+                <td><strong>DBMS (Oracle)</strong></td>
+                <td>8 Core (Named 200 Users) · Java VM · Java Function · Stored Procedure · XML</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>스토리지 연결</td>
+              </tr>
+              <tr class="sw-section-header"><td colspan="4">상용 S/W 직접 구매</td></tr>
+              <tr>
+                <td><strong>서버보안</strong></td>
+                <td>Secuve TOS V5.0 for Windows — 서버 라이선스</td>
+                <td style="text-align:center;font-weight:700">5식</td>
+                <td>전체 서버</td>
+              </tr>
+              <tr>
+                <td><strong>모니터링</strong></td>
+                <td>Sycros v3 Agent & System Monitoring for Win or Linux</td>
+                <td style="text-align:center;font-weight:700">5식</td>
+                <td>전체 서버</td>
+              </tr>
+              <tr>
+                <td><strong>DB 접근제어</strong></td>
+                <td>Chakra MAX — 7~8 Core · Ethernet Adaptor</td>
+                <td style="text-align:center;font-weight:700">1식</td>
+                <td>DB서버</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+
+
+    </div>
+  </main>
+
+  <script>
+    function toggleMenu() { var d = document.getElementById('vizMenuDropdown'); if (d) d.classList.toggle('open'); }
+    document.addEventListener('click', function(e) { if (!e.target.closest('.viz-menu')) { var d = document.getElementById('vizMenuDropdown'); if (d) d.classList.remove('open'); } });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape') { var d = document.getElementById('vizMenuDropdown'); if (d) d.classList.remove('open'); } });
+
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || 'light';
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t); currentTheme = t;
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    async function downloadImage() {
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.querySelector('.diagram-wrapper'), { quality: 1, pixelRatio: 2 });
+        var a = document.createElement('a'); a.href = url; a.download = 'hw-network-diagram.png'; a.click();
+      } catch(e) { console.error(e); }
+      menu.style.display = '';
+    }
+  </script>
+</body>
+</html>

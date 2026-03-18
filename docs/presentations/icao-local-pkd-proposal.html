@@ -83,14 +83,14 @@
     .cover-bg-pattern { position: absolute; inset: 0; opacity: 0.04; background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.4) 1px, transparent 0); background-size: 32px 32px; }
 
     /* Part divider */
-    .part-label { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.6; margin-bottom: 12px; }
+    .part-label { font-size: 1rem; text-transform: uppercase; letter-spacing: 0.15em; opacity: 0.5; margin-bottom: 12px; border-bottom: 2px solid rgba(255,255,255,0.2); padding-bottom: 8px; display: inline-block; }
     .part-title { font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 800; text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
     .part-subtitle { font-size: 1.2rem; opacity: 0.7; margin-top: 16px; max-width: 600px; }
 
     /* Content slides */
-    .slide-header { margin-bottom: 32px; width: 100%; }
-    .slide-header h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); color: var(--text); }
-    .slide-header .slide-tag { display: inline-block; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 8px; }
+    .slide-header { margin-bottom: 28px; width: 100%; position: relative; }
+    .slide-header h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); color: var(--text); padding-bottom: 12px; border-bottom: 3px solid var(--accent); display: inline-block; }
+    .slide-header .slide-tag { display: inline-block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: var(--accent); padding: 2px 10px; border-radius: 4px; margin-bottom: 10px; }
     .slide-body { width: 100%; flex: 1; overflow-y: auto; }
 
     /* Grids */
@@ -100,37 +100,39 @@
     .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; width: 100%; align-items: start; }
 
     /* Cards */
-    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; transition: box-shadow 0.2s ease; }
-    .card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; transition: box-shadow 0.2s ease, transform 0.2s ease; }
+    .card:hover { box-shadow: 0 6px 24px rgba(0,0,0,0.1); transform: translateY(-1px); }
     .card-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 12px; font-size: 1.2rem; }
     .card-title { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
     .card-desc { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
 
     /* Stat cards */
-    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; text-align: center; position: relative; overflow: hidden; }
+    .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-secondary)); }
     .stat-value { font-size: 2rem; font-weight: 800; color: var(--accent); line-height: 1.1; margin-bottom: 4px; }
     .stat-label { font-size: 0.8rem; color: var(--text-secondary); font-weight: 500; }
 
     /* Impact card */
-    .impact-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+    .impact-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: center; gap: 14px; transition: border-color 0.2s; }
+    .impact-card:hover { border-color: var(--accent); }
     .impact-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
     .impact-text { font-size: 0.85rem; line-height: 1.4; }
     .impact-text strong { font-weight: 700; }
 
     /* Tables */
     .data-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
-    .data-table th { text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid var(--border); color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .data-table th { text-align: left; padding: 10px 14px; font-weight: 700; border-bottom: none; color: #fff; background: var(--navy); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
     .data-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
     .data-table tr:hover td { background: var(--surface-hover); }
 
     /* Timeline */
     .timeline-step { display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; }
-    .timeline-dot { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff; }
+    .timeline-dot { width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.85rem; color: #fff; box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
     .timeline-content h4 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
     .timeline-content p { font-size: 0.85rem; color: var(--text-secondary); }
 
     /* Badge */
-    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em; }
     .badge-green { background: rgba(16,185,129,0.12); color: var(--positive); }
     .badge-orange { background: rgba(245,158,11,0.12); color: var(--warning); }
     .badge-red { background: rgba(244,63,94,0.12); color: var(--negative); }
@@ -139,10 +141,10 @@
 
     /* Process flow */
     .process-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 16px 0; }
-    .process-step { background: var(--surface); border: 1px solid var(--border); padding: 8px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 500; white-space: nowrap; }
+    .process-step { background: var(--surface); border: 1.5px solid var(--border); padding: 8px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 600; white-space: nowrap; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
     .process-arrow { color: var(--text-secondary); font-size: 1.2rem; }
 
-    .highlight-row { background: rgba(37,99,235,0.06); }
+    .highlight-row { background: rgba(37,99,235,0.06); border-left: 3px solid var(--accent); }
     .check-list { list-style: none; }
     .check-list li { padding: 6px 0; font-size: 0.88rem; display: flex; align-items: flex-start; gap: 8px; }
     .check-list .icon { flex-shrink: 0; width: 18px; text-align: center; }
@@ -156,11 +158,11 @@
     .chart-container { height: 220px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); padding: 16px; }
 
     /* Nav */
-    .slide-nav { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 9998; background: var(--surface); border: 1px solid var(--border); padding: 6px 12px; border-radius: 24px; backdrop-filter: blur(12px); }
+    .slide-nav { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 9998; background: var(--surface); border: 1px solid var(--border); padding: 6px 16px; border-radius: 24px; backdrop-filter: blur(16px); box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
     .slide-nav button { width: 32px; height: 32px; border-radius: 8px; background: transparent; border: none; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
     .slide-nav button:hover { background: var(--surface-hover); color: var(--text); }
     .slide-counter { font-size: 0.75rem; color: var(--text-secondary); font-weight: 500; min-width: 48px; text-align: center; }
-    .progress-bar { position: fixed; top: 0; left: 0; height: 3px; z-index: 9997; background: linear-gradient(90deg, var(--accent), var(--accent-secondary)); transition: width 0.4s ease; }
+    .progress-bar { position: fixed; top: 0; left: 0; height: 4px; z-index: 9997; background: linear-gradient(90deg, var(--accent), var(--accent-secondary)); transition: width 0.4s ease; box-shadow: 0 1px 6px rgba(37,99,235,0.3); }
 
     /* Animations */
     @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
@@ -193,6 +195,32 @@
       * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
     }
     @page { margin: 0; size: landscape; }
+
+    /* HW Network Diagram styles */
+    .zone { border-radius: 12px; padding: 14px; position: relative; overflow: visible; }
+    .zone-label { position: absolute; top: -9px; left: 16px; font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 1px 8px; border-radius: 3px; z-index: 1; line-height: 1.4; }
+    .zone-internal { background: rgba(37,99,235,0.06); border: 1.5px dashed rgba(37,99,235,0.25); }
+    .zone-internal .zone-label { background: rgba(37,99,235,0.15); color: var(--accent); }
+    .zone-dmz { background: rgba(245,158,11,0.06); border: 1.5px dashed rgba(245,158,11,0.25); }
+    .zone-dmz .zone-label { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .zone-external { background: rgba(139,92,246,0.06); border: 1.5px dashed rgba(139,92,246,0.25); }
+    .zone-external .zone-label { background: rgba(139,92,246,0.15); color: var(--accent-secondary); }
+    .hw-server { background: rgba(37,99,235,0.06); border: 1.5px solid rgba(37,99,235,0.2); border-radius: 8px; padding: 8px; text-align: center; position: relative; }
+    .hw-server-name { font-size: 0.68rem; font-weight: 700; color: var(--text); }
+    .hw-server-role { font-size: 0.55rem; color: var(--text-secondary); }
+    .hw-server-spec { font-size: 0.5rem; color: var(--text-secondary); line-height: 1.3; }
+    .hw-server-sw { font-size: 0.52rem; color: var(--accent); font-weight: 600; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); }
+    .ha-badge { position: absolute; top: -7px; right: -7px; font-size: 0.48rem; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: var(--warning); color: #fff; }
+    .ha-label-text { font-size: 0.5rem; font-weight: 700; color: var(--warning); text-align: center; }
+    .fw-icon { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 0; font-size: 0.52rem; font-weight: 700; color: var(--negative); }
+    .fw-icon .fw-l { flex: 1; height: 0; border-top: 2px double var(--negative); }
+    .san-sw { background: var(--surface); border: 1.5px solid var(--accent-secondary); border-radius: 6px; padding: 4px 8px; text-align: center; font-size: 0.55rem; font-weight: 600; color: var(--accent-secondary); position: relative; }
+    .hw-storage { background: rgba(16,185,129,0.06); border: 1.5px solid rgba(16,185,129,0.2); border-radius: 8px; padding: 8px; text-align: center; }
+    .spec-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .spec-table th { text-align: left; padding: 8px 10px; font-weight: 700; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.04em; background: var(--navy); color: #fff; }
+    .spec-table td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .spec-table tr:hover td { background: var(--surface-hover); }
+    .spec-table .sw-section-header td { background: var(--surface-hover); font-weight: 700; font-size: 0.65rem; color: var(--text-secondary); padding: 5px 10px; border-bottom: 2px solid var(--border); }
 
     @media (max-width: 768px) {
       .slide { padding: 32px 24px; }
@@ -359,19 +387,19 @@
             <div>
               <h3 style="font-size:1rem;margin-bottom:12px;color:var(--accent)">제안 배경</h3>
               <div style="display:flex;flex-direction:column;gap:10px">
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(59,130,246,0.1)">🌐</div><div class="impact-text"><strong>ICAO PA 의무화</strong> — 2024년 Doc 9303 개정으로 Passive Authentication 검증 의무 전환</div></div>
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(244,63,94,0.1)">⚠️</div><div class="impact-text"><strong>3세대 위조 기술</strong> — BAC 통과 + 칩 데이터 정상 읽기까지 가능한 정밀 위조 급증</div></div>
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(245,158,11,0.1)">📈</div><div class="impact-text"><strong>입국자 급증</strong> — 연간 3,000만+ 출입국 심사 건수, 자동화·정확성 필수</div></div>
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(16,185,129,0.1)">🇰🇷</div><div class="impact-text"><strong>스마트 출입국</strong> — SES 18개국 확대, e-Arrival Card 의무화 등 디지털 전환 가속</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(244,63,94,0.1)">⚠️</div><div class="impact-text"><strong>시스템 노후화</strong> — 현 PKD Manager 2009년 도입, HW/SW 내용연수 초과 · 지원 만료</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(59,130,246,0.1)">🌐</div><div class="impact-text"><strong>기술 표준 변경</strong> — LDS 1.8, PACE 등 신규 기술 미지원 (ICAO 2028년 의무 적용 예정)</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(245,158,11,0.1)">📈</div><div class="impact-text"><strong>위조 기술 고도화</strong> — BAC 통과 + 칩 데이터 정상 읽기까지 가능한 3세대 정밀 위조 급증</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(16,185,129,0.1)">🇰🇷</div><div class="impact-text"><strong>서비스 범위 확대</strong> — 입·출국심사 외 인천공항공사, 재외공관, 크루즈 터미널 등 확장 필요</div></div>
               </div>
             </div>
             <div>
               <h3 style="font-size:1rem;margin-bottom:12px;color:var(--positive)">사업 목적</h3>
               <div style="display:flex;flex-direction:column;gap:10px">
-                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>1. ICAO Local PKD 구축</strong><br>전 세계 139개국 인증서 통합 관리 체계 구축</div></div>
-                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>2. PA 검증 체계 확립</strong><br>ICAO 9303 Part 10 & 11 완벽 준수 8단계 자동 검증</div></div>
-                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>3. 위·변조 실시간 탐지</strong><br>100~300ms 이내 전자여권 칩 데이터 무결성 검증</div></div>
-                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>4. 법적 컴플라이언스</strong><br>개인정보보호법, 전자정부법 시행령 요건 충족</div></div>
+                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>1. 전자여권시스템 전면 재구축</strong><br>변경된 기술 표준(LDS 1.8, PACE) 반영 및 인증 체계 고도화</div></div>
+                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>2. Local PKD (재)구축</strong><br>ICAO PKD–Local PKD 연계, 전자여권 검증을 위한 PKD 체계 활용성 강화</div></div>
+                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>3. 전자칩 분석 능력 강화</strong><br>정밀분석·패턴분석·결함처리 프로그램으로 검증 결과의 신뢰도 향상</div></div>
+                <div class="impact-card" style="border-left:3px solid var(--positive)"><div class="impact-text"><strong>4. 운영 관리성·가시성 확보</strong><br>모니터링 에이전트, 운영 통계, 발급상 결함정보 관리 체계 구축</div></div>
               </div>
             </div>
           </div>
@@ -382,42 +410,69 @@
       <section class="slide slide-content" aria-label="현행 시스템 현황">
         <div class="slide-header s-animate">
           <div class="slide-tag">Part 1 — 현황 분석</div>
-          <h2>현행 출입국 심사 시스템 현황과 한계</h2>
+          <h2>현행 전자여권시스템 현황과 문제점</h2>
         </div>
         <div class="slide-body">
           <div class="two-col s-animate s-delay-1">
             <div>
-              <h3 style="font-size:1rem;color:var(--accent);margin-bottom:12px">현행 시스템</h3>
-              <ul class="check-list">
-                <li><span class="icon" style="color:var(--positive)">✓</span>BAC (Basic Access Control) 기반 칩 접근</li>
-                <li><span class="icon" style="color:var(--positive)">✓</span>MRZ 판독 및 데이터 읽기</li>
+              <h3 style="font-size:1rem;color:var(--accent);margin-bottom:10px">현행 운영 현황</h3>
+              <ul class="check-list" style="font-size:0.84rem">
+                <li><span class="icon" style="color:var(--positive)">✓</span>ICRM 기반 입·출국심사 시 전자여권 판독·인증</li>
+                <li><span class="icon" style="color:var(--positive)">✓</span>BAC/CA/AA 인증 + PKI Toolkit PA 검증</li>
                 <li><span class="icon" style="color:var(--positive)">✓</span>자동출입국심사(SES) 18개국 운영</li>
-                <li><span class="icon" style="color:var(--positive)">✓</span>인천·김해·제주 등 12개 공항·항만</li>
+                <li><span class="icon" style="color:var(--positive)">✓</span>PKD Manager로 ICAO PKD → Local PKD 동기</li>
               </ul>
-              <h3 style="font-size:1rem;color:var(--negative);margin-bottom:12px;margin-top:20px">현행 한계</h3>
-              <ul class="check-list">
-                <li><span class="icon" style="color:var(--negative)">✗</span><strong>칩 진위 확인 불가</strong> — 복제 칩 탐지 수단 부재</li>
-                <li><span class="icon" style="color:var(--negative)">✗</span><strong>데이터 무결성 미검증</strong> — DG 변조 탐지 불가</li>
-                <li><span class="icon" style="color:var(--negative)">✗</span><strong>발급국 인증서 미확인</strong> — Trust Chain 부재</li>
-                <li><span class="icon" style="color:var(--negative)">✗</span><strong>인증서 폐기 미확인</strong> — CRL 실시간 체크 불가</li>
+              <h3 style="font-size:1rem;color:var(--negative);margin-bottom:10px;margin-top:16px">핵심 문제점</h3>
+              <ul class="check-list" style="font-size:0.84rem">
+                <li><span class="icon" style="color:var(--negative)">✗</span><strong>시스템 노후화</strong> — PKD Manager 2009년 도입, HW/SW 6년+ 내용연수 초과 및 지원 만료</li>
+                <li><span class="icon" style="color:var(--negative)">✗</span><strong>기술 표준 미지원</strong> — LDS 1.8, PACE 미지원 (ICAO 2028년 의무 적용 권고 중)</li>
+                <li><span class="icon" style="color:var(--negative)">✗</span><strong>ML 미활용</strong> — ICAO Master List을 통한 CSCA 인증서 보조 수집·검증 부재</li>
+                <li><span class="icon" style="color:var(--negative)">✗</span><strong>DL·Non-Conformant 미활용</strong> — 각국 DL 및 비표준 DSC 미준수 사항 관리·조회 부재</li>
               </ul>
             </div>
             <div>
-              <div class="card" style="background:rgba(244,63,94,0.06);border-color:rgba(244,63,94,0.2);text-align:center;padding:24px;margin-bottom:16px">
-                <div style="font-size:2.5rem;margin-bottom:8px">⚠️</div>
-                <h3 style="font-size:1.1rem;color:var(--negative);margin-bottom:6px">핵심 문제</h3>
-                <p style="font-size:0.95rem;font-weight:600">BAC만으로는 3세대 정밀 위조를<br>탐지할 수 없습니다</p>
-              </div>
-              <div class="card" style="padding:16px">
-                <h3 style="font-size:0.9rem;margin-bottom:8px">국제 동향</h3>
-                <div style="display:flex;flex-direction:column;gap:6px;font-size:0.82rem">
-                  <div class="badge badge-red" style="width:fit-content">🇪🇺 EU: 2024년부터 PA 미검증 여권 입국 금지</div>
-                  <div class="badge badge-blue" style="width:fit-content">🇺🇸 US: TSA 요구사항에 PA 포함</div>
-                  <div class="badge badge-orange" style="width:fit-content">🇦🇺 호주·뉴질랜드: PA 전면 시행 완료</div>
-                  <div class="badge badge-green" style="width:fit-content">🌐 ICAO: 회원국 단계적 의무 도입 권고</div>
-                </div>
+              <h3 style="font-size:1rem;color:var(--warning);margin-bottom:10px">추가 개선 필요 사항</h3>
+              <div style="display:flex;flex-direction:column;gap:8px">
+                <div class="impact-card" style="padding:12px"><div class="impact-icon" style="background:rgba(244,63,94,0.1);font-size:0.6rem;font-weight:700;width:48px;min-width:48px">검증</div><div class="impact-text" style="font-size:0.82rem"><strong>검증 결과 인식성 부족</strong> — "성공/실패" 이분법, 신뢰도 개념 부재, 다양한 결과 미전달</div></div>
+                <div class="impact-card" style="padding:12px"><div class="impact-icon" style="background:rgba(245,158,11,0.1);font-size:0.6rem;font-weight:700;width:48px;min-width:48px">분석</div><div class="impact-text" style="font-size:0.82rem"><strong>전자칩 분석도구 부재</strong> — 위·변조 의심 시 상세 분석 소프트웨어 없음</div></div>
+                <div class="impact-card" style="padding:12px"><div class="impact-icon" style="background:rgba(139,92,246,0.1);font-size:0.6rem;font-weight:700;width:48px;min-width:48px">모니터링</div><div class="impact-text" style="font-size:0.82rem"><strong>모니터링 체계 부재</strong> — 오류 빈도·유형 사전 탐지 및 모니터링 기능 미구현</div></div>
+                <div class="impact-card" style="padding:12px"><div class="impact-icon" style="background:rgba(59,130,246,0.1);font-size:0.6rem;font-weight:700;width:48px;min-width:48px">관리</div><div class="impact-text" style="font-size:0.82rem"><strong>인증서 관리 제약</strong> — PKD Manager 별도 관리 기능 미제공, 현황 파악 어려움</div></div>
+                <div class="impact-card" style="padding:12px"><div class="impact-icon" style="background:rgba(16,185,129,0.1);font-size:0.6rem;font-weight:700;width:48px;min-width:48px">범위</div><div class="impact-text" style="font-size:0.82rem"><strong>서비스 범위 한정</strong> — 출입국심사만 대상, 인천공항공사·재외공관 등 확장 필요</div></div>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 5-2: 사업 과제 대응 -->
+      <section class="slide slide-content" aria-label="사업 과제 대응">
+        <div class="slide-header s-animate">
+          <div class="slide-tag">Part 1 — 사업 이해</div>
+          <h2>사업 과제 대응 범위</h2>
+        </div>
+        <div class="slide-body s-animate s-delay-1">
+          <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:12px">전자여권시스템 재구축 사업계획서 22개 과제 중 FastSPKD 직접 대응 항목</p>
+          <table class="data-table" style="font-size:0.8rem">
+            <thead><tr><th style="width:38%">사업 과제</th><th style="width:40%">FastSPKD 대응 기능</th><th style="width:22%">상태</th></tr></thead>
+            <tbody>
+              <tr class="highlight-row"><td><strong>전자여권 인증(PA) 공통 프로그램</strong></td><td>PA Service — ICAO 9303 8단계 검증</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>Local PKD 구축</strong></td><td>ICAO PKD + 양자협정 + DB/LDAP 통합 저장소</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>Local PKD 관리 프로그램</strong></td><td>PKD Management — ML/CSCA/DS/CRL/DL 관리</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>전자여권 운영환경 관리</strong></td><td>환경설정, 인증 적용 여부 관리</td><td><span class="badge badge-blue">부분 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>전자여권 정밀분석 프로그램</strong></td><td>인증서 직접 파싱·분석, Doc 9303 준수 검사</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>전자여권 인증 결함처리</strong></td><td>Doc 9303 Compliance Checklist (28개 항목)</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>데이터 수집 및 패턴분석</strong></td><td>검증 결과 데이터 수집 · 국가별/유형별 통계 분석</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>비정상 패턴 데이터 관리</strong></td><td>오류 유형별 목록 조회 · 빈도/그래프 통계</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>판독·인증 오류 데이터 관리</strong></td><td>오류 건별 상세조회 · 바이너리 데이터 다운로드</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>발급상 결함정보 관리</strong></td><td>DL/Non-Conformant 조회·관리 기능</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>판독·인증 운영 통계 조회</strong></td><td>Dashboard + 보고서 (DSC_NC/CRL/Trust Chain)</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>판독·인증 모니터링 에이전트</strong></td><td>Monitoring Service + SSE 실시간 알림</td><td><span class="badge badge-green">완전 대응</span></td></tr>
+              <tr class="highlight-row"><td><strong>입·출국심사 시 판독·인증</strong></td><td>REST API + X-API-Key 인증 연동</td><td><span class="badge badge-blue">API 제공</span></td></tr>
+            </tbody>
+          </table>
+          <div style="display:flex;gap:16px;margin-top:12px;justify-content:center">
+            <div class="stat-card" style="padding:10px 20px"><div class="stat-value" style="font-size:1.3rem;color:var(--positive)">11/22</div><div class="stat-label">완전 대응 과제</div></div>
+            <div class="stat-card" style="padding:10px 20px"><div class="stat-value" style="font-size:1.3rem;color:var(--accent)">13/22</div><div class="stat-label">직접 대응 과제</div></div>
           </div>
         </div>
       </section>
@@ -444,9 +499,9 @@
             <div>
               <h3 style="font-size:1rem;margin-bottom:12px">위조 기술 3세대 진화</h3>
               <div style="display:flex;flex-direction:column;gap:8px">
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(245,158,11,0.1)">1세대</div><div class="impact-text"><strong>MRZ 위조</strong> — 기계 판독 영역 조작 (육안 검사로 발견)</div></div>
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(244,63,94,0.1)">2세대</div><div class="impact-text"><strong>칩 복제</strong> — 원본 데이터 복사 (BAC 통과)</div></div>
-                <div class="impact-card" style="border:2px solid rgba(124,58,237,0.3)"><div class="impact-icon" style="background:rgba(124,58,237,0.1)">3세대</div><div class="impact-text"><strong>정밀 위조</strong> — BAC·육안 모두 통과, <strong style="color:var(--negative)">PA만이 탐지 가능</strong></div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(245,158,11,0.1);white-space:nowrap;font-size:0.7rem;font-weight:700;width:48px;min-width:48px">1세대</div><div class="impact-text"><strong>MRZ 위조</strong> — 기계 판독 영역 조작 (육안 검사로 발견)</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(244,63,94,0.1);white-space:nowrap;font-size:0.7rem;font-weight:700;width:48px;min-width:48px">2세대</div><div class="impact-text"><strong>칩 복제</strong> — 원본 데이터 복사 (BAC 통과)</div></div>
+                <div class="impact-card" style="border:2px solid rgba(124,58,237,0.3)"><div class="impact-icon" style="background:rgba(124,58,237,0.1);white-space:nowrap;font-size:0.7rem;font-weight:700;width:48px;min-width:48px">3세대</div><div class="impact-text"><strong>정밀 위조</strong> — BAC·육안 모두 통과, <strong style="color:var(--negative)">PA만이 탐지 가능</strong></div></div>
               </div>
             </div>
           </div>
@@ -505,7 +560,7 @@
         <div class="part-label s-animate">Part 2</div>
         <h1 class="part-title s-animate s-delay-1">기술 방안</h1>
         <p class="part-subtitle s-animate s-delay-2" style="font-size:1.8rem;font-weight:700;opacity:1;margin-top:8px">FastSPKD</p>
-        <p class="part-subtitle s-animate s-delay-3">마이크로서비스 아키텍처 · 국제 표준 완벽 준수 · 검증된 성능</p>
+        <p class="part-subtitle s-animate s-delay-3" style="max-width:none;white-space:nowrap">마이크로서비스 아키텍처 · ICAO Doc 9303 등 관련 국제 표준 준수 · 컨테이너 기반 배포 · HA 이중화 구성</p>
       </section>
 
       <!-- SLIDE 9: 시스템 아키텍처 -->
@@ -517,13 +572,12 @@
         <div class="slide-body">
           <div class="two-col s-animate s-delay-1">
             <div>
-              <h3 style="font-size:0.95rem;margin-bottom:12px">5개 독립 마이크로서비스</h3>
+              <h3 style="font-size:0.95rem;margin-bottom:12px">4개 독립 마이크로서비스</h3>
               <div style="display:flex;flex-direction:column;gap:8px">
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(59,130,246,0.1);font-size:0.7rem;font-weight:700">PKD</div><div class="impact-text"><strong>PKD Management</strong> — 인증서 업로드·파싱·검증·관리</div></div>
+                <div class="impact-card"><div class="impact-icon" style="background:rgba(37,99,235,0.1);font-size:0.7rem;font-weight:700">PKD</div><div class="impact-text"><strong>PKD Management</strong> — 인증서 업로드·파싱·검증·관리</div></div>
                 <div class="impact-card"><div class="impact-icon" style="background:rgba(245,158,11,0.1);font-size:0.7rem;font-weight:700">PA</div><div class="impact-text"><strong>PA Service</strong> — ICAO 9303 8단계 위·변조 검증</div></div>
                 <div class="impact-card"><div class="impact-icon" style="background:rgba(16,185,129,0.1);font-size:0.7rem;font-weight:700">Sync</div><div class="impact-text"><strong>PKD Relay</strong> — DB↔LDAP 자동 동기화·조정</div></div>
                 <div class="impact-card"><div class="impact-icon" style="background:rgba(139,92,246,0.1);font-size:0.7rem;font-weight:700">Mon</div><div class="impact-text"><strong>Monitoring</strong> — 시스템 메트릭·서비스 헬스체크</div></div>
-                <div class="impact-card"><div class="impact-icon" style="background:rgba(139,92,246,0.1);font-size:0.7rem;font-weight:700">AI</div><div class="impact-text"><strong>AI Analysis</strong> — ML 기반 이상 인증서 탐지·분석</div></div>
               </div>
             </div>
             <div>
@@ -531,21 +585,371 @@
               <table class="data-table" style="font-size:0.82rem">
                 <tbody>
                   <tr><td style="font-weight:600">Backend</td><td>C++20 / Drogon Framework</td></tr>
-                  <tr><td style="font-weight:600">AI Engine</td><td>Python 3.12 / FastAPI / scikit-learn</td></tr>
                   <tr><td style="font-weight:600">Frontend</td><td>React 19 / TypeScript / Tailwind CSS</td></tr>
-                  <tr><td style="font-weight:600">Database</td><td>PostgreSQL 15 / Oracle XE 21c</td></tr>
+                  <tr><td style="font-weight:600">Database</td><td>Oracle RDBMS</td></tr>
                   <tr><td style="font-weight:600">Directory</td><td>OpenLDAP (MMR 이중화)</td></tr>
                   <tr><td style="font-weight:600">Gateway</td><td>nginx (SSL/TLS, Rate Limiting)</td></tr>
                   <tr><td style="font-weight:600">Container</td><td>Docker / Podman (RHEL 9)</td></tr>
                   <tr><td style="font-weight:600">암호 라이브러리</td><td>OpenSSL 3.x (FIPS 지원)</td></tr>
                 </tbody>
               </table>
-              <div class="card" style="margin-top:12px;padding:12px;text-align:center;background:rgba(37,99,235,0.06);border-color:rgba(37,99,235,0.15)">
-                <span style="font-size:0.82rem;color:var(--text-secondary)">Multi-DBMS 런타임 전환:</span>
-                <span style="font-size:0.9rem;font-weight:700;color:var(--accent)"> DB_TYPE=postgres|oracle</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE 9-2: SW 아키텍처 다이어그램 -->
+      <section class="slide slide-content" aria-label="SW 아키텍처 다이어그램">
+        <div class="slide-header s-animate">
+          <div class="slide-tag">Part 2 — 시스템 설계</div>
+          <h2>소프트웨어 아키텍처 구성도</h2>
+        </div>
+        <div class="slide-body s-animate s-delay-1">
+          <!-- 전체 다이어그램 -->
+          <div style="display:flex;gap:16px;width:100%;font-size:0.72rem">
+
+            <!-- 좌측: ICRM / 연계기관 -->
+            <div style="width:130px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;justify-content:center">
+              <!-- ICRM -->
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:0.68rem;font-weight:700;color:var(--accent);margin-bottom:4px">ICRM</div>
+                <div style="display:flex;gap:4px;justify-content:center;margin-bottom:4px">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+                </div>
+                <div style="font-size:0.58rem;color:var(--text-secondary)">심사 PC (1,500대)<br>PKI Toolkit</div>
+              </div>
+              <!-- 관리자 -->
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>
+                <div style="font-size:0.6rem;font-weight:600">관리자 PC</div>
+                <div style="font-size:0.52rem;color:var(--text-secondary)">React 19 웹 UI</div>
+              </div>
+              <!-- 연계기관 -->
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center">
+                <div style="font-size:0.6rem;font-weight:600;color:var(--positive)">연계기관</div>
+                <div style="font-size:0.52rem;color:var(--text-secondary)">관세청·외교부 등<br>REST API (X-API-Key)</div>
+              </div>
+              <!-- 화살표 -->
+              <div style="text-align:center;font-size:0.55rem;color:var(--text-secondary);font-weight:600">PA 검증 / API →</div>
+            </div>
+
+            <!-- 중앙: 서비스 계층 -->
+            <div style="flex:1;display:flex;flex-direction:column;gap:10px">
+
+              <!-- API Gateway -->
+              <div style="background:linear-gradient(135deg,#02385e,#0a4a7a);border-radius:10px;padding:10px 16px;text-align:center;color:#fff">
+                <div style="font-size:0.7rem;font-weight:700;margin-bottom:2px">API Gateway (nginx)</div>
+                <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;font-size:0.55rem;opacity:0.8">
+                  <span>SSL/TLS 종단</span><span>·</span>
+                  <span>Rate Limiting</span><span>·</span>
+                  <span>로드 밸런싱</span><span>·</span>
+                  <span>CSP 헤더</span><span>·</span>
+                  <span>auth_request</span>
+                </div>
+              </div>
+
+              <!-- 서비스 5개 -->
+              <div style="display:flex;gap:8px">
+                <!-- PKD Management -->
+                <div style="flex:1;background:rgba(37,99,235,0.08);border:1.5px solid rgba(37,99,235,0.25);border-radius:10px;padding:10px;display:flex;flex-direction:column">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--accent);margin-bottom:4px">PKD Management <span style="opacity:0.6">:8081</span></div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary);line-height:1.5;flex:1">
+                    인증서 업로드·파싱<br>
+                    Trust Chain 검증<br>
+                    ICAO 9303 준수 검사<br>
+                    인증서 검색·Export<br>
+                    CSR 관리<br>
+                    API Client 인증<br>
+                    JWT+RBAC 인증
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--accent);font-weight:600;margin-top:4px;padding-top:4px;border-top:1px solid rgba(37,99,235,0.15)">C++20 / Drogon</div>
+                </div>
+                <!-- PA Service -->
+                <div style="flex:1;background:rgba(245,158,11,0.08);border:1.5px solid rgba(245,158,11,0.25);border-radius:10px;padding:10px;display:flex;flex-direction:column">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--warning);margin-bottom:4px">PA Service <span style="opacity:0.6">:8082</span></div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary);line-height:1.5;flex:1">
+                    SOD 서명 검증<br>
+                    DSC → CSCA 체인<br>
+                    DG 해시 비교<br>
+                    CRL 폐기 확인<br>
+                    DSC 자동 등록<br>
+                    DG1/DG2 파싱
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--warning);font-weight:600;margin-top:4px;padding-top:4px;border-top:1px solid rgba(245,158,11,0.15)">C++20 / Drogon</div>
+                </div>
+                <!-- PKD Relay -->
+                <div style="flex:1;background:rgba(16,185,129,0.08);border:1.5px solid rgba(16,185,129,0.25);border-radius:10px;padding:10px;display:flex;flex-direction:column">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--positive);margin-bottom:4px">PKD Relay <span style="opacity:0.6">:8083</span></div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary);line-height:1.5;flex:1">
+                    DB↔LDAP 동기화<br>
+                    자동 Reconciliation<br>
+                    DSC 재검증<br>
+                    SSE 실시간 알림
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--positive);font-weight:600;margin-top:4px;padding-top:4px;border-top:1px solid rgba(16,185,129,0.15)">C++20 / Drogon</div>
+                </div>
+                <!-- Monitoring -->
+                <div style="flex:1;background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.25);border-radius:10px;padding:10px;display:flex;flex-direction:column">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--accent-secondary);margin-bottom:4px">Monitoring <span style="opacity:0.6">:8084</span></div>
+                  <div style="font-size:0.55rem;color:var(--text-secondary);line-height:1.5;flex:1">
+                    서비스 헬스체크<br>
+                    시스템 메트릭<br>
+                    접속자 현황<br>
+                    실시간 알림
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--accent-secondary);font-weight:600;margin-top:4px;padding-top:4px;border-top:1px solid rgba(139,92,246,0.15)">C++20 / Drogon</div>
+                </div>
+              </div>
+
+
+              <!-- Data 계층 -->
+              <div style="display:flex;gap:8px">
+                <!-- RDBMS -->
+                <div style="flex:1;background:rgba(16,185,129,0.06);border:1.5px solid rgba(16,185,129,0.2);border-radius:10px;padding:10px;text-align:center">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--positive);margin-bottom:4px">Oracle RDBMS</div>
+                  <div style="display:flex;gap:6px;justify-content:center;margin-bottom:4px">
+                    <span style="font-size:0.55rem;padding:2px 8px;border-radius:4px;background:rgba(245,158,11,0.12);color:var(--warning);font-weight:600">Oracle DB</span>
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--text-secondary)">IQueryExecutor 패턴 · Repository Pattern<br>certificate · validation_result · crl · operation_audit_log</div>
+                </div>
+                <!-- LDAP -->
+                <div style="flex:1;background:rgba(139,92,246,0.06);border:1.5px solid rgba(139,92,246,0.2);border-radius:10px;padding:10px;text-align:center">
+                  <div style="font-size:0.65rem;font-weight:700;color:var(--accent-secondary);margin-bottom:4px">LDAP (OpenLDAP MMR)</div>
+                  <div style="display:flex;gap:6px;justify-content:center;margin-bottom:4px">
+                    <span style="font-size:0.55rem;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-secondary);font-weight:600">Primary</span>
+                    <span style="font-size:0.55rem;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.12);color:var(--accent-secondary);font-weight:600">Replica</span>
+                  </div>
+                  <div style="font-size:0.5rem;color:var(--text-secondary)">dc=data (CSCA/DSC/CRL/ML)<br>dc=nc-data (DSC_NC) · SW 로드밸런싱</div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 우측: 외부 연계 -->
+            <div style="width:130px;flex-shrink:0;display:flex;flex-direction:column;gap:10px;justify-content:center">
+              <!-- 화살표 -->
+              <div style="text-align:center;font-size:0.55rem;color:var(--text-secondary);font-weight:600">← ICAO PKD 연계</div>
+              <!-- ICAO PKD -->
+              <div style="background:rgba(139,92,246,0.08);border:1.5px solid rgba(139,92,246,0.25);border-radius:10px;padding:10px;text-align:center">
+                <div style="font-size:0.65rem;font-weight:700;color:var(--accent-secondary);margin-bottom:4px">ICAO PKD</div>
+                <div style="font-size:0.52rem;color:var(--text-secondary);line-height:1.5">
+                  CSCA Master Lists<br>
+                  DSCs · CRLs<br>
+                  DL · NC-DATA
+                </div>
+                <div style="display:flex;flex-direction:column;gap:2px;margin-top:4px">
+                  <span style="font-size:0.48rem;padding:1px 4px;border-radius:3px;background:rgba(139,92,246,0.15);color:var(--accent-secondary);font-weight:600">CSR 인증</span>
+                  <span style="font-size:0.48rem;padding:1px 4px;border-radius:3px;background:rgba(139,92,246,0.15);color:var(--accent-secondary);font-weight:600">LDAP+REST</span>
+                </div>
+              </div>
+              <!-- 외교부 -->
+              <div style="background:rgba(16,185,129,0.08);border:1.5px solid rgba(16,185,129,0.25);border-radius:10px;padding:8px;text-align:center">
+                <div style="font-size:0.6rem;font-weight:700;color:var(--positive)">외교부</div>
+                <div style="font-size:0.52rem;color:var(--text-secondary)">전자여권시스템<br>양자 협정 경로</div>
+              </div>
+              <!-- Frontend -->
+              <div style="background:rgba(59,130,246,0.08);border:1.5px solid rgba(59,130,246,0.25);border-radius:10px;padding:8px;text-align:center">
+                <div style="font-size:0.6rem;font-weight:700;color:var(--accent)">Frontend</div>
+                <div style="font-size:0.52rem;color:var(--text-secondary)">React 19 · TypeScript<br>Tailwind CSS · Vite<br>27개 페이지</div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 디자인 패턴 요약 -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;justify-content:center">
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Repository Pattern</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Query Executor (IQueryExecutor)</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Service Container (DI)</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Handler Pattern</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">RAII (Connection Pool)</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Factory Pattern (DB 선택)</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">SSE (Server-Sent Events)</span>
+            <span style="font-size:0.55rem;padding:3px 8px;border-radius:4px;background:var(--surface);border:1px solid var(--border);color:var(--text-secondary)">Docker / Podman (RHEL 9)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE: H/W 네트워크 구성도 -->
+      <section class="slide slide-content" aria-label="H/W 네트워크 구성도">
+        <div class="slide-header s-animate">
+          <div class="slide-tag">Part 2 — 시스템 설계</div>
+          <h2>H/W 네트워크 구성도 (HA 이중화)</h2>
+        </div>
+        <div class="slide-body s-animate s-delay-1">
+          <div style="display:flex;gap:12px;width:100%;font-size:0.65rem">
+
+            <!-- 좌측: ICRM -->
+            <div style="width:120px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;justify-content:center">
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+                <div style="font-size:0.6rem;font-weight:700;color:var(--accent)">ICRM 심사 단말</div>
+                <div style="font-size:0.5rem;color:var(--text-secondary)">입·출국 / SES<br>PKI Toolkit 1,500대</div>
+              </div>
+              <div style="text-align:center;font-size:0.5rem;color:var(--text-secondary);font-weight:600">PA 검증 →</div>
+              <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px;text-align:center">
+                <div style="font-size:0.55rem;font-weight:600;color:var(--positive)">연계기관</div>
+                <div style="font-size:0.48rem;color:var(--text-secondary)">관세청·외교부 등<br>REST API</div>
+              </div>
+            </div>
+
+            <!-- 중앙: 서비스+DMZ -->
+            <div style="flex:1;display:flex;gap:10px">
+              <!-- 내부망 -->
+              <div class="zone zone-internal" style="flex:1;padding-top:22px;margin-top:6px">
+                <span class="zone-label">내부망</span>
+                <div style="text-align:center;margin-bottom:8px">
+                  <span style="font-size:0.52rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:3px 8px">Local PKD 관리자 PC</span>
+                </div>
+                <!-- 관리서버 -->
+                <div style="display:flex;justify-content:center;margin-bottom:6px">
+                  <div class="hw-server" style="width:160px">
+                    <div class="hw-server-name">관리서버</div>
+                    <div class="hw-server-role">API Gateway · 모니터링 · UI</div>
+                    <div class="hw-server-spec">16Core · 32GB · 960GB SSD×2</div>
+                    <div class="ha-badge" style="background:var(--accent)">×1</div>
+                  </div>
+                </div>
+                <div style="text-align:center;font-size:0.5rem;color:var(--accent);font-weight:600">10GbE ↕</div>
+                <!-- PKD서버 HA -->
+                <div style="margin-bottom:6px">
+                  <div class="ha-label-text">Active — Active</div>
+                  <div style="display:flex;gap:6px;justify-content:center">
+                    <div class="hw-server" style="width:140px">
+                      <div class="hw-server-name">PKD서버 #1</div>
+                      <div class="hw-server-role">PA · PKD 관리</div>
+                      <div class="hw-server-spec">16Core · 32GB · SSD×2</div>
+                      <div class="hw-server-sw">PKD Mgr · Toolkit · LDAP(P)</div>
+                      <div class="ha-badge">Active</div>
+                    </div>
+                    <div class="hw-server" style="width:140px">
+                      <div class="hw-server-name">PKD서버 #2</div>
+                      <div class="hw-server-role">PA · PKD 관리</div>
+                      <div class="hw-server-spec">16Core · 32GB · SSD×2</div>
+                      <div class="hw-server-sw">PKD Mgr · Toolkit · LDAP(R)</div>
+                      <div class="ha-badge">Active</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- Data 계층 -->
+                <div style="text-align:center;font-size:0.5rem;color:var(--accent-secondary);font-weight:600">32Gb FC ↕</div>
+                <div style="display:flex;gap:6px;justify-content:center;margin-bottom:6px">
+                  <div class="san-sw">SAN #1<br><span style="font-size:0.45rem">Fabric A</span><div class="ha-badge" style="background:var(--accent-secondary)">24p</div></div>
+                  <div style="border-top:1.5px dashed var(--warning);width:16px;align-self:center"></div>
+                  <div class="san-sw">SAN #2<br><span style="font-size:0.45rem">Fabric B</span><div class="ha-badge" style="background:var(--accent-secondary)">24p</div></div>
+                </div>
+                <div style="display:flex;gap:6px;justify-content:center">
+                  <div class="hw-storage" style="flex:1;max-width:180px">
+                    <div style="font-size:0.6rem;font-weight:700;color:var(--positive)">스토리지</div>
+                    <div style="font-size:0.48rem;color:var(--text-secondary)">NVMe 7.68TB×28EA<br>150.42TiB · RaidB</div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:4px;flex:1;max-width:160px">
+                    <div class="hw-storage">
+                      <div style="font-size:0.55rem;font-weight:700;color:var(--positive)">LDAP (이중화)</div>
+                      <div style="font-size:0.45rem;color:var(--text-secondary)">v2/v3 · 3,000 Entry</div>
+                    </div>
+                    <div class="hw-storage">
+                      <div style="font-size:0.55rem;font-weight:700;color:var(--positive)">Oracle RDBMS</div>
+                      <div style="font-size:0.45rem;color:var(--text-secondary)">8 Core · 200 Users</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- DMZ -->
+              <div class="zone zone-dmz" style="width:150px;padding-top:22px;margin-top:6px;display:flex;flex-direction:column;justify-content:center;gap:6px">
+                <span class="zone-label">DMZ</span>
+                <div class="fw-icon"><span class="fw-l"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="fw-l"></span></div>
+                <div class="ha-label-text">Active — Standby</div>
+                <div class="hw-server" style="border-color:rgba(245,158,11,0.3)">
+                  <div class="hw-server-name">중계서버 #1</div>
+                  <div class="hw-server-role">ICAO PKD 연계</div>
+                  <div class="hw-server-spec">CSR인증 + LDAP/REST</div>
+                  <div class="ha-badge">Active</div>
+                </div>
+                <div style="border-left:1.5px dashed var(--warning);height:4px;margin:0 auto"></div>
+                <div class="hw-server" style="border-color:rgba(245,158,11,0.3)">
+                  <div class="hw-server-name">중계서버 #2</div>
+                  <div class="hw-server-role">ICAO PKD 연계</div>
+                  <div class="hw-server-spec">CSR인증 + LDAP/REST</div>
+                  <div class="ha-badge" style="background:var(--text-secondary)">Standby</div>
+                </div>
+                <div class="fw-icon"><span class="fw-l"></span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span class="fw-l"></span></div>
+              </div>
+            </div>
+
+            <!-- 우측: 외부 -->
+            <div style="width:120px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;justify-content:center">
+              <div class="zone zone-external" style="padding-top:22px;margin-top:6px">
+                <span class="zone-label">외부</span>
+                <div style="background:var(--surface);border:1px solid var(--accent-secondary);border-radius:6px;padding:6px;text-align:center;margin-bottom:6px">
+                  <div style="font-size:0.55rem;font-weight:700;color:var(--accent-secondary)">ICAO PKD</div>
+                  <div style="font-size:0.45rem;color:var(--text-secondary)">CSCA · DSC · CRL<br>DL · NC-DATA</div>
+                  <div style="margin-top:3px;font-size:0.42rem;padding:1px 4px;border-radius:2px;background:rgba(139,92,246,0.12);color:var(--accent-secondary);font-weight:600">CSR + LDAP/REST</div>
+                </div>
+                <div style="background:var(--surface);border:1px solid var(--positive);border-radius:6px;padding:6px;text-align:center">
+                  <div style="font-size:0.55rem;font-weight:700;color:var(--positive)">외교부</div>
+                  <div style="font-size:0.45rem;color:var(--text-secondary)">양자 협정 경로</div>
+                </div>
               </div>
             </div>
           </div>
+
+          <!-- 범례 -->
+          <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px;font-size:0.55rem;color:var(--text-secondary)">
+            <span><span style="display:inline-block;width:16px;border-top:2.5px solid var(--accent);vertical-align:middle;margin-right:4px"></span>10GbE</span>
+            <span><span style="display:inline-block;width:16px;border-top:2px solid var(--accent-secondary);vertical-align:middle;margin-right:4px"></span>32Gb FC</span>
+            <span><span style="display:inline-block;width:16px;border-top:1.5px dashed var(--warning);vertical-align:middle;margin-right:4px"></span>HA Heartbeat</span>
+            <span style="display:inline-block;width:10px;height:10px;background:rgba(37,99,235,0.08);border:1px dashed rgba(37,99,235,0.3);border-radius:2px;vertical-align:middle;margin-right:2px"></span>내부
+            <span style="display:inline-block;width:10px;height:10px;background:rgba(245,158,11,0.08);border:1px dashed rgba(245,158,11,0.3);border-radius:2px;vertical-align:middle;margin-right:2px"></span>DMZ
+            <span style="display:inline-block;width:10px;height:10px;background:rgba(139,92,246,0.08);border:1px dashed rgba(139,92,246,0.3);border-radius:2px;vertical-align:middle;margin-right:2px"></span>외부
+          </div>
+        </div>
+      </section>
+
+      <!-- SLIDE: H/W 도입 사양 -->
+      <section class="slide slide-content" aria-label="H/W 도입 사양">
+        <div class="slide-header s-animate">
+          <div class="slide-tag">Part 2 — 장비 구성</div>
+          <h2>도입 H/W 사양 및 수량</h2>
+        </div>
+        <div class="slide-body s-animate s-delay-1">
+          <table class="spec-table">
+            <thead><tr><th style="width:14%">품명</th><th style="width:56%">세부 사양</th><th style="width:10%">수량</th><th style="width:20%">비고</th></tr></thead>
+            <tbody>
+              <tr><td><strong>중계서버</strong></td><td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · 이중화 · Windows</td><td style="text-align:center;font-weight:700">2식</td><td>DMZ · Active-Standby</td></tr>
+              <tr><td><strong>PKD서버</strong></td><td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · 이중화 · Windows</td><td style="text-align:center;font-weight:700">2식</td><td>서비스 계층 · Active-Active</td></tr>
+              <tr><td><strong>관리서버</strong></td><td>CPU 3.2GHz 16Core · Memory 32GB · DISK 960GB SSD ×2EA · NIC 10GbE 2Port (Gbic) · 관리포트 1GbE 4Port · Windows</td><td style="text-align:center;font-weight:700">1식</td><td>API Gateway · 관리 UI</td></tr>
+              <tr><td><strong>스토리지</strong></td><td>NVMe SSD 7.68TB ×28EA · Usable 150.42TiB · RaidB 지원 · 32G 4p HBA ×4ea · 3년 TCE DMR 보증</td><td style="text-align:center;font-weight:700">1식</td><td>SAN 공유 스토리지</td></tr>
+              <tr><td><strong>SAN 스위치</strong></td><td>24port 32Gb FC Switch</td><td style="text-align:center;font-weight:700">2식</td><td>Fabric A/B 이중화</td></tr>
+              <tr><td><strong>랙 및 KVM</strong></td><td>Deep Rack · 16port KVM 지원</td><td style="text-align:center;font-weight:700">2식</td><td></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- SLIDE: S/W 도입 사양 -->
+      <section class="slide slide-content" aria-label="S/W 도입 사양">
+        <div class="slide-header s-animate">
+          <div class="slide-tag">Part 2 — 장비 구성</div>
+          <h2>도입 S/W 사양 및 수량</h2>
+        </div>
+        <div class="slide-body s-animate s-delay-1">
+          <table class="spec-table">
+            <thead><tr><th style="width:14%">품명</th><th style="width:52%">규격 및 기능</th><th style="width:10%">수량</th><th style="width:24%">설치 위치</th></tr></thead>
+            <tbody>
+              <tr class="sw-section-header"><td colspan="4">통합 발주</td></tr>
+              <tr><td><strong>PKD 중계 에이전트</strong></td><td>ICAO PKD 서버 연계 · DS인증서/CRL 자동 다운로드 · CSR 기반 인증 로그인 · LDAP V3 + REST/Web API 이중 인터페이스</td><td style="text-align:center;font-weight:700">2식</td><td>중계서버 #1, #2</td></tr>
+              <tr><td><strong>PKD Manager</strong></td><td>PKI 기반 DS인증서/CRL 관리 · ICAO 규정 PA 인증 · 사용자/인증서 관리 · 통계 및 감시</td><td style="text-align:center;font-weight:700">1식</td><td>PKD서버</td></tr>
+              <tr><td><strong>ICAO PKI Toolkit</strong></td><td>전자여권 판독 기능 (단말별 라이선스 1,500대) · PA/BAC/AA 인증 · ICAO 표준 및 EU EAC 지원</td><td style="text-align:center;font-weight:700">1식</td><td>PKD서버 + 심사 단말</td></tr>
+              <tr><td><strong>LDAP Server</strong></td><td>CSCA, DS, CRL 게시 · LDAP v2/v3 완벽 지원 · UTF-8 한글/외국어 (3,000 Entry)</td><td style="text-align:center;font-weight:700">2식</td><td>PKD서버 #1, #2</td></tr>
+              <tr><td><strong>DBMS (Oracle)</strong></td><td>8 Core (Named 200 Users) · Java VM · Java Function · Stored Procedure · XML</td><td style="text-align:center;font-weight:700">1식</td><td>스토리지 연결</td></tr>
+              <tr class="sw-section-header"><td colspan="4">상용 S/W 직접 구매</td></tr>
+              <tr><td><strong>서버보안</strong></td><td>Secuve TOS V5.0 for Windows — 서버 라이선스</td><td style="text-align:center;font-weight:700">5식</td><td>전체 서버</td></tr>
+              <tr><td><strong>모니터링</strong></td><td>Sycros v3 Agent & System Monitoring for Win or Linux</td><td style="text-align:center;font-weight:700">5식</td><td>전체 서버</td></tr>
+              <tr><td><strong>DB 접근제어</strong></td><td>Chakra MAX — 7~8 Core · Ethernet Adaptor</td><td style="text-align:center;font-weight:700">1식</td><td>DB서버</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -553,42 +957,56 @@
       <section class="slide slide-content" aria-label="Local PKD 구축 전략">
         <div class="slide-header s-animate">
           <div class="slide-tag">Part 2 — 핵심 기능</div>
-          <h2>Local PKD 구축 전략</h2>
+          <h2>Local PKD 구축 전략 — 인증서 수집 경로</h2>
         </div>
         <div class="slide-body">
-          <div class="grid-3 s-animate s-delay-1" style="margin-bottom:16px">
-            <div class="card" style="text-align:center">
-              <div style="font-size:1.5rem;margin-bottom:8px">🏛️</div>
-              <h3 style="font-size:0.95rem;margin-bottom:6px">ICAO 공식 PKD</h3>
-              <p class="card-desc">공개 다운로드 (무료) + PKD 회원<br>DSC/CRL, Master List, DSC_NC 3종</p>
+          <div class="two-col s-animate s-delay-1">
+            <div>
+              <table class="data-table" style="font-size:0.8rem">
+                <thead><tr><th>수집 경로</th><th>정보 종류</th><th>수집 형태</th></tr></thead>
+                <tbody>
+                  <tr><td rowspan="3" style="vertical-align:top;font-weight:600">외교적 경로<br><span style="font-size:0.7rem;color:var(--text-secondary)">(양자 협정)</span></td><td>CSCAC (국가인증기관)</td><td>공문, 저장매체 수신</td></tr>
+                  <tr><td>DSC (문서서명인증서)</td><td></td></tr>
+                  <tr><td>JRL (인증폐기목록)</td><td></td></tr>
+                  <tr style="border-top:2px solid var(--border)"><td rowspan="5" style="vertical-align:top;font-weight:600">ICAO PKD<br><span style="font-size:0.7rem;color:var(--text-secondary)">(2026.03~ 신규)</span></td><td>DSC</td><td rowspan="5">CSR 인증 로그인<br>LDAP + REST/Web API<br><span style="font-size:0.65rem">pkddownloadsg.icao.int</span></td></tr>
+                  <tr><td>CRL</td></tr>
+                  <tr><td>ML (Master List)</td></tr>
+                  <tr><td>DL (Deviation List)</td></tr>
+                  <tr><td>Non-Conformant (DSC_NC)</td></tr>
+                  <tr style="border-top:2px solid var(--border)"><td style="font-weight:600">ICAO Web</td><td>ML (현재 형태로 공개)</td><td>파일 다운로드</td></tr>
+                </tbody>
+              </table>
             </div>
-            <div class="card" style="text-align:center">
-              <div style="font-size:1.5rem;margin-bottom:8px">🤝</div>
-              <h3 style="font-size:0.95rem;margin-bottom:6px">양자 협정</h3>
-              <p class="card-desc">국가간 직접 교환<br>SFTP/API 자동 다운로드</p>
+            <div>
+              <div class="card" style="text-align:center;background:rgba(37,99,235,0.06);border-color:rgba(37,99,235,0.15);padding:14px;margin-bottom:12px">
+                <div class="process-flow" style="justify-content:center;margin:0">
+                  <span class="process-step" style="font-size:0.78rem">외교적 경로</span>
+                  <span class="process-arrow">+</span>
+                  <span class="process-step" style="font-size:0.78rem">ICAO PKD</span>
+                  <span class="process-arrow">+</span>
+                  <span class="process-step" style="font-size:0.78rem">Web</span>
+                  <span class="process-arrow">→</span>
+                  <span class="process-step" style="background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700;font-size:0.78rem">Local PKD</span>
+                </div>
+              </div>
+              <div class="grid-2" style="gap:8px;margin-bottom:12px">
+                <div class="stat-card" style="padding:10px"><div class="stat-value" style="font-size:1.3rem">31,212</div><div class="stat-label">총 인증서</div></div>
+                <div class="stat-card" style="padding:10px"><div class="stat-value" style="font-size:1.3rem;color:var(--positive)">139</div><div class="stat-label">국가</div></div>
+              </div>
+              <h3 style="font-size:0.9rem;margin-bottom:8px">지원 파일 형식</h3>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                <span class="badge badge-blue">LDIF</span>
+                <span class="badge badge-blue">ML (.ml)</span>
+                <span class="badge badge-blue">PEM</span>
+                <span class="badge badge-blue">DER</span>
+                <span class="badge badge-blue">P7B</span>
+                <span class="badge badge-blue">CER</span>
+                <span class="badge badge-blue">CRL</span>
+                <span class="badge badge-blue">DL</span>
+                <span class="badge badge-orange">JRL (.bin)</span>
+              </div>
+              <p style="font-size:0.78rem;color:var(--text-secondary);margin-top:8px">※ 2026년 3월부터 ICAO PKD 다운로드 방식이 CSR 인증 로그인 + LDAP/REST API 이중 인터페이스로 전환됨. 기존 수동 다운로드에서 자동 다운로드로 변경 대응 필요</p>
             </div>
-            <div class="card" style="text-align:center">
-              <div style="font-size:1.5rem;margin-bottom:8px">🌐</div>
-              <h3 style="font-size:0.95rem;margin-bottom:6px">지역 PKD</h3>
-              <p class="card-desc">EU PKD / ASEAN PKD<br>지역 통합 시스템</p>
-            </div>
-          </div>
-          <div class="card s-animate s-delay-2" style="text-align:center;background:rgba(37,99,235,0.06);border-color:rgba(37,99,235,0.15);padding:16px">
-            <div class="process-flow" style="justify-content:center">
-              <span class="process-step">ICAO PKD</span>
-              <span class="process-arrow">+</span>
-              <span class="process-step">양자 협정</span>
-              <span class="process-arrow">+</span>
-              <span class="process-step">지역 PKD</span>
-              <span class="process-arrow">→</span>
-              <span class="process-step" style="background:var(--accent);color:#fff;border-color:var(--accent);font-weight:700">Local PKD (DB + LDAP)</span>
-            </div>
-          </div>
-          <div class="grid-4 s-animate s-delay-3" style="margin-top:16px">
-            <div class="stat-card" style="padding:14px"><div class="stat-value" style="font-size:1.5rem">31,212</div><div class="stat-label">총 인증서</div></div>
-            <div class="stat-card" style="padding:14px"><div class="stat-value" style="font-size:1.5rem;color:var(--positive)">139</div><div class="stat-label">국가</div></div>
-            <div class="stat-card" style="padding:14px"><div class="stat-value" style="font-size:1.5rem">69</div><div class="stat-label">CRL</div></div>
-            <div class="stat-card" style="padding:14px"><div class="stat-value" style="font-size:1.5rem;color:var(--positive)">100%</div><div class="stat-label">DB↔LDAP 동기화</div></div>
           </div>
         </div>
       </section>
@@ -609,8 +1027,8 @@
               <tr><td><strong>DB-LDAP 동기화</strong></td><td>30초 주기 자동 체크, 불일치 즉시 감지 및 자동 조정</td><td><span class="badge badge-green">100% 일관성</span></td></tr>
               <tr><td><strong>ICAO 버전 관리</strong></td><td>매일 자동 체크, 신규 버전 감지 시 실시간 알림</td><td><span class="badge badge-blue">자동화</span></td></tr>
               <tr><td><strong>CSR 관리</strong></td><td>ICAO PKD CSR 생성 (RSA-2048, SHA256withRSA, PKCS#10)</td><td><span class="badge badge-blue">PKD 전환 대응</span></td></tr>
-              <tr><td><strong>AI 분석 엔진</strong></td><td>Isolation Forest + LOF 이중 모델 이상 탐지, 포렌식 분석</td><td><span class="badge badge-new">ML 기반</span></td></tr>
-              <tr><td><strong>Export/API 연동</strong></td><td>DER/PEM/ZIP Export, REST API 외부 연동 (X-API-Key 인증)</td><td><span class="badge badge-green">시스템 통합</span></td></tr>
+              <tr><td><strong>DL·Non-Conformant 관리</strong></td><td>각국 DL 및 비표준 DSC 미준수 사항 조회·관리, DSC_NC 보고서</td><td><span class="badge badge-green">사업과제 #11</span></td></tr>
+              <tr><td><strong>ICRM 연동 API</strong></td><td>REST API + X-API-Key 인증, Export (DER/PEM/ZIP), 실시간 PA</td><td><span class="badge badge-blue">사업과제 #15</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -620,12 +1038,12 @@
       <section class="slide slide-content" aria-label="운영 실적">
         <div class="slide-header s-animate">
           <div class="slide-tag">Part 2 — 검증된 성과</div>
-          <h2>운영 실적 및 인증서 분포</h2>
+          <h2>ICAO PKD Download 사이트 게시 데이터 내의 인증서 분포 현황</h2>
         </div>
         <div class="slide-body">
           <div class="grid-2 s-animate s-delay-1">
-            <div class="card" style="padding:16px">
-              <div class="chart-container" style="height:220px;padding:8px;background:transparent;border:none">
+            <div class="card" style="padding:16px;display:flex;align-items:center;justify-content:center">
+              <div class="chart-container" style="height:260px;width:100%;max-width:360px;padding:8px;background:transparent;border:none">
                 <canvas id="certChart"></canvas>
               </div>
             </div>
@@ -741,7 +1159,7 @@
               <div class="timeline-dot" style="background:var(--accent-secondary)">4</div>
               <div class="timeline-content" style="flex:1">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px"><h4>Phase 4: 본격 운영 및 고도화</h4><span class="badge badge-blue">상시</span></div>
-                <p>ICAO PKD 정식 회원 등록 · 양자 협정 추진 · SFTP/API 자동 다운로드 · AI 분석 본격 운영</p>
+                <p>ICAO PKD 정식 회원 등록 · 양자 협정 추진 · SFTP/API 자동 다운로드 · 서비스 범위 단계적 확장</p>
               </div>
             </div>
           </div>
@@ -774,7 +1192,7 @@
             <div class="card" style="text-align:center;border-top:3px solid var(--positive)">
               <div style="font-size:1.5rem;margin-bottom:8px">📋</div>
               <h3 style="font-size:0.95rem;margin-bottom:6px">운영 보고</h3>
-              <p class="card-desc">인증서 현황 보고서 자동 생성<br>AI 이상 탐지 보고서<br>감사 로그 통계 제공<br>월간/분기 운영 보고서</p>
+              <p class="card-desc">인증서 현황 보고서 자동 생성<br>검증 결과 통계 보고서<br>감사 로그 통계 제공<br>월간/분기 운영 보고서</p>
             </div>
           </div>
           <div class="grid-2 s-animate s-delay-2">
@@ -864,10 +1282,10 @@
             <tbody>
               <tr class="highlight-row"><td>ICAO 9303 준수 범위</td><td>부분 구현 (PA 검증 일부 누락)</td><td><strong style="color:var(--positive)">Part 10 & 11 완벽 준수 (8단계)</strong></td></tr>
               <tr><td>인증서 검색 속도</td><td>5~10초 이상</td><td><strong style="color:var(--positive)">40ms (1,975배 개선)</strong></td></tr>
-              <tr class="highlight-row"><td>Multi-DBMS 지원</td><td>단일 DB 종속</td><td><strong style="color:var(--positive)">PostgreSQL + Oracle 런타임 전환</strong></td></tr>
-              <tr><td>AI 이상 탐지</td><td>미지원</td><td><strong>Isolation Forest + LOF 이중 모델</strong></td></tr>
+              <tr class="highlight-row"><td>Oracle 네이티브 지원</td><td>단일 DB 종속 또는 미지원</td><td><strong style="color:var(--positive)">Oracle RDBMS 완벽 지원</strong></td></tr>
+              <tr><td>정밀 분석</td><td>미지원</td><td><strong>인증서 직접 파싱·검증, 국가별 통계</strong></td></tr>
               <tr class="highlight-row"><td>개인정보 암호화</td><td>미구현 또는 부분</td><td><strong style="color:var(--positive)">AES-256-GCM 인증 암호화</strong></td></tr>
-              <tr><td>아키텍처</td><td>모놀리식 (확장 제한)</td><td><strong>마이크로서비스 5개 독립 서비스</strong></td></tr>
+              <tr><td>아키텍처</td><td>모놀리식 (확장 제한)</td><td><strong>마이크로서비스 4개 독립 서비스</strong></td></tr>
               <tr class="highlight-row"><td>자동화 수준</td><td>수동 개입 필요</td><td><strong style="color:var(--positive)">완전 자동 (업로드·검증·동기화·알림)</strong></td></tr>
               <tr><td>운영 환경</td><td>특정 OS 종속</td><td><strong>Docker/Podman 컨테이너, RHEL 9 검증</strong></td></tr>
             </tbody>
@@ -916,7 +1334,7 @@
     <button onclick="prevSlide()" aria-label="Previous slide">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
     </button>
-    <span class="slide-counter" id="slideCounter">1 / 20</span>
+    <span class="slide-counter" id="slideCounter">1 / 21</span>
     <button onclick="nextSlide()" aria-label="Next slide">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
     </button>
