@@ -2512,7 +2512,7 @@ components:
           type: array
           items:
             type: string
-            enum: [cert:read, cert:export, pa:verify, pa:read, upload:read, upload:write, report:read, ai:read, sync:read, icao:read]
+            enum: [cert:read, cert:export, pa:verify, pa:read, pa:stats, upload:read, upload:write, report:read, ai:read, sync:read, icao:read]
         allowed_endpoints:
           type: array
           items:

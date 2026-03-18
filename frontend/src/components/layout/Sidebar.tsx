@@ -104,7 +104,7 @@ function buildNavSections(): NavSection[] {
             { path: '/pkd/quality', labelKey: 'menu.certQuality', icon: <ShieldCheck className="w-4 h-4" />, permission: 'report:read' },
           ],
         },
-        { path: '/pa/dashboard', labelKey: 'menu.paStats', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },
+        { path: '/pa/dashboard', labelKey: 'menu.paStats', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:stats' },
         { path: '/ai/analysis', labelKey: 'menu.aiAnalysis', icon: <Brain className="w-4 h-4" />, permission: 'ai:read' },
         ...(appConfig.enableEacMenu
           ? [{ path: '/eac/dashboard', labelKey: 'menu.eacDashboard', icon: <FlaskConical className="w-4 h-4" />, adminOnly: true }]
