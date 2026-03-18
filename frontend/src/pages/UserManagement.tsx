@@ -273,19 +273,19 @@ export function UserManagement() {
 
       {/* Summary Stats + Search */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.totalUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{users.length}</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-indigo-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-indigo-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.adminUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminCount}</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-green-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.activeUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeCount}</p>
         </div>
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <label htmlFor="user-search" className="text-sm text-gray-500 dark:text-gray-400 mb-2 block">{t('common:button.search')}</label>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -428,7 +428,7 @@ export function UserManagement() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">{t('admin:userMgmt.registerNewUser')}</p>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
+            <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
               {/* 2-column grid for basic fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -655,7 +655,7 @@ export function UserManagement() {
                 <div className="space-y-2">
                   {PERMISSION_GROUPS.map((group) => (
                     <div key={group.label}>
-                      <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{t(group.label)}</p>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">{t(group.label)}</p>
                       <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
                         {group.permissions.map((perm) => (
                           <label
@@ -754,7 +754,7 @@ export function UserManagement() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 space-y-3">
               {authApi.getStoredUser()?.id === selectedUser.id && (
                 <div>
                   <label htmlFor="pw-current" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">

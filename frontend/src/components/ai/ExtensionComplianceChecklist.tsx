@@ -77,7 +77,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4">
         <div className="animate-pulse space-y-4">
           <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
           <div className="h-40 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -97,7 +97,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
   const countryCodes = [...new Set(anomalies.map(a => a.country_code).filter((v): v is string => v != null))];
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden lg:max-h-[600px]">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 h-full flex flex-col overflow-hidden lg:max-h-[600px]">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <ShieldAlert className="w-5 h-5 text-orange-500" />

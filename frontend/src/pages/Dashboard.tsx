@@ -25,6 +25,7 @@ import type { UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
 import { formatDateTime, formatTime } from '@/utils/dateFormat';
 import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
+import { GlossaryTerm, getGlossaryTooltip } from '@/components/common';
 
 interface IcaoStatusItem {
   collection_type: string;
@@ -328,15 +329,15 @@ export function Dashboard() {
               <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                   <Shield className="w-3.5 h-3.5 text-blue-500" />
-                  <span className="font-medium">CSCA</span>
+                  <GlossaryTerm term="CSCA" className="font-medium" />
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
                   <FileText className="w-3.5 h-3.5 text-purple-500" />
-                  <span className="font-medium">MLSC</span>
+                  <GlossaryTerm term="MLSC" className="font-medium" />
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <Key className="w-3.5 h-3.5 text-green-500" />
-                  <span className="font-medium">DSC</span>
+                  <GlossaryTerm term="DSC" className="font-medium" />
                 </div>
               </div>
               <button
@@ -349,7 +350,7 @@ export function Dashboard() {
             </div>
           </div>
         </div>
-        <div className="p-6">
+        <div className="p-4">
           {countryLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -454,7 +455,7 @@ export function Dashboard() {
             </Link>
           </div>
         </div>
-        <div className="p-6">
+        <div className="p-4">
           {changesLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -492,8 +493,8 @@ export function Dashboard() {
                       { key: 'crl', label: 'CRL', value: change.changes.crl },
                       { key: 'ml', label: 'ML', value: change.changes.ml },
                     ].filter(item => item.value !== 0).map(item => (
-                      <div key={item.key} className={cn(
-                        "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                      <div key={item.key} title={getGlossaryTooltip(item.label)} className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium cursor-help",
                         item.value > 0
                           ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
                           : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"

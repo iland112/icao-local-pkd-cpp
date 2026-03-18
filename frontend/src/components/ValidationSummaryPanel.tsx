@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import { IcaoViolationDetailDialog } from './IcaoViolationDetailDialog';
+import { getGlossaryTooltip } from '@/components/common';
 
 /**
  * Unified validation summary data interface.
@@ -112,16 +113,25 @@ export function ValidationSummaryPanel({
     return Math.round((data.trustChainValidCount / total) * 100);
   }, [data.trustChainValidCount, data.trustChainInvalidCount, data.cscaNotFoundCount]);
 
+  // Effective non-compliant count: use icaoNonCompliantCount, fallback to complianceViolations sum
+  const violationsSum = useMemo(() => {
+    if (!data.complianceViolations) return 0;
+    return Object.values(data.complianceViolations).reduce((s, v) => s + v, 0);
+  }, [data.complianceViolations]);
+  const effectiveNonCompliantCount = (data.icaoNonCompliantCount ?? 0) > 0
+    ? (data.icaoNonCompliantCount ?? 0)
+    : violationsSum;
+
   // ICAO compliance rate
   const icaoComplianceRate = useMemo(() => {
-    const total = (data.icaoCompliantCount ?? 0) + (data.icaoNonCompliantCount ?? 0) + (data.icaoWarningCount ?? 0);
+    const total = (data.icaoCompliantCount ?? 0) + effectiveNonCompliantCount + (data.icaoWarningCount ?? 0);
     if (total === 0) return 0;
     return Math.round(((data.icaoCompliantCount ?? 0) / total) * 100);
-  }, [data.icaoCompliantCount, data.icaoNonCompliantCount, data.icaoWarningCount]);
+  }, [data.icaoCompliantCount, effectiveNonCompliantCount, data.icaoWarningCount]);
 
   // Section visibility
   const hasTrustChainData = data.trustChainValidCount > 0 || data.trustChainInvalidCount > 0 || data.cscaNotFoundCount > 0;
-  const hasIcaoData = (data.icaoCompliantCount ?? 0) > 0 || (data.icaoNonCompliantCount ?? 0) > 0 || (data.icaoWarningCount ?? 0) > 0;
+  const hasIcaoData = (data.icaoCompliantCount ?? 0) > 0 || effectiveNonCompliantCount > 0 || (data.icaoWarningCount ?? 0) > 0;
   const hasExpirationData = data.expiredCount > 0 || (data.validPeriodCount ?? 0) > 0;
   const hasRevokedData = (data.revokedCount ?? 0) > 0;
   const hasCertTypeData = data.certificateTypes && Object.keys(data.certificateTypes).length > 0;
@@ -190,34 +200,34 @@ export function ValidationSummaryPanel({
               <p className="text-base font-bold text-slate-700 dark:text-slate-300 leading-tight">
                 {fileTotal.toLocaleString()}
               </p>
-              <span className="text-[10px] text-slate-500 dark:text-slate-400">{t('upload:validationSummary.fileTotal')}</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">{t('upload:validationSummary.fileTotal')}</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" />
             <div className="flex-1 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded px-2 py-1.5 text-center min-w-0">
               <p className="text-base font-bold text-amber-700 dark:text-amber-300 leading-tight">
                 {dupCount.toLocaleString()}
               </p>
-              <span className="text-[10px] text-amber-600 dark:text-amber-400">{t('upload:validationSummary.duplicatePercent', { pct: dupPct })}</span>
+              <span className="text-xs text-amber-600 dark:text-amber-400">{t('upload:validationSummary.duplicatePercent', { pct: dupPct })}</span>
             </div>
             <ChevronRight className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 shrink-0" />
             <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded px-2 py-1.5 text-center min-w-0">
               <p className="text-base font-bold text-blue-700 dark:text-blue-300 leading-tight">
                 {newCount.toLocaleString()}
               </p>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400">{t('upload:validationSummary.newlyProcessed')}</span>
+              <span className="text-xs text-blue-600 dark:text-blue-400">{t('upload:validationSummary.newlyProcessed')}</span>
             </div>
           </div>
 
           {/* Row 2: Validation result inline chips */}
           {activeCards.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[10px] text-gray-400 dark:text-gray-500 mr-0.5">{t('upload:validationSummary.validationLabel')}:</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500 mr-0.5">{t('upload:validationSummary.validationLabel')}:</span>
               {activeCards.map((card) => {
                 const c = cc[card.color];
                 return (
                   <div key={card.key} className={`${c.bg} border ${c.border} rounded px-2 py-0.5 flex items-center gap-1`}>
                     <span className={`text-sm font-bold ${c.bold}`}>{card.value.toLocaleString()}</span>
-                    <span className={`text-[10px] ${c.text}`}>{card.label}</span>
+                    <span className={`text-xs ${c.text}`}>{card.label}</span>
                   </div>
                 );
               })}
@@ -234,7 +244,7 @@ export function ValidationSummaryPanel({
               <p className="text-base font-bold text-blue-700 dark:text-blue-300 leading-tight">
                 {data.processedCount!.toLocaleString()}
               </p>
-              <span className="text-[10px] text-blue-600 dark:text-blue-400">
+              <span className="text-xs text-blue-600 dark:text-blue-400">
                 {t('upload:validationSummary.processedOf', { num: data.totalCertificates!.toLocaleString() })}
               </span>
             </div>
@@ -246,7 +256,7 @@ export function ValidationSummaryPanel({
                 <p className={`text-base font-bold ${c.bold} leading-tight`}>
                   {card.value.toLocaleString()}
                 </p>
-                <span className={`text-[10px] ${c.text}`}>{card.label}</span>
+                <span className={`text-xs ${c.text}`}>{card.label}</span>
               </div>
             );
           })}
@@ -257,7 +267,7 @@ export function ValidationSummaryPanel({
       {hasDuplicateFlow && hasAnyAnalysisSection && (
         <div className="flex items-center gap-2">
           <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
-          <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap">
+          <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
             {t('upload:validationSummary.fullFileAnalysis', { num: fileTotal.toLocaleString() })}
           </span>
           <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
@@ -272,7 +282,7 @@ export function ValidationSummaryPanel({
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
               <div className="flex items-center gap-1.5">
                 <Shield className="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.trustChain')}</h4>
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.trustChain')}</h4>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
@@ -306,7 +316,7 @@ export function ValidationSummaryPanel({
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
               <div className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3 h-3 text-gray-500 dark:text-gray-400" />
-                <h4 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.icaoCompliance')}</h4>
+                <h4 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{t('upload:validationSummary.icaoCompliance')}</h4>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
@@ -316,7 +326,7 @@ export function ValidationSummaryPanel({
                   {(data.icaoCompliantCount ?? 0).toLocaleString()} ({icaoComplianceRate}%)
                 </span>
               </div>
-              {(data.icaoNonCompliantCount ?? 0) > 0 && (
+              {effectiveNonCompliantCount > 0 && (
                 <button
                   onClick={() => { setViolationDialogCategory(undefined); setViolationDialogOpen(true); }}
                   className="w-full flex justify-between items-center text-xs hover:bg-red-50 dark:hover:bg-red-900/10 rounded px-1 -mx-1 py-0.5 transition-colors group cursor-pointer"
@@ -326,7 +336,7 @@ export function ValidationSummaryPanel({
                     <Search className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">
-                    {(data.icaoNonCompliantCount ?? 0).toLocaleString()}
+                    {effectiveNonCompliantCount.toLocaleString()}
                   </span>
                 </button>
               )}
@@ -340,7 +350,7 @@ export function ValidationSummaryPanel({
                         <button
                           key={cat}
                           onClick={() => { setViolationDialogCategory(cat); setViolationDialogOpen(true); }}
-                          className="flex items-center justify-between text-[10px] px-1.5 py-0.5 bg-red-50 dark:bg-red-900/10 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors cursor-pointer group"
+                          className="flex items-center justify-between text-xs px-1.5 py-0.5 bg-red-50 dark:bg-red-900/10 rounded hover:bg-red-100 dark:hover:bg-red-900/20 transition-colors cursor-pointer group"
                         >
                           <span className="text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300 flex items-center gap-0.5">
                             {violationLabel[cat] ?? cat}
@@ -358,7 +368,7 @@ export function ValidationSummaryPanel({
           {/* Expiration + Revoked */}
           {(hasExpirationData || hasRevokedData) && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{ t('common:label.validPeriod') }</div>
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{ t('common:label.validPeriod') }</div>
               <div className="flex gap-2">
                 {(data.validPeriodCount ?? 0) > 0 && (
                   <div className="flex items-center gap-1 text-xs">
@@ -393,14 +403,14 @@ export function ValidationSummaryPanel({
           {/* Certificate Types */}
           {hasCertTypeData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.certificateType') }</div>
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.certificateType') }</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(data.certificateTypes!)
                   .sort(([, a], [, b]) => b - a)
                   .map(([type, count]) => (
-                    <div key={type} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-center">
+                    <div key={type} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-center" title={getGlossaryTooltip(type === 'LINK_CERT' ? 'Link Certificate' : type)}>
                       <span className="text-xs font-bold text-gray-900 dark:text-gray-100">{count.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{certTypeLabel(type)}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{certTypeLabel(type)}</span>
                     </div>
                   ))}
               </div>
@@ -410,14 +420,14 @@ export function ValidationSummaryPanel({
           {/* Key Sizes */}
           {hasKeySizeData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('ai:forensic.categories.keySize') }</div>
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('ai:forensic.categories.keySize') }</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(data.keySizes!)
                   .sort(([a], [b]) => parseInt(b) - parseInt(a))
                   .map(([size, count]) => (
                     <div key={size} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded px-2 py-0.5 text-center">
                       <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{count.toLocaleString()}</span>
-                      <span className="text-[10px] text-gray-500 dark:text-gray-400 ml-1">{keySizeLabel(parseInt(size))}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{keySizeLabel(parseInt(size))}</span>
                     </div>
                   ))}
               </div>
@@ -427,7 +437,7 @@ export function ValidationSummaryPanel({
           {/* Signature Algorithms — full width */}
           {hasSigAlgoData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 md:col-span-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.signatureAlgorithm') }</div>
+              <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.signatureAlgorithm') }</div>
               <div className="space-y-1">
                 {(() => {
                   const total = Object.values(data.signatureAlgorithms!).reduce((s, c) => s + c, 0);
@@ -438,7 +448,7 @@ export function ValidationSummaryPanel({
                       const pct = total > 0 ? Math.round((count / total) * 100) : 0;
                       return (
                         <div key={algo} className="space-y-0.5">
-                          <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex items-center justify-between text-xs">
                             <span className="text-gray-600 dark:text-gray-400 truncate mr-2">{algo}</span>
                             <span className="font-medium text-gray-900 dark:text-gray-100 whitespace-nowrap">
                               {count.toLocaleString()} ({pct}%)
@@ -464,7 +474,7 @@ export function ValidationSummaryPanel({
         const pct = Math.round(((data.validCount + expiredValidCount) / total) * 100);
         return (
           <div>
-            <div className="flex justify-between text-[11px] mb-0.5">
+            <div className="flex justify-between text-xs mb-0.5">
               <span className="text-gray-500 dark:text-gray-400">{t('dashboard:successRate')}</span>
               <span className="font-semibold text-gray-900 dark:text-gray-100">{pct}%</span>
             </div>
@@ -476,13 +486,13 @@ export function ValidationSummaryPanel({
       })()}
 
       {/* ICAO Violation Detail Dialog */}
-      {(data.icaoNonCompliantCount ?? 0) > 0 && uploadId && (
+      {effectiveNonCompliantCount > 0 && uploadId && (
         <IcaoViolationDetailDialog
           open={violationDialogOpen}
           onClose={() => setViolationDialogOpen(false)}
           uploadId={uploadId}
           violations={data.complianceViolations ?? {}}
-          totalNonCompliantCount={data.icaoNonCompliantCount ?? 0}
+          totalNonCompliantCount={effectiveNonCompliantCount}
           initialCategory={violationDialogCategory}
         />
       )}

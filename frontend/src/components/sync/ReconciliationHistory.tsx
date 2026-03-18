@@ -155,7 +155,7 @@ export function ReconciliationHistory() {
                     key={item.id}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         {getStatusIcon(item.status)}
                         <span className="text-xs font-medium">{item.status}</span>
@@ -166,10 +166,10 @@ export function ReconciliationHistory() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-900 dark:text-white">
+                    <td className="px-4 py-2 text-gray-900 dark:text-white">
                       {formatDateTime(item.startedAt)}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-2">
                       <div className="flex items-center gap-1.5">
                         {getTriggeredByIcon(item.triggeredBy)}
                         <span className="text-gray-600 dark:text-gray-400">
@@ -177,26 +177,26 @@ export function ReconciliationHistory() {
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-900 dark:text-white">
+                    <td className="px-4 py-2 text-center text-gray-900 dark:text-white">
                       {item.totalProcessed}
                     </td>
-                    <td className="px-4 py-3 text-center text-green-600 dark:text-green-400 font-medium">
+                    <td className="px-4 py-2 text-center text-green-600 dark:text-green-400 font-medium">
                       {item.successCount}
                     </td>
-                    <td className="px-4 py-3 text-center text-red-600 dark:text-red-400 font-medium">
+                    <td className="px-4 py-2 text-center text-red-600 dark:text-red-400 font-medium">
                       {item.failedCount}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-2 text-center">
                       <div className="text-xs text-gray-600 dark:text-gray-400">
                         <div>CSCA: {item.cscaAdded}</div>
                         <div>DSC: {item.dscAdded}</div>
                         <div>NC: {item.dscNcAdded}</div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-400">
+                    <td className="px-4 py-2 text-center text-gray-600 dark:text-gray-400">
                       {formatDuration(item.durationMs)}
                     </td>
-                    <td className="px-4 py-3 text-center">
+                    <td className="px-4 py-2 text-center">
                       <button
                         onClick={() => handleViewDetails(item)}
                         className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"

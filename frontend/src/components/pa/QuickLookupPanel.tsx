@@ -72,7 +72,7 @@ export function QuickLookupPanel({
   return (
     <div className="max-w-3xl space-y-5">
       {/* Input Card */}
-      <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5">
+      <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
         <div className="flex items-center gap-3 mb-4">
           <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30">
             <Search className="w-5 h-5 text-teal-500" />
@@ -184,7 +184,7 @@ export function QuickLookupPanel({
           </div>
 
           {/* Detail Card */}
-          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5 space-y-3">
+          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4 space-y-3">
             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
               <ListChecks className="w-4 h-4 text-teal-500" />
               {t('pa:quickLookup.detailResult')}

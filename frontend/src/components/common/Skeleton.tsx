@@ -17,7 +17,7 @@ export function Skeleton({ className }: SkeletonProps) {
 
 export function CardSkeleton() {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
       <div className="flex items-center gap-3 mb-4">
         <Skeleton className="w-10 h-10 rounded-xl" />
         <div className="space-y-2">

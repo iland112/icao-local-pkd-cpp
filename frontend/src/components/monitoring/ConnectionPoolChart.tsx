@@ -44,7 +44,7 @@ export default function ConnectionPoolChart({ services }: Props) {
 
   if (chartData.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 h-full">
         <div className="flex items-center gap-2 mb-4">
           <Database className="w-5 h-5 text-indigo-500" />
           <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:pool.title')}</h3>
@@ -63,7 +63,7 @@ export default function ConnectionPoolChart({ services }: Props) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full flex flex-col">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 h-full flex flex-col">
       <div className="flex items-center gap-2 mb-4">
         <Database className="w-5 h-5 text-indigo-500" />
         <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:pool.title')}</h3>

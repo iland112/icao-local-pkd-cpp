@@ -34,7 +34,7 @@ export default function LatencyTrendChart({ data }: Props) {
   }));
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
       <div className="flex items-center gap-2 mb-4">
         <Timer className="w-5 h-5 text-green-500" />
         <h3 className="font-semibold text-gray-800 dark:text-white">{t('monitoring:latency.title')}</h3>

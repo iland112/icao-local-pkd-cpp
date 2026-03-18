@@ -2080,10 +2080,13 @@ void CertificateHandler::handleDoc9303Checklist(
 
         std::string certType = certInfo.get("certificate_type", "DSC").asString();
         std::string country = certInfo.get("country_code", "").asString();
+        bool isSelfSigned = certInfo.get("isSelfSigned", false).asBool();
 
         // Step 2: Build LDAP DN from metadata and get certificate binary from LDAP
+        // Link Certificates (CSCA that is NOT self-signed) are stored under o=lc
         std::string typeOu;
-        if (certType == "CSCA") typeOu = "csca";
+        if (certType == "CSCA" && !isSelfSigned) typeOu = "lc";
+        else if (certType == "CSCA") typeOu = "csca";
         else if (certType == "MLSC") typeOu = "mlsc";
         else typeOu = "dsc";  // DSC and DSC_NC both stored under o=dsc
 
@@ -2094,6 +2097,16 @@ void CertificateHandler::handleDoc9303Checklist(
         spdlog::debug("Doc9303 checklist: fetching binary from LDAP DN={}", ldapDn);
 
         auto exportResult = certificateService_->exportCertificateFile(ldapDn, services::ExportFormat::DER);
+
+        // Fallback: if CSCA not found under o=lc, try o=csca (and vice versa)
+        if ((!exportResult.success || exportResult.data.empty()) && certType == "CSCA") {
+            std::string fallbackOu = (typeOu == "lc") ? "csca" : "lc";
+            std::string fallbackDn = "cn=" + fingerprint + ",o=" + fallbackOu + ",c=" + country +
+                ",dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
+            spdlog::debug("Doc9303 checklist: primary DN not found, trying fallback DN={}", fallbackDn);
+            exportResult = certificateService_->exportCertificateFile(fallbackDn, services::ExportFormat::DER);
+        }
+
         if (!exportResult.success || exportResult.data.empty()) {
             Json::Value error;
             error["success"] = false;

@@ -268,80 +268,63 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Summary Section */}
-      <div className="grid grid-cols-3 gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {data.totalEntries.toLocaleString()}
+    <div className="space-y-2.5">
+      {/* Summary + ObjectClass + Limit — compact single row */}
+      <div className="flex items-center justify-between gap-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 px-3 py-2">
+        <div className="flex items-center gap-4">
+          <div className="text-center">
+            <div className="text-lg font-bold text-blue-600 dark:text-blue-400">{data.totalEntries.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('upload:ldifStructure.totalEntries')}</div>
           </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.totalEntries')}</div>
+          <div className="text-center">
+            <div className="text-lg font-bold text-green-600 dark:text-green-400">{data.displayedEntries.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('upload:ldifStructure.displayed')}</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-bold text-purple-600 dark:text-purple-400">{data.totalAttributes.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 dark:text-gray-400">{t('upload:ldifStructure.totalAttributes')}</div>
+          </div>
         </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {data.displayedEntries.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.displayed')}</div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {Object.entries(data.objectClassCounts).map(([className, count]) => (
+            <span key={className} className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-xs font-medium">
+              {className}: {count.toLocaleString()}
+            </span>
+          ))}
         </div>
-        <div className="text-center">
-          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-            {data.totalAttributes.toLocaleString()}
-          </div>
-          <div className="text-sm text-gray-600 dark:text-gray-400">{t('upload:ldifStructure.totalAttributes')}</div>
-        </div>
-      </div>
-
-      {/* ObjectClass Counts */}
-      <div className="flex flex-wrap gap-2">
-        {Object.entries(data.objectClassCounts).map(([className, count]) => (
-          <div
-            key={className}
-            className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full text-sm"
-          >
-            <span className="font-semibold">{className}</span>:{' '}
-            <span>{count.toLocaleString()}</span>
-          </div>
-        ))}
-      </div>
-
-      {/* Entry Limit Selector */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {t('upload:ldifStructure.displayCount')}
-          </label>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{t('upload:ldifStructure.displayCount')}:</label>
           <select
             value={maxEntries}
             onChange={(e) => setMaxEntries(Number(e.target.value))}
-            className="px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+            className="px-2 py-0.5 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-xs"
           >
-            <option value="50">{t('upload:ldifStructure.nEntries', { num: 50 })}</option>
-            <option value="100">{t('upload:ldifStructure.nEntries', { num: 100 })}</option>
-            <option value="500">{t('upload:ldifStructure.nEntries', { num: 500 })}</option>
-            <option value="1000">{t('upload:ldifStructure.nEntries', { num: 1000 })}</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="500">500</option>
+            <option value="1000">1,000</option>
             <option value="10000">{t('upload:ldifStructure.all')}</option>
           </select>
         </div>
       </div>
 
-      {/* Truncation Warning */}
+      {/* Truncation Warning — compact */}
       {data.truncated && (
-        <div className="flex items-start gap-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
-          <div className="text-sm text-yellow-800 dark:text-yellow-300">
-            <strong>{t('upload:ldifStructure.truncatedLabel')}</strong> {t('upload:ldifStructure.truncatedMessage', { total: data.totalEntries.toLocaleString(), displayed: data.displayedEntries.toLocaleString() })}
-          </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs text-yellow-800 dark:text-yellow-300">
+          <AlertCircle className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+          <span><strong>{t('upload:ldifStructure.truncatedLabel')}</strong> {t('upload:ldifStructure.truncatedMessage', { total: data.totalEntries.toLocaleString(), displayed: data.displayedEntries.toLocaleString() })}</span>
         </div>
       )}
 
-      {/* DN Hierarchy Tree */}
+      {/* DN Hierarchy Tree — compact mode */}
       <TreeViewer
         data={treeData}
-        height="600px"
+        height="480px"
+        compact
       />
 
       {/* Entry Count Footer */}
-      <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+      <div className="text-center text-xs text-gray-400 dark:text-gray-500">
         {t('upload:ldifStructure.entriesDisplayed', { num: data.entries.length.toLocaleString() })}
       </div>
     </div>

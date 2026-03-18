@@ -539,7 +539,7 @@
     "size": "Size",
     "totalNodes": "Total Nodes",
     "structure": "Structure",
-    "constructedPrimitive": "{{constructed}} / Prim {{primitive}}",
+    "constructedPrimitive": "Constructed {{constructed}} / Primitive {{primitive}}",
     "truncatedMessage": "Output limited to {{num}} lines. Select \"All\" above to view the full structure."
   },
   "duplicateDialog": {

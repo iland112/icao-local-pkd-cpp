@@ -5,3 +5,5 @@ export { ConfirmDialog } from './ConfirmDialog';
 export { PrivateRoute } from './PrivateRoute';
 export { AdminRoute } from './AdminRoute';
 export { ErrorBoundary } from './ErrorBoundary';
+export { CountryFlag } from './CountryFlag';
+export { GlossaryTerm, getGlossaryTooltip } from './GlossaryTerm';

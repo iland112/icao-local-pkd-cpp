@@ -20,6 +20,7 @@ import { uploadApi, createProgressEventSource } from '@/services/api';
 import type { UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus, ProcessingError } from '@/types';
 import { cn } from '@/utils/cn';
 import { Stepper, type Step, type StepStatus } from '@/components/common/Stepper';
+import { GlossaryTerm } from '@/components/common';
 import { RealTimeStatisticsPanel } from '@/components/RealTimeStatisticsPanel';
 import { ProcessingErrorsPanel } from '@/components/ProcessingErrorsPanel';
 import { CurrentCertificateCard } from '@/components/CurrentCertificateCard';
@@ -1122,7 +1123,7 @@ export function FileUpload() {
                           ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
                           : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
                       )}>
-                        {selectedFile.name.toLowerCase().endsWith('.ldif') ? 'LDIF' : 'Master List'}
+                        {selectedFile.name.toLowerCase().endsWith('.ldif') ? <GlossaryTerm term="LDIF" /> : <GlossaryTerm term="Master List" />}
                       </span>
                     </div>
                   )}

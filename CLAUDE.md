@@ -608,17 +608,26 @@ scripts/
 
 ## Version History
 
-### v2.36.0 (2026-03-17) - 제품 브랜드 리네이밍 (SPKD → FastSPKD) + 로그인 페이지 개선
-- **브랜드 리네이밍**: 제품명 SPKD → FastSPKD 전체 변경 (SmartCore 제품 네이밍 컨벤션: FastPass, FastFinger, FastPhoto)
-- **favicon.svg 리디자인**: Shield + "S" → Shield + "F" + Speed Lines (SmartCore 브랜딩 스타일 반영)
-- **전체 브랜드 반영**: 16개 파일 일괄 수정 — Login, Sidebar, Header, Dashboard, index.html, i18n(ko/en) 4쌍, hero-bg.svg, 테스트, 문서
-- **표준 배지 추가**: BSI TR-03110 배지 추가 (기존 ICAO Doc 9303, RFC 5280, RFC 5652 + BSI TR-03110)
-- **기능 카드 추가**: "보안 관리 및 감사" 카드 신규 (JWT+RBAC, API Key, AES-256-GCM, 감사 로그) — 기존 3개 → 4개, 1행 4열 배치
-- **로그인 페이지 레이아웃 개선**: 히어로:로그인 비율 55:45 → 68:32 (스크롤 없이 한 화면 표시)
-- **로그인 폼 컴팩트화**: 브랜딩/폼/푸터 영역 여백 전반 축소 (py, mb, mt, space-y)
-- **설명 문구 개선**: "FastSPKD 인증서 관리" → "ICAO Local PKD 구성·관리 및 PA 검증을 위한 종합 솔루션" (한국어/영어)
-- **줄바꿈 자동화**: description `max-w-lg` 제거 → 부모 컨테이너 폭 기준 자동 줄바꿈
-- 16+ files changed (frontend 코드 + i18n + 문서)
+### v2.36.0 (2026-03-17~18) - 브랜드 리네이밍 + UI/UX 전면 일관성 개선 + GlossaryTerm + Link Certificate 버그 수정
+- **브랜드 리네이밍**: SPKD → FastSPKD (SmartCore 네이밍: FastPass, FastFinger, FastPhoto)
+- **favicon.svg 리디자인**: Shield + "S" → Shield + "F" + Speed Lines
+- **로그인 페이지**: BSI TR-03110 배지 추가, 보안 관리/감사 기능 카드 추가, 히어로:로그인 68:32, 설명 문구 ICAO Local PKD 종합 솔루션으로 개선
+- **UI/UX 일관성 전면 개선 (50+ 파일)**:
+  - 비표준 폰트 `text-[9px]`/`text-[10px]`/`text-[11px]` → `text-xs` 통일 (23파일 167건)
+  - 메인 카드 패딩 `p-5`/`p-6` → `p-4` 통일 (30+ 파일)
+  - 테이블 행 `py-2.5`/`py-3` → `py-2` 통일 (14파일)
+  - 다이얼로그 내부 `space-y-4` → `space-y-3` 통일 (7파일)
+  - 버튼 `rounded-xl` → `rounded-lg` 통일
+- **GlossaryTerm 컴포넌트**: 전문 용어(CSCA, DSC, CRL, SOD, MRZ 등 21개) 위에 `?` 아이콘 + hover 풍선 도움말 (ko/en)
+  - `position: fixed` 렌더링으로 overflow-hidden 부모에서도 잘림 없이 표시
+  - 14개 페이지 + 7개 컴포넌트에 적용
+- **CountryFlag 컴포넌트**: 국기 아이콘 hover 시 전체 국가명 표시 (13파일 25건)
+- **다이얼로그 compact화**: LDIF 구조/Master List 구조/중복 인증서 탭 TreeViewer compact 모드 적용
+- **IcaoViolationDetailDialog**: 테이블 compact 디자인 (font 11→xs, table-fixed, 고정 컬럼폭)
+- **ValidationSummaryPanel**: complianceViolations 합계 기반 비준수 행 표시 (effectiveNonCompliantCount)
+- **Link Certificate Doc 9303 버그 수정**: CSCA Link Certificate(`o=lc`)에 대한 LDAP DN fallback 로직 추가 (certificate_handler.cpp)
+- **i18n**: Master List 구조 라벨 "Prim" → "Constructed/Primitive", 대시보드 부제 "플랫폼" → "시스템"
+- 59 files changed, +692/-4170 lines
 
 ### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈 + 인증서 등록 + 감사 강화
 - **ICAO PKD CSR 생성**: RSA 2048 bit 공개키 + SHA256withRSA 서명 + Base64(PEM) 인코딩 — ICAO PKD 요구사항 완전 준수

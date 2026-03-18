@@ -74,6 +74,7 @@ function TrustChainErrorDetail({ chainValidation }: { chainValidation: Certifica
               <img
                 src={getFlagSvgPath(countryCode)}
                 alt={countryCode}
+                title={getCountryName(countryCode)}
                 className="w-5 h-3.5 object-cover rounded-sm border border-white/30"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
               />
@@ -178,6 +179,7 @@ export function VerificationResultCard({
                   <img
                     src={getFlagSvgPath(result.issuingCountry)}
                     alt={result.issuingCountry}
+                    title={getCountryName(result.issuingCountry)}
                     className="w-5 h-3.5 object-cover rounded-sm border border-white/30"
                     onError={(e) => {
                       const img = e.target as HTMLImageElement;

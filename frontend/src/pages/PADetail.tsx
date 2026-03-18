@@ -452,7 +452,7 @@ export function PADetail() {
         {/* Right Column: Summary & Info */}
         <div className="lg:col-span-1 space-y-6">
           {/* Verification Info */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Fingerprint className="w-5 h-5 text-purple-500" />
               {t('pa:detail.verificationInfo')}
@@ -531,7 +531,7 @@ export function PADetail() {
           </div>
 
           {/* Validation Summary */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">{t('pa:detail.verificationSummary')}</h2>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">

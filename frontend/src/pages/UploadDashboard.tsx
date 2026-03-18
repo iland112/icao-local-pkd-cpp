@@ -38,6 +38,8 @@ import type { UploadStatisticsOverview, UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/dateFormat';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
+import { GlossaryTerm, getGlossaryTooltip } from '@/components/common';
 
 interface ValidationReasonEntry {
   status: string;
@@ -193,7 +195,7 @@ export function UploadDashboard() {
           {/* Overview Stats - Large Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {/* Countries */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-cyan-500">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-cyan-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload:dashboard.registeredCountries')}</p>
@@ -211,7 +213,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Total Certificates */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('upload:dashboard.totalCertificates') }</p>
@@ -229,7 +231,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Total Uploads */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-green-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload:dashboard.uploadStatus')}</p>
@@ -253,7 +255,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Validation Rate */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-violet-500">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-violet-500">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('upload:dashboard.successRate') }</p>
@@ -273,7 +275,7 @@ export function UploadDashboard() {
 
           {/* Master List Extraction Statistics (v2.1.1) */}
           {(stats?.cscaExtractedFromMl || stats?.cscaDuplicates) && (
-            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl shadow-lg p-5 mb-6 border border-indigo-200 dark:border-indigo-800">
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl shadow-lg p-4 mb-6 border border-indigo-200 dark:border-indigo-800">
               <div className="flex items-center gap-2 mb-4">
                 <Database className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.mlExtractionStats')}</h3>
@@ -291,7 +293,7 @@ export function UploadDashboard() {
                   <p className="text-3xl font-bold text-indigo-800 dark:text-indigo-200">
                     {(stats?.cscaExtractedFromMl ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">MLSC + CSCA + LC</p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1" title={`${getGlossaryTooltip('MLSC')} / ${getGlossaryTooltip('CSCA')} / ${getGlossaryTooltip('Link Certificate')}`}>MLSC + CSCA + LC</p>
                 </div>
 
                 {/* Duplicates Detected */}
@@ -330,7 +332,7 @@ export function UploadDashboard() {
           {/* Certificate Breakdown + Source Statistics - 2 column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Certificate Type Breakdown - 2/3 width */}
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
+            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <Shield className="w-5 h-5 text-violet-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.certTypeStatus')}</h3>
@@ -341,7 +343,7 @@ export function UploadDashboard() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-semibold text-green-700 dark:text-green-300">CSCA</span>
+                      <GlossaryTerm term="CSCA" className="text-sm font-semibold text-green-700 dark:text-green-300" />
                     </div>
                     <span className="text-xs text-green-600 dark:text-green-400">{cscaPercent}%</span>
                   </div>
@@ -363,7 +365,7 @@ export function UploadDashboard() {
                   </div>
                   <div className="mb-1">
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-green-700 dark:text-green-300">Link Cert</span>
+                      <GlossaryTerm term="Link Certificate" label="Link Cert" className="text-green-700 dark:text-green-300" />
                       <span className="font-medium text-green-800 dark:text-green-200">
                         {(stats?.cscaBreakdown?.linkCertificates ?? 0).toLocaleString()}
                         {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
@@ -385,7 +387,7 @@ export function UploadDashboard() {
                 <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-900/30 p-4 border border-indigo-200 dark:border-indigo-800">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">MLSC</span>
+                    <GlossaryTerm term="MLSC" className="text-sm font-semibold text-indigo-700 dark:text-indigo-300" />
                   </div>
                   <p className="text-2xl font-bold text-indigo-800 dark:text-indigo-200">{(stats?.mlscCount ?? 0).toLocaleString()}</p>
                   <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">ML Signer</p>
@@ -398,7 +400,7 @@ export function UploadDashboard() {
                 <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-50 to-purple-100 dark:from-violet-900/20 dark:to-purple-900/30 p-4 border border-violet-200 dark:border-violet-800">
                   <div className="flex items-center gap-2 mb-2">
                     <Key className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">DSC</span>
+                    <GlossaryTerm term="DSC" className="text-sm font-semibold text-violet-700 dark:text-violet-300" />
                   </div>
                   <p className="text-2xl font-bold text-violet-800 dark:text-violet-200">{(stats?.dscCount ?? 0).toLocaleString()}</p>
                   <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">{dscPercent}%</p>
@@ -411,7 +413,7 @@ export function UploadDashboard() {
                 <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-900/20 dark:to-orange-900/30 p-4 border border-amber-200 dark:border-amber-800">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">DSC_NC</span>
+                    <GlossaryTerm term="DSC_NC" className="text-sm font-semibold text-amber-700 dark:text-amber-300" />
                   </div>
                   <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{(stats?.dscNcCount ?? 0).toLocaleString()}</p>
                   <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dscNcPercent}%</p>
@@ -424,7 +426,7 @@ export function UploadDashboard() {
                 <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-red-100 dark:from-orange-900/20 dark:to-red-900/30 p-4 border border-orange-200 dark:border-orange-800">
                   <div className="flex items-center gap-2 mb-2">
                     <FileText className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                    <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">CRL</span>
+                    <GlossaryTerm term="CRL" className="text-sm font-semibold text-orange-700 dark:text-orange-300" />
                   </div>
                   <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats?.crlCount ?? 0).toLocaleString()}</p>
                   <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{t('upload:dashboard.revocationList')}</p>
@@ -436,7 +438,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Source Statistics - 1/3 width */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <PackageOpen className="w-5 h-5 text-amber-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.sourceStatus')}</h3>
@@ -472,14 +474,14 @@ export function UploadDashboard() {
                       return (
                         <div key={sourceType} className={cn('rounded-lg border p-2.5', info.bg)}>
                           <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300" title={sourceType === 'ML_PARSED' ? getGlossaryTooltip('Master List') : undefined}>
                               {info.label}
                             </span>
                             <div className="flex items-center gap-2">
                               <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
                                 {count.toLocaleString()}
                               </span>
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 w-10 text-right">
+                              <span className="text-xs text-gray-500 dark:text-gray-400 w-10 text-right">
                                 {pct}%
                               </span>
                             </div>
@@ -507,7 +509,7 @@ export function UploadDashboard() {
           {stats?.validation && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* Validation Status */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
                 <div className="flex items-center gap-2 mb-5">
                   <CheckCircle className="w-5 h-5 text-green-500" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.dscTrustChainStatus')}</h3>
@@ -675,7 +677,7 @@ export function UploadDashboard() {
               </div>
 
               {/* Trust Chain Validation */}
-              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
                 <div className="flex items-center gap-2 mb-5">
                   <TrendingUp className="w-5 h-5 text-violet-500" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">{ t('pa:steps.step5') }</h3>
@@ -746,7 +748,7 @@ export function UploadDashboard() {
 
           {/* Timeline Chart Section */}
           {chartData.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
               <div className="flex items-center gap-2 mb-6">
                 <TrendingUp className="w-5 h-5 text-violet-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.certTrend')}</h3>
@@ -920,7 +922,7 @@ export function UploadDashboard() {
                         <div className="flex flex-wrap gap-1.5 ml-8">
                           {row.countries.map((c, ci) => (
                             <span key={ci} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
-                              {getFlagSvgPath(c.code) && <img src={getFlagSvgPath(c.code)} alt={c.code} className="w-4 h-3 object-cover rounded-sm" />}
+                              {getFlagSvgPath(c.code) && <img src={getFlagSvgPath(c.code)} alt={c.code} title={getCountryName(c.code)} className="w-4 h-3 object-cover rounded-sm" />}
                               <span className="font-bold">{c.code}</span>
                               <span className="text-gray-400 dark:text-gray-500">{c.count.toLocaleString()}</span>
                             </span>
@@ -976,7 +978,7 @@ export function UploadDashboard() {
                             <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-orange-400 dark:bg-orange-500">
                               {idx + 1}
                             </span>
-                            {getFlagSvgPath(row.code) && <img src={getFlagSvgPath(row.code)} alt={row.code} className="w-5 h-4 object-cover rounded-sm" />}
+                            {getFlagSvgPath(row.code) && <img src={getFlagSvgPath(row.code)} alt={row.code} title={getCountryName(row.code)} className="w-5 h-4 object-cover rounded-sm" />}
                             <span className="font-semibold text-gray-900 dark:text-white text-lg">
                               {row.code}
                             </span>
@@ -1022,7 +1024,7 @@ export function UploadDashboard() {
                             <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gray-400 dark:bg-gray-500">
                               {idx + 1}
                             </span>
-                            {getFlagSvgPath(row.countryCode) && <img src={getFlagSvgPath(row.countryCode)} alt={row.countryCode} className="w-5 h-4 object-cover rounded-sm" />}
+                            {getFlagSvgPath(row.countryCode) && <img src={getFlagSvgPath(row.countryCode)} alt={row.countryCode} title={getCountryName(row.countryCode)} className="w-5 h-4 object-cover rounded-sm" />}
                             <span className="font-semibold text-gray-900 dark:text-white text-lg">
                               {row.countryCode}
                             </span>

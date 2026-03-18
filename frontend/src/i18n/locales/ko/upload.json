@@ -539,7 +539,7 @@
     "size": "크기",
     "totalNodes": "총 노드",
     "structure": "구조",
-    "constructedPrimitive": "{{constructed}}개 / Prim {{primitive}}개",
+    "constructedPrimitive": "Constructed {{constructed}}개 / Primitive {{primitive}}개",
     "truncatedMessage": "출력이 {{num}}개 라인으로 제한되었습니다. 전체 구조를 보려면 위에서 \"전체\"를 선택하세요."
   },
   "duplicateDialog": {

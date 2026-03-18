@@ -475,6 +475,41 @@ Inactive:       text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg
 Disabled:       text-gray-300 dark:text-gray-600 cursor-not-allowed
 ```
 
+### 5.12 GlossaryTerm (전문 용어 도움말)
+
+전문 용어(CSCA, DSC, CRL 등) 옆에 `?` 아이콘을 표시하고 hover 시 풍선 도움말을 제공하는 컴포넌트.
+
+```tsx
+import { GlossaryTerm, getGlossaryTooltip } from '@/components/common';
+
+// 정적 라벨 (카드, 섹션 헤더)
+<GlossaryTerm term="CSCA" className="text-xs text-blue-700" />
+
+// 커스텀 라벨
+<GlossaryTerm term="Link Certificate" label="Link Cert" />
+
+// 테이블 셀/동적 영역 (title 속성 방식)
+<span title={getGlossaryTooltip("DSC")}>{certType}</span>
+```
+
+지원 용어 (21개): CSCA, DSC, DSC_NC, MLSC, CRL, SOD, DG1, DG2, MRZ, PA, BAC, PKD, LDIF, LDAP, Trust Chain, CSR, Link Certificate, Self-signed, Master List, ML
+
+- `position: fixed` 렌더링 — overflow-hidden 부모에서도 잘림 없이 표시
+- 한국어/영어 자동 감지 (`document.documentElement.lang`)
+- 화면 경계 보정 (좌우/상하)
+
+### 5.13 CountryFlag (국기 + 국가명 툴팁)
+
+국기 아이콘 + 국가 코드 표시, hover 시 전체 국가명 tooltip.
+
+```tsx
+import { CountryFlag } from '@/components/common';
+
+<CountryFlag code="KR" />           // 🇰🇷 KR (hover: "KR — Korea, Republic of")
+<CountryFlag code="KR" size="md" /> // 큰 국기
+<CountryFlag code="KR" showCode={false} /> // 국기만
+```
+
 ---
 
 ## 6. Spacing System
@@ -554,7 +589,7 @@ Disabled:       text-gray-300 dark:text-gray-600 cursor-not-allowed
 
 Landing 페이지는 시스템 전반과 다른 특별한 디자인을 적용한다:
 
-### 9.1 Hero Panel (좌측 55%)
+### 9.1 Hero Panel (좌측 68%)
 
 ```
 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700

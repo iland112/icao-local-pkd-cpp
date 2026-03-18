@@ -338,7 +338,7 @@ export default function AiAnalysisDashboard() {
 
       {/* Progress bar during analysis */}
       {isRunning && jobStatus && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-purple-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-purple-500">
           <div className="flex items-center gap-2 mb-3">
             <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.analysisInProgress')}</h3>
@@ -361,7 +361,7 @@ export default function AiAnalysisDashboard() {
       {/* Summary Cards */}
       {stats && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('ai:dashboard.totalAnalyzed')}</p>
@@ -376,7 +376,7 @@ export default function AiAnalysisDashboard() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-green-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.normal')}</p>
@@ -391,7 +391,7 @@ export default function AiAnalysisDashboard() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-amber-500">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-amber-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.suspicious')}</p>
@@ -406,7 +406,7 @@ export default function AiAnalysisDashboard() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-red-500">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.anomalous')}</p>
@@ -425,7 +425,7 @@ export default function AiAnalysisDashboard() {
 
       {/* Risk Level Proportional Bar */}
       {riskDist.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-purple-500" />
@@ -468,7 +468,7 @@ export default function AiAnalysisDashboard() {
 
       {/* Forensic Risk Summary */}
       {forensicSummary && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-orange-500" />
@@ -545,7 +545,7 @@ export default function AiAnalysisDashboard() {
 
       {/* Country PKI Maturity Chart (full width) */}
       {top15Maturity.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-purple-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.countryPkiMaturity')}</h3>
@@ -584,7 +584,7 @@ export default function AiAnalysisDashboard() {
                   return (
                     <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
                       <div className="flex items-center gap-2 mb-1.5">
-                        {flagPath && <img src={flagPath} alt={item.country_code} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
+                        {flagPath && <img src={flagPath} alt={item.country_code} title={getCountryName(item.country_code)} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
                         <span className="text-sm font-semibold text-white">{item.country_code}</span>
                         <span className="text-xs text-gray-400">{getCountryName(item.country_code)}</span>
                       </div>
@@ -615,7 +615,7 @@ export default function AiAnalysisDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Algorithm Migration Trends */}
         {trendData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 h-full">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-blue-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.algorithmMigrationTrend')}</h3>
@@ -649,7 +649,7 @@ export default function AiAnalysisDashboard() {
 
         {/* Key Size Distribution Pie */}
         {keySizePieData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 h-full">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-violet-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('dashboard.keySizeDistribution')}</h3>
@@ -821,12 +821,13 @@ export default function AiAnalysisDashboard() {
               ) : (
                 sortedAnomalies.map((item) => (
                   <tr key={item.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-3 py-2.5 whitespace-nowrap">
+                    <td className="px-3 py-2 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">
                         {item.country_code && getFlagSvgPath(item.country_code) && (
                           <img
                             src={getFlagSvgPath(item.country_code)}
                             alt={item.country_code}
+                            title={getCountryName(item.country_code)}
                             className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
@@ -834,21 +835,21 @@ export default function AiAnalysisDashboard() {
                         <span className="text-xs font-medium text-gray-900 dark:text-white">{item.country_code || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                         {item.certificate_type || '-'}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap font-mono text-xs">
+                    <td className="px-3 py-2 text-center whitespace-nowrap font-mono text-xs">
                       {item.anomaly_score.toFixed(3)}
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
                       <AnomalyBadge label={item.anomaly_label} />
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap font-mono text-xs">
+                    <td className="px-3 py-2 text-center whitespace-nowrap font-mono text-xs">
                       {item.risk_score.toFixed(1)}
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <td className="px-3 py-2 text-center whitespace-nowrap">
                       <RiskBadge level={item.risk_level} />
                     </td>
                     <td
@@ -864,7 +865,7 @@ export default function AiAnalysisDashboard() {
                         .map(([k, v]) => `${k}(${v})`)
                         .join(', ')}
                     </td>
-                    <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2 text-center whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                       {formatDate(item.analyzed_at)}
                     </td>
                   </tr>

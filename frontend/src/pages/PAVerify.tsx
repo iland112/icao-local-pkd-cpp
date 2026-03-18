@@ -21,6 +21,7 @@ import type {
   MRZData,
 } from '@/types';
 import { cn } from '@/utils/cn';
+import { GlossaryTerm } from '@/components/common';
 import { QuickLookupPanel } from '@/components/pa/QuickLookupPanel';
 import type { QuickLookupResult } from '@/components/pa/QuickLookupPanel';
 import { VerificationStepsPanel } from '@/components/pa/VerificationStepsPanel';
@@ -785,7 +786,7 @@ export function PAVerify() {
                     {sodFile && (
                       <div className="flex items-center gap-1">
                         <ShieldCheck className="w-3 h-3" />
-                        SOD: {sodFile.name}
+                        <GlossaryTerm term="SOD" />: {sodFile.name}
                       </div>
                     )}
                     {dgFiles.map((dg, idx) => (
@@ -825,7 +826,7 @@ export function PAVerify() {
 
           {/* Data Preview Card */}
           {sodInfo && (
-            <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5">
+            <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
               <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
                 <Eye className="w-5 h-5 text-blue-500" />
                 {t('pa:verify.dataPreview')}

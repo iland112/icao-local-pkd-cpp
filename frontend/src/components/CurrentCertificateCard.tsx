@@ -4,6 +4,7 @@ import type { CertificateMetadata, IcaoComplianceStatus } from '@/types';
 import { IcaoComplianceBadge } from './IcaoComplianceBadge';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/dateFormat';
+import { GlossaryTerm } from '@/components/common';
 
 interface CurrentCertificateCardProps {
   certificate: CertificateMetadata;
@@ -74,13 +75,13 @@ export function CurrentCertificateCard({
             {certificate.certificateType}
           </span>
           {certificate.isSelfSigned && (
-            <span className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
-              Self-signed
+            <span className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700">
+              <GlossaryTerm term="Self-signed" className="text-gray-600 dark:text-gray-400" />
             </span>
           )}
           {certificate.isLinkCertificate && (
-            <span className="text-xs px-2 py-1 rounded bg-cyan-100 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300">
-              Link Cert
+            <span className="text-xs px-2 py-1 rounded bg-cyan-100 dark:bg-cyan-900/20">
+              <GlossaryTerm term="Link Certificate" label="Link Cert" className="text-cyan-700 dark:text-cyan-300" />
             </span>
           )}
         </div>

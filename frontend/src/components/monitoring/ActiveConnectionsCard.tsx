@@ -11,7 +11,7 @@ interface Props {
 export default function ActiveConnectionsCard({ nginx, requestsPerSecond, uniqueUsers }: Props) {
   const { t } = useTranslation(['monitoring', 'common']);
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 h-full">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-5 h-5 text-cyan-500" />
         <h3 className="font-semibold text-gray-800 dark:text-white">{ t('monitoring:activeConnections') }</h3>
@@ -38,17 +38,17 @@ export default function ActiveConnectionsCard({ nginx, requestsPerSecond, unique
         <div className="text-center p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
           <BookOpen className="w-3.5 h-3.5 text-blue-500 mx-auto mb-1" />
           <div className="text-lg font-bold text-gray-900 dark:text-white">{nginx.reading}</div>
-          <div className="text-[10px] text-gray-500 dark:text-gray-400">Reading</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Reading</div>
         </div>
         <div className="text-center p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
           <PenTool className="w-3.5 h-3.5 text-green-500 mx-auto mb-1" />
           <div className="text-lg font-bold text-gray-900 dark:text-white">{nginx.writing}</div>
-          <div className="text-[10px] text-gray-500 dark:text-gray-400">Writing</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Writing</div>
         </div>
         <div className="text-center p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
           <Clock className="w-3.5 h-3.5 text-amber-500 mx-auto mb-1" />
           <div className="text-lg font-bold text-gray-900 dark:text-white">{nginx.waiting}</div>
-          <div className="text-[10px] text-gray-500 dark:text-gray-400">Waiting</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400">Waiting</div>
         </div>
       </div>
 

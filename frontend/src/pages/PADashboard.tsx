@@ -29,6 +29,7 @@ import { paApi } from '@/services/paApi';
 import type { PAStatisticsOverview, PAHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath, getAlpha2Code } from '@/utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
 import { useThemeStore } from '@/stores/themeStore';
 
 export function PADashboard() {
@@ -434,6 +435,7 @@ export function PADashboard() {
                           <img
                             src={getFlagSvgPath(item.country)}
                             alt={item.country}
+                            title={getCountryName(item.country)}
                             className="w-7 h-5 flex-shrink-0 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';

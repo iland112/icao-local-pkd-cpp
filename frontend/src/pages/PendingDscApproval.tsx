@@ -197,8 +197,8 @@ export default function PendingDscApproval() {
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">{t('common:table.noData')}</td></tr>
               ) : items.map((item) => (
                 <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
-                  <td className="px-4 py-3 font-medium">{item.country_code}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-2 font-medium">{item.country_code}</td>
+                  <td className="px-4 py-2">
                     <button
                       onClick={() => setDetailTarget(item)}
                       className="text-left text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[280px] block"
@@ -207,18 +207,18 @@ export default function PendingDscApproval() {
                       {extractCN(item.subject_dn)}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
+                  <td className="px-4 py-2 text-gray-600">
                     <span className="text-xs">{item.signature_algorithm}</span>
                     <br />
                     <span className="text-xs text-gray-400">{item.public_key_algorithm} {item.public_key_size}bit</span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
+                  <td className="px-4 py-2 text-xs text-gray-500">
                     {formatDate(item.not_before)} ~ {formatDate(item.not_after)}
                   </td>
-                  <td className="px-4 py-3">{verificationBadge(item.verification_status)}</td>
-                  <td className="px-4 py-3">{statusBadge(item.status)}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{formatDate(item.created_at)}</td>
-                  <td className="px-4 py-3 text-center">
+                  <td className="px-4 py-2">{verificationBadge(item.verification_status)}</td>
+                  <td className="px-4 py-2">{statusBadge(item.status)}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">{formatDate(item.created_at)}</td>
+                  <td className="px-4 py-2 text-center">
                     {item.status === 'PENDING' ? (
                       <div className="flex items-center justify-center gap-1">
                         <button

@@ -15,6 +15,7 @@ import {
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { getCountryName } from '@/utils/countryNames';
+import { GlossaryTerm } from '@/components/common';
 import axios from 'axios';
 
 // Trust Chain 분포 데이터
@@ -180,10 +181,10 @@ export function TrustChainValidationReport() {
           </div>
 
           {/* Trust Chain Distribution */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 mb-5">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-indigo-500" />
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('report:trustChain.trustChainDistribution')}</h2>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white"><GlossaryTerm term="Trust Chain" label={t('report:trustChain.trustChainDistribution')} /></h2>
             </div>
 
             {/* Status Bar */}
@@ -247,7 +248,7 @@ export function TrustChainValidationReport() {
 
       {/* Sample Certificates - dynamically from API */}
       {stats && stats.chainPathDistribution.some(e => e.samples && e.samples.length > 0) && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 mb-5">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-indigo-500" />
             <h2 className="text-base font-bold text-gray-900 dark:text-white">{ t('report:trustChain.sampleCertificates') }</h2>
@@ -270,6 +271,7 @@ export function TrustChainValidationReport() {
                     <img
                       src={getFlagSvgPath(sample.country)}
                       alt={sample.country}
+                      title={getCountryName(sample.country)}
                       className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600 flex-shrink-0"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                     />
@@ -281,7 +283,7 @@ export function TrustChainValidationReport() {
                         {getCountryName(sample.country)} DSC
                       </span>
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                    <div className="flex items-center gap-1 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
                       <ArrowRight className="w-2.5 h-2.5" />
                       {formatPath(entry.path)}
                     </div>
@@ -306,7 +308,7 @@ function StatCard({ icon, label, value, sub, borderColor }: {
   borderColor: string;
 }) {
   return (
-    <div className={cn('bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4', borderColor)}>
+    <div className={cn('bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4', borderColor)}>
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
           {icon}

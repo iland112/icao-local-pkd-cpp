@@ -17,6 +17,7 @@ import type { TreeNode } from '@/components/TreeViewer';
 import { certificateApi } from '@/services/pkdApi';
 import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
 import ForensicAnalysisPanel from '@/components/ai/ForensicAnalysisPanel';
+import { GlossaryTerm } from '@/components/common';
 
 interface DnComponents {
   commonName?: string;
@@ -73,7 +74,7 @@ interface CertificateDetailDialogProps {
   validationResult: ValidationResult | null;
   validationLoading: boolean;
   exportCertificate: (dn: string, format: 'der' | 'pem') => void;
-  getCertTypeBadge: (certType: string, cert?: Certificate) => React.ReactElement;
+  getCertTypeBadge: (certType: string) => React.ReactElement;
 }
 
 const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
@@ -355,21 +356,21 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               </p>
               {/* Certificate Type Badges */}
               <div className="flex items-center gap-2 mt-2">
-                {getCertTypeBadge(getActualCertType(selectedCert), selectedCert)}
+                {getCertTypeBadge(getActualCertType(selectedCert))}
                 {isLinkCertificate(selectedCert) && (
-                  <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700">
-                    Link Certificate
+                  <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-cyan-100 dark:bg-cyan-900/40 border border-cyan-200 dark:border-cyan-700">
+                    <GlossaryTerm term="Link Certificate" className="text-cyan-800 dark:text-cyan-300" />
                   </span>
                 )}
                 {isMasterListSignerCertificate(selectedCert) && (
-                  <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
-                    Master List Signer
+                  <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 border border-purple-200 dark:border-purple-700">
+                    <GlossaryTerm term="MLSC" label="Master List Signer" className="text-purple-800 dark:text-purple-300" />
                   </span>
                 )}
                 {selectedCert.isSelfSigned && (
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                    <CheckCircle className="w-3 h-3 mr-1" />
-                    Self-signed
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30">
+                    <CheckCircle className="w-3 h-3 mr-1 text-blue-700 dark:text-blue-400" />
+                    <GlossaryTerm term="Self-signed" className="text-blue-700 dark:text-blue-400" />
                   </span>
                 )}
               </div>
@@ -439,7 +440,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
         <div className="flex-1 overflow-y-auto p-6">
           {/* General Tab */}
           {detailTab === 'general' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Issued To/By in 2-column layout */}
               <div className="grid grid-cols-2 gap-4">
                 {/* Issued To */}
@@ -658,7 +659,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
 
           {/* Doc 9303 Tab */}
           {detailTab === 'doc9303' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {doc9303Loading && (
                 <div className="flex items-center justify-center gap-2 py-8 text-blue-500">
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -688,7 +689,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
 
           {/* Details Tab */}
           {detailTab === 'details' && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* Trust Chain Validation */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
@@ -728,7 +729,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                               <Award className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
                               <span className="text-xs font-semibold text-green-700 dark:text-green-300">CSCA (Root)</span>
                             </div>
-                            <code className="block mt-1 text-[11px] font-mono break-all text-gray-600 dark:text-gray-400">
+                            <code className="block mt-1 text-xs font-mono break-all text-gray-600 dark:text-gray-400">
                               {validationResult.cscaSubjectDn}
                             </code>
                           </div>
@@ -739,7 +740,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                               <span className="text-xs font-semibold text-red-700 dark:text-red-300">{ t('pa:steps.cscaNotFound') }</span>
                             </div>
                             {validationResult.issuerDn && (
-                              <code className="block mt-1 text-[11px] font-mono break-all text-gray-500 dark:text-gray-400">
+                              <code className="block mt-1 text-xs font-mono break-all text-gray-500 dark:text-gray-400">
                                 {t('certificate:detail.issuerLabel')} {validationResult.issuerDn}
                               </code>
                             )}
@@ -749,7 +750,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                         {/* Link Certificate indicator (if chain has Link) */}
                         {validationResult.trustChainMessage && /Link/.test(validationResult.trustChainMessage) && (
                           <>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
+                            <div className="text-xs text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
                             <div className="w-full p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-300 dark:border-purple-700">
                               <div className="flex items-center gap-2">
                                 <Link2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -757,13 +758,13 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                                 {(() => {
                                   const linkCount = (validationResult.trustChainMessage.match(/Link/g) || []).length;
                                   return linkCount > 1 ? (
-                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                    <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
                                       ×{linkCount}
                                     </span>
                                   ) : null;
                                 })()}
                               </div>
-                              <span className="block mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                              <span className="block mt-1 text-xs text-gray-500 dark:text-gray-400">
                                 {t('certificate:detail.linkCertChain')}
                               </span>
                             </div>
@@ -771,7 +772,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                         )}
 
                         {/* Arrow */}
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
+                        <div className="text-xs text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
 
                         {/* DSC (Leaf) */}
                         <div className="w-full p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-300 dark:border-blue-700">
@@ -779,21 +780,21 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                             <FileKey className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
                             <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
                             {validationResult.isExpired && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
                                 {t('certificate:detail.expired')}
                               </span>
                             )}
                             {validationResult.signatureVerified && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
                                 {t('certificate:detail.signatureVerified')}
                               </span>
                             )}
                           </div>
-                          <code className="block mt-1 text-[11px] font-mono break-all text-gray-600 dark:text-gray-400">
+                          <code className="block mt-1 text-xs font-mono break-all text-gray-600 dark:text-gray-400">
                             {validationResult.subjectDn}
                           </code>
                           {validationResult.notBefore && validationResult.notAfter && (
-                            <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                               {t('certificate:detail.validityPeriod', { from: validationResult.notBefore?.split('T')[0], to: validationResult.notAfter?.split('T')[0] })}
                             </div>
                           )}
@@ -802,7 +803,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                     </div>
 
                     {/* Additional checks summary */}
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] pt-2 border-t border-gray-200 dark:border-gray-600">
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs pt-2 border-t border-gray-200 dark:border-gray-600">
                       <span className={validationResult.cscaFound ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
                         {validationResult.cscaFound ? '✓' : '✗'} CSCA {validationResult.cscaFound ? t('common:button.confirm') : t('certificate:detail.cscaNotRegistered')}
                       </span>

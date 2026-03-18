@@ -265,7 +265,7 @@ export default function CrlReport() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:crl.totalCrls')}</p>
@@ -278,7 +278,7 @@ export default function CrlReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-orange-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common:label.countryCount')}</p>
@@ -291,7 +291,7 @@ export default function CrlReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-red-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:crl.totalRevoked')}</p>
@@ -304,7 +304,7 @@ export default function CrlReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-rose-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-rose-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('report:dscNc.expirationRate') }</p>
@@ -325,7 +325,7 @@ export default function CrlReport() {
 
       {/* Row 1: Country Distribution (full width) */}
       {sortedByCountry.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-orange-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:crl.byCountry')}</h3>
@@ -360,7 +360,7 @@ export default function CrlReport() {
                   return (
                     <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
                       <div className="flex items-center gap-2 mb-1.5">
-                        {flagPath && <img src={flagPath} alt={item.countryCode} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
+                        {flagPath && <img src={flagPath} alt={item.countryCode} title={getCountryName(item.countryCode, lang)} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
                         <span className="text-sm font-semibold text-white">{item.countryCode}</span>
                         <span className="text-xs text-gray-400">{getCountryName(item.countryCode, lang)}</span>
                       </div>
@@ -382,7 +382,7 @@ export default function CrlReport() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Signature Algorithm Pie */}
         {reportData.bySignatureAlgorithm.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <div className="flex items-center gap-2 mb-4">
               <FileText className="w-5 h-5 text-violet-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:crl.bySignatureAlgorithm')}</h3>
@@ -419,7 +419,7 @@ export default function CrlReport() {
 
         {/* Revocation Reason */}
         {sortedByReason.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="w-5 h-5 text-amber-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:crl.byRevocationReason')}</h3>
@@ -450,7 +450,7 @@ export default function CrlReport() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-amber-500" />
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('report:crl.filterLabel')}</h3>
@@ -531,25 +531,26 @@ export default function CrlReport() {
               {sortedCrls.map(crl => (
                 <tr key={crl.id} onClick={() => handleRowClick(crl)}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center justify-center gap-1.5">
                       {getFlagSvgPath(crl.countryCode) && (
                         <img src={getFlagSvgPath(crl.countryCode)} alt={crl.countryCode}
+                          title={getCountryName(crl.countryCode, lang)}
                           className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       )}
                       <span className="text-xs font-medium text-gray-900 dark:text-white">{crl.countryCode}</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2.5 max-w-[220px]" title={crl.issuerDn}>
+                  <td className="px-3 py-2 max-w-[220px]" title={crl.issuerDn}>
                     <span className="text-xs text-gray-600 dark:text-gray-300">{extractCn(crl.issuerDn)}</span>
                   </td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.thisUpdate?.slice(0, 10)}</td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.nextUpdate?.slice(0, 10) || '-'}</td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.thisUpdate?.slice(0, 10)}</td>
+                  <td className="px-3 py-2 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.nextUpdate?.slice(0, 10) || '-'}</td>
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     <StatusBadge status={crl.status} />
                   </td>
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     {crl.revokedCount > 0 ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
                         <XCircle className="w-3 h-3" />
@@ -557,8 +558,8 @@ export default function CrlReport() {
                       </span>
                     ) : <span className="text-xs text-gray-400">0</span>}
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{formatAlgorithm(crl.signatureAlgorithm)}</td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                  <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{formatAlgorithm(crl.signatureAlgorithm)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRowClick(crl); }}
@@ -637,6 +638,7 @@ export default function CrlReport() {
                     <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('report:crl.crlDetail')}</h2>
                     {getFlagSvgPath(selectedCrl.countryCode) && (
                       <img src={getFlagSvgPath(selectedCrl.countryCode)} alt={selectedCrl.countryCode}
+                        title={getCountryName(selectedCrl.countryCode, lang)}
                         className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500" />
                     )}
                     <span className="text-sm font-medium text-gray-600 dark:text-gray-300">
@@ -663,7 +665,7 @@ export default function CrlReport() {
             </div>
 
             {/* Dialog Body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
               {detailLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -714,10 +716,10 @@ export default function CrlReport() {
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {sortedRevoked.map((rev, i) => (
                               <tr key={rev.serialNumber} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                <td className="px-3 py-2.5 text-center text-xs text-gray-400">{i + 1}</td>
-                                <td className="px-3 py-2.5 font-mono text-xs text-gray-900 dark:text-white">{rev.serialNumber}</td>
-                                <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">{rev.revocationDate}</td>
-                                <td className="px-3 py-2.5">
+                                <td className="px-3 py-2 text-center text-xs text-gray-400">{i + 1}</td>
+                                <td className="px-3 py-2 font-mono text-xs text-gray-900 dark:text-white">{rev.serialNumber}</td>
+                                <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">{rev.revocationDate}</td>
+                                <td className="px-3 py-2">
                                   <span className={cn(
                                     'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
                                     rev.revocationReason === 'keyCompromise' || rev.revocationReason === 'cACompromise'
@@ -806,7 +808,7 @@ function ValidityBar({ validCount, expiredCount, total }: { validCount: number; 
   ].filter(s => s.count > 0);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
       <div className="flex items-center gap-2 mb-3">
         <CheckCircle className="w-5 h-5 text-green-500" />
         <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.validityStatus')}</h3>

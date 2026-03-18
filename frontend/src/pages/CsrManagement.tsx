@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { csrApiService, type CsrRecord, type CsrGenerateRequest } from '@/services/csrApi';
 import { toast } from '@/stores/toastStore';
+import { GlossaryTerm } from '@/components/common';
 
 const STATUS_COLORS: Record<string, string> = {
   CREATED: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
@@ -21,7 +22,7 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const inputClass = "w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors";
-const textareaClass = "w-full px-3 py-2 text-[11px] font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none transition-colors";
+const textareaClass = "w-full px-3 py-2 text-xs font-mono border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none transition-colors";
 const labelClass = "block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5";
 const btnSecondary = "px-4 py-2 text-sm text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors";
 const btnDanger = "flex items-center gap-1.5 px-4 py-2 text-sm text-white bg-red-500 hover:bg-red-600 rounded-xl transition-colors disabled:opacity-50";
@@ -183,8 +184,8 @@ export default function CsrManagement() {
             <FileKey className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">CSR 관리</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">ICAO PKD 인증서 서명 요청 (Certificate Signing Request)</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white"><GlossaryTerm term="CSR" label="CSR 관리" /></h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400"><GlossaryTerm term="PKD" label="ICAO PKD" /> 인증서 서명 요청 (Certificate Signing Request)</p>
           </div>
         </div>
         <div className="flex gap-2">
@@ -267,21 +268,21 @@ export default function CsrManagement() {
                 <tr><td colSpan={6} className="py-12 text-center text-gray-500 dark:text-gray-400">{hasFilters ? '필터 조건에 맞는 CSR이 없습니다' : '생성된 CSR이 없습니다'}</td></tr>
               ) : filteredList.map((csr) => (
                 <tr key={csr.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors border-b border-gray-100 dark:border-gray-700">
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-2">
                     <button onClick={() => handleViewDetail(csr.id)} className="text-indigo-600 dark:text-indigo-400 hover:underline text-left font-medium">
                       {csr.subject_dn}
                     </button>
-                    {csr.memo && <p className="text-[10px] text-gray-400 mt-0.5">{csr.memo}</p>}
+                    {csr.memo && <p className="text-xs text-gray-400 mt-0.5">{csr.memo}</p>}
                   </td>
-                  <td className="px-6 py-3 text-xs font-mono text-gray-600 dark:text-gray-400">{csr.key_algorithm}</td>
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-2 text-xs font-mono text-gray-600 dark:text-gray-400">{csr.key_algorithm}</td>
+                  <td className="px-6 py-2">
                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[csr.status] || 'bg-gray-100 text-gray-600'}`}>
                       {STATUS_LABELS[csr.status] || csr.status}
                     </span>
                   </td>
-                  <td className="px-6 py-3 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{csr.created_at?.substring(0, 19).replace('T', ' ')}</td>
-                  <td className="px-6 py-3 text-xs text-gray-500 dark:text-gray-400">{csr.created_by}</td>
-                  <td className="px-6 py-3">
+                  <td className="px-6 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{csr.created_at?.substring(0, 19).replace('T', ' ')}</td>
+                  <td className="px-6 py-2 text-xs text-gray-500 dark:text-gray-400">{csr.created_by}</td>
+                  <td className="px-6 py-2">
                     <div className="flex items-center justify-center gap-1">
                       <button onClick={() => handleViewDetail(csr.id)} className="p-2 text-gray-400 hover:text-indigo-600 rounded-lg transition-colors" title="상세"><Eye className="w-4 h-4" /></button>
                       <button onClick={() => handleExportPem(csr.id)} className="p-2 text-gray-400 hover:text-blue-600 rounded-lg transition-colors" title="PEM"><Download className="w-4 h-4" /></button>
@@ -318,7 +319,7 @@ export default function CsrManagement() {
                 </div>
                 <button onClick={() => setGenerateOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
               </div>
-              <div className="px-6 py-5 space-y-4">
+              <div className="px-6 py-5 space-y-3">
                 {!genResult ? (
                   <>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 text-sm space-y-2">
@@ -332,12 +333,12 @@ export default function CsrManagement() {
                     <div><label htmlFor="csr-memo" className={labelClass}>메모</label><input id="csr-memo" type="text" value={genForm.memo} onChange={(e) => setGenForm({ ...genForm, memo: e.target.value })} className={inputClass} placeholder="ICAO PKD 등록용" /></div>
                   </>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
                       <ShieldCheck className="w-5 h-5 text-green-600" /><span className="text-sm font-semibold text-green-700 dark:text-green-300">CSR 생성 완료</span>
                     </div>
                     <div className="relative">
-                      <pre className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-[10px] font-mono overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">{genResult.csrPem}</pre>
+                      <pre className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">{genResult.csrPem}</pre>
                       <button onClick={() => handleCopy(genResult.csrPem)} className="absolute top-3 right-3 p-1.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-100 shadow-sm" title="복사">
                         {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-gray-500" />}
                       </button>
@@ -375,7 +376,7 @@ export default function CsrManagement() {
                 </div>
                 <button onClick={() => setImportOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
               </div>
-              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-3">
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-300">
                   외부에서 생성된 CSR 파일과 개인키 파일을 PEM 형식으로 붙여넣으세요. CSR 서명 검증 및 키 매칭을 자동 수행합니다.
                 </div>
@@ -412,7 +413,7 @@ export default function CsrManagement() {
                 </div>
                 <button onClick={() => setDetailOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
               </div>
-              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="overflow-y-auto flex-1 px-6 py-5 space-y-3">
                 {detailLoading ? (
                   <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" /></div>
                 ) : selectedCsr && (
@@ -452,7 +453,7 @@ export default function CsrManagement() {
                     {selectedCsr.csr_pem && (
                       <div className="relative">
                         <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">CSR (PEM)</p>
-                        <pre className="bg-gray-900 dark:bg-gray-950 text-green-400 border border-gray-700 rounded-xl p-4 text-[10px] font-mono overflow-x-auto max-h-44 overflow-y-auto whitespace-pre-wrap break-all">{selectedCsr.csr_pem}</pre>
+                        <pre className="bg-gray-900 dark:bg-gray-950 text-green-400 border border-gray-700 rounded-xl p-4 text-xs font-mono overflow-x-auto max-h-44 overflow-y-auto whitespace-pre-wrap break-all">{selectedCsr.csr_pem}</pre>
                         <button onClick={() => handleCopy(selectedCsr.csr_pem!)} className="absolute top-8 right-3 p-1.5 bg-gray-800 border border-gray-600 rounded-lg hover:bg-gray-700 shadow-sm">
                           {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5 text-gray-400" />}
                         </button>
@@ -529,7 +530,7 @@ export default function CsrManagement() {
                 </div>
                 <button onClick={() => setCertRegOpen(false)} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"><X className="w-5 h-5" /></button>
               </div>
-              <div className="px-6 py-5 space-y-4">
+              <div className="px-6 py-5 space-y-3">
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-3 text-xs text-blue-700 dark:text-blue-300">
                   ICAO에서 발급받은 인증서를 PEM 형식으로 붙여넣으세요. 공개키 매칭을 자동 검증합니다.
                 </div>

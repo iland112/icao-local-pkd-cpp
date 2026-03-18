@@ -25,6 +25,7 @@ import { cn } from '@/utils/cn';
 import { TreeViewer, type TreeNode } from '@/components/TreeViewer';
 import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
 import { Dialog } from '@/components/common/Dialog';
+import { GlossaryTerm } from '@/components/common';
 
 type PageState = 'IDLE' | 'FILE_SELECTED' | 'PREVIEWING' | 'PREVIEW_READY' | 'PREVIEW_ERROR' | 'CONFIRMING' | 'COMPLETED' | 'FAILED';
 type PreviewTab = 'certificates' | 'dl-structure' | 'crl';
@@ -196,7 +197,7 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
           </div>
           <div className="flex items-center gap-1.5 flex-wrap min-w-0">
             <span className={cn(
-              'inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold rounded',
+              'inline-flex items-center px-1.5 py-0.5 text-xs font-bold rounded',
               cert.certificateType === 'CSCA' && 'bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300',
               cert.certificateType === 'DSC' && 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300',
               cert.certificateType === 'DSC_NC' && 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300',
@@ -208,18 +209,18 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
             <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{cert.countryCode}</span>
             <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[280px]" title={cert.subjectDn}>{cert.subjectDn}</span>
             {cert.isExpired && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
                 <XCircle className="w-3 h-3" /> {t('upload:certUpload.card.expired')}
               </span>
             )}
             {deviations.length > 0 && (
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="w-3 h-3" /> {t('upload:certUpload.card.deviation')}
               </span>
             )}
             {cert.doc9303Checklist && (
               <span className={cn(
-                'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold',
+                'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-semibold',
                 cert.doc9303Checklist.overallStatus === 'CONFORMANT' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
                 cert.doc9303Checklist.overallStatus === 'WARNING' && 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
                 cert.doc9303Checklist.overallStatus === 'NON_CONFORMANT' && 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
@@ -295,7 +296,7 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
                   {deviations.map((dev, di) => (
                     <div key={di} className="p-2 rounded bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 mt-1">
                       <p className="text-xs text-amber-900 dark:text-amber-200">{dev.defectDescription}</p>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                      <div className="flex items-center gap-2 mt-1 text-xs text-amber-700 dark:text-amber-400">
                         <span className="font-mono">{dev.defectTypeOid}</span>
                         <span className="px-1 py-0.5 rounded bg-amber-200/50 dark:bg-amber-800/40 font-semibold">{dev.defectCategory}</span>
                       </div>
@@ -528,19 +529,19 @@ export default function CertificateUpload() {
               <div className="flex items-center justify-center gap-3">
                 <FileText className="w-7 h-7 text-blue-500 flex-shrink-0" />
                 <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
+                  <span className="px-1.5 py-0.5 text-xs font-bold rounded bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400">
                     {getFileTypeBadge(selectedFile.name)}
                   </span>
                   <span className="text-sm font-semibold text-gray-900 dark:text-white">{selectedFile.name}</span>
                   <span className="text-xs text-gray-400">({formatFileSize(selectedFile.size)})</span>
                 </div>
-                <span className="text-[10px] text-gray-400 ml-2">{t('upload:certUpload.clickToChange')}</span>
+                <span className="text-xs text-gray-400 ml-2">{t('upload:certUpload.clickToChange')}</span>
               </div>
             ) : (
               <div className="flex flex-col items-center gap-1.5">
                 <CloudUpload className="w-8 h-8 text-gray-400" />
                 <p className="text-sm text-gray-600 dark:text-gray-300">{t('upload:certUpload.dropzoneText')}</p>
-                <p className="text-[10px] text-gray-400">.pem .crt .der .cer .p7b .dl .dvl .crl</p>
+                <p className="text-xs text-gray-400">.pem .crt .der .cer .p7b .dl .dvl .crl</p>
               </div>
             )}
           </div>
@@ -577,13 +578,13 @@ export default function CertificateUpload() {
                 {/* Summary badges */}
                 <div className="flex items-center gap-2 ml-auto">
                   {previewResult.isDuplicate && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                       <AlertTriangle className="w-3 h-3" /> {t('upload:statistics.duplicateCount')}
                     </span>
                   )}
                   {isDl && previewResult.dlSignatureValid !== undefined && (
                     <span className={cn(
-                      'inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full',
+                      'inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full',
                       previewResult.dlSignatureValid
                         ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
                         : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
@@ -591,7 +592,7 @@ export default function CertificateUpload() {
                       <Lock className="w-3 h-3" /> {previewResult.dlSignatureValid ? t('upload:certUpload.sigValid') : t('upload:certUpload.sigInvalid')}
                     </span>
                   )}
-                  <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                  <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
                     {previewResult.fileFormat}
                   </span>
                 </div>
@@ -706,13 +707,13 @@ export default function CertificateUpload() {
               <div>
                 <p className="text-sm font-semibold text-green-800 dark:text-green-300">{ t('upload:statistics.totalProcessed') }</p>
                 <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-green-700 dark:text-green-400">
-                  {uploadResult.cscaCount ? <span>CSCA {uploadResult.cscaCount}</span> : null}
-                  {uploadResult.dscCount ? <span>DSC {uploadResult.dscCount}</span> : null}
-                  {uploadResult.dscNcCount ? <span>DSC_NC {uploadResult.dscNcCount}</span> : null}
-                  {uploadResult.mlscCount ? <span>MLSC {uploadResult.mlscCount}</span> : null}
-                  {uploadResult.crlCount ? <span>CRL {uploadResult.crlCount}</span> : null}
+                  {uploadResult.cscaCount ? <span><GlossaryTerm term="CSCA" className="text-green-700 dark:text-green-400" /> {uploadResult.cscaCount}</span> : null}
+                  {uploadResult.dscCount ? <span><GlossaryTerm term="DSC" className="text-green-700 dark:text-green-400" /> {uploadResult.dscCount}</span> : null}
+                  {uploadResult.dscNcCount ? <span><GlossaryTerm term="DSC_NC" className="text-green-700 dark:text-green-400" /> {uploadResult.dscNcCount}</span> : null}
+                  {uploadResult.mlscCount ? <span><GlossaryTerm term="MLSC" className="text-green-700 dark:text-green-400" /> {uploadResult.mlscCount}</span> : null}
+                  {uploadResult.crlCount ? <span><GlossaryTerm term="CRL" className="text-green-700 dark:text-green-400" /> {uploadResult.crlCount}</span> : null}
                 </div>
-                {uploadId && <p className="mt-0.5 text-[10px] text-gray-400">ID: {uploadId}</p>}
+                {uploadId && <p className="mt-0.5 text-xs text-gray-400">ID: {uploadId}</p>}
               </div>
             </div>
 
@@ -859,7 +860,7 @@ export default function CertificateUpload() {
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Shield className="w-3.5 h-3.5 text-blue-500" />
-                      <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">CSCA</span>
+                      <GlossaryTerm term="CSCA" className="text-xs text-blue-600 dark:text-blue-400 font-medium" />
                     </div>
                     <span className="text-lg font-bold text-blue-700 dark:text-blue-300">{uploadResult.cscaCount}</span>
                   </div>
@@ -868,7 +869,7 @@ export default function CertificateUpload() {
                   <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Shield className="w-3.5 h-3.5 text-green-500" />
-                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">DSC</span>
+                      <GlossaryTerm term="DSC" className="text-xs text-green-600 dark:text-green-400 font-medium" />
                     </div>
                     <span className="text-lg font-bold text-green-700 dark:text-green-300">{uploadResult.dscCount}</span>
                   </div>
@@ -877,7 +878,7 @@ export default function CertificateUpload() {
                   <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Shield className="w-3.5 h-3.5 text-orange-500" />
-                      <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">DSC_NC</span>
+                      <GlossaryTerm term="DSC_NC" className="text-xs text-orange-600 dark:text-orange-400 font-medium" />
                     </div>
                     <span className="text-lg font-bold text-orange-700 dark:text-orange-300">{uploadResult.dscNcCount}</span>
                   </div>
@@ -886,7 +887,7 @@ export default function CertificateUpload() {
                   <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Key className="w-3.5 h-3.5 text-teal-500" />
-                      <span className="text-xs text-teal-600 dark:text-teal-400 font-medium">MLSC</span>
+                      <GlossaryTerm term="MLSC" className="text-xs text-teal-600 dark:text-teal-400 font-medium" />
                     </div>
                     <span className="text-lg font-bold text-teal-700 dark:text-teal-300">{uploadResult.mlscCount}</span>
                   </div>
@@ -895,7 +896,7 @@ export default function CertificateUpload() {
                   <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
                     <div className="flex items-center justify-center gap-1.5 mb-1">
                       <Globe className="w-3.5 h-3.5 text-purple-500" />
-                      <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">CRL</span>
+                      <GlossaryTerm term="CRL" className="text-xs text-purple-600 dark:text-purple-400 font-medium" />
                     </div>
                     <span className="text-lg font-bold text-purple-700 dark:text-purple-300">{uploadResult.crlCount}</span>
                   </div>

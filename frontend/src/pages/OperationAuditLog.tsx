@@ -227,7 +227,7 @@ export function OperationAuditLog() {
         {/* Statistics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{t('admin:operationAudit.totalOperations')}</p>
@@ -240,7 +240,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Successful Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{t('common:toast.success')}</p>
@@ -253,7 +253,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Failed Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{t('common:status.failed')}</p>
@@ -266,7 +266,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Top Users */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">{ t('admin:userManagement.activeUsers') }</p>
@@ -280,7 +280,7 @@ export function OperationAuditLog() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{ t('common:label.filter') }</h2>
@@ -413,10 +413,10 @@ export function OperationAuditLog() {
                 ) : (
                   sortedAuditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                      <td className="px-3 py-2.5 text-xs text-gray-900 dark:text-gray-100">
+                      <td className="px-3 py-2 text-xs text-gray-900 dark:text-gray-100">
                         {formatDateTime(log.createdAt)}
                       </td>
-                      <td className="px-3 py-2.5 text-xs">
+                      <td className="px-3 py-2 text-xs">
                         <div className="flex items-center space-x-1.5">
                           <User className="w-3.5 h-3.5 text-gray-400" />
                           <span className="text-gray-900 dark:text-gray-100">
@@ -424,7 +424,7 @@ export function OperationAuditLog() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-xs">
+                      <td className="px-3 py-2 text-xs">
                         <div className="flex items-center space-x-1.5">
                           {OPERATION_TYPE_ICONS[log.operationType] || <Activity className="w-3.5 h-3.5" />}
                           <span className="text-gray-900 dark:text-gray-100">
@@ -432,13 +432,13 @@ export function OperationAuditLog() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">
+                      <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
                         {log.resourceType || '-'}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400 font-mono">
+                      <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400 font-mono">
                         {log.ipAddress || '-'}
                       </td>
-                      <td className="px-3 py-2.5 text-xs">
+                      <td className="px-3 py-2 text-xs">
                         {log.success ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                             <CheckCircle className="w-3 h-3 mr-1" />
@@ -451,7 +451,7 @@ export function OperationAuditLog() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-center">
+                      <td className="px-3 py-2 text-center">
                         <button
                           onClick={() => {
                             setSelectedLog(log);
@@ -544,22 +544,22 @@ export function OperationAuditLog() {
                 {/* Row 1: Basic + Operation */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.timestamp') }</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.timestamp') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{formatDateTime(selectedLog.createdAt)}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('common:label.user') }</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{ t('common:label.user') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || t('admin:operationAudit.anonymous')}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.operationType')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.operationType')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5 flex items-center gap-1">
                       {OPERATION_TYPE_ICONS[selectedLog.operationType]}
                       <span>{t(OPERATION_TYPE_LABEL_KEYS[selectedLog.operationType])}</span>
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.subType')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.subType')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.operationSubtype || '-'}</dd>
                   </div>
                 </div>
@@ -569,20 +569,20 @@ export function OperationAuditLog() {
                 {/* Row 2: IDs */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div className="col-span-2">
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common:label.logId')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.logId')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={String(selectedLog.id)}>{selectedLog.id}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.resourceType')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.resourceType')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.resourceType || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common:label.userId')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.userId')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.userId || '-'}>{selectedLog.userId || '-'}</dd>
                   </div>
                   {selectedLog.resourceId && (
                     <div className="col-span-4">
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.resourceId')}</dt>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.resourceId')}</dt>
                       <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 break-all">{selectedLog.resourceId}</dd>
                     </div>
                   )}
@@ -593,31 +593,31 @@ export function OperationAuditLog() {
                 {/* Row 3: Request */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.ipAddress') }</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.ipAddress') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.ipAddress || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.requestMethod')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.requestMethod')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.requestMethod || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.statusCode')}</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.statusCode')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.statusCode || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('sync:reconciliation.duration') }</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">{ t('sync:reconciliation.duration') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{formatDuration(selectedLog.durationMs)}</dd>
                   </div>
                   {selectedLog.requestPath && (
                     <div className="col-span-4">
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.requestPath')}</dt>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.requestPath')}</dt>
                       <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 break-all">{selectedLog.requestPath}</dd>
                     </div>
                   )}
                   {selectedLog.userAgent && (
                     <div className="col-span-4">
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">User Agent</dt>
-                      <dd className="text-[11px] text-gray-600 dark:text-gray-400 font-mono mt-0.5 truncate" title={selectedLog.userAgent}>{selectedLog.userAgent}</dd>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">User Agent</dt>
+                      <dd className="text-xs text-gray-600 dark:text-gray-400 font-mono mt-0.5 truncate" title={selectedLog.userAgent}>{selectedLog.userAgent}</dd>
                     </div>
                   )}
                 </div>
@@ -627,7 +627,7 @@ export function OperationAuditLog() {
                   <>
                     <hr className="border-gray-200 dark:border-gray-700" />
                     <div>
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('admin:operationAudit.errorMessage')}</dt>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">{t('admin:operationAudit.errorMessage')}</dt>
                       <dd className="text-xs text-red-600 dark:text-red-400 mt-0.5 break-all">{selectedLog.errorMessage}</dd>
                     </div>
                   </>
@@ -638,9 +638,9 @@ export function OperationAuditLog() {
                   <>
                     <hr className="border-gray-200 dark:border-gray-700" />
                     <div>
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">{t('admin:operationAudit.metadata')}</dt>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:operationAudit.metadata')}</dt>
                       <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 overflow-x-auto">
-                        <pre className="text-[11px] text-gray-900 dark:text-gray-100 font-mono">
+                        <pre className="text-xs text-gray-900 dark:text-gray-100 font-mono">
                           {JSON.stringify(selectedLog.metadata, null, 2)}
                         </pre>
                       </div>

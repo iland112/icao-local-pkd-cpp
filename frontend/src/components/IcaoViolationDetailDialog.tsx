@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { getUploadValidations } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
+import { getCountryName } from '@/utils/countryNames';
 
 /** ICAO 9303 violation category key */
 type ViolationCategory = 'algorithm' | 'keySize' | 'validityPeriod' | 'keyUsage' | 'extensions' | 'dnFormat' | 'nonConformant';
@@ -310,7 +311,7 @@ export function IcaoViolationDetailDialog({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm sm:max-w-2xl lg:max-w-3xl w-full mx-4 max-h-[90vh] flex flex-col"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-sm sm:max-w-2xl lg:max-w-4xl xl:max-w-5xl w-full mx-4 max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -392,7 +393,7 @@ export function IcaoViolationDetailDialog({
                         <p className="text-xs text-gray-700 dark:text-gray-300">{info.description}</p>
                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-2.5">
                           <p className="text-xs text-gray-600 dark:text-gray-400 leading-relaxed">{info.detail}</p>
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
+                          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 flex items-center gap-1">
                             <ExternalLink className="w-3 h-3" />
                             참조: {info.reference}
                           </p>
@@ -402,7 +403,7 @@ export function IcaoViolationDetailDialog({
 
                     {/* Certificate list */}
                     <div>
-                      <h5 className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
+                      <h5 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1.5">
                         해당 인증서 목록 (최대 200건)
                       </h5>
                       {loading ? (
@@ -411,46 +412,45 @@ export function IcaoViolationDetailDialog({
                           <span className="ml-2 text-xs text-gray-500">조회 중...</span>
                         </div>
                       ) : certificates.length > 0 ? (
-                        <div className="max-h-60 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
-                          <table className="w-full text-xs">
+                        <div className="max-h-72 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded">
+                          <table className="w-full text-xs leading-tight table-fixed">
                             <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                               <tr>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">국가</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">유형</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">Subject</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">{categoryColumnConfig[cat]?.header ?? '상세'}</th>
-                                <th className="px-2 py-1.5 text-center font-medium text-gray-500 dark:text-gray-400">상태</th>
+                                <th className="px-1.5 py-1 text-center font-medium text-gray-500 dark:text-gray-400 w-[44px]">국가</th>
+                                <th className="px-1.5 py-1 text-center font-medium text-gray-500 dark:text-gray-400 w-[52px]">유형</th>
+                                <th className="px-1.5 py-1 text-left font-medium text-gray-500 dark:text-gray-400">Subject</th>
+                                <th className="px-1.5 py-1 text-left font-medium text-gray-500 dark:text-gray-400">{categoryColumnConfig[cat]?.header ?? '상세'}</th>
+                                <th className="px-1.5 py-1 text-center font-medium text-gray-500 dark:text-gray-400 w-[28px]"></th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                               {certificates.map((cert, idx) => (
                                 <tr key={cert.id || idx} className="hover:bg-white dark:hover:bg-gray-800/30">
-                                  <td className="px-2 py-1.5 whitespace-nowrap">
-                                    <span className="inline-flex items-center gap-1">
+                                  <td className="px-1.5 py-0.5 whitespace-nowrap text-center">
+                                    <span className="inline-flex items-center gap-0.5">
                                       <img
                                         src={`https://flagcdn.com/16x12/${cert.countryCode?.toLowerCase()}.png`}
                                         alt={cert.countryCode}
-                                        className="w-4 h-3"
+                                        title={cert.countryCode ? getCountryName(cert.countryCode) : ''}
+                                        className="w-3.5 h-2.5"
                                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                       />
-                                      <span>{cert.countryCode}</span>
+                                      <span className="text-xs">{cert.countryCode}</span>
                                     </span>
                                   </td>
-                                  <td className="px-2 py-1.5 whitespace-nowrap">
-                                    <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded text-[10px]">
+                                  <td className="px-1.5 py-0.5 whitespace-nowrap text-center">
+                                    <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1 py-px rounded text-xs">
                                       {cert.certificateType}
                                     </span>
                                   </td>
-                                  <td className="px-2 py-1.5 max-w-[200px] truncate text-gray-700 dark:text-gray-300" title={cert.subjectDn}>
-                                    {cert.subjectDn?.replace(/^.*?CN=/, 'CN=')?.substring(0, 40)}
+                                  <td className="px-1.5 py-0.5 truncate text-gray-700 dark:text-gray-300" title={cert.subjectDn}>
+                                    {cert.subjectDn?.replace(/^.*?CN=/, 'CN=')?.substring(0, 50)}
                                   </td>
-                                  <td className="px-2 py-1.5 max-w-[180px] truncate text-gray-600 dark:text-gray-400" title={categoryColumnConfig[cat]?.getValue(cert)}>
+                                  <td className="px-1.5 py-0.5 truncate text-gray-600 dark:text-gray-400" title={categoryColumnConfig[cat]?.getValue(cert)}>
                                     {categoryColumnConfig[cat]?.getValue(cert) ?? '-'}
                                   </td>
-                                  <td className="px-2 py-1.5 text-center">
-                                    <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400">
-                                      <XCircle className="w-3 h-3" />
-                                    </span>
+                                  <td className="px-1.5 py-0.5 text-center">
+                                    <XCircle className="w-2.5 h-2.5 text-red-500 dark:text-red-400 inline-block" />
                                   </td>
                                 </tr>
                               ))}

@@ -179,7 +179,7 @@ export function Header() {
             >
               <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
               {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-xs font-bold text-white bg-red-500 rounded-full">
                   {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
@@ -242,8 +242,8 @@ export function Header() {
                                   <span className="flex-shrink-0 w-1.5 h-1.5 bg-blue-500 rounded-full" />
                                 )}
                               </div>
-                              <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">{n.message}</p>
-                              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{formatRelativeTime(n.timestamp)}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">{n.message}</p>
+                              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{formatRelativeTime(n.timestamp)}</p>
                             </div>
                           </div>
                         </button>
@@ -286,7 +286,7 @@ export function Header() {
                   {user?.username || 'User'}
                 </span>
                 {user?.is_admin && (
-                  <span className="flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 leading-none">
+                  <span className="flex items-center gap-0.5 text-xs text-blue-600 dark:text-blue-400 leading-none">
                     <Shield className="w-2.5 h-2.5" />
                     {t('nav:header.adminBadge')}
                   </span>
@@ -414,7 +414,7 @@ export function Header() {
                       </td>
                       <td className="px-2 py-1.5 text-gray-500 dark:text-gray-400">{lib.version}</td>
                       <td className="px-2.5 py-1.5 text-right">
-                        <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-[10px] font-medium">
+                        <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">
                           {lib.license}
                         </span>
                       </td>

@@ -334,7 +334,7 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
     purple: 'border-purple-500 text-purple-600',
   };
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 ${colors[color] || colors.blue}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 ${colors[color] || colors.blue}`}>
       <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
       <p className="text-2xl font-bold mt-1">{value}</p>
     </div>
@@ -460,7 +460,7 @@ function CreateDialog({ onClose, onCreated }: {
     <DialogWrapper onClose={onClose} title={t('admin:apiClient.registerClient')} wide>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto px-0.5">
         {/* Left Column: Client Info + Device + IPs + Rate Limits */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Client Config */}
           <div>
             <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('common:label.clientSettings')}</h4>
@@ -603,8 +603,8 @@ function CreateDialog({ onClose, onCreated }: {
       )}
 
       <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
-        <button onClick={handleSubmit} disabled={saving || !form.client_name.trim()} className="flex items-center gap-2 px-5 py-2 bg-[#02385e] text-white rounded-xl hover:bg-[#024b7a] disabled:opacity-50 transition-colors active:scale-[0.98]">
+        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
+        <button onClick={handleSubmit} disabled={saving || !form.client_name.trim()} className="flex items-center gap-2 px-5 py-2 bg-[#02385e] text-white rounded-lg hover:bg-[#024b7a] disabled:opacity-50 transition-colors active:scale-[0.98]">
           <Key className="w-4 h-4" />
           {saving ? t('admin:apiClient.creating') : t('admin:apiClient.apiKeyIssue')}
         </button>
@@ -654,7 +654,7 @@ function EditDialog({ client, onClose, onUpdated }: {
       {editError && (
         <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">{editError}</div>
       )}
-      <div className="space-y-4">
+      <div className="space-y-3">
         <InputField label={t('admin:apiClient.clientName_label')} value={form.client_name || ''} onChange={v => setForm({ ...form, client_name: v })} />
         <InputField label={t('common:label.description')} value={form.description || ''} onChange={v => setForm({ ...form, description: v })} />
 
@@ -697,8 +697,8 @@ function EditDialog({ client, onClose, onUpdated }: {
       </div>
 
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
-        <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
+        <button onClick={handleSubmit} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
           {saving ? t('common:label.saving') : t('common:button.save')}
         </button>
       </div>
@@ -729,7 +729,7 @@ function DeleteDialog({ client, onClose, onDeleted }: {
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">{t('admin:apiClient.accessBlocked')}</p>
       </div>
       <div className="flex justify-center gap-3 mt-4">
-        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
+        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.cancel')}</button>
         <button
           onClick={async () => {
             setDeleting(true);
@@ -867,7 +867,7 @@ function UsageDialog({ client, onClose }: {
                   {endpoints.map((ep, i) => (
                     <tr key={ep.endpoint} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                       <td className="px-3 py-1.5 font-mono text-xs text-gray-700 dark:text-gray-300">
-                        <span className={`inline-flex items-center justify-center w-4.5 h-4.5 text-center text-[10px] font-bold rounded-full mr-1.5 ${i < 3 ? 'text-white' : 'text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-600'}`} style={i < 3 ? { backgroundColor: BAR_COLORS[i], width: '18px', height: '18px' } : { width: '18px', height: '18px' }}>{i + 1}</span>
+                        <span className={`inline-flex items-center justify-center w-4.5 h-4.5 text-center text-xs font-bold rounded-full mr-1.5 ${i < 3 ? 'text-white' : 'text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-600'}`} style={i < 3 ? { backgroundColor: BAR_COLORS[i], width: '18px', height: '18px' } : { width: '18px', height: '18px' }}>{i + 1}</span>
                         {ep.endpoint}
                       </td>
                       <td className="text-right px-3 py-1.5 font-semibold text-gray-900 dark:text-white">{ep.count.toLocaleString()}</td>
@@ -882,7 +882,7 @@ function UsageDialog({ client, onClose }: {
       )}
 
       <div className="flex justify-end mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.close')}</button>
+        <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">{t('common:button.close')}</button>
       </div>
     </DialogWrapper>
   );
@@ -905,7 +905,7 @@ function ApiKeyDialog({ clientName, apiKey, onClose }: {
 
   return (
     <DialogWrapper onClose={onClose} title={t('admin:apiClient.apiKeyIssueComplete')}>
-      <div className="space-y-4">
+      <div className="space-y-3">
         <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
           <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">
             {t('admin:apiClient.copyKeyWarning')}
@@ -929,7 +929,7 @@ function ApiKeyDialog({ clientName, apiKey, onClose }: {
       </div>
 
       <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">{t('common:button.confirm')}</button>
+        <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">{t('common:button.confirm')}</button>
       </div>
     </DialogWrapper>
   );
@@ -1071,7 +1071,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
 
   return (
     <DialogWrapper onClose={onClose} title={t('admin:apiClient.requestDetailTitle')}>
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+      <div className="space-y-3 max-h-[70vh] overflow-y-auto">
         {/* Status badge */}
         <div className="flex items-center gap-2">
           <span className={`text-sm px-3 py-1 rounded-full font-medium ${STATUS_STYLES[request.status] || ''}`}>
@@ -1203,7 +1203,7 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
       </div>
 
       <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
           {t('common:button.close')}
         </button>
         {isPending && (

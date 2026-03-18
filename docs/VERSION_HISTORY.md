@@ -10,7 +10,7 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
-| v2.36.0 | 03-17 | Branding | 브랜드 리네이밍 SPKD→FastSPKD + 로그인 페이지 개선 + BSI TR-03110 배지 |
+| v2.36.0 | 03-17~18 | UX | 브랜드 리네이밍 FastSPKD + UI/UX 전면 일관성 개선 + GlossaryTerm + CountryFlag + LC 버그 수정 |
 | v2.35.0 | 03-16 | Feature | ICAO PKD CSR 관리 (생성/Import/인증서 등록/암호화/감사 로그) |
 | v2.34.0 | 03-15 | Refactor | DB 초기화 스크립트 통합 (PostgreSQL 18→8, Oracle 13→9) |
 | v2.33.5 | 03-15 | Fix | ICAO Doc 9303 미준수 카테고리 필터 + DSC_NC 부적합 사유 표시 수정 |

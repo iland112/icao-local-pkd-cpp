@@ -231,7 +231,7 @@ export function VerificationStepsPanel({
                           <FileKey className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                           <span className="font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
                           {step.details.dscExpired && (
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
+                            <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
                               {t('pa:steps.expired')}
                             </span>
                           )}
@@ -270,7 +270,7 @@ export function VerificationStepsPanel({
                               {step.details.expirationStatus === 'EXPIRED' ? t('pa:steps.certExpired') : t('pa:steps.certExpiringSoon')}
                             </span>
                             {step.details.validAtSigningTime && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                              <span className="px-1.5 py-0.5 rounded text-xs font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
                                 &#10003; {t('pa:steps.validAtSigningTime')}
                               </span>
                             )}
@@ -352,6 +352,7 @@ export function VerificationStepsPanel({
                                   <img
                                     src={getFlagSvgPath(cc)}
                                     alt={cc}
+                                    title={getCountryName(cc)}
                                     className="w-5 h-3.5 object-cover rounded-sm border border-gray-300 dark:border-gray-600"
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />
@@ -414,6 +415,7 @@ export function VerificationStepsPanel({
                                   <img
                                     src={getFlagSvgPath(countryCode)}
                                     alt={countryCode}
+                                    title={getCountryName(countryCode)}
                                     className="w-5 h-3.5 object-cover rounded-sm border border-gray-300 dark:border-gray-600"
                                     onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                   />

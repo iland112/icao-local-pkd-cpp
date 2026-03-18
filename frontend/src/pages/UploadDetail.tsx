@@ -25,6 +25,7 @@ import { formatDateTime } from '@/utils/dateFormat';
 import { validationApi } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
+import { GlossaryTerm } from '@/components/common';
 
 export function UploadDetail() {
   const { t } = useTranslation(['upload', 'common']);
@@ -227,7 +228,7 @@ export function UploadDetail() {
         {/* Left Column: File Info */}
         <div className="lg:col-span-2 space-y-6">
           {/* Basic Info Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
               {t('upload:detail.fileInfo')}
@@ -271,7 +272,7 @@ export function UploadDetail() {
           </div>
 
           {/* Timeline Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-purple-500" />
               {t('upload:detail.processingTimeline')}
@@ -344,7 +345,7 @@ export function UploadDetail() {
         {/* Right Column: Statistics */}
         <div className="lg:col-span-1">
           {upload.statistics ? (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-500" />
                 {t('upload:detail.processingStats')}
@@ -366,7 +367,7 @@ export function UploadDetail() {
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-blue-500" />
-                      <span className="text-xs text-blue-600 dark:text-blue-400">CSCA</span>
+                      <GlossaryTerm term="CSCA" className="text-xs text-blue-600 dark:text-blue-400" />
                     </div>
                     <span className="text-xl font-bold text-blue-700 dark:text-blue-300">
                       {upload.statistics.cscaCount}
@@ -375,7 +376,7 @@ export function UploadDetail() {
                   <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-green-500" />
-                      <span className="text-xs text-green-600 dark:text-green-400">DSC</span>
+                      <GlossaryTerm term="DSC" className="text-xs text-green-600 dark:text-green-400" />
                     </div>
                     <span className="text-xl font-bold text-green-700 dark:text-green-300">
                       {upload.statistics.dscCount}
@@ -384,7 +385,7 @@ export function UploadDetail() {
                   <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
                     <div className="flex items-center gap-2 mb-1">
                       <Globe className="w-4 h-4 text-purple-500" />
-                      <span className="text-xs text-purple-600 dark:text-purple-400">CRL</span>
+                      <GlossaryTerm term="CRL" className="text-xs text-purple-600 dark:text-purple-400" />
                     </div>
                     <span className="text-xl font-bold text-purple-700 dark:text-purple-300">
                       {upload.statistics.crlCount}
@@ -429,7 +430,7 @@ export function UploadDetail() {
               </div>
             </div>
           ) : IN_PROGRESS_STATUSES.includes(upload.status) ? (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
                 {t('upload:detail.processingInProgressTitle')}
@@ -462,7 +463,7 @@ export function UploadDetail() {
                     <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                       <div className="flex items-center gap-2 mb-1">
                         <Shield className="w-4 h-4 text-blue-500" />
-                        <span className="text-xs text-blue-600 dark:text-blue-400">CSCA</span>
+                        <GlossaryTerm term="CSCA" className="text-xs text-blue-600 dark:text-blue-400" />
                       </div>
                       <span className="text-xl font-bold text-blue-700 dark:text-blue-300">
                         {upload.cscaCount}
@@ -473,7 +474,7 @@ export function UploadDetail() {
                     <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
                       <div className="flex items-center gap-2 mb-1">
                         <Shield className="w-4 h-4 text-green-500" />
-                        <span className="text-xs text-green-600 dark:text-green-400">DSC</span>
+                        <GlossaryTerm term="DSC" className="text-xs text-green-600 dark:text-green-400" />
                       </div>
                       <span className="text-xl font-bold text-green-700 dark:text-green-300">
                         {upload.dscCount}
@@ -484,7 +485,7 @@ export function UploadDetail() {
                     <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
                       <div className="flex items-center gap-2 mb-1">
                         <Shield className="w-4 h-4 text-orange-500" />
-                        <span className="text-xs text-orange-600 dark:text-orange-400">DSC_NC</span>
+                        <GlossaryTerm term="DSC_NC" className="text-xs text-orange-600 dark:text-orange-400" />
                       </div>
                       <span className="text-xl font-bold text-orange-700 dark:text-orange-300">
                         {upload.dscNcCount}
@@ -495,7 +496,7 @@ export function UploadDetail() {
                     <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
                       <div className="flex items-center gap-2 mb-1">
                         <Globe className="w-4 h-4 text-purple-500" />
-                        <span className="text-xs text-purple-600 dark:text-purple-400">CRL</span>
+                        <GlossaryTerm term="CRL" className="text-xs text-purple-600 dark:text-purple-400" />
                       </div>
                       <span className="text-xl font-bold text-purple-700 dark:text-purple-300">
                         {upload.crlCount}
@@ -513,7 +514,7 @@ export function UploadDetail() {
               </div>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
               <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
                 <Database className="w-12 h-12 mb-4 opacity-50" />
                 <p className="text-sm">{t('upload:detail.noStatsAvailable')}</p>

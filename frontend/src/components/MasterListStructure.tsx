@@ -134,58 +134,50 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header Info */}
-      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <FileCode className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+    <div className="space-y-2.5">
+      {/* Header Info — compact */}
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-3 py-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5">
+            <FileCode className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-xs font-semibold text-blue-900 dark:text-blue-100">
               {t('upload:masterListStructure.title')}
             </h3>
           </div>
           {data.truncated && (
-            <div className="flex items-center gap-2">
-              <select
-                value={maxLines}
-                onChange={(e) => setMaxLines(Number(e.target.value))}
-                className="text-xs border border-blue-300 dark:border-blue-700 rounded px-2 py-1 bg-white dark:bg-gray-800"
-              >
-                <option value={50}>{t('upload:masterListStructure.nLines', { num: 50 })}</option>
-                <option value={100}>{t('upload:masterListStructure.nLines', { num: 100 })}</option>
-                <option value={500}>{t('upload:masterListStructure.nLines', { num: 500 })}</option>
-                <option value={1000}>{t('upload:masterListStructure.nLines', { num: '1,000' })}</option>
-                <option value={5000}>{t('upload:masterListStructure.nLines', { num: '5,000' })}</option>
-                <option value={0}>{t('upload:masterListStructure.allSlow')}</option>
-              </select>
-            </div>
+            <select
+              value={maxLines}
+              onChange={(e) => setMaxLines(Number(e.target.value))}
+              className="text-xs border border-blue-300 dark:border-blue-700 rounded px-1.5 py-0.5 bg-white dark:bg-gray-800"
+            >
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={500}>500</option>
+              <option value={1000}>1,000</option>
+              <option value={5000}>5,000</option>
+              <option value={0}>{t('upload:masterListStructure.allSlow')}</option>
+            </select>
           )}
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           <div>
             <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.file')}:</span>
-            <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
-              {data.fileName || 'Unknown'}
-            </span>
+            <span className="ml-1 text-blue-900 dark:text-blue-100 font-medium">{data.fileName || 'Unknown'}</span>
           </div>
           <div>
             <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.size')}:</span>
-            <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
-              {data.fileSize ? formatBytes(data.fileSize) : 'N/A'}
-            </span>
+            <span className="ml-1 text-blue-900 dark:text-blue-100 font-medium">{data.fileSize ? formatBytes(data.fileSize) : 'N/A'}</span>
           </div>
           {data.statistics && (
             <>
               <div>
                 <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.totalNodes')}:</span>
-                <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
-                  {data.statistics.totalNodes}
-                </span>
+                <span className="ml-1 text-blue-900 dark:text-blue-100 font-medium">{data.statistics.totalNodes}</span>
               </div>
               <div>
                 <span className="text-blue-700 dark:text-blue-300">{t('upload:masterListStructure.structure')}:</span>
-                <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
+                <span className="ml-1 text-blue-900 dark:text-blue-100 font-medium">
                   {t('upload:masterListStructure.constructedPrimitive', { constructed: data.statistics.constructedNodes, primitive: data.statistics.primitiveNodes })}
                 </span>
               </div>
@@ -194,39 +186,23 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
         </div>
 
         {data.truncated && (
-          <div className="mt-3 flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-2 rounded">
-            <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            <span>
-              {t('upload:masterListStructure.truncatedMessage', { num: data.maxLines })}
-            </span>
+          <div className="mt-2 flex items-center gap-1.5 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-2 py-1 rounded">
+            <AlertCircle className="w-3 h-3 flex-shrink-0" />
+            <span>{t('upload:masterListStructure.truncatedMessage', { num: data.maxLines })}</span>
           </div>
         )}
       </div>
 
-      {/* ASN.1 Tree */}
+      {/* ASN.1 Tree — compact */}
       <div>
-        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-              TLV (Tag-Length-Value) Tree
-            </span>
-            <div className="flex items-center gap-2 text-xs">
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-blue-500"></div>
-                <span className="text-gray-600 dark:text-gray-400">Constructed</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded bg-green-500"></div>
-                <span className="text-gray-600 dark:text-gray-400">Primitive</span>
-              </div>
-            </div>
+        <div className="bg-gray-50 dark:bg-gray-800 px-3 py-1.5 border border-gray-200 dark:border-gray-700 rounded-t-lg flex items-center justify-between">
+          <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">TLV (Tag-Length-Value) Tree</span>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-blue-500"></div><span className="text-gray-500 dark:text-gray-400">Constructed</span></div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-green-500"></div><span className="text-gray-500 dark:text-gray-400">Primitive</span></div>
           </div>
         </div>
-
-        <TreeViewer
-          data={treeData}
-          height="400px"
-        />
+        <TreeViewer data={treeData} height="400px" compact />
       </div>
     </div>
   );

@@ -241,7 +241,7 @@ export default function DscNcReport() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-orange-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common:label.countryCount')}</p>
@@ -256,7 +256,7 @@ export default function DscNcReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-amber-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-amber-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('report:dscNc.totalDscNc') }</p>
@@ -271,7 +271,7 @@ export default function DscNcReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-red-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('report:dscNc.nonConformanceCode') }</p>
@@ -286,7 +286,7 @@ export default function DscNcReport() {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-rose-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-rose-500">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:dscNc.expirationRate')}</p>
@@ -310,7 +310,7 @@ export default function DscNcReport() {
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Conformance Code Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.byConformanceCode')}</h3>
@@ -342,7 +342,7 @@ export default function DscNcReport() {
         </div>
 
         {/* Country Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-orange-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{ t('report:crl.byCountry') }</h3>
@@ -381,7 +381,7 @@ export default function DscNcReport() {
                   return (
                     <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
                       <div className="flex items-center gap-2 mb-1.5">
-                        {flagPath && <img src={flagPath} alt={item.countryCode} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
+                        {flagPath && <img src={flagPath} alt={item.countryCode} title={getCountryName(item.countryCode)} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
                         <span className="text-sm font-semibold text-white">{item.countryCode}</span>
                         <span className="text-xs text-gray-400">{getCountryName(item.countryCode)}</span>
                       </div>
@@ -405,7 +405,7 @@ export default function DscNcReport() {
       {/* Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Year Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <Clock className="w-5 h-5 text-blue-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.byYear')}</h3>
@@ -426,7 +426,7 @@ export default function DscNcReport() {
         </div>
 
         {/* Signature Algorithm Pie */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-violet-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{ t('certificate:detail.signatureAlgorithm') }</h3>
@@ -461,7 +461,7 @@ export default function DscNcReport() {
         </div>
 
         {/* Public Key Algorithm Pie */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="w-5 h-5 text-teal-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{ t('certificate:detail.publicKeyAlgorithm') }</h3>
@@ -586,12 +586,13 @@ export default function DscNcReport() {
               {sortedCerts.map((cert) => (
                 <tr key={cert.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* Country */}
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center justify-center gap-1.5">
                       {getFlagSvgPath(cert.countryCode) && (
                         <img
                           src={getFlagSvgPath(cert.countryCode)}
                           alt={cert.countryCode}
+                          title={getCountryName(cert.countryCode)}
                           className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
@@ -600,17 +601,17 @@ export default function DscNcReport() {
                     </div>
                   </td>
                   {/* Issued Year */}
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                       {cert.notBefore ? new Date(cert.notBefore).getFullYear() : '-'}
                     </span>
                   </td>
                   {/* Signature Algorithm */}
-                  <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
                     {formatAlgorithm(cert.signatureAlgorithm)}
                   </td>
                   {/* Public Key Algorithm + Size */}
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       {cert.publicKeyAlgorithm || '-'}
                     </span>
@@ -626,7 +627,7 @@ export default function DscNcReport() {
                     )}
                   </td>
                   {/* Validity Period */}
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       {formatDate(cert.notBefore)}
                       <span className="text-gray-400 dark:text-gray-500 mx-1">~</span>
@@ -634,11 +635,11 @@ export default function DscNcReport() {
                     </span>
                   </td>
                   {/* Status */}
-                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                  <td className="px-3 py-2 text-center whitespace-nowrap">
                     <ValidityBadge validity={cert.validity} />
                   </td>
                   {/* Non-conformance Code + Help */}
-                  <td className="px-3 py-2.5 whitespace-nowrap">
+                  <td className="px-3 py-2 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-amber-700 dark:text-amber-400 font-mono">
                         {cert.pkdConformanceCode || '-'}
@@ -756,7 +757,7 @@ function ValidityBar({ breakdown, total }: { breakdown: DscNcSummary['validityBr
   ].filter(s => s.count > 0);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
       <div className="flex items-center gap-2 mb-3">
         <CheckCircle className="w-5 h-5 text-green-500" />
         <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('report:dscNc.validityStatus')}</h3>

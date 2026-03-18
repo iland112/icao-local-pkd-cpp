@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronRight, Shield, ShieldCheck, Link as LinkIcon } from 'lucide-react';
+import { getGlossaryTooltip } from '@/components/common';
 
 interface TrustChainVisualizationProps {
   trustChainPath: string;
@@ -184,6 +185,15 @@ export const TrustChainVisualization: React.FC<TrustChainVisualizationProps> = (
                         ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200'
                         : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
                     }`}
+                    title={
+                      node.isRoot
+                        ? getGlossaryTooltip('CSCA')
+                        : node.isLink
+                        ? getGlossaryTooltip('Link Certificate')
+                        : index === 0
+                        ? getGlossaryTooltip('DSC')
+                        : getGlossaryTooltip('CSCA')
+                    }
                   >
                     {node.isRoot
                       ? 'Root CSCA'

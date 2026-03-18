@@ -421,7 +421,7 @@ export function Login() {
           </div>
 
           {/* Footer */}
-          <p className="mt-3 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
+          <p className="mt-3 text-center text-xs text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
             {t('login.copyright')}
           </p>
         </div>

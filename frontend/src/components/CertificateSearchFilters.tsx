@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { Search, Download, Filter, ChevronDown, ChevronUp, Archive, Loader2 } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
-import { getCountryDisplayName } from '@/utils/countryNames';
+import { getCountryDisplayName, getCountryName } from '@/utils/countryNames';
 
 export interface SearchCriteria {
   country: string;
@@ -43,7 +43,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 }) => {
   const { t } = useTranslation(['certificate', 'common']);
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-4 p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-4 p-4">
       <div className="flex items-center gap-2 mb-3">
         <Filter className="w-4 h-4 text-blue-500" />
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
@@ -86,6 +86,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                   <img
                     src={getFlagSvgPath(criteria.country)}
                     alt={criteria.country}
+                    title={getCountryName(criteria.country)}
                     className="absolute left-2 top-1/2 transform -translate-y-1/2 w-6 h-4 object-cover rounded shadow-sm border border-gray-300 pointer-events-none"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';

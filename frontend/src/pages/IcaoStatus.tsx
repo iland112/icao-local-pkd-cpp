@@ -212,7 +212,7 @@ export default function IcaoStatus() {
                   <div
                     key={status.collection_type}
                     className={cn(
-                      "bg-white dark:bg-gray-800 rounded-2xl border shadow-lg p-5 h-full flex flex-col transition-all duration-200",
+                      "bg-white dark:bg-gray-800 rounded-2xl border shadow-lg p-4 h-full flex flex-col transition-all duration-200",
                       status.status === 'DETECTION_STALE'
                         ? 'border-yellow-300 dark:border-yellow-700'
                         : status.needs_update
@@ -362,22 +362,22 @@ export default function IcaoStatus() {
                     ) : (
                       versionHistory.map((version) => (
                         <tr key={version.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          <td className="px-3 py-2 whitespace-nowrap">
                             <span className="text-xs font-medium text-gray-900 dark:text-white">
                               {getCollectionShortName(t, version.collection_type)}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          <td className="px-3 py-2 whitespace-nowrap">
                             <span className="text-xs text-gray-700 dark:text-gray-300 font-mono">
                               {version.file_name}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          <td className="px-3 py-2 whitespace-nowrap">
                             <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                               {version.file_version.toString().padStart(6, '0')}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
+                          <td className="px-3 py-2 whitespace-nowrap">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-medium",
@@ -397,7 +397,7 @@ export default function IcaoStatus() {
                               {version.status}
                             </span>
                           </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
+                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                             {formatDateTime(version.detected_at)}
                           </td>
                         </tr>
@@ -526,7 +526,7 @@ export default function IcaoStatus() {
                           <span className="text-sm font-semibold text-gray-900 dark:text-white">
                             {getCollectionShortName(t, v.collection_type)}
                           </span>
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
                             {v.status}
                           </span>
                         </div>

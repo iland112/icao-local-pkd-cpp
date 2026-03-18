@@ -85,7 +85,7 @@ export default function ApiClientRequest() {
   if (submitted) {
     return (
       <div className={cn('min-h-screen flex items-center justify-center px-4 py-6 sm:py-8', darkMode ? 'bg-gray-900' : 'bg-gray-50')}>
-        <div className={cn('max-w-lg w-full rounded-2xl shadow-lg p-6 sm:p-8 text-center', darkMode ? 'bg-gray-800' : 'bg-white')}>
+        <div className={cn('max-w-lg w-full rounded-2xl shadow-lg p-4 sm:p-8 text-center', darkMode ? 'bg-gray-800' : 'bg-white')}>
           <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-5 sm:mb-6">
             <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-green-600 dark:text-green-400" />
           </div>
@@ -313,7 +313,7 @@ export default function ApiClientRequest() {
         </form>
 
         {/* Footer */}
-        <p className="mt-4 text-center text-[11px] text-gray-300 dark:text-gray-600">
+        <p className="mt-4 text-center text-xs text-gray-300 dark:text-gray-600">
           &copy; 2026 SmartCore Inc.
         </p>
       </div>

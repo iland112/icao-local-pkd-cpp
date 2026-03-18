@@ -118,7 +118,7 @@ function InfoTooltip({ content, side = 'right' }: { content: React.ReactNode; si
       {show && pos && createPortal(
         <div
           style={tooltipStyle}
-          className="w-72 bg-gray-900 text-white text-[11px] rounded-xl p-3.5 shadow-2xl pointer-events-none leading-relaxed"
+          className="w-72 bg-gray-900 text-white text-xs rounded-xl p-3.5 shadow-2xl pointer-events-none leading-relaxed"
         >
           {content}
           {/* 말풍선 꼬리 */}
@@ -139,7 +139,7 @@ const CHR_TOOLTIP = (
   <div className="space-y-2">
     <p className="font-bold text-white text-xs">CHR — Certificate Holder Reference</p>
     <p className="text-gray-300">이 인증서의 <span className="text-indigo-300 font-semibold">소유자(holder) 식별자</span>입니다. X.509의 Subject DN에 해당합니다.</p>
-    <div className="bg-gray-800 rounded-lg p-2 font-mono text-[10px] text-green-300">
+    <div className="bg-gray-800 rounded-lg p-2 font-mono text-xs text-green-300">
       <p>DETESTATDE019</p>
       <p className="text-gray-400 mt-1">DE  = 국가코드</p>
       <p className="text-gray-400">TEST = 테스트 환경</p>
@@ -154,12 +154,12 @@ const CAR_TOOLTIP = (
   <div className="space-y-2">
     <p className="font-bold text-white text-xs">CAR — Certification Authority Reference</p>
     <p className="text-gray-300">이 인증서에 <span className="text-indigo-300 font-semibold">서명한 상위 CA의 CHR</span>입니다. X.509의 Issuer DN에 해당합니다.</p>
-    <div className="bg-gray-800 rounded-lg p-2 font-mono text-[10px] space-y-1">
+    <div className="bg-gray-800 rounded-lg p-2 font-mono text-xs space-y-1">
       <p><span className="text-purple-300">CVCA</span> <span className="text-gray-400">CAR = 자신의 CHR (자체 서명)</span></p>
       <p><span className="text-blue-300">DV  </span> <span className="text-gray-400">CAR = CVCA의 CHR</span></p>
       <p><span className="text-indigo-300">IS  </span> <span className="text-gray-400">CAR = DV의 CHR</span></p>
     </div>
-    <p className="text-gray-400 text-[10px]">CAR가 상위 인증서의 CHR와 일치하면 체인이 연결됩니다.</p>
+    <p className="text-gray-400 text-xs">CAR가 상위 인증서의 CHR와 일치하면 체인이 연결됩니다.</p>
   </div>
 );
 
@@ -192,7 +192,7 @@ function ChainDiagram({ chain }: { chain: ChainResult }) {
 
   return (
     <div className="mt-2">
-      <p className="text-[10px] text-gray-400 mb-2 flex items-center gap-1">
+      <p className="text-xs text-gray-400 mb-2 flex items-center gap-1">
         <Shield className="w-3 h-3" /> 신뢰 체인 구조
         <span className="ml-auto font-mono">depth = {chain.chainDepth}</span>
       </p>
@@ -213,7 +213,7 @@ function ChainDiagram({ chain }: { chain: ChainResult }) {
               )}>
                 {/* 타입 배지 */}
                 {certType && (
-                  <span className={cn('px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0', CVC_TYPE_COLOR[certType] ?? 'bg-gray-100 text-gray-700')}>
+                  <span className={cn('px-1.5 py-0.5 rounded text-xs font-bold flex-shrink-0', CVC_TYPE_COLOR[certType] ?? 'bg-gray-100 text-gray-700')}>
                     {CVC_TYPE_LABELS[certType] ?? certType}
                   </span>
                 )}
@@ -224,13 +224,13 @@ function ChainDiagram({ chain }: { chain: ChainResult }) {
                 {/* 태그 */}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {isRoot && isLeaf && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">자체 서명</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">자체 서명</span>
                   )}
                   {isRoot && !isLeaf && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">루트 CA · 자체 서명</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">루트 CA · 자체 서명</span>
                   )}
                   {isLeaf && !isRoot && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">이 인증서</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">이 인증서</span>
                   )}
                   {cert?.validation_status && (
                     <StatusBadge status={cert.validation_status} />
@@ -246,7 +246,7 @@ function ChainDiagram({ chain }: { chain: ChainResult }) {
                     <ArrowDown className="w-3 h-3 text-gray-400" />
                     <div className="w-px h-2 bg-gray-300" />
                   </div>
-                  <span className="text-[10px] text-gray-400">발급</span>
+                  <span className="text-xs text-gray-400">발급</span>
                 </div>
               )}
             </div>
@@ -381,11 +381,11 @@ function CvcPreviewCard({ cert }: { cert: Partial<CvcCertificate> }) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-gray-900 truncate">{cert.chr ?? '-'}</p>
-          <p className="text-[10px] text-gray-500">Certificate Holder Reference</p>
+          <p className="text-xs text-gray-500">Certificate Holder Reference</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {cert.cvc_type && (
-            <span className={cn('px-2 py-0.5 text-[10px] font-bold rounded', CVC_TYPE_COLOR[cert.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
+            <span className={cn('px-2 py-0.5 text-xs font-bold rounded', CVC_TYPE_COLOR[cert.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
               {CVC_TYPE_LABELS[cert.cvc_type] ?? cert.cvc_type}
             </span>
           )}
@@ -421,7 +421,7 @@ function CvcPreviewCard({ cert }: { cert: Partial<CvcCertificate> }) {
               <span className="text-xs text-gray-500 w-32 flex-shrink-0 pt-0.5 flex items-center gap-1">
                 <Hash className="w-3 h-3" /> SHA-256
               </span>
-              <span className="text-[10px] font-mono text-gray-600 break-all">{cert.fingerprint_sha256}</span>
+              <span className="text-xs font-mono text-gray-600 break-all">{cert.fingerprint_sha256}</span>
             </div>
           )}
           {grantedPermissions.length > 0 && (
@@ -431,7 +431,7 @@ function CvcPreviewCard({ cert }: { cert: Partial<CvcCertificate> }) {
               </p>
               <div className="flex flex-wrap gap-1">
                 {grantedPermissions.map(p => (
-                  <span key={p} className="px-1.5 py-0.5 text-[10px] bg-indigo-50 text-indigo-700 rounded font-mono">{p}</span>
+                  <span key={p} className="px-1.5 py-0.5 text-xs bg-indigo-50 text-indigo-700 rounded font-mono">{p}</span>
                 ))}
               </div>
             </div>
@@ -508,7 +508,7 @@ function UploadTab({ onUploaded }: { onUploaded: () => void }) {
     <div className="max-w-3xl mx-auto space-y-4 py-2">
 
       {/* Step 1 */}
-      <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-5">
+      <div className="rounded-xl bg-white border border-gray-200 shadow-sm p-4">
         <div className="flex items-center gap-2 mb-4">
           <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-600">1</div>
           <h2 className="text-sm font-bold text-gray-900">CVC 파일 선택</h2>
@@ -532,17 +532,17 @@ function UploadTab({ onUploaded }: { onUploaded: () => void }) {
             <div className="flex items-center justify-center gap-3">
               <FileText className="w-8 h-8 text-blue-500 flex-shrink-0" />
               <div className="flex items-center gap-2 min-w-0">
-                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-indigo-100 text-indigo-700 flex-shrink-0">CVC</span>
+                <span className="px-1.5 py-0.5 text-xs font-bold rounded bg-indigo-100 text-indigo-700 flex-shrink-0">CVC</span>
                 <span className="text-sm font-semibold text-gray-900 truncate">{file.name}</span>
                 <span className="text-xs text-gray-400 flex-shrink-0">({formatFileSize(file.size)})</span>
               </div>
-              <span className="text-[10px] text-gray-400 flex-shrink-0">클릭하여 변경</span>
+              <span className="text-xs text-gray-400 flex-shrink-0">클릭하여 변경</span>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-2">
               <CloudUpload className="w-10 h-10 text-gray-300" />
               <p className="text-sm text-gray-500">파일을 드래그하거나 클릭하여 선택</p>
-              <p className="text-[11px] text-gray-400">.cvc .cvcert .bin .der</p>
+              <p className="text-xs text-gray-400">.cvc .cvcert .bin .der</p>
             </div>
           )}
         </div>
@@ -568,7 +568,7 @@ function UploadTab({ onUploaded }: { onUploaded: () => void }) {
             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold text-blue-600">2</div>
             <h2 className="text-sm font-bold text-gray-900">파싱 결과</h2>
             {preview.cvc_type && (
-              <span className={cn('ml-auto px-2 py-0.5 text-[10px] font-bold rounded', CVC_TYPE_COLOR[preview.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
+              <span className={cn('ml-auto px-2 py-0.5 text-xs font-bold rounded', CVC_TYPE_COLOR[preview.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
                 {CVC_TYPE_LABELS[preview.cvc_type] ?? preview.cvc_type}
               </span>
             )}
@@ -657,38 +657,38 @@ function CertRow({ cert, onDeleted }: { cert: CvcCertificate; onDeleted: () => v
   return (
     <>
       <tr className="border-t border-gray-100 hover:bg-gray-50 text-xs">
-        <td className="px-4 py-2.5 font-medium text-gray-700">{cert.country_code}</td>
-        <td className="px-4 py-2.5">
-          <span className={cn('px-1.5 py-0.5 rounded text-[11px] font-medium', CVC_TYPE_COLOR[cert.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
+        <td className="px-4 py-2 font-medium text-gray-700">{cert.country_code}</td>
+        <td className="px-4 py-2">
+          <span className={cn('px-1.5 py-0.5 rounded text-xs font-medium', CVC_TYPE_COLOR[cert.cvc_type] ?? 'bg-gray-100 text-gray-700')}>
             {CVC_TYPE_LABELS[cert.cvc_type] ?? cert.cvc_type}
           </span>
         </td>
-        <td className="px-4 py-2.5 font-mono text-gray-700">{cert.chr}</td>
-        <td className="px-4 py-2.5 font-mono text-gray-500">{cert.car}</td>
-        <td className="px-4 py-2.5 text-gray-600">{cert.public_key_algorithm || <span className="text-gray-300 italic">—</span>}</td>
-        <td className="px-4 py-2.5 text-gray-600">{cert.effective_date}</td>
-        <td className="px-4 py-2.5 text-gray-600">{cert.expiration_date}</td>
-        <td className="px-4 py-2.5"><StatusBadge status={cert.validation_status} /></td>
-        <td className="px-4 py-2.5">
+        <td className="px-4 py-2 font-mono text-gray-700">{cert.chr}</td>
+        <td className="px-4 py-2 font-mono text-gray-500">{cert.car}</td>
+        <td className="px-4 py-2 text-gray-600">{cert.public_key_algorithm || <span className="text-gray-300 italic">—</span>}</td>
+        <td className="px-4 py-2 text-gray-600">{cert.effective_date}</td>
+        <td className="px-4 py-2 text-gray-600">{cert.expiration_date}</td>
+        <td className="px-4 py-2"><StatusBadge status={cert.validation_status} /></td>
+        <td className="px-4 py-2">
           <button onClick={loadChain} className="text-blue-600 hover:underline flex items-center gap-1">
             {chainLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : open ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             체인
           </button>
         </td>
-        <td className="px-4 py-2.5">
+        <td className="px-4 py-2">
           {deleteConfirm ? (
             <div className="flex items-center gap-1">
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded hover:bg-red-600 disabled:opacity-50 flex items-center gap-0.5"
+                className="px-1.5 py-0.5 bg-red-500 text-white text-xs rounded hover:bg-red-600 disabled:opacity-50 flex items-center gap-0.5"
               >
                 {deleting ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
                 확인
               </button>
               <button
                 onClick={() => setDeleteConfirm(false)}
-                className="px-1.5 py-0.5 bg-gray-200 text-gray-600 text-[10px] rounded hover:bg-gray-300"
+                className="px-1.5 py-0.5 bg-gray-200 text-gray-600 text-xs rounded hover:bg-gray-300"
               >
                 취소
               </button>
@@ -750,7 +750,7 @@ function CertListTab({
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
-              <tr className="text-[11px] text-gray-500 uppercase tracking-wide">
+              <tr className="text-xs text-gray-500 uppercase tracking-wide">
                 <th className="px-4 py-2.5 text-center">국가</th>
                 <th className="px-4 py-2.5 text-center">유형</th>
                 <th className="px-4 py-2.5 text-center whitespace-nowrap">
@@ -858,7 +858,7 @@ export default function EacDashboard() {
             <h1 className="text-lg font-bold text-white">EAC 인증서 관리</h1>
             <p className="text-xs text-indigo-200">BSI TR-03110 · Card Verifiable Certificate</p>
           </div>
-          <span className="ml-auto px-2.5 py-1 rounded-full text-[10px] font-semibold bg-white/20 text-white border border-white/30">
+          <span className="ml-auto px-2.5 py-1 rounded-full text-xs font-semibold bg-white/20 text-white border border-white/30">
             EXPERIMENTAL
           </span>
         </div>
@@ -872,7 +872,7 @@ export default function EacDashboard() {
             <div key={label} className="bg-white/10 rounded-xl px-4 py-3 flex items-center gap-3 border border-white/10">
               {icon}
               <div>
-                <p className="text-[11px] text-indigo-200">{label}</p>
+                <p className="text-xs text-indigo-200">{label}</p>
                 <p className="text-xl font-bold text-white">{value.toLocaleString()}</p>
               </div>
             </div>
@@ -889,7 +889,7 @@ export default function EacDashboard() {
           <button onClick={() => setPageTab('list')} className={tabCls(pageTab === 'list')}>
             <List className="w-4 h-4" /> 인증서 목록
             {total > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-600">
+              <span className="ml-1 px-1.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-600">
                 {total}
               </span>
             )}

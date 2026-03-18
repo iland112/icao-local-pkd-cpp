@@ -29,6 +29,7 @@ import { Dialog } from '@/components/common/Dialog';
 import { ReconciliationHistory } from '@/components/sync/ReconciliationHistory';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
+import { GlossaryTerm } from '@/components/common';
 
 export function SyncDashboard() {
   const { t } = useTranslation(['sync', 'common']);
@@ -311,7 +312,7 @@ export function SyncDashboard() {
 
       {/* Config Card */}
       {config && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-gray-500" />
@@ -362,7 +363,7 @@ export function SyncDashboard() {
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Current Status Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 h-full">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               {t('dashboard.currentStatus')}
@@ -442,7 +443,7 @@ export function SyncDashboard() {
                     </div>
                   )}
                 </div>
-                <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-400">
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                   {t('dashboard.dbOnlyLdapOnly')}
                 </div>
               </div>
@@ -460,7 +461,7 @@ export function SyncDashboard() {
         </div>
 
         {/* DB vs LDAP Comparison Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:col-span-2 h-full">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 md:col-span-2 h-full">
           <div className="flex items-center gap-2 mb-4">
             <ArrowRightLeft className="w-5 h-5 text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -494,7 +495,7 @@ export function SyncDashboard() {
                 </thead>
                 <tbody>
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CSCA</td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300"><GlossaryTerm term="CSCA" /></td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbCounts.csca?.toLocaleString()}
                     </td>
@@ -515,7 +516,7 @@ export function SyncDashboard() {
                     </td>
                   </tr>
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">MLSC</td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300"><GlossaryTerm term="MLSC" /></td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbCounts.mlsc?.toLocaleString()}
                     </td>
@@ -536,7 +537,7 @@ export function SyncDashboard() {
                     </td>
                   </tr>
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC</td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300"><GlossaryTerm term="DSC" /></td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbCounts.dsc?.toLocaleString()}
                     </td>
@@ -557,7 +558,7 @@ export function SyncDashboard() {
                     </td>
                   </tr>
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
-                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC_NC</td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300"><GlossaryTerm term="DSC_NC" /></td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbCounts.dscNc?.toLocaleString()}
                     </td>
@@ -578,7 +579,7 @@ export function SyncDashboard() {
                     </td>
                   </tr>
                   <tr>
-                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CRL</td>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300"><GlossaryTerm term="CRL" /></td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbCounts.crl?.toLocaleString()}
                     </td>
@@ -633,31 +634,31 @@ export function SyncDashboard() {
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                 {status.discrepancies.csca}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">CSCA</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400"><GlossaryTerm term="CSCA" /></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                 {status.discrepancies.mlsc}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">MLSC</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400"><GlossaryTerm term="MLSC" /></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                 {status.discrepancies.dsc}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">DSC</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400"><GlossaryTerm term="DSC" /></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                 {status.discrepancies.dscNc}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">DSC_NC</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400"><GlossaryTerm term="DSC_NC" /></div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
                 {status.discrepancies.crl}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">CRL</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400"><GlossaryTerm term="CRL" /></div>
             </div>
           </div>
           <p className="mt-4 text-sm text-yellow-700 dark:text-yellow-300">
@@ -667,7 +668,7 @@ export function SyncDashboard() {
       )}
 
       {/* Sync History */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
         <div className="flex items-center gap-2 mb-4">
           <History className="w-5 h-5 text-purple-500" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -706,10 +707,10 @@ export function SyncDashboard() {
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
-                    <td className="py-2.5 px-3 text-gray-900 dark:text-white">
+                    <td className="py-2 px-3 text-gray-900 dark:text-white">
                       {formatDateTime(item.checkedAt)}
                     </td>
-                    <td className="py-2.5 px-3 text-center">
+                    <td className="py-2 px-3 text-center">
                       <span
                         className={cn(
                           'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
@@ -719,13 +720,13 @@ export function SyncDashboard() {
                         {getStatusLabel(item.status)}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.dbTotal?.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.ldapTotal?.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -737,7 +738,7 @@ export function SyncDashboard() {
                         {item.totalDiscrepancy}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right text-gray-500 dark:text-gray-400">
+                    <td className="py-2 px-3 text-right text-gray-500 dark:text-gray-400">
                       {item.checkDurationMs}ms
                     </td>
                   </tr>
@@ -756,7 +757,7 @@ export function SyncDashboard() {
 
       {/* Revalidation History */}
       {revalidationHistory.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck className="w-5 h-5 text-green-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -798,13 +799,13 @@ export function SyncDashboard() {
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
-                    <td className="py-2.5 px-3 text-gray-900 dark:text-white">
+                    <td className="py-2 px-3 text-gray-900 dark:text-white">
                       {formatDateTime(item.executedAt)}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.totalProcessed.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -816,7 +817,7 @@ export function SyncDashboard() {
                         {item.newlyExpired}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -828,10 +829,10 @@ export function SyncDashboard() {
                         {item.newlyValid}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-gray-500 dark:text-gray-400">
+                    <td className="py-2 px-3 text-right font-mono text-gray-500 dark:text-gray-400">
                       {item.unchanged.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -843,23 +844,23 @@ export function SyncDashboard() {
                         {item.errors}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-blue-600 dark:text-blue-400">
+                    <td className="py-2 px-3 text-right font-mono text-blue-600 dark:text-blue-400">
                       {(item.tcProcessed ?? 0).toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span className={cn('font-mono font-semibold', (item.tcNewlyValid ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
                         {(item.tcNewlyValid ?? 0).toLocaleString()}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono text-purple-600 dark:text-purple-400">
+                    <td className="py-2 px-3 text-right font-mono text-purple-600 dark:text-purple-400">
                       {(item.crlChecked ?? 0).toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right">
+                    <td className="py-2 px-3 text-right">
                       <span className={cn('font-mono font-semibold', (item.crlRevoked ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400')}>
                         {item.crlRevoked ?? 0}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right text-gray-500 dark:text-gray-400">
+                    <td className="py-2 px-3 text-right text-gray-500 dark:text-gray-400">
                       {item.durationMs}ms
                     </td>
                   </tr>
@@ -871,7 +872,7 @@ export function SyncDashboard() {
       )}
 
       {/* Reconciliation History */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
         <ReconciliationHistory />
       </div>
 
@@ -948,25 +949,25 @@ export function SyncDashboard() {
               </h4>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('common:label.processing') }</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('common:label.processing') }</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.totalProcessed.toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.newlyExpired > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyExpired')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyExpired')}</p>
                   <p className={cn('text-base font-bold', revalidationResult.newlyExpired > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyExpired}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.newlyValid > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyValid')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyValid')}</p>
                   <p className={cn('text-base font-bold', revalidationResult.newlyValid > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyValid}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 mt-2 text-center">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.noChange')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.noChange')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.unchanged.toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.errors > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', revalidationResult.errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.errors}</p>
                 </div>
               </div>
@@ -979,19 +980,19 @@ export function SyncDashboard() {
               </h4>
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.target')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.target')}</p>
                   <p className="text-base font-bold text-blue-700 dark:text-blue-300">{(revalidationResult.tcProcessed ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.validTransition')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.validTransition')}</p>
                   <p className={cn('text-base font-bold', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{(revalidationResult.tcNewlyValid ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.stillPending')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.stillPending')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.tcStillPending ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.tcErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', (revalidationResult.tcErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.tcErrors ?? 0}</p>
                 </div>
               </div>
@@ -1004,23 +1005,23 @@ export function SyncDashboard() {
               </h4>
               <div className="grid grid-cols-5 gap-2 text-center">
                 <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.checked')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.checked')}</p>
                   <p className="text-base font-bold text-purple-700 dark:text-purple-300">{(revalidationResult.crlChecked ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.crlRevoked ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.revoked')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.revoked')}</p>
                   <p className={cn('text-base font-bold', (revalidationResult.crlRevoked ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlRevoked ?? 0}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlUnavailable')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlUnavailable')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.crlUnavailable ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlExpired')}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlExpired')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.crlExpired ?? 0}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.crlErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', (revalidationResult.crlErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlErrors ?? 0}</p>
                 </div>
               </div>
@@ -1207,7 +1208,7 @@ export function SyncDashboard() {
                       <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{step.label}</span>
                       {step.note && (
                         <span className={cn(
-                          'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                          'text-xs px-1.5 py-0.5 rounded font-medium',
                           step.note === t('dashboard.enabled')
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                             : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'

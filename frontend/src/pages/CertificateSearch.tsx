@@ -6,6 +6,7 @@ import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import { Download, FileText, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, Shield, HelpCircle } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
 import { cn } from '@/utils/cn';
 import {
   formatDate,
@@ -13,8 +14,8 @@ import {
   formatSignatureAlgorithm,
   getActualCertType,
   isMasterListSignerCertificate,
-  getCertTypeDescription,
 } from '@/utils/certificateDisplayUtils';
+import { getGlossaryTooltip } from '@/components/common';
 import { toast } from '@/stores/toastStore';
 import { validationApi } from '@/api/validationApi';
 import { certificateApi } from '@/services/pkdApi';
@@ -320,7 +321,7 @@ const CertificateSearch: React.FC = () => {
   }, [apiStats, certificates, total]);
 
   // Get certificate type badge with tooltip
-  const getCertTypeBadge = (certType: string, cert?: Certificate) => {
+  const getCertTypeBadge = (certType: string) => {
     const colorMap: Record<string, string> = {
       'CSCA': 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300',
       'MLSC': 'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300',
@@ -331,32 +332,16 @@ const CertificateSearch: React.FC = () => {
     };
 
     const colors = colorMap[certType] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300';
-    const badge = (
-      <span className={`inline-flex items-center px-1.5 py-0.5 text-xs font-semibold rounded ${colors}`}>
+
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-semibold rounded ${colors} cursor-help`}
+        title={getGlossaryTooltip(certType)}
+      >
         {certType}
+        <HelpCircle className="w-2.5 h-2.5 opacity-40" />
       </span>
     );
-
-    // Add tooltip icon if certificate object is provided
-    if (cert) {
-      const description = getCertTypeDescription(certType, cert);
-      return (
-        <div className="inline-flex items-center gap-1">
-          {badge}
-          <div className="relative group">
-            <HelpCircle className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
-            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block z-50 w-80">
-              <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg p-3 shadow-lg">
-                <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900 dark:border-b-gray-100"></div>
-                <div className="whitespace-pre-line leading-relaxed">{description}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return badge;
   };
 
   // Get validity badge
@@ -421,7 +406,7 @@ const CertificateSearch: React.FC = () => {
       {/* Statistics Cards - Hierarchical Layout */}
       <div className="mb-4">
         {/* Main Total Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
               <Shield className="w-6 h-6 text-blue-500" />
@@ -432,6 +417,7 @@ const CertificateSearch: React.FC = () => {
                   <img
                     src={getFlagSvgPath(criteria.country)}
                     alt={criteria.country}
+                    title={getCountryName(criteria.country)}
                     className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                     onError={(e) => {
                       e.currentTarget.style.display = 'none';
@@ -553,12 +539,13 @@ const CertificateSearch: React.FC = () => {
                     key={cert.fingerprint}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                   >
-                    <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1.5">
                         {getFlagSvgPath(cert.country) && (
                           <img
                             src={getFlagSvgPath(cert.country)}
                             alt={cert.country}
+                            title={getCountryName(cert.country)}
                             className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                             onError={(e) => {
                               e.currentTarget.style.display = 'none';
@@ -568,7 +555,7 @@ const CertificateSearch: React.FC = () => {
                         <span className="text-xs font-medium text-gray-900 dark:text-gray-100">{cert.country}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-1">
                         {getCertTypeBadge(getActualCertType(cert))}
                         {getActualCertType(cert) === 'CSCA' && !isMasterListSignerCertificate(cert) && (
@@ -584,22 +571,22 @@ const CertificateSearch: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-900 dark:text-gray-100 max-w-[200px] truncate" title={cert.issuerDnComponents?.organization || cert.issuerDnComponents?.commonName || 'N/A'}>
+                    <td className="px-3 py-2 text-xs text-gray-900 dark:text-gray-100 max-w-[200px] truncate" title={cert.issuerDnComponents?.organization || cert.issuerDnComponents?.commonName || 'N/A'}>
                       {cert.issuerDnComponents?.organization || cert.issuerDnComponents?.commonName || 'N/A'}
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
+                    <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
                       {formatVersion(cert.version)}
                     </td>
-                    <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap" title={cert.signatureAlgorithm || 'N/A'}>
+                    <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap" title={cert.signatureAlgorithm || 'N/A'}>
                       {formatSignatureAlgorithm(cert.signatureAlgorithm)}
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
+                    <td className="px-3 py-2 whitespace-nowrap text-center text-xs text-gray-600 dark:text-gray-300">
                       {formatDate(cert.validFrom)} ~ {formatDate(cert.validTo)}
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-center">
+                    <td className="px-3 py-2 whitespace-nowrap text-center">
                       {getValidityBadge(cert.validity)}
                     </td>
-                    <td className="px-3 py-2.5 whitespace-nowrap text-right">
+                    <td className="px-3 py-2 whitespace-nowrap text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => viewDetails(cert)}

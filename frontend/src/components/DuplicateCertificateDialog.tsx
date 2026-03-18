@@ -3,6 +3,7 @@ import React from 'react';
 import { X, Copy, FileText, MapPin, Database, Link2 } from 'lucide-react';
 import type { UploadDuplicate } from '../types';
 import { getFlagSvgPath } from '../utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
 import { formatDateTime } from '@/utils/dateFormat';
 
 interface Props {
@@ -74,7 +75,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
           {/* Certificate Information */}
           <section>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
@@ -98,6 +99,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                     <img
                       src={getFlagSvgPath(duplicate.country)}
                       alt={duplicate.country}
+                      title={getCountryName(duplicate.country)}
                       className="w-6 h-4 object-cover rounded shadow-sm border"
                     />
                   )}

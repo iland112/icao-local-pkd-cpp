@@ -285,7 +285,7 @@ export default function CertificateQualityReport() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-blue-500">
           <div className="flex items-center gap-2 mb-1">
             <ShieldCheck className="w-5 h-5 text-blue-500" />
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:quality.totalCerts')}</span>
@@ -294,7 +294,7 @@ export default function CertificateQualityReport() {
           <p className="text-xs text-gray-400 mt-0.5">{t('report:quality.totalCertsDesc')}</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-emerald-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-emerald-500">
           <div className="flex items-center gap-2 mb-1">
             <CheckCircle className="w-5 h-5 text-emerald-500" />
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:quality.compliant')}</span>
@@ -303,7 +303,7 @@ export default function CertificateQualityReport() {
           <p className="text-xs text-gray-400 mt-0.5">{t('report:quality.complianceRate')}: {complianceRate}%</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-red-500">
           <div className="flex items-center gap-2 mb-1">
             <XCircle className="w-5 h-5 text-red-500" />
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:quality.nonCompliant')}</span>
@@ -312,7 +312,7 @@ export default function CertificateQualityReport() {
           <p className="text-xs text-gray-400 mt-0.5">{t('report:quality.nonCompliantDesc')}</p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-amber-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-amber-500">
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-5 h-5 text-amber-500" />
             <span className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('report:quality.warning')}</span>
@@ -323,7 +323,7 @@ export default function CertificateQualityReport() {
       </div>
 
       {/* Compliance Status Bar */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('report:quality.complianceStatus')}</h3>
         <div className="flex h-6 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
           {statusSegments.map((seg, i) => (
@@ -348,7 +348,7 @@ export default function CertificateQualityReport() {
       {/* Charts Row 1: Category + Violations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Category Breakdown */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('report:quality.byCategory')}</h3>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart
@@ -386,7 +386,7 @@ export default function CertificateQualityReport() {
         </div>
 
         {/* Top Violations */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('report:quality.violationRanking')}</h3>
           <div className="space-y-2 max-h-[340px] overflow-y-auto">
             {(data.violations ?? []).slice(0, 15).map((v, i) => {
@@ -424,7 +424,7 @@ export default function CertificateQualityReport() {
       {/* Charts Row 2: Country + Cert Type */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* By Country */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('report:quality.byCountry')}</h3>
           <ResponsiveContainer width="100%" height={Math.max(250, (data.byCountry ?? []).slice(0, 20).length * 28)}>
             <BarChart
@@ -462,7 +462,7 @@ export default function CertificateQualityReport() {
                   return (
                     <div className="bg-gray-800 border border-gray-600 rounded-lg p-2 text-xs text-gray-200">
                       <div className="flex items-center gap-1.5 mb-1">
-                        <img src={getFlagSvgPath(d.country)} alt="" className="w-4 h-3" />
+                        <img src={getFlagSvgPath(d.country)} alt="" title={getCountryName(d.country)} className="w-4 h-3" />
                         <span className="font-medium">{getCountryName(d.country)} ({d.country})</span>
                       </div>
                       <div className="text-emerald-400">{t('report:quality.compliant')}: {d.compliant}</div>
@@ -480,7 +480,7 @@ export default function CertificateQualityReport() {
         </div>
 
         {/* By Cert Type */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('report:quality.byCertType')}</h3>
           <div className="space-y-3">
             {certTypePieData.map((item) => {
@@ -612,7 +612,7 @@ export default function CertificateQualityReport() {
                   <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
-                        <img src={getFlagSvgPath(cert.countryCode)} alt="" className="w-4 h-3" />
+                        <img src={getFlagSvgPath(cert.countryCode)} alt="" title={getCountryName(cert.countryCode)} className="w-4 h-3" />
                         <span className="text-xs text-gray-700 dark:text-gray-300">{cert.countryCode}</span>
                       </div>
                     </td>

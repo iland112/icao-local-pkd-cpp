@@ -28,6 +28,7 @@ import { paApi } from '@/services/paApi';
 import type { PAHistoryItem, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
 import { formatDateTime } from '@/utils/dateFormat';
 
 // DG1 MRZ Data interface
@@ -540,18 +541,19 @@ export function PAHistory() {
                       key={item.verificationId}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">
                         <span className="font-mono text-xs text-gray-600 dark:text-gray-300">
                           {item.verificationId ? `${item.verificationId.substring(0, 8)}...` : '-'}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">
                         {item.issuingCountry ? (
                           <div className="flex items-center gap-1.5">
                             {getFlagSvgPath(item.issuingCountry) && (
                               <img
                                 src={getFlagSvgPath(item.issuingCountry)}
                                 alt={item.issuingCountry}
+                                title={getCountryName(item.issuingCountry)}
                                 className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
@@ -566,10 +568,10 @@ export function PAHistory() {
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 font-mono">
+                      <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 font-mono">
                         {item.documentNumber || '-'}
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">
                         {item.verificationType === 'LOOKUP' ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                             <Search className="w-3 h-3" />
@@ -582,28 +584,28 @@ export function PAHistory() {
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5">{getStatusBadge(item.status)}</td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2">{getStatusBadge(item.status)}</td>
+                      <td className="px-3 py-2">
                         <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                           <Calendar className="w-3 h-3" />
                           {formatDateTime(item.verificationTimestamp)}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
+                      <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                         {item.requestedBy ? (
                           <span>{item.requestedBy}</span>
                         ) : (
                           <div>
                             <span className="text-gray-400 dark:text-gray-500">{t('pa:history.anonymous')}</span>
                             {item.clientIp && (
-                              <span className="ml-1.5 text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                              <span className="ml-1.5 text-xs text-gray-400 dark:text-gray-500 font-mono">
                                 ({item.clientIp})
                               </span>
                             )}
                           </div>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-right">
+                      <td className="px-3 py-2 text-right">
                         <button
                           onClick={() => openDetailModal(item)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
@@ -694,24 +696,25 @@ export function PAHistory() {
               {/* Section 1: 기본 정보 - inline row */}
               <div className="grid grid-cols-5 gap-2">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.verificationId')}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.verificationId')}</p>
                   <p className="font-mono text-xs text-gray-900 dark:text-white truncate mt-0.5" title={selectedRecord.verificationId}>
                     {selectedRecord.verificationId.substring(0, 12)}...
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.verificationTime')}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.verificationTime')}</p>
                   <p className="text-xs text-gray-900 dark:text-white mt-0.5">
                     {formatDateTime(selectedRecord.verificationTimestamp)}
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.country')}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.country')}</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {selectedRecord.issuingCountry && getFlagSvgPath(selectedRecord.issuingCountry) && (
                       <img
                         src={getFlagSvgPath(selectedRecord.issuingCountry)}
                         alt={selectedRecord.issuingCountry}
+                        title={getCountryName(selectedRecord.issuingCountry)}
                         className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                       />
@@ -722,13 +725,13 @@ export function PAHistory() {
                   </div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.documentNumber')}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.documentNumber')}</p>
                   <p className="font-mono text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">
                     {selectedRecord.documentNumber || '-'}
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.requestedBy')}</p>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{t('pa:history.requestedBy')}</p>
                   {selectedRecord.requestedBy ? (
                     <p className="text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">
                       {selectedRecord.requestedBy}
@@ -737,12 +740,12 @@ export function PAHistory() {
                     <div className="mt-0.5">
                       <p className="text-xs text-gray-400 dark:text-gray-500">{t('pa:history.anonymous')}</p>
                       {selectedRecord.clientIp && (
-                        <p className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mt-0.5">
+                        <p className="text-xs font-mono text-gray-400 dark:text-gray-500 mt-0.5">
                           IP: {selectedRecord.clientIp}
                         </p>
                       )}
                       {selectedRecord.userAgent && (
-                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={selectedRecord.userAgent}>
+                        <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={selectedRecord.userAgent}>
                           UA: {selectedRecord.userAgent.length > 40 ? selectedRecord.userAgent.substring(0, 40) + '...' : selectedRecord.userAgent}
                         </p>
                       )}
@@ -767,7 +770,7 @@ export function PAHistory() {
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                         : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                     )}>
-                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:steps.step3')}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:steps.step3')}</p>
                       <div className="flex items-center gap-1.5">
                         {selectedRecord.sodSignatureValid ? (
                           <CheckCircle className="w-4 h-4 text-green-500" />
@@ -793,7 +796,7 @@ export function PAHistory() {
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                   )}>
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:history.certChainVerification')}</p>
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:history.certChainVerification')}</p>
                     <div className="flex items-center gap-1.5">
                       {selectedRecord.trustChainValid ? (
                         <CheckCircle className="w-4 h-4 text-green-500" />
@@ -810,7 +813,7 @@ export function PAHistory() {
                       </span>
                     </div>
                     {selectedRecord.trustChainMessage && (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 truncate" title={selectedRecord.trustChainMessage}>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 truncate" title={selectedRecord.trustChainMessage}>
                         {selectedRecord.trustChainMessage}
                       </p>
                     )}
@@ -824,7 +827,7 @@ export function PAHistory() {
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                         : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                     )}>
-                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:steps.step2')}</p>
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('pa:steps.step2')}</p>
                       <div className="flex items-center gap-1.5">
                         {selectedRecord.dgHashesValid ? (
                           <CheckCircle className="w-4 h-4 text-green-500" />
@@ -879,16 +882,16 @@ export function PAHistory() {
                         {t('pa:history.nonConformantDsc')}
                       </span>
                       {selectedRecord.pkdConformanceCode && (
-                        <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 font-mono">
+                        <span className="ml-2 px-1.5 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 font-mono">
                           {selectedRecord.pkdConformanceCode}
                         </span>
                       )}
                       {selectedRecord.pkdConformanceText ? (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                           {selectedRecord.pkdConformanceText}
                         </p>
                       ) : (
-                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                        <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
                           {t('pa:history.ncDataDefaultWarning')}
                         </p>
                       )}
@@ -926,29 +929,29 @@ export function PAHistory() {
                         {dgData?.hasDg1 && dgData.dg1 ? (
                           <div className="grid grid-cols-4 gap-1.5">
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.surname')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.surname')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">{dgData.dg1.surname || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5 col-span-2">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.givenNames')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.givenNames')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">{dgData.dg1.givenNames || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.gender')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.gender')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">
                                 {dgData.dg1.sex === 'M' ? t('pa:result.male') : dgData.dg1.sex === 'F' ? t('pa:result.female') : dgData.dg1.sex || '-'}
                               </p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5 col-span-2">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.documentNumber')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.documentNumber')}</p>
                               <p className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">{dgData.dg1.documentNumber || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.nationality')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.nationality')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">{dgData.dg1.nationality || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">{t('pa:history.dateOfBirth')}</p>
+                              <p className="text-xs text-gray-400 leading-none">{t('pa:history.dateOfBirth')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">{dgData.dg1.dateOfBirth || '-'}</p>
                             </div>
                           </div>
@@ -972,7 +975,7 @@ export function PAHistory() {
                               alt={t('pa:history.dg2Face')}
                               className="w-28 aspect-[3/4] object-cover rounded-lg shadow-md border-2 border-purple-200 dark:border-purple-700"
                             />
-                            <span className="mt-1.5 px-1.5 py-0.5 text-[10px] rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 font-medium">
+                            <span className="mt-1.5 px-1.5 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 font-medium">
                               {dgData.dg2.faceImages[0].imageFormat || 'N/A'}
                             </span>
                           </div>
