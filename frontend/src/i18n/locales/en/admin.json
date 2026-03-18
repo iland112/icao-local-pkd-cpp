@@ -93,6 +93,7 @@
       "syncRead": "Sync Status",
       "paVerify": "PA Verification",
       "paRead": "PA Verification History",
+      "paStats": "PA Verification Statistics",
       "reportRead": "Certificate Reports",
       "aiRead": "AI Analysis",
       "apiClientManage": "API Client Management"
@@ -106,6 +107,7 @@
       "syncRead": "DB-LDAP synchronization status view",
       "paVerify": "Passive Authentication verification",
       "paRead": "PA verification history view",
+      "paStats": "PA verification statistics dashboard",
       "reportRead": "Certificate statistics, Trust Chain, CRL, DSC_NC reports",
       "aiRead": "AI certificate analysis results view",
       "apiClientManage": "API client create, update, delete, key regeneration"

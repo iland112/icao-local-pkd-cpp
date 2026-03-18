@@ -36,6 +36,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: 'admin:userMgmt.permGroup.reportAnalysis',
     permissions: [
       { value: 'report:read', label: 'admin:userMgmt.perm.reportRead', desc: 'admin:userMgmt.permDesc.reportRead' },
+      { value: 'pa:read', label: 'admin:userMgmt.perm.paStats', desc: 'admin:userMgmt.permDesc.paStats' },
       { value: 'ai:read', label: 'admin:userMgmt.perm.aiRead', desc: 'admin:userMgmt.permDesc.aiRead' },
     ],
   },

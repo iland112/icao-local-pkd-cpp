@@ -93,6 +93,7 @@
       "syncRead": "동기화 상태",
       "paVerify": "PA 검증 수행",
       "paRead": "PA 검증 이력",
+      "paStats": "PA 검증 통계",
       "reportRead": "인증서 보고서",
       "aiRead": "AI 분석",
       "apiClientManage": "API 클라이언트 관리"
@@ -106,6 +107,7 @@
       "syncRead": "DB-LDAP 동기화 상태 조회",
       "paVerify": "Passive Authentication 검증",
       "paRead": "PA 검증 이력 조회",
+      "paStats": "PA 검증 통계 대시보드",
       "reportRead": "인증서 통계, Trust Chain, CRL, DSC_NC 보고서",
       "aiRead": "AI 인증서 분석 결과 조회",
       "apiClientManage": "API 클라이언트 생성, 수정, 삭제, 키 재발급"
