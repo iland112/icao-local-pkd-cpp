@@ -622,7 +622,7 @@ scripts/
   - API Docs: permission 없음 → `adminOnly: true`
   - EAC 인증서 (실험): permission 없음 → `adminOnly: true`
   - 인증서 통계: `upload:read` → `report:read` (보고서 섹션 권한 일치)
-- **Profile 권한 카드 수정**: PERMISSION_GROUPS 보고서 그룹에 `pa:read` → "PA 검증 통계" 항목 추가 (누락 수정)
+- **PA 권한 분리**: `pa:read`(이력) + `pa:stats`(통계) 독립 관리 — 관리자가 PA 이력/통계 접근 권한을 개별 부여 가능 (총 12개 permission)
 - **브랜드 리네이밍 완료**: FASTpass® SPKD → FASTpass® PKD (전체 79파일), SmartCore Inc. → SMARTCORE Inc. (전체 63파일)
 - **OpenAPI v2.36.0 업데이트**: PKD Management (CSR 7 + pending-dsc 4 엔드포인트), PA Service (v2.1.7 dscAutoRegistration 필드), PKD Relay (v2.36.0)
 - **문서**: CSR 생성 가이드 HTML, 기술제안서 PPTX 25슬라이드
@@ -1336,7 +1336,7 @@ scripts/
 - New feature: External client API Key authentication for server-to-server (M2M) API access
 - **API Key format**: `icao_{prefix}_{random}` (46 chars), SHA-256 hash stored in DB, raw key shown only at creation
 - **Auth middleware**: `X-API-Key` header validation alongside existing JWT Bearer — dual authentication support
-- **Permission model**: 10 granular permissions (cert:read, cert:export, pa:verify, pa:read, upload:read, upload:write, report:read, ai:read, sync:read, icao:read)
+- **Permission model**: 12 granular permissions (cert:read, cert:export, pa:verify, pa:read, pa:stats, upload:read, upload:write, report:read, ai:read, sync:read, icao:read, api-client:manage)
 - **Rate Limiting**: In-memory sliding window per-client (3-tier: per-minute, per-hour, per-day), 429 response with Retry-After header
 - **IP whitelist**: Per-client allowed IP/CIDR restriction (`allowed_ips` field)
 - **Endpoint restriction**: Per-client allowed endpoint patterns (`allowed_endpoints` field)
