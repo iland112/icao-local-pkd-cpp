@@ -10,7 +10,7 @@ const pkdApi = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// JWT interceptor
+// JWT request interceptor
 pkdApi.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token && config.headers) {
@@ -18,6 +18,22 @@ pkdApi.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// 401 response interceptor — clear auth state on token expiry
+pkdApi.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 // --- Types ---
 

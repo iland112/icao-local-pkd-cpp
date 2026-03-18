@@ -63,6 +63,9 @@
 // PII Encryption (개인정보보호법)
 #include "../auth/personal_info_crypto.h"
 
+// Password hashing (admin user initialization)
+#include "../auth/password_hash.h"
+
 // HTTP infrastructure
 #include "../infrastructure/http/http_client.h"
 
@@ -410,6 +413,9 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     );
     spdlog::info("CSR handler initialized (6 endpoints)");
 
+    // --- Phase 8: Ensure admin user exists ---
+    ensureAdminUser();
+
     spdlog::info("ServiceContainer initialization complete");
     return true;
 }
@@ -455,5 +461,65 @@ handlers::CodeMasterHandler* ServiceContainer::codeMasterHandler() const { retur
 handlers::ApiClientHandler* ServiceContainer::apiClientHandler() const { return impl_->apiClientHandler.get(); }
 handlers::ApiClientRequestHandler* ServiceContainer::apiClientRequestHandler() const { return impl_->apiClientRequestHandler.get(); }
 handlers::CsrHandler* ServiceContainer::csrHandler() const { return impl_->csrHandler.get(); }
+
+// --- Admin User Initialization (Phase 8) ---
+
+void ServiceContainer::ensureAdminUser() {
+    try {
+        // Check if admin user already exists
+        auto existingAdmin = impl_->userRepository->findByUsername("admin");
+        if (existingAdmin.has_value()) {
+            spdlog::debug("Admin user already exists, skipping creation");
+            return;
+        }
+
+        // Read initial password from environment variable
+        const char* initialPassword = std::getenv("ADMIN_INITIAL_PASSWORD");
+        if (!initialPassword || std::strlen(initialPassword) == 0) {
+            spdlog::warn("ADMIN_INITIAL_PASSWORD not set — admin user will not be created. "
+                         "Set this environment variable to create the initial admin account.");
+            return;
+        }
+
+        // Validate password minimum length
+        std::string password(initialPassword);
+        if (password.length() < 8) {
+            spdlog::error("ADMIN_INITIAL_PASSWORD must be at least 8 characters — admin user not created");
+            return;
+        }
+
+        // Hash password using PBKDF2-HMAC-SHA256 (OWASP 2023: 310,000 iterations)
+        std::string passwordHash = auth::hashPassword(password);
+
+        // Insert admin user via parameterized query
+        std::string dbType = impl_->queryExecutor->getDatabaseType();
+        std::string insertQuery;
+        if (dbType == "oracle") {
+            insertQuery =
+                "INSERT INTO users (id, username, password_hash, email, full_name, is_admin, permissions) "
+                "VALUES (SYS_GUID(), $1, $2, $3, $4, 1, $5)";
+        } else {
+            insertQuery =
+                "INSERT INTO users (username, password_hash, email, full_name, is_admin, permissions) "
+                "VALUES ($1, $2, $3, $4, true, $5::jsonb)";
+        }
+
+        std::vector<std::string> params = {
+            "admin",
+            passwordHash,
+            "admin@localhost",
+            "System Administrator",
+            R"(["admin","upload:read","upload:write","cert:read","cert:export","pa:verify","pa:read","sync:read","report:read","ai:read","icao:read"])"
+        };
+
+        impl_->queryExecutor->executeCommand(insertQuery, params);
+        spdlog::info("Initial admin user created successfully (password from ADMIN_INITIAL_PASSWORD env var)");
+
+    } catch (const std::exception& e) {
+        // Non-fatal: log warning but don't prevent service startup
+        // Admin may already exist (race condition) or DB not ready
+        spdlog::warn("ensureAdminUser: {} (non-fatal, admin may already exist)", e.what());
+    }
+}
 
 } // namespace infrastructure

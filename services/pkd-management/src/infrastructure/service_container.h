@@ -102,6 +102,17 @@ public:
      */
     void shutdown();
 
+private:
+    /**
+     * @brief Ensure admin user exists on startup
+     *
+     * Creates admin user from ADMIN_INITIAL_PASSWORD environment variable
+     * if no admin user exists in the database. Skips silently if env var not set
+     * or admin already exists.
+     */
+    void ensureAdminUser();
+
+public:
     // --- Connection Pool Accessors ---
     common::IQueryExecutor* queryExecutor() const;
     common::LdapConnectionPool* ldapPool() const;

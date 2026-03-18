@@ -139,14 +139,13 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
     <div className="h-full flex flex-col">
       {/* Summary */}
       <div className="mb-2 px-2 py-1.5 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
-        <div className="text-xs text-yellow-800 dark:text-yellow-300"
-          dangerouslySetInnerHTML={{ __html: t('upload:duplicateTree.summary', {
+        <p className="text-xs font-medium text-yellow-800 dark:text-yellow-300">
+          {t('upload:duplicateTree.summary', {
             countryNum: countryGroups.length,
             certNum: countryGroups.reduce((sum, g) => sum + g.certificates.length, 0),
             dupNum: countryGroups.reduce((sum, g) => sum + g.totalDuplicates, 0),
-            interpolation: { escapeValue: false }
-          }) }}
-        />
+          })}
+        </p>
       </div>
 
       {/* Tree view — compact mode for dialog consistency */}

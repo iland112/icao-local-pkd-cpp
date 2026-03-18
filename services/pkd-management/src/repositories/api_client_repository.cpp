@@ -431,8 +431,12 @@ bool ApiClientRepository::insertUsageLog(
 
 Json::Value ApiClientRepository::getUsageStats(const std::string& clientId, int days) {
     try {
+        // Bounds check: 1~365 days (prevents unreasonable queries)
+        days = std::max(1, std::min(365, days));
+
         std::string dbType = executor_->getDatabaseType();
         Json::Value stats;
+        std::string daysStr = std::to_string(days);
 
         // Total requests in period
         std::string countQuery;

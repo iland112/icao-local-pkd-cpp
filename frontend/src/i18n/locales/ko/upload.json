@@ -559,7 +559,7 @@
   "duplicateTree": {
     "countrySummary": "{{certNum}}개 인증서, {{dupNum}}회 중복",
     "noDuplicates": "중복된 인증서가 없습니다.",
-    "summary": "<strong>{{countryNum}}개 국가</strong>에서 <strong>{{certNum}}개 인증서</strong>가 <strong>{{dupNum}}회 중복</strong>됨"
+    "summary": "{{countryNum}}개 국가에서 {{certNum}}개 인증서가 {{dupNum}}회 중복됨"
   },
   "validationSummary": {
     "title": "검증 결과 요약",

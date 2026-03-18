@@ -11,6 +11,7 @@
 #include <sstream>
 #include <iomanip>
 #include <ctime>
+#include <algorithm>
 #include <ldap.h>
 
 namespace repositories {
@@ -1451,6 +1452,13 @@ void ValidationRepository::enrichWithConformanceData(Json::Value& result)
 
     if (fingerprint.empty() || countryCode.empty()) {
         spdlog::warn("[ValidationRepository] Cannot enrich: fingerprint or countryCode empty");
+        return;
+    }
+
+    // Validate countryCode is ISO 3166-1 alpha-2/3 (letters only, 2-3 chars) — prevents LDAP DN injection
+    if (countryCode.length() < 2 || countryCode.length() > 3 ||
+        !std::all_of(countryCode.begin(), countryCode.end(), [](unsigned char c) { return std::isalpha(c); })) {
+        spdlog::warn("[ValidationRepository] Invalid countryCode format: {}", countryCode);
         return;
     }
 

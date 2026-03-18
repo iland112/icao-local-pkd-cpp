@@ -559,7 +559,7 @@
   "duplicateTree": {
     "countrySummary": "{{certNum}} certificates, {{dupNum}} duplicates",
     "noDuplicates": "No duplicate certificates.",
-    "summary": "<strong>{{countryNum}} countries</strong> with <strong>{{certNum}} certificates</strong> having <strong>{{dupNum}} duplicates</strong>"
+    "summary": "{{countryNum}} countries with {{certNum}} certificates having {{dupNum}} duplicates"
   },
   "validationSummary": {
     "title": "Validation Summary",

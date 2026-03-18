@@ -150,6 +150,7 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
       - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
       - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
+      - ADMIN_INITIAL_PASSWORD=${ADMIN_INITIAL_PASSWORD:-}  # Initial admin password (auto-creates admin user on first startup)
       # PII Encryption (개인정보보호법 제29조 — AES-256-GCM)
       - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-}  # 64 hex chars (32 bytes). Empty = encryption disabled
       # ASN.1 Parser Configuration
