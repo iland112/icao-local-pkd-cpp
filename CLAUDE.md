@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.36.0
-**Last Updated**: 2026-03-17
+**Current Version**: v2.37.0
+**Last Updated**: 2026-03-18
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -184,6 +184,9 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Dual audit logging: `auth_audit_log` (authentication events) + `operation_audit_log` (operations)
 - IP tracking and User-Agent logging
 - Content-Security-Policy (CSP) header via nginx (XSS defense)
+- **Admin 초기화**: `ADMIN_INITIAL_PASSWORD` 환경변수 기반 (DB init 스크립트에 비밀번호 하드코딩 없음)
+- **LDAP DN injection 방지**: countryCode ISO 3166-1 alpha-2/3 형식 검증
+- **사이드바 RBAC**: `adminOnly` + `permission` 기반 메뉴 필터링 (비관리자에게 관리 메뉴 미표시)
 - **PII encryption (개인정보보호법 제29조)**: AES-256-GCM authenticated encryption for personal information fields
   - PKD Management: `api_client_requests` 4개 PII 필드 (성명, 소속, 이메일, 전화번호)
   - PA Service: `pa_verification` 3개 PII 필드 (여권번호, IP, User-Agent)
@@ -607,6 +610,23 @@ scripts/
 ---
 
 ## Version History
+
+### v2.37.0 (2026-03-18) - 6차 코드 보안 강화 + 권한 관리 수정 + 브랜드 리네이밍 완료
+- **Admin 초기 비밀번호 환경변수 전환**: DB init 스크립트 하드코딩 admin/admin123 제거 → 서비스 기동 시 `ADMIN_INITIAL_PASSWORD` 환경변수로 admin 자동 생성 (ensureAdminUser, Phase 8)
+- **XSS 수정**: `DuplicateCertificatesTree.tsx` — `dangerouslySetInnerHTML` + `escapeValue: false` 제거 → 일반 텍스트 렌더링
+- **LDAP DN countryCode 검증**: `validation_repository.cpp` — ISO 3166-1 alpha-2/3 형식 검증 추가 (LDAP DN injection 방지)
+- **401 응답 인터셉터 추가**: `eacApi.ts`, `pendingDscApi.ts` — JWT 만료 시 토큰 정리 + auth:expired 이벤트 (authApi 패턴 통일)
+- **SQL INTERVAL 범위 제한**: `api_client_repository.cpp` — days 파라미터 1~365 범위 제한
+- **사이드바 메뉴 권한 수정**: 비관리자에게 노출되던 관리 메뉴 숨김 처리
+  - 시스템 모니터링: permission 없음 → `adminOnly: true`
+  - API Docs: permission 없음 → `adminOnly: true`
+  - EAC 인증서 (실험): permission 없음 → `adminOnly: true`
+  - 인증서 통계: `upload:read` → `report:read` (보고서 섹션 권한 일치)
+- **Profile 권한 카드 수정**: PERMISSION_GROUPS 보고서 그룹에 `pa:read` → "PA 검증 통계" 항목 추가 (누락 수정)
+- **브랜드 리네이밍 완료**: FASTpass® SPKD → FASTpass® PKD (전체 79파일), SmartCore Inc. → SMARTCORE Inc. (전체 63파일)
+- **OpenAPI v2.36.0 업데이트**: PKD Management (CSR 7 + pending-dsc 4 엔드포인트), PA Service (v2.1.7 dscAutoRegistration 필드), PKD Relay (v2.36.0)
+- **문서**: CSR 생성 가이드 HTML, 기술제안서 PPTX 25슬라이드
+- ~100 files changed
 
 ### v2.36.0 (2026-03-17~18) - 브랜드 리네이밍 + UI/UX 전면 일관성 개선 + GlossaryTerm + Link Certificate 버그 수정
 - **브랜드 리네이밍**: SPKD → FASTpass® PKD (SmartCore 네이밍: FastPass, FastFinger, FastPhoto)
