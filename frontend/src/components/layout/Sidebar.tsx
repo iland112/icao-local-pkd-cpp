@@ -97,7 +97,7 @@ function buildNavSections(): NavSection[] {
           labelKey: 'menu.certReports',
           icon: <BarChart3 className="w-4 h-4" />,
           children: [
-            { path: '/upload-dashboard', labelKey: 'menu.certStats', icon: <BarChart3 className="w-4 h-4" />, permission: 'upload:read' },
+            { path: '/upload-dashboard', labelKey: 'menu.certStats', icon: <BarChart3 className="w-4 h-4" />, permission: 'report:read' },
             { path: '/pkd/trust-chain', labelKey: 'menu.dscTrustChain', icon: <Link2 className="w-4 h-4" />, permission: 'report:read' },
             { path: '/pkd/crl', labelKey: 'menu.crlReport', icon: <FileWarning className="w-4 h-4" />, permission: 'report:read' },
             { path: '/pkd/dsc-nc', labelKey: 'menu.nonConformantDsc', icon: <ShieldX className="w-4 h-4" />, permission: 'report:read' },
@@ -107,7 +107,7 @@ function buildNavSections(): NavSection[] {
         { path: '/pa/dashboard', labelKey: 'menu.paStats', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },
         { path: '/ai/analysis', labelKey: 'menu.aiAnalysis', icon: <Brain className="w-4 h-4" />, permission: 'ai:read' },
         ...(appConfig.enableEacMenu
-          ? [{ path: '/eac/dashboard', labelKey: 'menu.eacDashboard', icon: <FlaskConical className="w-4 h-4" /> }]
+          ? [{ path: '/eac/dashboard', labelKey: 'menu.eacDashboard', icon: <FlaskConical className="w-4 h-4" />, adminOnly: true }]
           : []),
       ],
     },
@@ -115,7 +115,7 @@ function buildNavSections(): NavSection[] {
       titleKey: 'sections.systemAdmin',
       icon: <Settings className="w-5 h-5 flex-shrink-0" />,
       items: [
-        { path: '/monitoring', labelKey: 'menu.systemMonitoring', icon: <Activity className="w-4 h-4" /> },
+        { path: '/monitoring', labelKey: 'menu.systemMonitoring', icon: <Activity className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/users', labelKey: 'menu.userManagement', icon: <Users className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/api-clients', labelKey: 'menu.apiClients', icon: <KeyRound className="w-4 h-4" />, adminOnly: true },
         { path: '/admin/csr', labelKey: 'menu.csrManagement', icon: <FileKey className="w-4 h-4" />, adminOnly: true },
@@ -131,6 +131,7 @@ function buildNavSections(): NavSection[] {
         {
           labelKey: 'menu.apiDocs',
           icon: <BookOpen className="w-4 h-4" />,
+          adminOnly: true,
           children: [
             { path: `${window.location.origin}/api-docs/?urls.primaryName=PKD+Management+API+v2.9.1`, labelKey: 'PKD Management', icon: <BookOpen className="w-4 h-4" />, external: true },
             { path: `${window.location.origin}/api-docs/?urls.primaryName=PA+Service+API+v2.1.1`, labelKey: 'PA Service', icon: <BookOpen className="w-4 h-4" />, external: true },
