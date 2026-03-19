@@ -558,7 +558,7 @@ def build():
     slide = add_part_divider(prs, blank_layout, 2,
                      "\uae30\uc220 \ubc29\uc548",
                      "\ub9c8\uc774\ud06c\ub85c\uc11c\ube44\uc2a4 \uc544\ud0a4\ud14d\ucc98 \xb7 ICAO Doc 9303 \ub4f1 \uad00\ub828 \uad6d\uc81c \ud45c\uc900 \uc900\uc218 \xb7 \ucee8\ud14c\uc774\ub108 \uae30\ubc18 \ubc30\ud3ec \xb7 HA \uc774\uc911\ud654 \uad6c\uc131")
-    # Add FASTpass® PKD title
+    # Add FASTpass® SPKD title
     add_textbox(slide, Cm(3), Cm(9.5), Cm(20), Cm(1.5),
                 "FASTpass\u00ae PKD",
                 font_size=22, font_color=BLUE_ACCENT, bold=True)

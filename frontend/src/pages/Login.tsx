@@ -148,10 +148,10 @@ export function Login() {
           {/* Branding */}
           <div style={stagger(0.1)}>
             <div className="inline-flex mb-6">
-              <img src="/favicon.svg" alt="FASTpass® PKD" className="w-16 h-16 drop-shadow-lg" />
+              <img src="/favicon.svg" alt="FASTpass® SPKD" className="w-16 h-16 drop-shadow-lg" />
             </div>
             <h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold text-white mb-3 tracking-tight">
-              FASTpass® PKD
+              FASTpass® SPKD
             </h1>
             <p className="text-lg lg:text-xl text-sky-200 mb-2 font-medium">
               {t('login.systemName')}
@@ -262,10 +262,10 @@ export function Login() {
           {/* Mobile-only branding */}
           <div className="md:hidden text-center mb-5" style={stagger(0.1)}>
             <div className="inline-flex items-center justify-center mb-3">
-              <img src="/favicon.svg" alt="FASTpass® PKD" className="w-12 h-12 drop-shadow-lg" />
+              <img src="/favicon.svg" alt="FASTpass® SPKD" className="w-12 h-12 drop-shadow-lg" />
             </div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white tracking-tight">
-              FASTpass® PKD
+              FASTpass® SPKD
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               {t('login.systemName')}
@@ -275,7 +275,7 @@ export function Login() {
           {/* Desktop: logo + title */}
           <div className="hidden md:flex flex-col items-center mb-5" style={stagger(0.1)}>
             <div className="inline-flex items-center justify-center mb-2.5">
-              <img src="/favicon.svg" alt="FASTpass® PKD" className="w-10 h-10" />
+              <img src="/favicon.svg" alt="FASTpass® SPKD" className="w-10 h-10" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">{t('login.title')}</h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{t('login.enterCredentials')}</p>

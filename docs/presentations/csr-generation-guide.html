@@ -494,7 +494,7 @@
           <li><a href="#step3">CSR PEM 파일 생성</a></li>
           <li><a href="#step4">생성 결과 검증</a></li>
           <li><a href="#step5">ICAO PKD 포털에 CSR 제출</a></li>
-          <li><a href="#appendix">부록: Subject DN 예시, 보안 주의사항, FASTpass® PKD Import</a></li>
+          <li><a href="#appendix">부록: Subject DN 예시, 보안 주의사항, FASTpass® SPKD Import</a></li>
         </ol>
       </section>
 
@@ -727,7 +727,7 @@
               <tbody>
                 <tr><td><code>-new</code></td><td>새 CSR 요청 생성</td></tr>
                 <tr><td><code>-newkey rsa:2048</code></td><td>RSA 2048비트 키 쌍 신규 생성 <strong>(ICAO 필수 요구사항)</strong></td></tr>
-                <tr><td><code>-nodes</code></td><td>개인키에 암호를 설정하지 않음 (FASTpass® PKD Import 편의)</td></tr>
+                <tr><td><code>-nodes</code></td><td>개인키에 암호를 설정하지 않음 (FASTpass® SPKD Import 편의)</td></tr>
                 <tr><td><code>-keyout private.key</code></td><td>개인키 저장 파일명</td></tr>
                 <tr><td><code>-out csr.pem</code></td><td>CSR PEM 파일 저장 파일명</td></tr>
                 <tr><td><code>-subj "..."</code></td><td>인증서 주체 정보 (Subject Distinguished Name). ICAO는 제한 없음 — 자유 설정 가능</td></tr>
@@ -934,7 +934,7 @@ dHJ5IG9mIEp1c3RpY2UxGzAZBgNVBAMMEktvcmVhIEltbWlncmF0aW9u
               <span class="alert-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
-              <div>발급된 인증서는 향후 사업 수행 시 FASTpass® PKD 시스템에 등록하여 사용합니다. 자세한 절차는 <a href="#appendix-import">부록 — FASTpass® PKD Import 절차</a>를 참고하세요.</div>
+              <div>발급된 인증서는 향후 사업 수행 시 FASTpass® SPKD 시스템에 등록하여 사용합니다. 자세한 절차는 <a href="#appendix-import">부록 — FASTpass® SPKD Import 절차</a>를 참고하세요.</div>
             </div>
           </div>
         </div>
@@ -952,7 +952,7 @@ dHJ5IG9mIEp1c3RpY2UxGzAZBgNVBAMMEktvcmVhIEltbWlncmF0aW9u
           </div>
           <div class="step-title">
             <h2>부록</h2>
-            <p>Subject DN 예시, 보안 주의사항, FASTpass® PKD Import 절차</p>
+            <p>Subject DN 예시, 보안 주의사항, FASTpass® SPKD Import 절차</p>
           </div>
         </div>
 
@@ -1055,22 +1055,22 @@ dHJ5IG9mIEp1c3RpY2UxGzAZBgNVBAMMEktvcmVhIEltbWlncmF0aW9u
           </div>
         </div>
 
-          <!-- FASTpass® PKD Import -->
+          <!-- FASTpass® SPKD Import -->
           <div class="substep" id="appendix-import" style="border-color: var(--accent); border-width: 2px;">
             <span class="substep-badge" style="background: var(--brand); color: white; border: none;">향후 사업 수행 시</span>
             <h4>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              FASTpass® PKD 시스템 CSR Import 절차
+              FASTpass® SPKD 시스템 CSR Import 절차
             </h4>
             <div class="alert alert-info" style="margin: 0 0 16px 0;">
               <span class="alert-icon">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
               </span>
-              <div>아래 절차는 <strong>향후 사업 수행 시</strong> FASTpass® PKD 시스템이 구축된 후 진행합니다. CSR 생성 및 ICAO 제출은 사업 수행 전에도 가능합니다.</div>
+              <div>아래 절차는 <strong>향후 사업 수행 시</strong> FASTpass® SPKD 시스템이 구축된 후 진행합니다. CSR 생성 및 ICAO 제출은 사업 수행 전에도 가능합니다.</div>
             </div>
             <p><strong>CSR + 개인키 Import:</strong></p>
             <ol style="line-height: 2.2;">
-              <li>FASTpass® PKD에 관리자 계정으로 <strong>로그인</strong></li>
+              <li>FASTpass® SPKD에 관리자 계정으로 <strong>로그인</strong></li>
               <li>좌측 메뉴 <strong>시스템 관리</strong> → <strong>CSR 관리</strong> 클릭</li>
               <li>상단 <strong>"CSR Import"</strong> 버튼 클릭</li>
               <li>CSR 파일: <code>csr.pem</code> 선택</li>
@@ -1093,7 +1093,7 @@ dHJ5IG9mIEp1c3RpY2UxGzAZBgNVBAMMEktvcmVhIEltbWlncmF0aW9u
 
             <p style="margin-top: 16px;"><strong>ICAO 발급 인증서 등록:</strong></p>
             <ol style="line-height: 2.2;">
-              <li>FASTpass® PKD → CSR 관리 → 해당 CSR 선택</li>
+              <li>FASTpass® SPKD → CSR 관리 → 해당 CSR 선택</li>
               <li><strong>"인증서 등록"</strong> 버튼 클릭</li>
               <li>ICAO로부터 발급받은 인증서 파일 선택 후 등록</li>
             </ol>
@@ -1114,7 +1114,7 @@ dHJ5IG9mIEp1c3RpY2UxGzAZBgNVBAMMEktvcmVhIEltbWlncmF0aW9u
     <footer class="footer">
       <div class="container">
         <p><span class="footer-brand">SMARTCORE Inc.</span> &copy; 2026. All rights reserved.</p>
-        <p style="margin-top: 4px;">FASTpass® PKD — ICAO Local PKD Certificate Management System</p>
+        <p style="margin-top: 4px;">FASTpass® SPKD — ICAO Local PKD Certificate Management System</p>
       </div>
     </footer>
 

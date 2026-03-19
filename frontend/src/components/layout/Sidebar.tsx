@@ -227,11 +227,11 @@ export function Sidebar() {
           <div className="px-4 pt-4 pb-2">
             <Link to="/" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow flex-shrink-0 overflow-hidden">
-                <img src="/favicon.svg" alt="FASTpass® PKD" className="w-10 h-10" />
+                <img src="/favicon.svg" alt="FASTpass® SPKD" className="w-10 h-10" />
               </div>
               {expanded && (
                 <div className="flex-1 min-w-0 overflow-hidden transition-opacity duration-200">
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">FASTpass® PKD</h2>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">FASTpass® SPKD</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 truncate">by SMARTCORE Inc.</p>
                 </div>
               )}

@@ -379,7 +379,7 @@ export function Header() {
     <Dialog isOpen={showAbout} onClose={() => setShowAbout(false)} title={t('about.title')} size="lg">
       <div className="space-y-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">FASTpass® PKD</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">FASTpass® SPKD</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Version: {__APP_VERSION__}</p>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">

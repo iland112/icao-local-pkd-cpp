@@ -208,7 +208,7 @@ export function Dashboard() {
       <div className="mb-6">
         <div className="flex items-center gap-4">
           <div className="rounded-xl shadow-lg overflow-hidden">
-            <img src="/favicon.svg" alt="FASTpass® PKD" className="w-13 h-13" />
+            <img src="/favicon.svg" alt="FASTpass® SPKD" className="w-13 h-13" />
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>

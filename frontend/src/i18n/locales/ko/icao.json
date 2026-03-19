@@ -63,7 +63,7 @@
     "lifecycleDetected": "ICAO 포털에서 새 버전 발견",
     "lifecycleNotified": "관리자에게 알림 전송 완료",
     "lifecycleDownloaded": "포털에서 파일 다운로드 완료",
-    "lifecycleImported": "FASTpass® PKD로 가져오기 성공",
+    "lifecycleImported": "FASTpass® SPKD로 가져오기 성공",
     "lifecycleFailed": "가져오기 실패 (오류 메시지 확인)",
     "tier1Note": "현재 구현은 Tier 1 (수동 다운로드)입니다. ICAO 이용 약관 준수를 위해 자동 다운로드 기능은 활성화되지 않았습니다.",
     "checkResultTitle": "업데이트 확인 결과",

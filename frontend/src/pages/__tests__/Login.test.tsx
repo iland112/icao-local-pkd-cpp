@@ -189,10 +189,10 @@ describe('Login page', () => {
     });
   });
 
-  it('should display FASTpass® PKD branding', () => {
+  it('should display FASTpass® SPKD branding', () => {
     render(<Login />);
 
     // Mobile branding or desktop branding should be present
-    expect(screen.getAllByText('FASTpass® PKD').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('FASTpass® SPKD').length).toBeGreaterThanOrEqual(1);
   });
 });

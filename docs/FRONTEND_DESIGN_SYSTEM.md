@@ -10,13 +10,13 @@
 
 ### Brand Identity
 
-FASTpass® PKD(SmartCore PKD)는 전자여권 위·변조 검사 시스템으로, **엔터프라이즈급 보안 소프트웨어**에 적합한 디자인을 지향한다.
+FASTpass® SPKD(SmartCore PKD)는 전자여권 위·변조 검사 시스템으로, **엔터프라이즈급 보안 소프트웨어**에 적합한 디자인을 지향한다.
 
 | 항목 | 값 |
 |------|----|
 | 로고 아이콘 | Shield + "F" + Speed Lines 커스텀 SVG (`favicon.svg`) |
-| 브랜드 단색 | `bg-[#02385e]` (FASTpass® PKD Navy) |
-| 시스템 명 | FASTpass® PKD (SmartCore PKD) |
+| 브랜드 단색 | `bg-[#02385e]` (FASTpass® SPKD Navy) |
+| 시스템 명 | FASTpass® SPKD (SmartCore PKD) |
 | 부제 | 전자여권 위·변조 검사 시스템 |
 | 표준 참조 | ICAO Doc 9303, RFC 5280, RFC 5652 |
 
