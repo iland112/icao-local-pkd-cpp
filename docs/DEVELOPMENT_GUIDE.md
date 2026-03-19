@@ -1,7 +1,7 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.35.0
-**Last Updated**: 2026-03-16
+**Version**: 2.37.0
+**Last Updated**: 2026-03-18
 
 ---
 

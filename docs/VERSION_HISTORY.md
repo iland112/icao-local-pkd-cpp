@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.36.0
-**Period**: 2026-01-21 ~ 2026-03-17
-**Total Releases**: 76+
+**Current Version**: v2.37.0
+**Period**: 2026-01-21 ~ 2026-03-19
+**Total Releases**: 78+
 
 ---
 
@@ -10,6 +10,8 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.37.1 | 03-19 | Docs | 전체 기술 문서 현행화 + 카테고리별 통합 (33개→19개, 42% 축소) |
+| v2.37.0 | 03-18 | Security | 6차 보안 강화 + PA 권한 분리(pa:stats) + 브랜드 리네이밍 FASTpass® SPKD |
 | v2.36.0 | 03-17~18 | UX | 브랜드 리네이밍 FASTpass® SPKD + UI/UX 전면 일관성 개선 + GlossaryTerm + CountryFlag + LC 버그 수정 |
 | v2.35.0 | 03-16 | Feature | ICAO PKD CSR 관리 (생성/Import/인증서 등록/암호화/감사 로그) |
 | v2.34.0 | 03-15 | Refactor | DB 초기화 스크립트 통합 (PostgreSQL 18→8, Oracle 13→9) |
@@ -101,6 +103,29 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.37.1 (2026-03-19) - 전체 기술 문서 현행화 + 카테고리별 통합
+
+- **문서 통합 (33개 → 19개, 42% 축소)**:
+  - 배포: DEPLOYMENT_PROCESS + LUCKFOX_DEPLOYMENT + PODMAN_DEPLOYMENT + SERVER_SETUP + BUILD_SOP → `DEPLOYMENT_GUIDE.md`
+  - 아키텍처: SOFTWARE_ARCHITECTURE + ARCHITECTURE_DESIGN_PRINCIPLES → `ARCHITECTURE.md`
+  - ICAO 규격: EPASSPORT_TRUST_CHAIN + DOC9303_COMPLIANCE + BSI_TR03110 + ICAO_PKD_COMPLIANCE + DSC_NC_HANDLING + PII_ENCRYPTION → `ICAO_COMPLIANCE_MANUAL.md`
+  - 인증서 처리: CERTIFICATE_SOURCE_MANAGEMENT + MASTER_LIST_PROCESSING → `CERTIFICATE_PROCESSING_GUIDE.md`
+  - API 클라이언트: API_CLIENT_ADMIN + API_CLIENT_USER + CERTIFICATE_SEARCH_QUICKSTART → `API_CLIENT_GUIDE.md`
+  - 프론트엔드: FRONTEND_DESIGN_SYSTEM + PAGE_FUNCTIONALITY_GUIDE → `FRONTEND_GUIDE.md`
+- **문서 현행화**: 12개 문서 v2.37.0 기준 업데이트 (버전, 브랜드, 권한, 신규 기능 반영)
+- **원본 보존**: 머지 전 18개 원본 파일 docs/archive/로 이동
+- docs/README.md 문서 인덱스 전면 재구성
+
+### v2.37.0 (2026-03-18) - 6차 보안 강화 + PA 권한 분리 + 브랜드 리네이밍
+
+- **6차 코드 보안 강화**: admin 초기 비밀번호 환경변수 전환 (`ADMIN_INIT_PASSWORD`), XSS 방지 (`DuplicateCertificatesTree` HTML escape), LDAP DN 인젝션 검증 (`validation_repository`, `api_client_repository`), 401 인터셉터 추가 (`eacApi`, `pendingDscApi`)
+- **PA 권한 분리**: `pa:read` (검증 이력 조회) + `pa:stats` (통계 대시보드) 독립 관리 — 기존 `pa:read` 하나로 묶여 있던 권한을 분리
+- **사이드바 권한 수정**: 비관리자에게 관리 메뉴(사용자 관리, 감사 로그 등) 노출 방지 (`adminOnly` 체크 강화)
+- **Profile 권한 카드**: PA 검증 통계 항목 누락 수정 (en/ko admin.json + permissions.ts)
+- **브랜드 리네이밍**: FastSPKD → FASTpass® SPKD, SmartCore → SMARTCORE (79 파일, 프론트엔드 + 백엔드 + 문서 전체)
+- **오타 수정**: "FASTpass® PKD" → "FASTpass® SPKD" (19 파일)
+- 12 files changed (security), 79 files changed (branding), 19 files changed (typo fix)
 
 ### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 4섹션 재구성 + 클라이언트 정렬
 

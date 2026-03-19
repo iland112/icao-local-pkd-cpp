@@ -1,14 +1,14 @@
 # AI 인증서 분석 보고서 가이드
 
-**Version**: v2.20.2
-**Created**: 2026-02-22
+**Version**: v2.37.0
+**Last Updated**: 2026-03-18
 **페이지**: `/ai/analysis`
 
 ---
 
 ## 개요
 
-AI 인증서 분석 보고서는 ICAO Local PKD에 등록된 전체 인증서(CSCA, DSC, MLSC, DSC_NC)를
+AI 인증서 분석 보고서는 FASTpass® SPKD에 등록된 전체 인증서(CSCA, DSC, MLSC, DSC_NC)를
 ML(Machine Learning) 기반으로 분석하여 이상 징후, 보안 위험, PKI 성숙도를 시각화하는 대시보드입니다.
 
 ### 분석 엔진 구성
@@ -101,7 +101,7 @@ anomaly_score (0.0~1.0)는 Isolation Forest(전체 패턴 대비 이탈도)와 L
 
 ### 평균 위험 점수 (avg_risk_score)
 
-상단 우측에 표시되는 전체 인증서의 평균 위험 점수입니다. 이 값이 낮을수록 전체 PKD의 보안 상태가 양호합니다.
+상단 우측에 표시되는 전체 인증서의 평균 위험 점수입니다. 이 값이 낮을수록 전체 FASTpass® SPKD의 보안 상태가 양호합니다.
 
 ---
 
@@ -413,14 +413,14 @@ APScheduler로 매일 지정된 시각에 자동 분석이 실행됩니다.
 
 | 엔드포인트 | 메서드 | 용도 |
 |-----------|--------|------|
-| `/api/ai/health` | GET | 서비스 상태 확인 |
+| `/api/ai/health` | GET | 서비스 상태 확인 (DB 연결 체크 포함) |
 | `/api/ai/analyze` | POST | 전체 배치 분석 실행 |
 | `/api/ai/analyze/incremental` | POST | 증분 분석 (upload_id 기반) |
 | `/api/ai/analyze/status` | GET | 분석 작업 상태 조회 |
 | `/api/ai/certificate/{fingerprint}` | GET | 개별 인증서 분석 결과 |
 | `/api/ai/certificate/{fingerprint}/forensic` | GET | 개별 인증서 포렌식 상세 (10개 카테고리) |
 | `/api/ai/anomalies` | GET | 이상 인증서 목록 (필터, 페이지네이션) |
-| `/api/ai/statistics` | GET | 전체 분석 통계 |
+| `/api/ai/statistics` | GET | 전체 분석 통계 (포렌식 점수 포함) |
 | `/api/ai/reports/country-maturity` | GET | 국가별 PKI 성숙도 순위 |
 | `/api/ai/reports/algorithm-trends` | GET | 연도별 알고리즘 추이 |
 | `/api/ai/reports/key-size-distribution` | GET | 키 크기 분포 |
@@ -430,4 +430,40 @@ APScheduler로 매일 지정된 시각에 자동 분석이 실행됩니다.
 | `/api/ai/reports/forensic-summary` | GET | 포렌식 분석 요약 |
 | `/api/ai/reports/extension-anomalies` | GET | 확장 규칙 위반 목록 |
 
-모든 AI 엔드포인트는 **Public** (JWT 불필요)입니다.
+### 인증 및 권한
+
+모든 AI 엔드포인트는 **Public** (JWT 불필요)입니다. 단, 외부 API 클라이언트가 `X-API-Key` 헤더를 통해 접근하는 경우 해당 클라이언트에 `ai:read` 권한이 부여되어 있어야 합니다.
+
+| 인증 방식 | 설명 |
+|-----------|------|
+| **브라우저 (JWT)** | 로그인 사용자는 JWT 없이도 AI 엔드포인트에 접근 가능 (Public 엔드포인트) |
+| **API Key (`X-API-Key`)** | 외부 시스템 연동 시 API Key 인증 사용. `ai:read` 권한 필요 (v2.21.0+) |
+
+#### 전체 권한 목록 (12개, v2.37.0 기준)
+
+| 권한 | 설명 |
+|------|------|
+| `icao:read` | ICAO 버전 상태 조회 |
+| `upload:write` | 파일 업로드 (LDIF/ML/인증서) |
+| `upload:read` | 업로드 이력 조회 |
+| `cert:read` | 인증서 조회 |
+| `cert:export` | 인증서 내보내기 |
+| `sync:read` | 동기화 상태 조회 |
+| `pa:verify` | PA 검증 수행 |
+| `pa:read` | PA 검증 이력 조회 |
+| `pa:stats` | PA 검증 통계 조회 |
+| `report:read` | 보고서 조회 |
+| **`ai:read`** | **AI 분석 결과 조회** |
+| `api-client:manage` | API 클라이언트 관리 (관리자 전용) |
+
+### 입력 검증 (보안 강화)
+
+모든 API 파라미터는 서버 측에서 정규식으로 검증됩니다 (v2.29.3+):
+
+| 파라미터 | 검증 패턴 | 설명 |
+|----------|-----------|------|
+| `fingerprint` | `^[a-fA-F0-9]{64}$` | SHA-256 hex 문자열 (64자) |
+| `country` | `^[A-Z]{2,3}$` | ISO 3166-1 alpha-2/3 국가 코드 |
+| `type` | `^(CSCA\|DSC\|DSC_NC\|MLSC\|LC)$` | 인증서 유형 |
+| `risk_level` | `^(LOW\|MEDIUM\|HIGH\|CRITICAL)$` | 위험 수준 |
+| `label` | `^(NORMAL\|SUSPICIOUS\|ANOMALOUS)$` | 이상 수준 |

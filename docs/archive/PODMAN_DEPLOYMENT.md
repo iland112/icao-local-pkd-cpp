@@ -393,6 +393,7 @@ podman ps -a --filter "name=icao-local-pkd" --format "{{.Names}}" | xargs -r pod
 
 ## 버전 이력
 
+- v2.37.0 (2026-03-18): 문서 버전 v2.37.0 동기화
 - v1.2.0 (2026-02-27): 스크립트 안정성 개선 — `--profile` 자동, chmod fallback, health port 80, restart stop+start
 - v1.1.0 (2026-02-27): Docker→Podman 마이그레이션 완료, SELinux MCS 해결, DNS 플러그인 설정
 - v1.0.0 (2026-02-27): 최초 Podman 지원 — Docker 스크립트에서 분리

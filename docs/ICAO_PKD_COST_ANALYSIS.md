@@ -1,8 +1,15 @@
 # ICAO Local PKD - 비용 분석 보고서
 
-**Version**: 1.0
-**Date**: 2026-01-19
+**Version**: 2.37.0
+**Date**: 2026-03-18
 **Status**: Planning
+
+> **Note (v2.37.0)**: 초기 비용 분석 이후 다음 기능이 추가되었으나, 비용 수치는 당초 추정치를 그대로 유지합니다:
+> - CSR Management (ICAO PKD Certificate Signing Request 생성/관리)
+> - API Client Management (외부 클라이언트 API Key 인증/권한/Rate Limiting)
+> - Pending DSC Approval (PA 검증 자동 등록 → 관리자 승인 워크플로우)
+> - EAC 인증서 실험적 지원 (BSI TR-03110 CVC 파서/검증)
+> - AI Certificate Forensic Analysis Engine (ML 기반 이상 탐지/포렌식 분석)
 
 ---
 

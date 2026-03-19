@@ -1,9 +1,9 @@
 # 오픈소스 라이선스 준수 보고서 (License Compliance Report)
 
-**Version**: 1.0.0
-**Last Updated**: 2026-02-26
+**Version**: 2.37.0
+**Last Updated**: 2026-03-18
 **대상**: 상용 배포 라이선스 검토
-**프로젝트**: ICAO Local PKD v2.22.1
+**프로젝트**: ICAO Local PKD v2.37.0
 
 ---
 

@@ -1,7 +1,7 @@
 # Luckfox ARM64 Deployment Guide
 
-**Version**: 3.1
-**Last Updated**: 2026-02-23
+**Version**: 2.37.0
+**Last Updated**: 2026-03-18
 **Status**: Degraded — 192.168.100.11 하드웨어 장애로 단일 노드(192.168.100.10) 운영 중
 
 ---
@@ -18,7 +18,7 @@ All services use `network_mode: host` (luckfox kernel lacks iptables DNAT).
 192.168.100.11: OpenLDAP2 (:389) + Docker Apps - Luckfox (하드웨어 장애로 정지)
 ```
 
-> **⚠ 현재 상태 (2026-02-23)**: `192.168.100.11` (Luckfox) 하드웨어 장애로 동작 정지.
+> **⚠ 현재 상태 (2026-03-18)**: `192.168.100.11` (Luckfox) 하드웨어 장애로 동작 정지.
 > OpenLDAP MMR 복제는 `192.168.100.10` 단일 노드로 운영 중.
 > Docker 서비스 배포 대상도 `192.168.100.10`으로 변경 필요.
 
