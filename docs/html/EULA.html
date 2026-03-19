@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>End User License Agreement — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html" class="active">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>End User License Agreement</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="최종사용자-라이선스-계약-end-user-license-agreement-eula">최종사용자 라이선스 계약 / End-User License Agreement (EULA)</h1>
+<p><strong>Version</strong>: 1.0.0
+<strong>Last Updated</strong>: 2026-02-26
+<strong>제품</strong>: ICAO Local PKD
+<strong>라이선서</strong>: 스마트코어 주식회사 (Smartcore Inc.)</p>
+<hr>
+<blockquote>
+<p><strong>중요</strong>: 본 소프트웨어를 설치, 복사 또는 사용하기 전에 본 계약을 주의 깊게 읽으십시오. 본 소프트웨어를 설치하거나 사용하는 것은 본 계약의 조건에 동의하는 것으로 간주됩니다.</p>
+<p><strong>IMPORTANT</strong>: Please read this Agreement carefully before installing, copying, or using the Software. By installing or using the Software, you agree to be bound by the terms of this Agreement.</p>
+</blockquote>
+<hr>
+<h2 id="제1조-정의-article-1-definitions">제1조 — 정의 / Article 1 — Definitions</h2>
+<p><strong>1.1</strong> &quot;소프트웨어&quot;란 ICAO Local PKD 제품을 구성하는 모든 실행 파일, 컨테이너 이미지, 라이브러리, 문서, 구성 파일 및 관련 자료를 의미한다.</p>
+<p>&quot;Software&quot; means all executable files, container images, libraries, documentation, configuration files, and related materials that constitute the ICAO Local PKD product.</p>
+<p><strong>1.2</strong> &quot;라이선서&quot;란 스마트코어 주식회사(Smartcore Inc.)를 의미한다.</p>
+<p>&quot;Licensor&quot; means Smartcore Inc.</p>
+<p><strong>1.3</strong> &quot;라이선시&quot;란 본 계약에 동의하고 소프트웨어를 사용하는 개인 또는 법인을 의미한다.</p>
+<p>&quot;Licensee&quot; means the individual or legal entity that agrees to this Agreement and uses the Software.</p>
+<p><strong>1.4</strong> &quot;서드파티 소프트웨어&quot;란 소프트웨어에 포함된 제3자의 오픈소스 또는 독점 라이브러리를 의미한다.</p>
+<p>&quot;Third-Party Software&quot; means third-party open-source or proprietary libraries included in the Software.</p>
+<p><strong>1.5</strong> &quot;Oracle 프로그램&quot;이란 소프트웨어에 포함된 Oracle Instant Client 라이브러리를 의미한다.</p>
+<p>&quot;Oracle Programs&quot; means the Oracle Instant Client libraries included in the Software.</p>
+<p><strong>1.6</strong> &quot;고객 인프라&quot;란 라이선시가 별도로 확보하여 운영하는 데이터베이스 서버, LDAP 디렉토리 서버 등 소프트웨어의 실행에 필요한 외부 시스템을 의미한다.</p>
+<p>&quot;Customer Infrastructure&quot; means the database servers, LDAP directory servers, and other external systems that the Licensee separately procures and operates for the execution of the Software.</p>
+<hr>
+<h2 id="제2조-라이선스-부여-article-2-grant-of-license">제2조 — 라이선스 부여 / Article 2 — Grant of License</h2>
+<p><strong>2.1</strong> 라이선서는 라이선시에게 본 계약의 조건에 따라 다음과 같은 제한적, 비독점적, 양도불가, 서브라이선스 불가의 라이선스를 부여한다:</p>
+<p>Licensor grants Licensee a limited, non-exclusive, non-transferable, non-sublicensable license under the terms of this Agreement to:</p>
+<p><strong>(a)</strong> 라이선시의 내부 비즈니스 운영 목적으로 소프트웨어를 설치하고 사용할 수 있다.</p>
+<p>Install and use the Software for Licensee&#39;s internal business operations.</p>
+<p><strong>(b)</strong> 소프트웨어의 실행에 합리적으로 필요한 수의 백업 복사본을 만들 수 있다.</p>
+<p>Make a reasonable number of backup copies necessary for the operation of the Software.</p>
+<p><strong>2.2</strong> 본 라이선스에서 명시적으로 부여되지 않은 모든 권리는 라이선서에게 유보된다.</p>
+<p>All rights not expressly granted herein are reserved by Licensor.</p>
+<hr>
+<h2 id="제3조-사용-제한-article-3-restrictions">제3조 — 사용 제한 / Article 3 — Restrictions</h2>
+<p>라이선시는 다음을 하여서는 아니 된다:</p>
+<p>Licensee shall not:</p>
+<p><strong>(a)</strong> 소프트웨어 또는 그 일부를 제3자에게 재배포, 재판매, 임대, 대여 또는 서브라이선스하는 행위.</p>
+<p>Redistribute, resell, lease, rent, or sublicense the Software or any part thereof to any third party.</p>
+<p><strong>(b)</strong> 소프트웨어를 역공학, 디컴파일, 디스어셈블리하거나 소스 코드를 추출하려는 시도. 단, 관련 법률이 이를 명시적으로 허용하는 경우는 제외한다.</p>
+<p>Reverse engineer, decompile, disassemble, or attempt to derive the source code of the Software, except to the extent expressly permitted by applicable law.</p>
+<p><strong>(c)</strong> 소프트웨어에 포함된 저작권 고지, 상표, 라벨 또는 기타 식별 표시를 제거하거나 변경하는 행위.</p>
+<p>Remove or alter any copyright notices, trademarks, labels, or other identifying marks on the Software.</p>
+<p><strong>(d)</strong> 소프트웨어를 불법적인 목적으로 사용하거나 관련 법률을 위반하여 사용하는 행위.</p>
+<p>Use the Software for any unlawful purpose or in violation of applicable laws.</p>
+<p><strong>(e)</strong> 소프트웨어와 직접 경쟁하는 제품을 개발하기 위해 소프트웨어를 사용하는 행위.</p>
+<p>Use the Software to develop a product that directly competes with the Software.</p>
+<hr>
+<h2 id="제4조-서드파티-소프트웨어-article-4-third-party-software">제4조 — 서드파티 소프트웨어 / Article 4 — Third-Party Software</h2>
+<p><strong>4.1</strong> 소프트웨어에는 별도의 라이선스 조건이 적용되는 서드파티 소프트웨어가 포함되어 있다. 서드파티 소프트웨어의 라이선스 목록은 소프트웨어와 함께 제공되는 <code>THIRD-PARTY-NOTICES</code> 파일 및 <code>LICENSE_COMPLIANCE.md</code> 문서에 명시되어 있다.</p>
+<p>The Software contains Third-Party Software governed by separate license terms. A list of Third-Party Software licenses is set forth in the <code>THIRD-PARTY-NOTICES</code> file and <code>LICENSE_COMPLIANCE.md</code> document provided with the Software.</p>
+<p><strong>4.2</strong> 서드파티 소프트웨어의 사용은 해당 서드파티 라이선스 조건에 따른다. 본 계약의 어떤 조항도 서드파티 라이선스에서 라이선시에게 부여된 권리를 제한하거나, 서드파티 라이선스가 요구하는 의무를 면제하지 않는다.</p>
+<p>Use of Third-Party Software is subject to the applicable third-party license terms. Nothing in this Agreement limits any rights granted to Licensee under those third-party licenses, nor does it exempt Licensee from any obligations required by those licenses.</p>
+<p><strong>4.3</strong> 소프트웨어에는 오픈소스 라이브러리가 포함되어 있으며, 각 라이선스에서 요구하는 저작권 고지 및 라이선스 전문은 <code>THIRD-PARTY-NOTICES</code> 파일에 수록되어 있다.</p>
+<p>The Software contains open-source libraries, and the copyright notices and license texts required by each license are included in the <code>THIRD-PARTY-NOTICES</code> file.</p>
+<p><strong>4.4</strong> 이 소프트웨어의 일부는 Independent JPEG Group의 작업에 기반하고 있다.</p>
+<p>This software is based in part on the work of the Independent JPEG Group.</p>
+<hr>
+<h2 id="제5조-oracle-프로그램-특별-조항-article-5-oracle-programs-special-terms">제5조 — Oracle 프로그램 특별 조항 / Article 5 — Oracle Programs Special Terms</h2>
+<p>소프트웨어에는 Oracle Corporation(&quot;Oracle&quot;)이 제공하는 Oracle Instant Client 라이브러리(&quot;Oracle 프로그램&quot;)가 포함되어 있다. Oracle 프로그램에 대하여 라이선시는 다음 조건에 동의한다:</p>
+<p>The Software includes Oracle Instant Client libraries (&quot;Oracle Programs&quot;) provided by Oracle Corporation (&quot;Oracle&quot;). With respect to the Oracle Programs, Licensee agrees to the following terms:</p>
+<p><strong>5.1 사용 범위 제한 (Scope of Use)</strong></p>
+<p>라이선시는 Oracle 프로그램을 오직 라이선시의 내부 비즈니스 운영 목적으로만 사용할 수 있다.</p>
+<p>Licensee may use the Oracle Programs solely for Licensee&#39;s internal business operations.</p>
+<p><strong>5.2 재배포 금지 (No Redistribution)</strong></p>
+<p>라이선시는 Oracle 프로그램을 제3자에게 재배포할 수 없다. 라이선시는 Oracle 프로그램을 본 소프트웨어와 분리하여 독립적으로 배포하거나 제공할 수 없다.</p>
+<p>Licensee shall not redistribute the Oracle Programs to any third party. Licensee may not distribute or make available the Oracle Programs separately from the Software.</p>
+<p><strong>5.3 역공학 금지 (No Reverse Engineering)</strong></p>
+<p>라이선시는 Oracle 프로그램을 역공학, 디컴파일 또는 디스어셈블리할 수 없다.</p>
+<p>Licensee shall not reverse engineer, decompile, or disassemble the Oracle Programs.</p>
+<p><strong>5.4 소유권 귀속 (Title and Ownership)</strong></p>
+<p>Oracle 프로그램에 대한 소유권(title)은 Oracle Corporation에 귀속된다. 본 계약은 라이선시에게 Oracle 프로그램에 대한 소유권을 이전하지 않는다.</p>
+<p>Title to the Oracle Programs remains with Oracle Corporation. This Agreement does not transfer any ownership interest in the Oracle Programs to Licensee.</p>
+<p><strong>5.5 보증 면책 (No Warranty for Oracle Programs)</strong></p>
+<p>Oracle 프로그램은 &quot;있는 그대로(AS IS)&quot; 제공된다. 라이선서 및 Oracle은 Oracle 프로그램에 대하여 상품성, 특정 목적 적합성 또는 비침해성에 대한 명시적이든 묵시적이든 어떠한 보증도 제공하지 않는다.</p>
+<p>The Oracle Programs are provided &quot;AS IS.&quot; Neither Licensor nor Oracle makes any warranties, express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement, with respect to the Oracle Programs.</p>
+<hr>
+<h2 id="제6조-고객-책임-인프라-article-6-customer-provided-infrastructure">제6조 — 고객 책임 인프라 / Article 6 — Customer-Provided Infrastructure</h2>
+<p><strong>6.1</strong> 소프트웨어의 정상적인 운영을 위해서는 데이터베이스 서버 및 LDAP 디렉토리 서버가 필요하다. 이러한 인프라는 소프트웨어에 포함되지 않으며, 라이선시가 별도로 확보하고 운영할 책임이 있다.</p>
+<p>The normal operation of the Software requires a database server and an LDAP directory server. Such infrastructure is not included in the Software, and Licensee is responsible for separately procuring and operating it.</p>
+<p><strong>6.2</strong> 라이선시가 확보하는 인프라 소프트웨어(예: Oracle Database Enterprise Edition, 상용 LDAP 서버 등)의 라이선스는 해당 공급업체와 라이선시 간의 별도 계약에 따르며, 라이선서는 이에 대한 책임을 지지 않는다.</p>
+<p>The licenses for infrastructure software procured by Licensee (e.g., Oracle Database Enterprise Edition, commercial LDAP servers) are governed by separate agreements between the respective vendors and Licensee, and Licensor assumes no responsibility therefor.</p>
+<p><strong>6.3</strong> 라이선서는 고객 인프라의 가용성, 성능, 보안 또는 호환성에 대해 보증하지 않는다.</p>
+<p>Licensor does not warrant the availability, performance, security, or compatibility of Customer Infrastructure.</p>
+<hr>
+<h2 id="제7조-지적-재산권-article-7-intellectual-property">제7조 — 지적 재산권 / Article 7 — Intellectual Property</h2>
+<p><strong>7.1</strong> 소프트웨어(서드파티 소프트웨어 제외)에 대한 모든 지적 재산권은 라이선서에게 귀속된다.</p>
+<p>All intellectual property rights in the Software (excluding Third-Party Software) belong to Licensor.</p>
+<p><strong>7.2</strong> 본 계약은 라이선시에게 소프트웨어에 대한 소유권을 이전하지 않으며, 라이선시는 제2조에 명시된 사용권만을 취득한다.</p>
+<p>This Agreement does not transfer ownership of the Software to Licensee, and Licensee acquires only the usage rights specified in Article 2.</p>
+<p><strong>7.3</strong> 라이선시가 소프트웨어 사용 과정에서 라이선서에게 제안, 피드백 또는 개선 사항을 제공하는 경우, 라이선서는 이를 아무런 보상 없이 소프트웨어에 반영할 수 있다.</p>
+<p>If Licensee provides Licensor with any suggestions, feedback, or improvements in connection with the use of the Software, Licensor may incorporate them into the Software without any obligation of compensation.</p>
+<hr>
+<h2 id="제8조-보증-제한-article-8-warranty-disclaimer">제8조 — 보증 제한 / Article 8 — Warranty Disclaimer</h2>
+<p><strong>8.1</strong> 소프트웨어는 &quot;있는 그대로(AS IS)&quot; 및 &quot;이용 가능한 상태(AS AVAILABLE)&quot;로 제공된다.</p>
+<p>THE SOFTWARE IS PROVIDED &quot;AS IS&quot; AND &quot;AS AVAILABLE.&quot;</p>
+<p><strong>8.2</strong> 관련 법률이 허용하는 최대 범위 내에서, 라이선서는 상품성, 특정 목적 적합성, 비침해성, 정확성, 완전성 또는 오류 없는 운영에 대한 명시적이든 묵시적이든 어떠한 보증도 제공하지 않는다.</p>
+<p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, LICENSOR DISCLAIMS ALL WARRANTIES, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, NON-INFRINGEMENT, ACCURACY, COMPLETENESS, OR ERROR-FREE OPERATION.</p>
+<p><strong>8.3</strong> 라이선서는 소프트웨어가 라이선시의 요구 사항을 충족하거나, 소프트웨어의 운영이 중단 없이 또는 오류 없이 이루어질 것을 보증하지 않는다.</p>
+<p>Licensor does not warrant that the Software will meet Licensee&#39;s requirements or that the operation of the Software will be uninterrupted or error-free.</p>
+<hr>
+<h2 id="제9조-책임-제한-article-9-limitation-of-liability">제9조 — 책임 제한 / Article 9 — Limitation of Liability</h2>
+<p><strong>9.1</strong> 관련 법률이 허용하는 최대 범위 내에서, 라이선서는 어떠한 경우에도 간접 손해, 부수적 손해, 특별 손해, 결과적 손해 또는 징벌적 손해(데이터 손실, 영업 이익 손실, 영업 중단을 포함하되 이에 한하지 않음)에 대하여 책임을 지지 않는다. 이는 계약, 불법행위, 과실, 무과실 책임 또는 기타 어떠한 법적 근거에 의하든 마찬가지이며, 해당 손해의 가능성을 사전에 통보받았다 하더라도 동일하다.</p>
+<p>TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL LICENSOR BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES (INCLUDING BUT NOT LIMITED TO LOSS OF DATA, LOSS OF PROFITS, OR BUSINESS INTERRUPTION), WHETHER BASED ON CONTRACT, TORT, NEGLIGENCE, STRICT LIABILITY, OR ANY OTHER LEGAL THEORY, EVEN IF LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.</p>
+<p><strong>9.2</strong> 본 계약에 따른 라이선서의 총 누적 배상 책임은, 어떠한 경우에도 라이선시가 본 계약에 따라 라이선서에게 지급한 금액 또는 손해 발생 직전 12개월간 지급한 라이선스 비용 중 큰 금액을 초과하지 않는다.</p>
+<p>IN NO EVENT SHALL LICENSOR&#39;S TOTAL CUMULATIVE LIABILITY UNDER THIS AGREEMENT EXCEED THE GREATER OF (A) THE AMOUNTS PAID BY LICENSEE TO LICENSOR UNDER THIS AGREEMENT, OR (B) THE LICENSE FEES PAID DURING THE TWELVE (12) MONTHS IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO THE CLAIM.</p>
+<hr>
+<h2 id="제10조-계약-기간-및-해지-article-10-term-and-termination">제10조 — 계약 기간 및 해지 / Article 10 — Term and Termination</h2>
+<p><strong>10.1</strong> 본 계약은 라이선시가 소프트웨어를 설치하거나 사용하는 시점에 발효되며, 해지될 때까지 유효하다.</p>
+<p>This Agreement becomes effective when Licensee installs or uses the Software and remains in effect until terminated.</p>
+<p><strong>10.2</strong> 라이선시가 본 계약의 조건을 위반할 경우, 라이선서는 서면 통지를 통해 본 계약을 즉시 해지할 수 있다.</p>
+<p>Licensor may terminate this Agreement immediately upon written notice if Licensee breaches any term of this Agreement.</p>
+<p><strong>10.3</strong> 라이선시는 소프트웨어의 모든 복사본을 파기하고 라이선서에게 서면으로 통지함으로써 언제든지 본 계약을 해지할 수 있다.</p>
+<p>Licensee may terminate this Agreement at any time by destroying all copies of the Software and providing written notice to Licensor.</p>
+<p><strong>10.4</strong> 본 계약이 어떠한 사유로든 해지되는 경우, 라이선시는 소프트웨어의 모든 복사본을 즉시 파기하여야 하며, 요청 시 파기를 서면으로 확인하여야 한다.</p>
+<p>Upon termination of this Agreement for any reason, Licensee shall immediately destroy all copies of the Software and, upon request, certify in writing that such destruction has been completed.</p>
+<p><strong>10.5</strong> 제3조(사용 제한), 제5조(Oracle 프로그램), 제7조(지적 재산권), 제8조(보증 제한), 제9조(책임 제한) 및 제12조(일반 조항)는 본 계약의 해지 이후에도 유효하게 존속한다.</p>
+<p>Articles 3 (Restrictions), 5 (Oracle Programs), 7 (Intellectual Property), 8 (Warranty Disclaimer), 9 (Limitation of Liability), and 12 (General Provisions) shall survive any termination of this Agreement.</p>
+<hr>
+<h2 id="제11조-기밀-유지-article-11-confidentiality">제11조 — 기밀 유지 / Article 11 — Confidentiality</h2>
+<p><strong>11.1</strong> 라이선시는 소프트웨어의 구조, 알고리즘, 소스 코드 및 기술 정보를 기밀로 유지하여야 하며, 라이선서의 사전 서면 동의 없이 제3자에게 공개하여서는 아니 된다.</p>
+<p>Licensee shall keep confidential the structure, algorithms, source code, and technical information of the Software and shall not disclose them to any third party without Licensor&#39;s prior written consent.</p>
+<p><strong>11.2</strong> 본 기밀 유지 의무는 해당 정보가 (a) 라이선시의 귀책 사유 없이 공지의 사실이 된 경우, (b) 라이선시가 합법적으로 제3자로부터 기밀 유지 의무 없이 입수한 경우, 또는 (c) 법률 또는 관할 법원의 명령에 의해 공개가 요구되는 경우에는 적용되지 않는다.</p>
+<p>This confidentiality obligation does not apply to information that (a) becomes publicly known without fault of Licensee, (b) is lawfully obtained by Licensee from a third party without confidentiality obligations, or (c) is required to be disclosed by law or a court order of competent jurisdiction.</p>
+<hr>
+<h2 id="제12조-일반-조항-article-12-general-provisions">제12조 — 일반 조항 / Article 12 — General Provisions</h2>
+<p><strong>12.1 준거법 및 관할 (Governing Law and Jurisdiction)</strong></p>
+<p>본 계약은 대한민국 법률에 따라 해석되고 적용된다. 본 계약과 관련하여 발생하는 분쟁은 서울중앙지방법원을 제1심 전속관할 법원으로 한다.</p>
+<p>This Agreement shall be governed by and construed in accordance with the laws of the Republic of Korea. Any dispute arising in connection with this Agreement shall be subject to the exclusive jurisdiction of the Seoul Central District Court as the court of first instance.</p>
+<p><strong>12.2 분리가능성 (Severability)</strong></p>
+<p>본 계약의 어느 조항이 무효이거나 집행 불가능한 것으로 판정되는 경우, 해당 조항은 유효하고 집행 가능한 범위 내에서 최대한 효력을 유지하며, 나머지 조항은 완전한 효력을 유지한다.</p>
+<p>If any provision of this Agreement is held to be invalid or unenforceable, such provision shall be enforced to the maximum extent permissible, and the remaining provisions shall remain in full force and effect.</p>
+<p><strong>12.3 완전합의 (Entire Agreement)</strong></p>
+<p>본 계약은 본 계약의 주제에 관한 당사자 간의 완전한 합의를 구성하며, 본 주제에 관한 이전의 모든 구두 또는 서면 합의를 대체한다.</p>
+<p>This Agreement constitutes the entire agreement between the parties with respect to its subject matter and supersedes all prior oral or written agreements relating thereto.</p>
+<p><strong>12.4 양도 (Assignment)</strong></p>
+<p>라이선시는 라이선서의 사전 서면 동의 없이 본 계약 또는 본 계약에 따른 권리나 의무를 양도할 수 없다.</p>
+<p>Licensee may not assign this Agreement or any rights or obligations hereunder without the prior written consent of Licensor.</p>
+<p><strong>12.5 포기 (Waiver)</strong></p>
+<p>라이선서가 본 계약의 어느 조항에 대한 권리를 행사하지 않거나 행사를 지연하더라도 해당 권리의 포기로 간주되지 않는다.</p>
+<p>No failure or delay by Licensor in exercising any right under this Agreement shall constitute a waiver of that right.</p>
+<p><strong>12.6 통지 (Notices)</strong></p>
+<p>본 계약에 따른 모든 통지는 서면으로 하여야 하며, 등기우편, 이메일 또는 기타 수신 확인이 가능한 방법으로 상대방에게 전달하여야 한다.</p>
+<p>All notices under this Agreement shall be in writing and shall be delivered by registered mail, email, or other method capable of confirming receipt.</p>
+<p><strong>12.7 언어 (Language)</strong></p>
+<p>본 계약은 한국어와 영어로 병행 작성되었다. 양 언어 간에 해석상 차이가 있는 경우, 한국어 본이 우선한다.</p>
+<p>This Agreement is written in both Korean and English. In the event of any discrepancy between the two language versions, the Korean version shall prevail.</p>
+<hr>
+<h2 id="부록-a-서드파티-소프트웨어-목록-appendix-a-third-party-software-list">부록 A — 서드파티 소프트웨어 목록 / Appendix A — Third-Party Software List</h2>
+<p>본 부록은 소프트웨어에 포함된 주요 서드파티 라이브러리의 요약이다. 각 라이선스의 전문은 <code>THIRD-PARTY-NOTICES</code> 파일에 수록되어 있다. 상세 분석은 <code>LICENSE_COMPLIANCE.md</code>를 참조한다.</p>
+<p>This appendix summarizes the major third-party libraries included in the Software. The full text of each license is included in the <code>THIRD-PARTY-NOTICES</code> file. For detailed analysis, refer to <code>LICENSE_COMPLIANCE.md</code>.</p>
+<h3 id="a-1-c-라이브러리-c-libraries">A.1 C++ 라이브러리 / C++ Libraries</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이브러리</th>
+<th>라이선스</th>
+<th>유형</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Drogon</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Trantor</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>OpenSSL 3.0+</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>libpq</td>
+<td>PostgreSQL License</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td><strong>Oracle Instant Client</strong></td>
+<td><strong>OTN License</strong></td>
+<td><strong>Proprietary (제5조 적용)</strong></td>
+</tr>
+<tr>
+<td>nlohmann/json</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>jsoncpp</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>spdlog</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>fmt</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>libzip</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>zlib</td>
+<td>Zlib</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>libldap / liblber</td>
+<td>OLDAP-2.8</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>libuuid</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>curl</td>
+<td>curl (MIT-derivative)</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>c-ares</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>brotli</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>OpenJPEG</td>
+<td>BSD-2-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>libjpeg-turbo</td>
+<td>IJG + BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+</tbody></table></div>
+<h3 id="a-2-python-라이브러리-python-libraries">A.2 Python 라이브러리 / Python Libraries</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이브러리</th>
+<th>라이선스</th>
+<th>유형</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>FastAPI</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Uvicorn</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>SQLAlchemy</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>asyncpg</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>psycopg2-binary</td>
+<td>LGPL-3.0</td>
+<td>Weak Copyleft</td>
+</tr>
+<tr>
+<td>oracledb</td>
+<td>UPL-1.0 OR Apache-2.0</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>scikit-learn</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>pandas</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>numpy</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Pydantic</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>pydantic-settings</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>APScheduler</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+</tbody></table></div>
+<h3 id="a-3-frontend-라이브러리-frontend-libraries">A.3 Frontend 라이브러리 / Frontend Libraries</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이브러리</th>
+<th>라이선스</th>
+<th>유형</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>React / React DOM</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>React Router</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Axios</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>TanStack Query</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Zustand</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Recharts</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Lucide React</td>
+<td>ISC</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>react-arborist</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>i18n-iso-countries</td>
+<td>MIT</td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td>Preline</td>
+<td>MIT + Fair Use</td>
+<td>Custom</td>
+</tr>
+</tbody></table></div>
+<h3 id="a-4-infrastructure-인프라">A.4 Infrastructure / 인프라</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>소프트웨어</th>
+<th>라이선스</th>
+<th>배포 포함 여부</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>nginx</td>
+<td>BSD-2-Clause</td>
+<td>포함 (API Gateway 컨테이너)</td>
+</tr>
+<tr>
+<td>Docker Engine</td>
+<td>Apache-2.0</td>
+<td>미포함 (고객 환경 설치)</td>
+</tr>
+<tr>
+<td>Swagger UI</td>
+<td>Apache-2.0</td>
+<td>포함 (API 문서 컨테이너)</td>
+</tr>
+<tr>
+<td>PostgreSQL 서버</td>
+<td>PostgreSQL License</td>
+<td>미포함 (개발/테스트 전용)</td>
+</tr>
+<tr>
+<td>OpenLDAP 서버</td>
+<td>OLDAP-2.8</td>
+<td>미포함 (개발/테스트 전용)</td>
+</tr>
+<tr>
+<td>Oracle DB 서버</td>
+<td>Oracle 상용 라이선스</td>
+<td>미포함 (고객 인프라, 제6조 적용)</td>
+</tr>
+<tr>
+<td>상용 LDAP 서버</td>
+<td>해당 업체 라이선스</td>
+<td>미포함 (고객 인프라, 제6조 적용)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><strong>스마트코어 주식회사 / Smartcore Inc.</strong></p>
+<p>Copyright (c) 2026 Smartcore Inc. All rights reserved.</p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#제1조-정의-article-1-definitions">제1조 — 정의 / Article 1 — Definitions</a><a href="#제2조-라이선스-부여-article-2-grant-of-license">제2조 — 라이선스 부여 / Article 2 — Grant of License</a><a href="#제3조-사용-제한-article-3-restrictions">제3조 — 사용 제한 / Article 3 — Restrictions</a><a href="#제4조-서드파티-소프트웨어-article-4-third-party-software">제4조 — 서드파티 소프트웨어 / Article 4 — Third-Party Software</a><a href="#제5조-oracle-프로그램-특별-조항-article-5-oracle-programs-special-terms">제5조 — Oracle 프로그램 특별 조항 / Article 5 — Oracle Programs Special Terms</a><a href="#제6조-고객-책임-인프라-article-6-customer-provided-infrastructure">제6조 — 고객 책임 인프라 / Article 6 — Customer-Provided Infrastructure</a><a href="#제7조-지적-재산권-article-7-intellectual-property">제7조 — 지적 재산권 / Article 7 — Intellectual Property</a><a href="#제8조-보증-제한-article-8-warranty-disclaimer">제8조 — 보증 제한 / Article 8 — Warranty Disclaimer</a><a href="#제9조-책임-제한-article-9-limitation-of-liability">제9조 — 책임 제한 / Article 9 — Limitation of Liability</a><a href="#제10조-계약-기간-및-해지-article-10-term-and-termination">제10조 — 계약 기간 및 해지 / Article 10 — Term and Termination</a><a href="#제11조-기밀-유지-article-11-confidentiality">제11조 — 기밀 유지 / Article 11 — Confidentiality</a><a href="#제12조-일반-조항-article-12-general-provisions">제12조 — 일반 조항 / Article 12 — General Provisions</a><a href="#부록-a-서드파티-소프트웨어-목록-appendix-a-third-party-software-list">부록 A — 서드파티 소프트웨어 목록 / Appendix A — Third-Party Software List</a><a href="#a-1-c-라이브러리-c-libraries" style="padding-left:1rem">A.1 C++ 라이브러리 / C++ Libraries</a><a href="#a-2-python-라이브러리-python-libraries" style="padding-left:1rem">A.2 Python 라이브러리 / Python Libraries</a><a href="#a-3-frontend-라이브러리-frontend-libraries" style="padding-left:1rem">A.3 Frontend 라이브러리 / Frontend Libraries</a><a href="#a-4-infrastructure-인프라" style="padding-left:1rem">A.4 Infrastructure / 인프라</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

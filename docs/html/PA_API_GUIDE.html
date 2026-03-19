@@ -1,0 +1,2867 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PA API Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html" class="active">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>PA API Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="pa-service-api-guide-for-external-clients">PA Service API Guide for External Clients</h1>
+<p><strong>Version</strong>: 2.1.12
+<strong>Last Updated</strong>: 2026-02-25
+<strong>API Gateway</strong>: HTTP (:80) / HTTPS (:443) / Internal (:8080)</p>
+<hr>
+<h2 id="overview">Overview</h2>
+<p>PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) 검증을 수행하는 REST API 서비스입니다. 전자여권 판독기가 연결된 외부 클라이언트 애플리케이션에서 이 API를 사용하여 여권의 진위를 검증할 수 있습니다.</p>
+<p><strong>세 가지 검증/분석 방식</strong>을 제공합니다:</p>
+<ul>
+<li><strong>전체 검증</strong> (<code>POST /api/pa/verify</code>): SOD + Data Groups를 전송하여 8단계 전체 PA 검증 수행</li>
+<li><strong>간편 조회</strong> (<code>POST /api/certificates/pa-lookup</code>): DSC Subject DN 또는 Fingerprint만으로 기존 Trust Chain 검증 결과를 즉시 조회 (v2.1.3+)</li>
+<li><strong>AI 인증서 분석</strong> (<code>GET /api/ai/certificate/{fingerprint}</code>): ML 기반 이상 탐지 및 위험도 분석 결과 조회 (v2.1.7+)</li>
+</ul>
+<h3 id="base-url">Base URL</h3>
+<p><strong>API Gateway (권장)</strong>:</p>
+<pre><code># HTTPS (Private CA 인증서 필요 — ca.crt를 클라이언트에 배포)
+PA Service:         https://pkd.smartcoreinc.com/api/pa
+PKD Management:     https://pkd.smartcoreinc.com/api
+AI Analysis:        https://pkd.smartcoreinc.com/api/ai
+
+# HTTP (내부 네트워크)
+PA Service:         http://pkd.smartcoreinc.com/api/pa
+PKD Management:     http://pkd.smartcoreinc.com/api
+AI Analysis:        http://pkd.smartcoreinc.com/api/ai</code></pre>
+<p><strong>WiFi 네트워크 (SC-WiFi) 접속</strong>:</p>
+<pre><code># Luckfox WiFi IP (192.168.1.70) — 같은 WiFi 네트워크 내에서 접근
+PA Service:         http://192.168.1.70:8080/api/pa
+PKD Management:     http://192.168.1.70:8080/api
+AI Analysis:        http://192.168.1.70:8080/api/ai
+Frontend:           http://192.168.1.70</code></pre>
+<p><strong>유선 LAN (내부 네트워크) 접속</strong>:</p>
+<pre><code># Luckfox 유선 IP (192.168.100.10)
+PA Service:         http://192.168.100.10:8080/api/pa
+PKD Management:     http://192.168.100.10:8080/api
+AI Analysis:        http://192.168.100.10:8080/api/ai
+Frontend:           http://192.168.100.10</code></pre>
+<blockquote>
+<p><strong>Note</strong>: 모든 API 요청은 API Gateway를 통해 라우팅됩니다. HTTPS와 HTTP 모두 지원됩니다. HTTPS 사용 시 Private CA 인증서(<code>ca.crt</code>)를 클라이언트에 설치해야 합니다. 전체 검증(<code>/api/pa/verify</code>)은 PA Service로, 간편 조회(<code>/api/certificates/pa-lookup</code>)는 PKD Management로, AI 분석(<code>/api/ai/*</code>)은 AI Analysis Service로 라우팅됩니다.</p>
+<p><strong>⚠ 현재 상태 (2026-02-23)</strong>: <code>192.168.100.11</code> 하드웨어 장애로 정지. <code>192.168.100.10</code> (유선) 또는 <code>192.168.1.70</code> (WiFi, SC-WiFi) 으로 접근.</p>
+</blockquote>
+<h3 id="인증">인증</h3>
+<p>PA Service의 모든 엔드포인트는 <strong>인증 불필요</strong>(Public)입니다. 전자여권 판독기 등 외부 클라이언트에서 별도 인증 없이 호출할 수 있습니다.</p>
+<h4 id="api-key-인증-선택-v2-1-10">API Key 인증 (선택, v2.1.10+)</h4>
+<p>관리자가 발급한 <strong>API Key</strong>를 <code>X-API-Key</code> 헤더에 포함하면, 클라이언트별 사용량 추적 및 Rate Limiting이 적용됩니다. API Key가 없어도 Public 엔드포인트는 정상 호출 가능합니다.</p>
+<pre><code>X-API-Key: icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구분</th>
+<th>인증 없음</th>
+<th>API Key 사용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Public 엔드포인트 호출</td>
+<td>O</td>
+<td>O</td>
+</tr>
+<tr>
+<td>클라이언트별 사용량 추적</td>
+<td>X</td>
+<td>O</td>
+</tr>
+<tr>
+<td>Rate Limiting (분/시/일)</td>
+<td>X</td>
+<td>O (클라이언트별 개별 한도)</td>
+</tr>
+<tr>
+<td>권한(Permission) 제어</td>
+<td>X</td>
+<td>O (<code>pa:verify</code>, <code>pa:read</code> 등)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>API Key 발급</strong>: 시스템 관리자가 <code>/admin/api-clients</code> 페이지 또는 <code>POST /api/auth/api-clients</code> API로 발급합니다. 자세한 내용은 <a href="API_CLIENT_USER_GUIDE.html">API_CLIENT_USER_GUIDE.md</a>를 참조하세요.</p>
+</blockquote>
+<h4 id="pa-관련-permission">PA 관련 Permission</h4>
+<p>API Key에 할당 가능한 PA 관련 권한:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>접근 가능 엔드포인트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pa:verify</code></td>
+<td><code>POST /api/pa/verify</code>, <code>POST /api/pa/parse-sod</code>, <code>POST /api/pa/parse-dg1</code>, <code>POST /api/pa/parse-dg2</code>, <code>POST /api/pa/parse-mrz-text</code></td>
+</tr>
+<tr>
+<td><code>pa:read</code></td>
+<td><code>GET /api/pa/history</code>, <code>GET /api/pa/{id}</code>, <code>GET /api/pa/{id}/datagroups</code>, <code>GET /api/pa/statistics</code></td>
+</tr>
+<tr>
+<td><code>cert:read</code></td>
+<td><code>POST /api/certificates/pa-lookup</code>, <code>GET /api/certificates/search</code></td>
+</tr>
+<tr>
+<td><code>ai:read</code></td>
+<td><code>GET /api/ai/certificate/{fingerprint}</code>, <code>GET /api/ai/anomalies</code>, <code>GET /api/ai/statistics</code>, 리포트 API</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Note</strong>: API Key 없이도 위 엔드포인트는 모두 Public으로 접근 가능합니다. Permission은 API Key를 사용하는 경우에만 적용됩니다.</p>
+</blockquote>
+<hr>
+<h2 id="api-endpoints-summary">API Endpoints Summary</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Method</th>
+<th>Path</th>
+<th>Service</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>POST</code></td>
+<td><code>/api/pa/verify</code></td>
+<td>PA</td>
+<td>PA 검증 (8단계 전체 프로세스)</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><strong><code>POST</code></strong></td>
+<td><strong><code>/api/certificates/pa-lookup</code></strong></td>
+<td><strong>PKD Mgmt</strong></td>
+<td><strong>간편 조회: DSC Subject DN/Fingerprint → Trust Chain 결과 (v2.1.3+)</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-sod</code></td>
+<td>PA</td>
+<td>SOD 메타데이터 파싱</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg1</code></td>
+<td>PA</td>
+<td>DG1 → MRZ 파싱</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg2</code></td>
+<td>PA</td>
+<td>DG2 → 얼굴 이미지 추출</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-mrz-text</code></td>
+<td>PA</td>
+<td>MRZ 텍스트 파싱</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>GET</code></td>
+<td><code>/api/pa/history</code></td>
+<td>PA</td>
+<td>검증 이력 조회</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>GET</code></td>
+<td><code>/api/pa/{id}</code></td>
+<td>PA</td>
+<td>검증 상세 조회</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>GET</code></td>
+<td><code>/api/pa/{id}/datagroups</code></td>
+<td>PA</td>
+<td>Data Groups 상세 조회</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>GET</code></td>
+<td><code>/api/pa/statistics</code></td>
+<td>PA</td>
+<td>검증 통계</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>GET</code></td>
+<td><code>/api/health</code></td>
+<td>PA</td>
+<td>서비스 헬스 체크</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>GET</code></td>
+<td><code>/api/health/database</code></td>
+<td>PA</td>
+<td>DB 연결 상태</td>
+</tr>
+<tr>
+<td>13</td>
+<td><code>GET</code></td>
+<td><code>/api/health/ldap</code></td>
+<td>PA</td>
+<td>LDAP 연결 상태</td>
+</tr>
+<tr>
+<td><strong>14</strong></td>
+<td><strong><code>GET</code></strong></td>
+<td><strong><code>/api/ai/certificate/{fingerprint}</code></strong></td>
+<td><strong>AI</strong></td>
+<td><strong>인증서 AI 분석 결과 조회 (v2.1.7+)</strong></td>
+</tr>
+<tr>
+<td>15</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/anomalies</code></td>
+<td>AI</td>
+<td>이상 인증서 목록 (필터/페이지네이션) (v2.1.7+)</td>
+</tr>
+<tr>
+<td>16</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/statistics</code></td>
+<td>AI</td>
+<td>AI 분석 전체 통계 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>17</td>
+<td><code>POST</code></td>
+<td><code>/api/ai/analyze</code></td>
+<td>AI</td>
+<td>전체 인증서 일괄 분석 실행 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>18</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/analyze/status</code></td>
+<td>AI</td>
+<td>분석 작업 진행 상태 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>19</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/country-maturity</code></td>
+<td>AI</td>
+<td>국가별 PKI 성숙도 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>20</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/algorithm-trends</code></td>
+<td>AI</td>
+<td>알고리즘 마이그레이션 트렌드 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>21</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/risk-distribution</code></td>
+<td>AI</td>
+<td>위험 수준별 분포 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>22</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/country/{code}</code></td>
+<td>AI</td>
+<td>국가별 상세 분석 (v2.1.7+)</td>
+</tr>
+<tr>
+<td>23</td>
+<td><code>GET</code></td>
+<td><code>/api/ai/health</code></td>
+<td>AI</td>
+<td>AI 서비스 헬스 체크 (v2.1.7+)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-pa-검증-passive-authentication">1. PA 검증 (Passive Authentication)</h2>
+<p>전자여권의 SOD와 Data Groups를 검증합니다. <strong>8단계 검증 프로세스</strong>를 수행하며, 검증 중 발견된 DSC(Document Signer Certificate)를 자동으로 Local PKD에 등록합니다.</p>
+<p><strong>Endpoint</strong>: <code>POST /api/pa/verify</code></p>
+<h3 id="검증-프로세스-8단계">검증 프로세스 (8단계)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Name</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>SOD Parse</td>
+<td>SOD에서 CMS 구조, 해시 알고리즘, DG 해시 추출</td>
+</tr>
+<tr>
+<td>2</td>
+<td>DSC Extract</td>
+<td>SOD의 SignedData에서 DSC 인증서 추출</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Trust Chain</td>
+<td>DSC → CSCA 신뢰 체인 검증 (공개키 서명 검증)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>CSCA Lookup</td>
+<td>LDAP에서 CSCA 인증서 검색 (Link Certificate 포함)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>SOD Signature</td>
+<td>SOD 서명 유효성 검증</td>
+</tr>
+<tr>
+<td>6</td>
+<td>DG Hash</td>
+<td>Data Group 해시값 검증 (SOD 내 기대값과 비교)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>CRL Check</td>
+<td>CRL 유효기간 확인 + DSC 인증서 폐지 여부 확인</td>
+</tr>
+<tr>
+<td>8</td>
+<td>DSC Auto-Registration</td>
+<td>신규 DSC를 Local PKD에 자동 등록 (<code>source_type=&#39;PA_EXTRACTED&#39;</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="request">Request</h3>
+<pre><code class="language-json">{
+  "sod": "&lt;Base64 encoded SOD&gt;",
+  "dataGroups": {
+    "1": "&lt;Base64 encoded DG1&gt;",
+    "2": "&lt;Base64 encoded DG2&gt;",
+    "14": "&lt;Base64 encoded DG14 (optional)&gt;"
+  },
+  "issuingCountry": "KR",
+  "documentNumber": "M12345678",
+  "requestedBy": "admin"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>sod</td>
+<td>string</td>
+<td><strong>필수</strong></td>
+<td>Base64 인코딩된 SOD (Security Object Document)</td>
+</tr>
+<tr>
+<td>dataGroups</td>
+<td>object</td>
+<td><strong>필수</strong></td>
+<td>DG 번호를 키로, Base64 인코딩된 데이터를 값으로 하는 객체</td>
+</tr>
+<tr>
+<td>issuingCountry</td>
+<td>string</td>
+<td>선택</td>
+<td>국가 코드 (DSC <code>C=</code> → DG1 MRZ 순으로 자동 추출)</td>
+</tr>
+<tr>
+<td>documentNumber</td>
+<td>string</td>
+<td>선택</td>
+<td>여권 번호 (DG1 MRZ에서 자동 추출 가능)</td>
+</tr>
+<tr>
+<td>requestedBy</td>
+<td>string</td>
+<td>선택</td>
+<td>요청자 사용자명 (프론트엔드에서 로그인 사용자 자동 전달, 미전달 시 <code>anonymous</code>)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>dataGroups 형식</strong>: 키는 <code>&quot;1&quot;</code>, <code>&quot;2&quot;</code>, <code>&quot;14&quot;</code> (숫자 문자열) 또는 <code>&quot;DG1&quot;</code>, <code>&quot;DG2&quot;</code>, <code>&quot;DG14&quot;</code> 형식 모두 지원됩니다. 배열 형식 <code>[{&quot;number&quot;:&quot;DG1&quot;,&quot;data&quot;:&quot;...&quot;}]</code>도 지원됩니다.</p>
+</blockquote>
+<h3 id="response-success-valid">Response (Success - VALID)</h3>
+<blockquote>
+<p><strong>Note</strong>: 아래 예시에서 <code>dscNonConformant</code>, <code>pkdConformanceCode</code>, <code>pkdConformanceText</code> 필드는 DSC가 ICAO PKD Non-Conformant인 경우에만 포함됩니다. 대부분의 검증에서는 이 필드가 포함되지 않습니다.</p>
+</blockquote>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "VALID",
+    "verificationTimestamp": "2026-02-13T10:30:00",
+    "processingDurationMs": 245,
+    "issuingCountry": "KR",
+    "documentNumber": "M12345678",
+
+    "certificateChainValidation": {
+      "valid": true,
+      "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Document Signer KR 01",
+      "dscSerialNumber": "1A2B3C4D5E6F",
+      "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+      "cscaFingerprint": "SHA256:ABCD1234...",
+      "countryCode": "KR",
+      "notBefore": "2024-01-01T00:00:00Z",
+      "notAfter": "2029-12-31T23:59:59Z",
+      "crlStatus": "NOT_REVOKED",
+      "crlThisUpdate": "2026-02-01T00:00:00",
+      "crlNextUpdate": "2026-03-01T00:00:00",
+      "dscExpired": false,
+      "cscaExpired": false,
+      "validAtSigningTime": true,
+      "expirationStatus": "VALID",
+      "expirationMessage": "",
+      "dscNonConformant": true,
+      "pkdConformanceCode": "ERR:CSCA.CDP.14",
+      "pkdConformanceText": "The Subject Public Key Info field does not contain an rsaEncryption OID"
+    },
+
+    "sodSignatureValidation": {
+      "valid": true,
+      "hashAlgorithm": "SHA-256",
+      "signatureAlgorithm": "SHA256withRSA",
+      "algorithm": "SHA256withRSA"
+    },
+
+    "dataGroupValidation": {
+      "totalGroups": 2,
+      "validGroups": 2,
+      "invalidGroups": 0,
+      "details": {
+        "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
+        "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." }
+      }
+    },
+
+    "dscAutoRegistration": {
+      "registered": true,
+      "newlyRegistered": false,
+      "certificateId": "660e8400-e29b-41d4-a716-446655440099",
+      "fingerprint": "a1b2c3d4e5f6...(SHA256 hex 64 chars)",
+      "countryCode": "KR"
+    }
+  }
+}</code></pre>
+<h3 id="response-failure-invalid">Response (Failure - INVALID)</h3>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440001",
+    "status": "INVALID",
+    "verificationTimestamp": "2026-02-13T10:31:00",
+    "processingDurationMs": 156,
+    "issuingCountry": "KR",
+    "documentNumber": "M12345678",
+
+    "certificateChainValidation": {
+      "valid": false,
+      "message": "CSCA certificate not found for issuer",
+      "dscExpired": false,
+      "cscaExpired": false,
+      "validAtSigningTime": false,
+      "expirationStatus": "VALID",
+      "expirationMessage": ""
+    },
+
+    "sodSignatureValidation": {
+      "valid": true,
+      "hashAlgorithm": "SHA-256",
+      "signatureAlgorithm": "SHA256withRSA"
+    },
+
+    "dataGroupValidation": {
+      "totalGroups": 2,
+      "validGroups": 2,
+      "invalidGroups": 0,
+      "details": {
+        "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
+        "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." }
+      }
+    }
+  }
+}</code></pre>
+<h3 id="response-error-sod-파싱-실패-등">Response (Error - SOD 파싱 실패 등)</h3>
+<pre><code class="language-json">{
+  "success": false,
+  "error": "SOD parsing failed: Invalid CMS structure"
+}</code></pre>
+<h3 id="certificate-chain-validation-fields">Certificate Chain Validation Fields</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>valid</td>
+<td>boolean</td>
+<td>인증서 체인 검증 성공 여부</td>
+</tr>
+<tr>
+<td>dscSubject</td>
+<td>string</td>
+<td>DSC 인증서 Subject DN</td>
+</tr>
+<tr>
+<td>dscSerialNumber</td>
+<td>string</td>
+<td>DSC 인증서 시리얼 번호</td>
+</tr>
+<tr>
+<td>cscaSubject</td>
+<td>string</td>
+<td>CSCA 인증서 Subject DN</td>
+</tr>
+<tr>
+<td>cscaFingerprint</td>
+<td>string</td>
+<td>CSCA 인증서 SHA256 지문</td>
+</tr>
+<tr>
+<td>countryCode</td>
+<td>string</td>
+<td>국가 코드 (추출 우선순위: 요청 파라미터 → DG1 MRZ → DSC issuer <code>C=</code> → <code>&quot;XX&quot;</code>)</td>
+</tr>
+<tr>
+<td>notBefore</td>
+<td>string</td>
+<td>DSC 인증서 유효 시작일</td>
+</tr>
+<tr>
+<td>notAfter</td>
+<td>string</td>
+<td>DSC 인증서 유효 종료일</td>
+</tr>
+<tr>
+<td>crlStatus</td>
+<td>string</td>
+<td>CRL 상태: <code>NOT_REVOKED</code>, <code>REVOKED</code>, <code>CRL_EXPIRED</code>, <code>UNKNOWN</code></td>
+</tr>
+<tr>
+<td>crlThisUpdate</td>
+<td>string</td>
+<td>CRL 발행일 (ISO 8601, 예: <code>2026-02-01T00:00:00</code>)</td>
+</tr>
+<tr>
+<td>crlNextUpdate</td>
+<td>string</td>
+<td>CRL 다음 업데이트 예정일 (ISO 8601, 예: <code>2026-03-01T00:00:00</code>)</td>
+</tr>
+<tr>
+<td>dscExpired</td>
+<td>boolean</td>
+<td>DSC 인증서 만료 여부</td>
+</tr>
+<tr>
+<td>cscaExpired</td>
+<td>boolean</td>
+<td>CSCA 인증서 만료 여부</td>
+</tr>
+<tr>
+<td>validAtSigningTime</td>
+<td>boolean</td>
+<td>여권 서명 당시 인증서 유효 여부 (Point-in-Time Validation)</td>
+</tr>
+<tr>
+<td>expirationStatus</td>
+<td>string</td>
+<td>만료 상태: <code>VALID</code>, <code>WARNING</code>, <code>EXPIRED</code></td>
+</tr>
+<tr>
+<td>expirationMessage</td>
+<td>string</td>
+<td>만료 상태 설명 메시지</td>
+</tr>
+<tr>
+<td>dscNonConformant</td>
+<td>boolean</td>
+<td>DSC가 ICAO PKD Non-Conformant(비준수)인 경우 <code>true</code> (v2.1.4+, 해당 시에만 포함)</td>
+</tr>
+<tr>
+<td>pkdConformanceCode</td>
+<td>string</td>
+<td>ICAO PKD 비준수 사유 코드 (예: <code>ERR:CSCA.CDP.14</code>) (v2.1.4+, <code>dscNonConformant=true</code> 시에만 포함)</td>
+</tr>
+<tr>
+<td>pkdConformanceText</td>
+<td>string</td>
+<td>ICAO PKD 비준수 사유 설명 (v2.1.4+, <code>dscNonConformant=true</code> 시에만 포함)</td>
+</tr>
+</tbody></table></div>
+<h3 id="dsc-auto-registration-fields-v2-1-0">DSC Auto-Registration Fields (v2.1.0+)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>registered</td>
+<td>boolean</td>
+<td>DSC 등록 성공 여부</td>
+</tr>
+<tr>
+<td>newlyRegistered</td>
+<td>boolean</td>
+<td><code>true</code>: 신규 등록, <code>false</code>: 이미 존재</td>
+</tr>
+<tr>
+<td>certificateId</td>
+<td>string (UUID)</td>
+<td>DB 인증서 레코드 ID</td>
+</tr>
+<tr>
+<td>fingerprint</td>
+<td>string</td>
+<td>DSC SHA-256 지문 (hex, 64자)</td>
+</tr>
+<tr>
+<td>countryCode</td>
+<td>string</td>
+<td>DSC 국가 코드</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Note</strong>: <code>dscAutoRegistration</code> 필드는 DSC 자동 등록이 성공한 경우에만 포함됩니다. 자동 등록은 PA 검증 결과에 영향을 주지 않습니다 (검증이 INVALID여도 DSC 등록은 시도됩니다).</p>
+</blockquote>
+<blockquote>
+<p><strong>Point-in-Time Validation (v1.2.0+)</strong>: ICAO 9303 표준에 따라, 인증서가 현재 만료되었더라도 여권 서명 당시에 유효했다면 <code>validAtSigningTime</code>이 <code>true</code>로 설정됩니다. 이 경우 <code>expirationStatus</code>는 <code>EXPIRED</code>이지만 검증은 성공(<code>valid: true</code>)할 수 있습니다.</p>
+</blockquote>
+<blockquote>
+<p><strong>DSC Non-Conformant 상태 (v2.1.4+)</strong>: DSC가 ICAO PKD의 비준수(Non-Conformant) 인증서로 분류된 경우 <code>dscNonConformant</code>, <code>pkdConformanceCode</code>, <code>pkdConformanceText</code> 필드가 응답에 포함됩니다. Non-Conformant는 ICAO Doc 9303 기술 사양 비준수를 의미하며, 인증서의 유효성과는 독립적입니다. 검증 결과(<code>valid</code>)는 Trust Chain, 서명 검증, CRL 상태에 의해 결정됩니다. 자세한 내용은 <a href="DSC_NC_HANDLING.html">DSC_NC_HANDLING.md</a>를 참조하세요.</p>
+</blockquote>
+<hr>
+<h2 id="2-간편-조회-trust-chain-lookup-v2-1-3">2. 간편 조회 - Trust Chain Lookup (v2.1.3+)</h2>
+<p>SOD/DG 파일을 전송하지 않고, DSC의 Subject DN 또는 Fingerprint만으로 기존에 수행된 Trust Chain 검증 결과를 DB에서 즉시 조회합니다.</p>
+<p><strong>Endpoint</strong>: <code>POST /api/certificates/pa-lookup</code></p>
+<blockquote>
+<p><strong>Note</strong>: 이 엔드포인트는 PKD Management 서비스에서 제공됩니다 (PA Service가 아님). API Gateway를 통해 <code>/api/certificates/pa-lookup</code>으로 접근합니다.</p>
+</blockquote>
+<h3 id="전체-검증-vs-간편-조회">전체 검증 vs 간편 조회</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>전체 검증 (<code>/api/pa/verify</code>)</th>
+<th>간편 조회 (<code>/api/certificates/pa-lookup</code>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>입력</td>
+<td>SOD + Data Groups (Base64)</td>
+<td>Subject DN 또는 Fingerprint (문자열)</td>
+</tr>
+<tr>
+<td>처리</td>
+<td>CMS 파싱, 서명 검증, 해시 비교</td>
+<td>DB 조회 (단순 SELECT)</td>
+</tr>
+<tr>
+<td>응답 시간</td>
+<td>100~500ms</td>
+<td>5~20ms</td>
+</tr>
+<tr>
+<td>SOD 서명 검증</td>
+<td>O</td>
+<td>X (기존 결과 참조)</td>
+</tr>
+<tr>
+<td>DG 해시 검증</td>
+<td>O</td>
+<td>X (해당 없음)</td>
+</tr>
+<tr>
+<td>Trust Chain 결과</td>
+<td>실시간 검증</td>
+<td>파일 업로드 시 수행된 결과 조회</td>
+</tr>
+<tr>
+<td>DSC 자동 등록</td>
+<td>O</td>
+<td>X</td>
+</tr>
+<tr>
+<td>사용 시나리오</td>
+<td>최초 여권 검증</td>
+<td>이미 알려진 DSC의 상태 확인</td>
+</tr>
+</tbody></table></div>
+<h3 id="request">Request</h3>
+<p>Subject DN으로 조회:</p>
+<pre><code class="language-json">{
+  "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"
+}</code></pre>
+<p>Fingerprint로 조회:</p>
+<pre><code class="language-json">{
+  "fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>subjectDn</td>
+<td>string</td>
+<td>택1 필수</td>
+<td>DSC Subject DN (대소문자 무시 비교)</td>
+</tr>
+<tr>
+<td>fingerprint</td>
+<td>string</td>
+<td>택1 필수</td>
+<td>DSC SHA-256 Fingerprint (hex, 64자)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><code>subjectDn</code>과 <code>fingerprint</code> 중 하나만 제공하면 됩니다. 둘 다 제공된 경우 <code>subjectDn</code>이 우선 적용됩니다.</p>
+</blockquote>
+<h3 id="response-success-검증-결과-존재">Response (Success - 검증 결과 존재)</h3>
+<p><strong>Conformant DSC (일반적인 경우)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "validation": {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "certificateType": "DSC",
+    "countryCode": "KR",
+    "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234",
+    "issuerDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "serialNumber": "1A2B3C4D",
+    "validationStatus": "VALID",
+    "trustChainValid": true,
+    "trustChainMessage": "",
+    "trustChainPath": "DSC → CSCA",
+    "cscaFound": true,
+    "cscaSubjectDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "signatureValid": true,
+    "signatureAlgorithm": "SHA256withRSA",
+    "validityPeriodValid": true,
+    "notBefore": "2024-01-01 00:00:00",
+    "notAfter": "2029-12-31 23:59:59",
+    "revocationStatus": "not_revoked",
+    "crlChecked": true,
+    "fingerprintSha256": "a1b2c3d4e5f6...",
+    "validatedAt": "2026-02-14T10:30:00"
+  }
+}</code></pre>
+<p><strong>Non-Conformant DSC_NC (v2.1.4+)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "validation": {
+    "id": "660e8400-e29b-41d4-a716-446655440002",
+    "certificateType": "DSC_NC",
+    "countryCode": "DE",
+    "subjectDn": "/C=DE/O=Federal Republic of Germany/CN=Document Signer DE 42",
+    "issuerDn": "/C=DE/O=Federal Republic of Germany/CN=Country Signing CA DE",
+    "serialNumber": "5A6B7C8D",
+    "validationStatus": "VALID",
+    "trustChainValid": true,
+    "trustChainPath": "DSC → CSCA",
+    "cscaFound": true,
+    "cscaSubjectDn": "/C=DE/O=Federal Republic of Germany/CN=Country Signing CA DE",
+    "signatureValid": true,
+    "signatureAlgorithm": "SHA256withECDSA",
+    "validityPeriodValid": true,
+    "notBefore": "2020-01-01 00:00:00",
+    "notAfter": "2025-12-31 23:59:59",
+    "revocationStatus": "not_revoked",
+    "crlChecked": true,
+    "fingerprintSha256": "e5f6a7b8c9d0...",
+    "validatedAt": "2026-02-14T11:00:00",
+    "pkdConformanceCode": "ERR:CSCA.CDP.14",
+    "pkdConformanceText": "The Subject Public Key Info field does not contain an rsaEncryption OID",
+    "pkdVersion": "90"
+  }
+}</code></pre>
+<h3 id="response-not-found-dsc가-db에-없음">Response (Not Found - DSC가 DB에 없음)</h3>
+<pre><code class="language-json">{
+  "success": true,
+  "validation": null,
+  "message": "No validation result found for the given subjectDn"
+}</code></pre>
+<h3 id="response-fields">Response Fields</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>validationStatus</td>
+<td>string</td>
+<td><code>VALID</code>, <code>EXPIRED_VALID</code>, <code>INVALID</code>, <code>PENDING</code>, <code>ERROR</code></td>
+</tr>
+<tr>
+<td>trustChainValid</td>
+<td>boolean</td>
+<td>DSC → CSCA 신뢰 체인 검증 성공 여부</td>
+</tr>
+<tr>
+<td>trustChainPath</td>
+<td>string</td>
+<td>신뢰 체인 경로 (예: &quot;DSC → Link → CSCA&quot;)</td>
+</tr>
+<tr>
+<td>cscaFound</td>
+<td>boolean</td>
+<td>CSCA 인증서 검색 성공 여부</td>
+</tr>
+<tr>
+<td>signatureValid</td>
+<td>boolean</td>
+<td>DSC 서명 검증 성공 여부</td>
+</tr>
+<tr>
+<td>crlChecked</td>
+<td>boolean</td>
+<td>CRL 검사 수행 여부</td>
+</tr>
+<tr>
+<td>revocationStatus</td>
+<td>string</td>
+<td>폐지 상태: <code>not_revoked</code>, <code>revoked</code>, <code>unknown</code></td>
+</tr>
+<tr>
+<td>fingerprintSha256</td>
+<td>string</td>
+<td>DSC SHA-256 지문 (hex, 64자)</td>
+</tr>
+<tr>
+<td>pkdConformanceCode</td>
+<td>string</td>
+<td>ICAO PKD 비준수 사유 코드 (v2.1.4+, <code>certificateType=&quot;DSC_NC&quot;</code> 시에만 포함)</td>
+</tr>
+<tr>
+<td>pkdConformanceText</td>
+<td>string</td>
+<td>ICAO PKD 비준수 사유 설명 (v2.1.4+, <code>certificateType=&quot;DSC_NC&quot;</code> 시에만 포함)</td>
+</tr>
+<tr>
+<td>pkdVersion</td>
+<td>string</td>
+<td>ICAO PKD 버전 (v2.1.4+, <code>certificateType=&quot;DSC_NC&quot;</code> 시에만 포함)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-sod-파싱-sod-parse">3. SOD 파싱 {#sod-parse}</h2>
+<p>SOD 메타데이터를 추출합니다 (검증 없이 파싱만 수행).</p>
+<p><strong>Endpoint</strong>: <code>POST /api/pa/parse-sod</code></p>
+<h3 id="request">Request</h3>
+<pre><code class="language-json">{
+  "sod": "&lt;Base64 encoded SOD&gt;"
+}</code></pre>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "success": true,
+  "sodSize": 4096,
+  "hashAlgorithm": "SHA-256",
+  "hashAlgorithmOid": "2.16.840.1.101.3.4.2.1",
+  "signatureAlgorithm": "SHA256withRSA",
+  "hasIcaoWrapper": true,
+  "dataGroupCount": 5,
+
+  "dscCertificate": {
+    "subjectDn": "/C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01",
+    "issuerDn": "/C=KR/O=Ministry of Foreign Affairs/CN=CSCA KR",
+    "serialNumber": "1A2B3C4D",
+    "notBefore": "Jan 01 00:00:00 2024 GMT",
+    "notAfter": "Dec 31 23:59:59 2029 GMT",
+    "countryCode": "KR"
+  },
+
+  "containedDataGroups": [
+    { "dgNumber": 1, "dgName": "DG1", "hashValue": "abc123...", "hashLength": 32 },
+    { "dgNumber": 2, "dgName": "DG2", "hashValue": "def456...", "hashLength": 32 },
+    { "dgNumber": 11, "dgName": "DG11", "hashValue": "ghi789...", "hashLength": 32 },
+    { "dgNumber": 12, "dgName": "DG12", "hashValue": "jkl012...", "hashLength": 32 },
+    { "dgNumber": 14, "dgName": "DG14", "hashValue": "mno345...", "hashLength": 32 }
+  ],
+
+  "hasDg14": true,
+  "hasDg15": false
+}</code></pre>
+<hr>
+<h2 id="4-dg1-파싱-mrz">4. DG1 파싱 (MRZ)</h2>
+<p>DG1에서 MRZ 정보를 추출합니다.</p>
+<p><strong>Endpoint</strong>: <code>POST /api/pa/parse-dg1</code></p>
+<h3 id="request">Request</h3>
+<pre><code class="language-json">{
+  "dg1": "&lt;Base64 encoded DG1&gt;"
+}</code></pre>
+<blockquote>
+<p><code>&quot;dg1Base64&quot;</code> 키도 지원됩니다.</p>
+</blockquote>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "success": true,
+  "mrzLine1": "P&lt;KORKIM&lt;&lt;MINHO&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;",
+  "mrzLine2": "M123456784KOR9005151M3005148&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;02",
+  "mrzFull": "P&lt;KORKIM&lt;&lt;MINHO&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;M123456784KOR9005151M3005148&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;02",
+
+  "documentType": "P",
+  "issuingCountry": "KOR",
+  "surname": "KIM",
+  "givenNames": "MINHO",
+  "fullName": "KIM MINHO",
+  "documentNumber": "M12345678",
+  "nationality": "KOR",
+  "dateOfBirth": "1990-05-15",
+  "dateOfBirthRaw": "900515",
+  "sex": "M",
+  "dateOfExpiry": "2030-05-14",
+  "dateOfExpiryRaw": "300514",
+  "optionalData1": ""
+}</code></pre>
+<hr>
+<h2 id="5-dg2-파싱-얼굴-이미지">5. DG2 파싱 (얼굴 이미지)</h2>
+<p>DG2에서 얼굴 이미지를 추출합니다.</p>
+<p><strong>Endpoint</strong>: <code>POST /api/pa/parse-dg2</code></p>
+<h3 id="request">Request</h3>
+<pre><code class="language-json">{
+  "dg2": "&lt;Base64 encoded DG2&gt;"
+}</code></pre>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "success": true,
+  "dg2Size": 15000,
+  "faceCount": 1,
+  "hasFacContainer": true,
+  "biometricTemplateFound": true,
+
+  "faceImages": [
+    {
+      "index": 1,
+      "imageFormat": "JPEG",
+      "originalFormat": "JPEG2000",
+      "imageSize": 12500,
+      "imageOffset": 245,
+      "width": 480,
+      "height": 640,
+      "imageDataUrl": "data:image/jpeg;base64,/9j/4AAQ..."
+    }
+  ]
+}</code></pre>
+<blockquote>
+<p><strong>JPEG2000 자동 변환 (v2.1.0+)</strong>: 브라우저에서 JPEG2000을 렌더링할 수 없으므로, DG2에 포함된 JPEG2000 이미지는 서버에서 자동으로 JPEG로 변환됩니다. <code>imageFormat</code>은 항상 <code>&quot;JPEG&quot;</code>이며, 원본이 JPEG2000인 경우 <code>originalFormat</code>에 <code>&quot;JPEG2000&quot;</code>이 표시됩니다.</p>
+</blockquote>
+<hr>
+<h2 id="6-mrz-텍스트-파싱">6. MRZ 텍스트 파싱</h2>
+<p>OCR로 읽은 MRZ 텍스트를 파싱합니다.</p>
+<p><strong>Endpoint</strong>: <code>POST /api/pa/parse-mrz-text</code></p>
+<h3 id="request">Request</h3>
+<pre><code class="language-json">{
+  "mrz": "P&lt;KORKIM&lt;&lt;MINHO&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;M123456784KOR9005151M3005148&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;02"
+}</code></pre>
+<blockquote>
+<p><code>&quot;mrzText&quot;</code> 키도 지원됩니다.</p>
+</blockquote>
+<h3 id="response">Response</h3>
+<p>DG1 파싱과 동일한 MRZ 필드 형식</p>
+<hr>
+<h2 id="7-검증-이력-조회">7. 검증 이력 조회</h2>
+<p><strong>Endpoint</strong>: <code>GET /api/pa/history</code></p>
+<h3 id="query-parameters">Query Parameters</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>page</td>
+<td>integer</td>
+<td>0</td>
+<td>페이지 번호 (0부터 시작)</td>
+</tr>
+<tr>
+<td>size</td>
+<td>integer</td>
+<td>20</td>
+<td>페이지 크기</td>
+</tr>
+<tr>
+<td>status</td>
+<td>string</td>
+<td>-</td>
+<td>상태 필터 (<code>VALID</code>, <code>INVALID</code>)</td>
+</tr>
+<tr>
+<td>issuingCountry</td>
+<td>string</td>
+<td>-</td>
+<td>국가 코드 필터</td>
+</tr>
+</tbody></table></div>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "total": 150,
+  "items": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "verifiedAt": "2026-02-13T10:30:00",
+      "issuingCountry": "KR",
+      "documentType": "P",
+      "documentNumber": "M12345678",
+      "status": "VALID",
+      "processingDurationMs": 245,
+      "certificateChainValid": true,
+      "sodSignatureValid": true,
+      "dataGroupsValid": true,
+      "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01",
+      "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=CSCA KR",
+      "crlStatus": "NOT_REVOKED"
+    }
+  ]
+}</code></pre>
+<hr>
+<h2 id="8-검증-상세-조회">8. 검증 상세 조회</h2>
+<p><strong>Endpoint</strong>: <code>GET /api/pa/{verificationId}</code></p>
+<h3 id="response">Response</h3>
+<p>검증 레코드의 전체 정보를 반환합니다 (DB에 저장된 모든 필드 포함).</p>
+<pre><code class="language-json">{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "documentNumber": "M12345678",
+  "issuingCountry": "KR",
+  "verificationStatus": "VALID",
+  "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01",
+  "dscSerialNumber": "1A2B3C4D5E6F",
+  "dscExpired": false,
+  "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=CSCA KR",
+  "cscaSerialNumber": "AABB1122",
+  "cscaExpired": false,
+  "certificateChainValid": true,
+  "sodSignatureValid": true,
+  "dataGroupsValid": true,
+  "crlChecked": true,
+  "revoked": false,
+  "crlStatus": "NOT_REVOKED",
+  "expirationStatus": "VALID",
+  "sodHash": "a1b2c3d4...",
+  "createdAt": "2026-02-13T10:30:00"
+}</code></pre>
+<hr>
+<h2 id="9-data-groups-상세-조회">9. Data Groups 상세 조회</h2>
+<p><strong>Endpoint</strong>: <code>GET /api/pa/{verificationId}/datagroups</code></p>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+  "hasDg1": true,
+  "hasDg2": true,
+
+  "dg1": {
+    "documentType": "P",
+    "issuingCountry": "KOR",
+    "surname": "KIM",
+    "givenNames": "MINHO",
+    "documentNumber": "M12345678",
+    "dateOfBirth": "1990-05-15",
+    "sex": "M",
+    "dateOfExpiry": "2030-05-14"
+  },
+
+  "dg2": {
+    "faceCount": 1,
+    "faceImages": [
+      {
+        "index": 1,
+        "imageFormat": "JPEG",
+        "width": 480,
+        "height": 640,
+        "imageDataUrl": "data:image/jpeg;base64,/9j/4AAQ..."
+      }
+    ]
+  }
+}</code></pre>
+<blockquote>
+<p><strong>Note</strong>: DG2 얼굴 이미지는 JPEG2000인 경우 자동으로 JPEG로 변환되어 반환됩니다.</p>
+</blockquote>
+<hr>
+<h2 id="10-검증-통계">10. 검증 통계</h2>
+<p><strong>Endpoint</strong>: <code>GET /api/pa/statistics</code></p>
+<h3 id="response">Response</h3>
+<pre><code class="language-json">{
+  "totalVerifications": 1500,
+  "successRate": 90.0,
+  "byCountry": [
+    { "country": "KR", "count": 500 },
+    { "country": "JP", "count": 300 },
+    { "country": "US", "count": 200 }
+  ],
+  "byStatus": {
+    "VALID": 1350,
+    "INVALID": 150
+  }
+}</code></pre>
+<hr>
+<h2 id="11-헬스-체크">11. 헬스 체크</h2>
+<h3 id="서비스-상태">서비스 상태</h3>
+<p><strong>Endpoint</strong>: <code>GET /api/health</code></p>
+<pre><code class="language-json">{
+  "service": "pa-service",
+  "status": "UP",
+  "version": "2.1.1",
+  "timestamp": "2026-02-13T10:30:00Z"
+}</code></pre>
+<h3 id="데이터베이스-상태">데이터베이스 상태</h3>
+<p><strong>Endpoint</strong>: <code>GET /api/health/database</code></p>
+<pre><code class="language-json">{
+  "status": "UP",
+  "database": "PostgreSQL 15.x",
+  "responseTimeMs": 5
+}</code></pre>
+<h3 id="ldap-상태">LDAP 상태</h3>
+<p><strong>Endpoint</strong>: <code>GET /api/health/ldap</code></p>
+<pre><code class="language-json">{
+  "status": "UP",
+  "host": "openldap1:389",
+  "responseTimeMs": 3
+}</code></pre>
+<hr>
+<h2 id="12-ai-인증서-분석-v2-1-7">12. AI 인증서 분석 (v2.1.7+)</h2>
+<p>ML 기반 인증서 이상 탐지 및 패턴 분석 결과를 조회합니다. PA 검증과 독립적으로 전체 Local PKD 인증서에 대한 분석을 수행하며, Isolation Forest + Local Outlier Factor 이중 모델로 이상치를 탐지합니다.</p>
+<blockquote>
+<p><strong>Note</strong>: AI Analysis 엔드포인트는 별도의 AI Analysis Service에서 제공됩니다. 모든 엔드포인트는 <strong>인증 불필요</strong>(Public)입니다.</p>
+</blockquote>
+<h3 id="12-1-개별-인증서-ai-분석-결과">12.1 개별 인증서 AI 분석 결과</h3>
+<p>PA 검증 후 DSC의 fingerprint로 해당 인증서의 AI 분석 결과를 조회할 수 있습니다.</p>
+<p><strong>Endpoint</strong>: <code>GET /api/ai/certificate/{fingerprint}</code></p>
+<pre><code class="language-json">{
+  "fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+  "certificate_type": "DSC",
+  "country_code": "KR",
+  "anomaly_score": 0.12,
+  "anomaly_label": "NORMAL",
+  "risk_score": 15.0,
+  "risk_level": "LOW",
+  "risk_factors": {
+    "algorithm": 5,
+    "key_size": 10
+  },
+  "anomaly_explanations": [
+    "국가 평균 대비 유효기간 편차: 평균 대비 1.2σ 낮음",
+    "키 크기: 평균 대비 0.8σ 낮음"
+  ],
+  "analyzed_at": "2026-02-21T03:00:05"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>anomaly_score</td>
+<td>float</td>
+<td>이상 점수 0.0 (정상) ~ 1.0 (이상)</td>
+</tr>
+<tr>
+<td>anomaly_label</td>
+<td>string</td>
+<td><code>NORMAL</code> (&lt;0.3), <code>SUSPICIOUS</code> (0.3~0.7), <code>ANOMALOUS</code> (≥0.7)</td>
+</tr>
+<tr>
+<td>risk_score</td>
+<td>float</td>
+<td>위험 점수 0 ~ 100 (복합 점수)</td>
+</tr>
+<tr>
+<td>risk_level</td>
+<td>string</td>
+<td><code>LOW</code> (0<del>25), <code>MEDIUM</code> (26</del>50), <code>HIGH</code> (51<del>75), <code>CRITICAL</code> (76</del>100)</td>
+</tr>
+<tr>
+<td>risk_factors</td>
+<td>object</td>
+<td>위험 기여 요인 (algorithm, key_size, compliance, validity, extensions, anomaly)</td>
+</tr>
+<tr>
+<td>anomaly_explanations</td>
+<td>list</td>
+<td>이상치 설명 — 상위 5개 기여 피처와 sigma 편차 (한국어)</td>
+</tr>
+</tbody></table></div>
+<h3 id="12-2-이상-인증서-목록">12.2 이상 인증서 목록</h3>
+<p><strong>Endpoint</strong>: <code>GET /api/ai/anomalies</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>country</td>
+<td>string</td>
+<td>-</td>
+<td>국가 코드 필터</td>
+</tr>
+<tr>
+<td>type</td>
+<td>string</td>
+<td>-</td>
+<td>인증서 유형 필터 (<code>CSCA</code>, <code>DSC</code>, <code>DSC_NC</code>, <code>MLSC</code>)</td>
+</tr>
+<tr>
+<td>label</td>
+<td>string</td>
+<td>-</td>
+<td>이상 수준 필터 (<code>NORMAL</code>, <code>SUSPICIOUS</code>, <code>ANOMALOUS</code>)</td>
+</tr>
+<tr>
+<td>risk_level</td>
+<td>string</td>
+<td>-</td>
+<td>위험 수준 필터 (<code>LOW</code>, <code>MEDIUM</code>, <code>HIGH</code>, <code>CRITICAL</code>)</td>
+</tr>
+<tr>
+<td>page</td>
+<td>integer</td>
+<td>1</td>
+<td>페이지 번호 (1부터 시작)</td>
+</tr>
+<tr>
+<td>size</td>
+<td>integer</td>
+<td>20</td>
+<td>페이지 크기 (최대 100)</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-json">{
+  "success": true,
+  "items": [
+    {
+      "fingerprint": "dd4ba0c9...",
+      "certificate_type": "DSC",
+      "country_code": "ID",
+      "anomaly_score": 0.80,
+      "anomaly_label": "ANOMALOUS",
+      "risk_score": 47.0,
+      "risk_level": "MEDIUM",
+      "risk_factors": {"algorithm": 5, "key_size": 10, "validity": 15, "extensions": 5, "anomaly": 12.0},
+      "anomaly_explanations": ["국가 평균 대비 유효기간 편차: 평균 대비 8.4σ 낮음", "..."],
+      "analyzed_at": "2026-02-21T03:00:05"
+    }
+  ],
+  "total": 31212,
+  "page": 1,
+  "size": 20
+}</code></pre>
+<h3 id="12-3-전체-분석-통계">12.3 전체 분석 통계</h3>
+<p><strong>Endpoint</strong>: <code>GET /api/ai/statistics</code></p>
+<pre><code class="language-json">{
+  "total_analyzed": 31212,
+  "normal_count": 27305,
+  "suspicious_count": 3905,
+  "anomalous_count": 2,
+  "risk_distribution": {"LOW": 22396, "MEDIUM": 7405, "HIGH": 919, "CRITICAL": 492},
+  "avg_risk_score": 24.75,
+  "top_anomalous_countries": [
+    {"country": "ID", "total": 19, "anomalous": 2, "anomaly_rate": 0.1053}
+  ],
+  "last_analysis_at": "2026-02-21T03:00:05",
+  "model_version": "1.0.0"
+}</code></pre>
+<h3 id="12-4-분석-실행-및-상태-확인">12.4 분석 실행 및 상태 확인</h3>
+<p><strong>분석 실행</strong>: <code>POST /api/ai/analyze</code></p>
+<pre><code class="language-json">{"success": true, "message": "Analysis started"}</code></pre>
+<blockquote>
+<p>분석은 비동기 백그라운드로 실행됩니다. 이미 실행 중이면 <code>409 Conflict</code>가 반환됩니다.</p>
+</blockquote>
+<p><strong>진행 상태</strong>: <code>GET /api/ai/analyze/status</code></p>
+<pre><code class="language-json">{
+  "status": "RUNNING",
+  "progress": 0.65,
+  "total_certificates": 31212,
+  "processed_certificates": 20000,
+  "started_at": "2026-02-21T03:00:00Z",
+  "completed_at": null,
+  "error_message": null
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>IDLE</code></td>
+<td>분석 미실행 또는 초기 상태</td>
+</tr>
+<tr>
+<td><code>RUNNING</code></td>
+<td>분석 진행 중</td>
+</tr>
+<tr>
+<td><code>COMPLETED</code></td>
+<td>분석 완료</td>
+</tr>
+<tr>
+<td><code>FAILED</code></td>
+<td>분석 실패 (<code>error_message</code>에 사유 표시)</td>
+</tr>
+</tbody></table></div>
+<h3 id="12-5-리포트-api">12.5 리포트 API</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/ai/reports/country-maturity</code></td>
+<td>국가별 PKI 성숙도 순위 (알고리즘, 키 크기, 준수성, 확장, 만료율 5개 차원)</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/algorithm-trends</code></td>
+<td>연도별 서명 알고리즘 사용 추이 (SHA-1→SHA-256→SHA-384 마이그레이션)</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/key-size-distribution</code></td>
+<td>알고리즘 군별 키 크기 분포 (RSA 2048/4096, ECDSA 256/384/521)</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/risk-distribution</code></td>
+<td>위험 수준별 인증서 분포 (LOW/MEDIUM/HIGH/CRITICAL)</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/country/{code}</code></td>
+<td>특정 국가 상세 분석 (성숙도, 위험/이상 분포, 상위 이상 인증서)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="pa-ai-analysis-연동-활용">PA + AI Analysis 연동 활용</h2>
+<p>PA 검증 결과와 AI 분석 결과를 연동하여 인증서의 종합적인 신뢰도를 평가할 수 있습니다:</p>
+<ol>
+<li><code>POST /api/pa/verify</code> → PA 검증 수행, DSC fingerprint 획득</li>
+<li><code>GET /api/ai/certificate/{fingerprint}</code> → 해당 DSC의 AI 이상 탐지 결과 조회</li>
+<li>PA 검증 결과 (VALID/INVALID) + AI 위험 수준 (LOW~CRITICAL)을 종합 판단</li>
+</ol>
+<pre><code class="language-python"># PA 검증 후 AI 분석 결합 예시
+pa_result = client.verify(sod, {1: dg1, 2: dg2})
+if pa_result["success"]:
+    dsc_reg = pa_result["data"].get("dscAutoRegistration", {})
+    fingerprint = dsc_reg.get("fingerprint")
+    if fingerprint:
+        ai_result = requests.get(f"{base_url}/ai/certificate/{fingerprint}").json()
+        print(f"PA: {pa_result['data']['status']}, AI Risk: {ai_result['risk_level']}")</code></pre>
+<hr>
+<h2 id="integration-examples">Integration Examples</h2>
+<h3 id="python-requests">Python (requests)</h3>
+<pre><code class="language-python">import requests
+import base64
+
+class PAServiceClient:
+    def __init__(self, base_url="http://localhost:8080/api", api_key=None):
+        self.base_url = base_url
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["X-API-Key"] = api_key
+
+    def verify(self, sod: bytes, data_groups: dict) -&gt; dict:
+        """
+        Perform PA verification.
+
+        Args:
+            sod: Raw SOD bytes
+            data_groups: Dict mapping DG number (int) to raw bytes
+        Returns:
+            dict: {"success": true, "data": {"status": "VALID"|"INVALID", ...}}
+        """
+        request = {
+            "sod": base64.b64encode(sod).decode('utf-8'),
+            "dataGroups": {
+                str(num): base64.b64encode(data).decode('utf-8')
+                for num, data in data_groups.items()
+            }
+        }
+
+        response = requests.post(
+            f"{self.base_url}/pa/verify",
+            json=request,
+            headers=self.headers
+        )
+
+        response.raise_for_status()
+        return response.json()
+
+    def pa_lookup(self, subject_dn: str = None, fingerprint: str = None) -&gt; dict:
+        """
+        Lightweight PA lookup by subject DN or fingerprint.
+        Returns pre-computed trust chain validation result from DB.
+
+        Args:
+            subject_dn: DSC Subject DN (e.g., "/C=KR/O=.../CN=...")
+            fingerprint: DSC SHA-256 fingerprint (hex, 64 chars)
+        Returns:
+            dict: {"success": true, "validation": {...}} or {"success": true, "validation": null}
+        """
+        params = {}
+        if subject_dn:
+            params["subjectDn"] = subject_dn
+        elif fingerprint:
+            params["fingerprint"] = fingerprint
+        else:
+            raise ValueError("Either subject_dn or fingerprint is required")
+
+        response = requests.post(
+            f"{self.base_url}/certificates/pa-lookup",
+            json=params,
+            headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def parse_sod(self, sod: bytes) -&gt; dict:
+        """Parse SOD metadata."""
+        response = requests.post(
+            f"{self.base_url}/pa/parse-sod",
+            json={"sod": base64.b64encode(sod).decode('utf-8')},
+            headers=self.headers
+        )
+        return response.json()
+
+    def parse_dg1(self, dg1: bytes) -&gt; dict:
+        """Parse MRZ from DG1."""
+        response = requests.post(
+            f"{self.base_url}/pa/parse-dg1",
+            json={"dg1": base64.b64encode(dg1).decode('utf-8')},
+            headers=self.headers
+        )
+        return response.json()
+
+    def parse_dg2(self, dg2: bytes) -&gt; dict:
+        """Extract face image from DG2 (JPEG2000 auto-converted to JPEG)."""
+        response = requests.post(
+            f"{self.base_url}/pa/parse-dg2",
+            json={"dg2": base64.b64encode(dg2).decode('utf-8')},
+            headers=self.headers
+        )
+        return response.json()
+
+    def get_history(self, page=0, size=20, status=None, country=None) -&gt; dict:
+        """Get verification history."""
+        params = {"page": page, "size": size}
+        if status:
+            params["status"] = status
+        if country:
+            params["issuingCountry"] = country
+        response = requests.get(
+            f"{self.base_url}/pa/history", params=params, headers=self.headers
+        )
+        return response.json()
+
+    def get_statistics(self) -&gt; dict:
+        """Get verification statistics."""
+        response = requests.get(
+            f"{self.base_url}/pa/statistics", headers=self.headers
+        )
+        return response.json()
+
+    # --- AI Analysis API (v2.1.7+) ---
+
+    def get_ai_analysis(self, fingerprint: str) -&gt; dict:
+        """
+        Get AI anomaly detection result for a specific certificate.
+
+        Args:
+            fingerprint: Certificate SHA-256 fingerprint (hex, 64 chars)
+        Returns:
+            dict: {"fingerprint": "...", "anomaly_score": 0.12, "risk_level": "LOW", ...}
+        """
+        response = requests.get(
+            f"{self.base_url}/ai/certificate/{fingerprint}", headers=self.headers
+        )
+        if response.status_code == 404:
+            return None  # Analysis not yet run for this certificate
+        response.raise_for_status()
+        return response.json()
+
+    def get_ai_statistics(self) -&gt; dict:
+        """Get overall AI analysis statistics."""
+        response = requests.get(
+            f"{self.base_url}/ai/statistics", headers=self.headers
+        )
+        return response.json()
+
+    def trigger_ai_analysis(self) -&gt; dict:
+        """Trigger full certificate analysis (runs in background)."""
+        response = requests.post(
+            f"{self.base_url}/ai/analyze", headers=self.headers
+        )
+        return response.json()
+
+    def get_ai_analysis_status(self) -&gt; dict:
+        """Get current AI analysis job status."""
+        response = requests.get(
+            f"{self.base_url}/ai/analyze/status", headers=self.headers
+        )
+        return response.json()
+
+    def get_ai_anomalies(self, country=None, label=None, risk_level=None,
+                         page=1, size=20) -&gt; dict:
+        """Get list of anomalous certificates with filters."""
+        params = {"page": page, "size": size}
+        if country:
+            params["country"] = country
+        if label:
+            params["label"] = label
+        if risk_level:
+            params["risk_level"] = risk_level
+        response = requests.get(
+            f"{self.base_url}/ai/anomalies", params=params, headers=self.headers
+        )
+        return response.json()
+
+
+# Usage example
+if __name__ == "__main__":
+    # API Key 없이 사용 (Public 접근)
+    client = PAServiceClient()
+
+    # API Key로 사용 (사용량 추적 + Rate Limiting 적용)
+    # client = PAServiceClient(api_key="icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY")
+
+    # Read passport data from reader
+    sod = read_sod_from_passport()
+    dg1 = read_dg1_from_passport()
+    dg2 = read_dg2_from_passport()
+
+    # Option A: Full PA verification (with SOD + DG files)
+    result = client.verify(sod, {1: dg1, 2: dg2})
+
+    if result["success"] and result["data"]["status"] == "VALID":
+        print("Passport verification successful!")
+        data = result["data"]
+        print(f"Country: {data['issuingCountry']}")
+        print(f"Document: {data['documentNumber']}")
+
+        # Check DSC non-conformant status (v2.1.4+)
+        chain = data.get("certificateChainValidation", {})
+        if chain.get("dscNonConformant"):
+            print(f"⚠ DSC Non-Conformant: {chain['pkdConformanceCode']}")
+            print(f"  Reason: {chain['pkdConformanceText']}")
+
+        # Check DSC auto-registration
+        if "dscAutoRegistration" in data:
+            reg = data["dscAutoRegistration"]
+            if reg["newlyRegistered"]:
+                print(f"New DSC registered: {reg['fingerprint'][:16]}...")
+    else:
+        print("Verification failed!")
+        print(f"Error: {result.get('error', 'INVALID status')}")
+
+    # Option B: Lightweight lookup (DSC subject DN only, no file upload)
+    lookup = client.pa_lookup(
+        subject_dn="/C=KR/O=Government of Korea/CN=Document Signer 1234"
+    )
+    if lookup["success"] and lookup.get("validation"):
+        v = lookup["validation"]
+        print(f"Trust Chain: {'VALID' if v['trustChainValid'] else 'INVALID'}")
+        print(f"Status: {v['validationStatus']}")
+        print(f"CSCA: {v.get('cscaSubjectDn', 'N/A')}")
+
+        # Check non-conformant status (v2.1.4+)
+        if v.get("certificateType") == "DSC_NC":
+            print(f"⚠ Non-Conformant DSC: {v.get('pkdConformanceCode', 'N/A')}")
+            print(f"  Reason: {v.get('pkdConformanceText', 'N/A')}")
+    else:
+        print("DSC not found in local PKD")
+
+    # Option C: AI analysis after PA verification (v2.1.7+)
+    if result["success"] and result["data"]["status"] == "VALID":
+        dsc_reg = result["data"].get("dscAutoRegistration", {})
+        fingerprint = dsc_reg.get("fingerprint")
+        if fingerprint:
+            ai = client.get_ai_analysis(fingerprint)
+            if ai:
+                print(f"AI Risk Level: {ai['risk_level']} (score: {ai['risk_score']})")
+                print(f"Anomaly: {ai['anomaly_label']} (score: {ai['anomaly_score']:.2f})")
+                if ai.get("risk_factors"):
+                    for factor, score in ai["risk_factors"].items():
+                        print(f"  - {factor}: {score}")
+                if ai.get("anomaly_explanations"):
+                    for explanation in ai["anomaly_explanations"]:
+                        print(f"  📋 {explanation}")
+
+    # Check AI analysis statistics
+    stats = client.get_ai_statistics()
+    print(f"Total analyzed: {stats['total_analyzed']}")
+    print(f"Anomalous: {stats['anomalous_count']}")
+    print(f"Avg risk score: {stats['avg_risk_score']}")</code></pre>
+<h3 id="java-spring-resttemplate">Java (Spring RestTemplate)</h3>
+<pre><code class="language-java">import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
+
+public class PAServiceClient {
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String baseUrl;
+    private final String apiKey; // nullable — API Key 없이도 사용 가능
+
+    public PAServiceClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    public PAServiceClient(String baseUrl, String apiKey) {
+        this.baseUrl = baseUrl;
+        this.apiKey = apiKey;
+    }
+
+    private HttpHeaders createHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (apiKey != null &amp;&amp; !apiKey.isEmpty()) {
+            headers.set("X-API-Key", apiKey);
+        }
+        return headers;
+    }
+
+    public Map&lt;String, Object&gt; verify(byte[] sod, Map&lt;Integer, byte[]&gt; dataGroups) {
+        Map&lt;String, Object&gt; request = new HashMap&lt;&gt;();
+        request.put("sod", Base64.getEncoder().encodeToString(sod));
+
+        Map&lt;String, String&gt; dgMap = new HashMap&lt;&gt;();
+        dataGroups.forEach((num, data) -&gt;
+            dgMap.put(String.valueOf(num), Base64.getEncoder().encodeToString(data))
+        );
+        request.put("dataGroups", dgMap);
+
+        HttpEntity&lt;Map&lt;String, Object&gt;&gt; entity = new HttpEntity&lt;&gt;(request, createHeaders());
+
+        ResponseEntity&lt;Map&gt; response = restTemplate.exchange(
+            baseUrl + "/pa/verify",
+            HttpMethod.POST,
+            entity,
+            Map.class
+        );
+
+        return response.getBody();
+    }
+
+    public Map&lt;String, Object&gt; paLookup(String subjectDn) {
+        Map&lt;String, Object&gt; request = new HashMap&lt;&gt;();
+        request.put("subjectDn", subjectDn);
+
+        HttpEntity&lt;Map&lt;String, Object&gt;&gt; entity = new HttpEntity&lt;&gt;(request, createHeaders());
+
+        ResponseEntity&lt;Map&gt; response = restTemplate.exchange(
+            baseUrl + "/certificates/pa-lookup",
+            HttpMethod.POST,
+            entity,
+            Map.class
+        );
+
+        return response.getBody();
+    }
+}
+
+// Usage
+// API Key 없이 사용
+PAServiceClient client = new PAServiceClient("http://localhost:8080/api");
+
+// API Key로 사용 (사용량 추적 + Rate Limiting)
+PAServiceClient client = new PAServiceClient(
+    "http://localhost:8080/api",
+    "icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+);</code></pre>
+<h3 id="c-net">C# (.NET)</h3>
+<pre><code class="language-csharp">using System.Net.Http.Json;
+
+public class PAServiceClient
+{
+    private readonly HttpClient _client;
+    private readonly string _baseUrl;
+
+    public PAServiceClient(string baseUrl = "http://localhost:8080/api", string apiKey = null)
+    {
+        _client = new HttpClient();
+        _baseUrl = baseUrl;
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            _client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
+    }
+
+    public async Task&lt;JsonElement&gt; VerifyAsync(
+        byte[] sod,
+        Dictionary&lt;int, byte[]&gt; dataGroups)
+    {
+        var request = new
+        {
+            sod = Convert.ToBase64String(sod),
+            dataGroups = dataGroups.ToDictionary(
+                kv =&gt; kv.Key.ToString(),
+                kv =&gt; Convert.ToBase64String(kv.Value)
+            )
+        };
+
+        var response = await _client.PostAsJsonAsync(
+            $"{_baseUrl}/pa/verify",
+            request
+        );
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync&lt;JsonElement&gt;();
+    }
+
+    public async Task&lt;JsonElement&gt; PaLookupAsync(
+        string subjectDn = null,
+        string fingerprint = null)
+    {
+        var request = new Dictionary&lt;string, string&gt;();
+        if (!string.IsNullOrEmpty(subjectDn))
+            request["subjectDn"] = subjectDn;
+        else if (!string.IsNullOrEmpty(fingerprint))
+            request["fingerprint"] = fingerprint;
+
+        var response = await _client.PostAsJsonAsync(
+            $"{_baseUrl}/certificates/pa-lookup",
+            request
+        );
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync&lt;JsonElement&gt;();
+    }
+}</code></pre>
+<h3 id="curl">curl</h3>
+<blockquote>
+<p><strong>접속 환경별 HOST 치환</strong>: <code>localhost:8080</code> 대신 환경에 맞는 주소 사용</p>
+<ul>
+<li>WiFi (SC-WiFi): <code>192.168.1.70:8080</code></li>
+<li>유선 LAN: <code>192.168.100.10:8080</code></li>
+<li>도메인: <code>pkd.smartcoreinc.com</code></li>
+</ul>
+</blockquote>
+<blockquote>
+<p><strong>API Key 사용 시</strong>: 모든 curl 명령에 <code>-H &quot;X-API-Key: icao_XXXXXXXX_...&quot;</code> 헤더를 추가하면 됩니다. API Key 없이도 Public 엔드포인트는 정상 호출됩니다.</p>
+</blockquote>
+<pre><code class="language-bash"># Full PA Verify (SOD + DG files required)
+# API Key 사용 시: -H "X-API-Key: icao_XXXXXXXX_..." 추가
+curl -X POST http://localhost:8080/api/pa/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sod": "'$(base64 -w0 sod.bin)'",
+    "dataGroups": {
+      "1": "'$(base64 -w0 dg1.bin)'",
+      "2": "'$(base64 -w0 dg2.bin)'"
+    }
+  }' | jq .
+
+# Lightweight PA Lookup (by Subject DN - no file upload needed)
+curl -X POST http://localhost:8080/api/certificates/pa-lookup \
+  -H "Content-Type: application/json" \
+  -d '{"subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"}' | jq .
+
+# Lightweight PA Lookup (by Fingerprint)
+curl -X POST http://localhost:8080/api/certificates/pa-lookup \
+  -H "Content-Type: application/json" \
+  -d '{"fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"}' | jq .
+
+# Parse SOD only
+curl -X POST http://localhost:8080/api/pa/parse-sod \
+  -H "Content-Type: application/json" \
+  -d '{"sod": "'$(base64 -w0 sod.bin)'"}' | jq .
+
+# Get verification history
+curl http://localhost:8080/api/pa/history?page=0&amp;size=10 | jq .
+
+# Get statistics
+curl http://localhost:8080/api/pa/statistics | jq .
+
+# Health check
+curl http://localhost:8080/api/health | jq .
+
+# --- AI Certificate Analysis (v2.1.7+) ---
+
+# Get AI analysis for a specific certificate
+curl http://localhost:8080/api/ai/certificate/a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd | jq .
+
+# Get analysis statistics
+curl http://localhost:8080/api/ai/statistics | jq .
+
+# List anomalous certificates (filtered)
+curl "http://localhost:8080/api/ai/anomalies?label=ANOMALOUS&amp;page=1&amp;size=10" | jq .
+
+# Trigger full analysis (background)
+curl -X POST http://localhost:8080/api/ai/analyze | jq .
+
+# Check analysis progress
+curl http://localhost:8080/api/ai/analyze/status | jq .
+
+# Country PKI maturity report
+curl http://localhost:8080/api/ai/reports/country-maturity | jq .
+
+# Risk distribution report
+curl http://localhost:8080/api/ai/reports/risk-distribution | jq .
+
+# Country detail report
+curl http://localhost:8080/api/ai/reports/country/KR | jq .
+
+# AI service health check
+curl http://localhost:8080/api/ai/health | jq .</code></pre>
+<hr>
+<h2 id="data-group-reference">Data Group Reference</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>DG</th>
+<th>Name</th>
+<th>Content</th>
+<th>Required for PA</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DG1</td>
+<td>MRZ</td>
+<td>Machine Readable Zone</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG2</td>
+<td>Face</td>
+<td>Facial biometric image (JPEG/JPEG2000)</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG3</td>
+<td>Finger</td>
+<td>Fingerprint biometrics</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG4</td>
+<td>Iris</td>
+<td>Iris biometrics</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG5-10</td>
+<td>Optional</td>
+<td>Additional data</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG11</td>
+<td>Personal Details</td>
+<td>Additional personal info</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG12</td>
+<td>Document Details</td>
+<td>Additional document info</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG13</td>
+<td>Optional Details</td>
+<td>Reserved</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG14</td>
+<td>Security Options</td>
+<td>Active Auth / PACE info</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG15</td>
+<td>AA Public Key</td>
+<td>Active Authentication</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG16</td>
+<td>Persons to Notify</td>
+<td>Emergency contacts</td>
+<td>선택</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>PA 검증에 필요한 최소 데이터는 <strong>SOD + 1개 이상의 DG</strong>입니다. DG1(MRZ)과 DG2(얼굴 이미지)를 포함하면 여권 정보와 얼굴 이미지를 함께 확인할 수 있습니다.</p>
+</blockquote>
+<hr>
+<h2 id="error-codes">Error Codes</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Severity</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>INVALID_REQUEST</td>
+<td>CRITICAL</td>
+<td>잘못된 요청 형식</td>
+</tr>
+<tr>
+<td>MISSING_SOD</td>
+<td>CRITICAL</td>
+<td>SOD 데이터 누락</td>
+</tr>
+<tr>
+<td>INVALID_SOD</td>
+<td>CRITICAL</td>
+<td>SOD 파싱 실패 (CMS 구조 오류)</td>
+</tr>
+<tr>
+<td>DSC_EXTRACTION_FAILED</td>
+<td>CRITICAL</td>
+<td>SOD에서 DSC 인증서 추출 실패</td>
+</tr>
+<tr>
+<td>CSCA_NOT_FOUND</td>
+<td>CRITICAL</td>
+<td>LDAP에서 CSCA 인증서를 찾을 수 없음</td>
+</tr>
+<tr>
+<td>TRUST_CHAIN_INVALID</td>
+<td>HIGH</td>
+<td>DSC → CSCA 신뢰 체인 검증 실패</td>
+</tr>
+<tr>
+<td>SOD_SIGNATURE_INVALID</td>
+<td>HIGH</td>
+<td>SOD 서명 검증 실패</td>
+</tr>
+<tr>
+<td>DG_HASH_MISMATCH</td>
+<td>HIGH</td>
+<td>Data Group 해시 불일치</td>
+</tr>
+<tr>
+<td>CERTIFICATE_EXPIRED</td>
+<td>MEDIUM</td>
+<td>인증서 유효기간 만료 (현재 시점)</td>
+</tr>
+<tr>
+<td>CRL_EXPIRED</td>
+<td>MEDIUM</td>
+<td>CRL 유효기간 만료 (nextUpdate 경과)</td>
+</tr>
+<tr>
+<td>CERTIFICATE_REVOKED</td>
+<td>HIGH</td>
+<td>인증서 CRL에 의해 폐지됨</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="openapi-specification">OpenAPI Specification</h2>
+<p>전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:</p>
+<ul>
+<li><strong>Swagger UI (PA Service)</strong>: <code>http://&lt;server-host&gt;:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.7</code></li>
+<li><strong>Swagger UI (PKD Management)</strong>: <code>http://&lt;server-host&gt;:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.21.0</code></li>
+<li><strong>OpenAPI YAML (PA)</strong>: <code>http://&lt;server-host&gt;:8080/api/docs/pa-service.yaml</code></li>
+<li><strong>OpenAPI YAML (PKD Mgmt)</strong>: <code>http://&lt;server-host&gt;:8080/api/docs/pkd-management.yaml</code></li>
+</ul>
+<hr>
+<h2 id="rate-limiting-v2-1-10">Rate Limiting (v2.1.10+)</h2>
+<p>API Key를 사용하는 경우, 클라이언트별 Rate Limiting이 적용됩니다. 기본 한도는 관리자가 클라이언트 생성 시 설정하며, 기본값은 다음과 같습니다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구간</th>
+<th>기본 한도</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>분당</td>
+<td>60 requests</td>
+<td>1분 슬라이딩 윈도우</td>
+</tr>
+<tr>
+<td>시간당</td>
+<td>1,000 requests</td>
+<td>1시간 슬라이딩 윈도우</td>
+</tr>
+<tr>
+<td>일당</td>
+<td>10,000 requests</td>
+<td>24시간 슬라이딩 윈도우</td>
+</tr>
+</tbody></table></div>
+<h3 id="rate-limit-초과-시-응답">Rate Limit 초과 시 응답</h3>
+<pre><code>HTTP/1.1 429 Too Many Requests
+Retry-After: 45
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1708800000
+
+{
+  "error": "Rate limit exceeded",
+  "message": "Per-minute rate limit exceeded (60/min)",
+  "retryAfter": 45
+}</code></pre>
+<h3 id="rate-limit-응답-헤더">Rate Limit 응답 헤더</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>헤더</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Retry-After</code></td>
+<td>다음 요청까지 대기 시간 (초)</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Limit</code></td>
+<td>현재 구간 최대 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Remaining</code></td>
+<td>현재 구간 남은 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Reset</code></td>
+<td>제한 초기화 시각 (Unix timestamp)</td>
+</tr>
+</tbody></table></div>
+<h3 id="retry-로직-예시-python">Retry 로직 예시 (Python)</h3>
+<pre><code class="language-python">import time
+import requests
+
+def api_call_with_retry(url, headers, max_retries=3):
+    for attempt in range(max_retries):
+        response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", 60))
+            print(f"Rate limited. Retrying after {retry_after}s...")
+            time.sleep(retry_after)
+            continue
+        return response
+    raise Exception("Max retries exceeded")</code></pre>
+<blockquote>
+<p><strong>Note</strong>: API Key 없이 호출하는 경우 Rate Limiting은 적용되지 않습니다.</p>
+</blockquote>
+<hr>
+<h2 id="api-key-에러-코드-v2-1-10">API Key 에러 코드 (v2.1.10+)</h2>
+<p>API Key를 사용하는 경우 발생할 수 있는 추가 에러:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>Error</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>401</code></td>
+<td>Unauthorized</td>
+<td>API Key가 유효하지 않거나 만료됨 (<strong>PKD Management 엔드포인트만 해당</strong>)</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Forbidden</td>
+<td>API Key에 해당 엔드포인트 접근 권한이 없음 (Permission 부족)</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>IP Not Allowed</td>
+<td>API Key에 설정된 IP 화이트리스트에 포함되지 않은 IP에서 접근</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>Rate Limit Exceeded</td>
+<td>분/시/일 중 하나의 Rate Limit 초과</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-json">// 401 — 유효하지 않은 API Key (PKD Management 엔드포인트만)
+{
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+
+// 403 — 권한 부족
+{
+  "error": "Forbidden",
+  "message": "Insufficient permissions. Required: pa:verify"
+}
+
+// 429 — Rate Limit 초과
+{
+  "error": "Rate limit exceeded",
+  "message": "Per-minute rate limit exceeded (60/min)",
+  "retryAfter": 45
+}</code></pre>
+<blockquote>
+<p><strong>Note</strong>: 이 에러들은 API Key를 <code>X-API-Key</code> 헤더에 포함한 경우에만 발생합니다. API Key 없이 Public 엔드포인트를 호출하면 이 에러가 발생하지 않습니다.</p>
+<p><strong>PA Service 엔드포인트 (v2.22.1+)</strong>: <code>/api/pa/*</code> 경로는 Public API이므로, 미등록/유효하지 않은 API Key를 전송해도 <strong>401이 발생하지 않고 정상 처리</strong>됩니다. 등록된 유효한 API Key인 경우에만 사용량 추적이 적용됩니다. 이는 기존 클라이언트의 하위 호환성을 보장합니다.</p>
+</blockquote>
+<hr>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="일반적인-오류">일반적인 오류</h3>
+<p><strong>1. CSCA_NOT_FOUND</strong></p>
+<ul>
+<li>원인: 해당 국가의 CSCA 인증서가 Local PKD에 등록되지 않음</li>
+<li>해결: PKD Management 서비스에서 해당 국가의 Master List 또는 LDIF 업로드</li>
+</ul>
+<p><strong>2. TRUST_CHAIN_INVALID</strong></p>
+<ul>
+<li>원인: DSC → CSCA 신뢰 체인 검증 실패</li>
+<li>해결: CSCA 인증서 유효성 확인, Link Certificate 여부 확인, CRL 업데이트</li>
+</ul>
+<p><strong>3. DG_HASH_MISMATCH</strong></p>
+<ul>
+<li>원인: Data Group 데이터가 SOD의 해시값과 불일치</li>
+<li>해결: 여권 판독 시 데이터 무결성 확인 (NFC 통신 오류 가능성)</li>
+</ul>
+<p><strong>4. Invalid Base64 encoding</strong></p>
+<ul>
+<li>원인: 잘못된 Base64 인코딩</li>
+<li>해결: Standard Base64 인코딩 사용 (URL-safe Base64가 아닌 RFC 4648 표준)</li>
+</ul>
+<p><strong>5. JPEG2000 이미지가 표시되지 않음</strong></p>
+<ul>
+<li>원인: DG2 파싱 시 JPEG2000 → JPEG 변환 미지원 빌드</li>
+<li>해결: pa-service가 OpenJPEG(<code>libopenjp2-dev</code>) + libjpeg(<code>libjpeg-dev</code>)와 함께 빌드되었는지 확인</li>
+</ul>
+<p><strong>6. 429 Too Many Requests (v2.1.10+)</strong></p>
+<ul>
+<li>원인: API Key 사용 시 Rate Limit 초과</li>
+<li>해결: <code>Retry-After</code> 헤더 값만큼 대기 후 재시도. 지속적 초과 시 관리자에게 Rate Limit 상향 요청</li>
+<li>참고: API Key 없이 호출하면 Rate Limiting이 적용되지 않음</li>
+</ul>
+<p><strong>7. 403 Forbidden — Insufficient permissions (v2.1.10+)</strong></p>
+<ul>
+<li>원인: API Key에 해당 엔드포인트 접근 권한이 없음</li>
+<li>해결: 관리자에게 필요한 Permission 추가 요청 (예: <code>pa:verify</code>, <code>pa:read</code>)</li>
+<li>확인: 현재 API Key의 Permission은 관리자가 <code>/admin/api-clients</code> 페이지에서 확인 가능</li>
+</ul>
+<p><strong>8. 401 Unauthorized — Invalid API key (v2.1.10+)</strong></p>
+<ul>
+<li>원인: API Key가 유효하지 않거나, 비활성화되었거나, 만료됨</li>
+<li>해결: 관리자에게 API Key 재발급 요청 (<code>POST /api/auth/api-clients/{id}/regenerate</code>)</li>
+<li>참고: API Key 없이 호출하면 Public 엔드포인트는 정상 접근 가능</li>
+<li><strong>PA 엔드포인트 (v2.22.1+)</strong>: <code>/api/pa/*</code> 경로에서는 미등록 API Key를 전송해도 401이 발생하지 않습니다 (Public API 하위 호환). 서버 로그에 경고만 기록됩니다.</li>
+</ul>
+<hr>
+<h2 id="changelog">Changelog</h2>
+<h3 id="v2-1-12-2026-02-25">v2.1.12 (2026-02-25)</h3>
+<p><strong>PA auth_request 하위 호환성 수정 + UsageDialog UX 개선 (v2.22.1)</strong>:</p>
+<ul>
+<li>미등록/유효하지 않은 API Key로 PA 엔드포인트 호출 시 401 대신 200 반환 (Public API 하위 호환)</li>
+<li>기존 외부 클라이언트가 미등록 API Key를 전송해도 PA 서비스 정상 이용 가능</li>
+<li>등록된 유효한 API Key만 사용량 추적 및 Rate Limiting 적용 (기존과 동일)</li>
+<li>서버 로그에 미등록 API Key 경고 기록 (모니터링용)</li>
+</ul>
+<h3 id="v2-1-11-2026-02-25">v2.1.11 (2026-02-25)</h3>
+<p><strong>PA API Key 사용량 추적 + nginx auth_request 통합 (v2.22.0)</strong>:</p>
+<ul>
+<li>nginx <code>auth_request</code> 모듈을 통해 모든 PA Service 요청의 API Key 사용량 자동 추적</li>
+<li><code>/api/pa/verify</code>, <code>/api/pa/parse-*</code>, <code>/api/pa/history</code> 등 PA 엔드포인트 사용 이력이 <code>api_client_usage_log</code>에 기록</li>
+<li>관리자 페이지 UsageDialog에서 PA 엔드포인트별 호출 횟수를 BarChart로 확인 가능</li>
+<li>Rate Limiting이 PKD Management와 PA Service 전체에 공유 적용 (단일 Rate Limiter)</li>
+<li>API Key 없이도 Public 엔드포인트는 기존과 동일하게 접근 가능 (하위 호환)</li>
+</ul>
+<h3 id="v2-1-10-2026-02-25">v2.1.10 (2026-02-25)</h3>
+<p><strong>API Key 인증 지원 (API Client Authentication, v2.21.0)</strong>:</p>
+<ul>
+<li><code>X-API-Key</code> 헤더를 통한 선택적 API Key 인증 지원</li>
+<li>API Key 사용 시 클라이언트별 사용량 추적 및 Rate Limiting 적용</li>
+<li>PA 관련 Permission: <code>pa:verify</code> (검증/파싱 엔드포인트), <code>pa:read</code> (이력/통계 조회), <code>cert:read</code> (간편 조회), <code>ai:read</code> (AI 분석)</li>
+<li>3-tier Rate Limiting: 분당/시간당/일당 슬라이딩 윈도우 방식 (기본 60/1000/10000)</li>
+<li>Rate Limit 초과 시 <code>429 Too Many Requests</code> + <code>Retry-After</code> 헤더 반환</li>
+<li>API Key 에러 코드: 401 (유효하지 않은 키), 403 (권한/IP 부족), 429 (Rate Limit 초과)</li>
+<li>Python/Java/C#/curl Integration Example에 API Key 지원 추가 (생성자/헤더 파라미터)</li>
+<li>API Key 없이도 Public 엔드포인트는 기존과 동일하게 접근 가능 (하위 호환)</li>
+<li>API Key 발급/관리: 관리자 가이드 <a href="API_CLIENT_ADMIN_GUIDE.html">API_CLIENT_ADMIN_GUIDE.md</a> 참조</li>
+<li>외부 클라이언트 연동: 사용자 가이드 <a href="API_CLIENT_USER_GUIDE.html">API_CLIENT_USER_GUIDE.md</a> 참조</li>
+</ul>
+<h3 id="v2-1-7-2026-02-21">v2.1.7 (2026-02-21)</h3>
+<p><strong>AI 인증서 분석 엔진 연동 (AI Certificate Analysis)</strong>:</p>
+<ul>
+<li>AI Analysis Service(Python FastAPI) 기반 ML 인증서 이상 탐지 및 패턴 분석 API 10개 엔드포인트 추가</li>
+<li><code>GET /api/ai/certificate/{fingerprint}</code> — 개별 인증서 AI 분석 결과 (anomaly_score, risk_level, risk_factors, anomaly_explanations)</li>
+<li><code>GET /api/ai/anomalies</code> — 이상 인증서 목록 (country/type/label/risk_level 필터, 페이지네이션)</li>
+<li><code>GET /api/ai/statistics</code> — 전체 분석 통계 (31,212개 인증서: NORMAL 27,305 / SUSPICIOUS 3,905 / ANOMALOUS 2)</li>
+<li><code>POST /api/ai/analyze</code> — 전체 인증서 일괄 분석 실행 (비동기 백그라운드)</li>
+<li><code>GET /api/ai/analyze/status</code> — 분석 작업 진행 상태 (IDLE/RUNNING/COMPLETED/FAILED)</li>
+<li>리포트 API 5개: country-maturity, algorithm-trends, key-size-distribution, risk-distribution, country detail</li>
+<li>Anomaly detection: Isolation Forest (global) + Local Outlier Factor (per country/type) 이중 모델</li>
+<li>Risk scoring: 6개 카테고리 복합 점수 (algorithm 0<del>40, key_size 0</del>40, compliance 0<del>20, validity 0</del>15, extensions 0<del>15, anomaly 0</del>15)</li>
+<li>Feature engineering: 25개 ML 피처 (암호학, 유효기간, 준수성, 확장, 국가 상대값)</li>
+<li>Explainability: 이상 인증서당 상위 5개 기여 피처 + sigma 편차 + 한국어 설명</li>
+<li>PA 검증 후 DSC fingerprint로 AI 분석 결합 활용 예시 추가</li>
+<li>Python/curl Integration Example에 AI 분석 API 호출 코드 추가</li>
+<li>모든 AI 엔드포인트 Public (인증 불필요)</li>
+</ul>
+<h3 id="v2-1-6-2026-02-19">v2.1.6 (2026-02-19)</h3>
+<p><strong>국가 코드 DG1 MRZ Fallback + requestedBy 필드</strong>:</p>
+<ul>
+<li>PA Verify 시 국가 코드 추출 우선순위 변경: 요청 파라미터 <code>issuingCountry</code> → DG1 MRZ issuing country (line1[2:5]) → DSC issuer <code>C=</code> → <code>&quot;XX&quot;</code></li>
+<li>DG1 MRZ에서 3자리 alpha-3 국가 코드 추출 후 <code>normalizeCountryCodeToAlpha2()</code>로 alpha-2 변환 (예: <code>CAN</code> → <code>CA</code>)</li>
+<li>DSC 인증서에 <code>C=</code> 필드가 없는 테스트 인증서에서도 MRZ 데이터로 정확한 국가 코드 표시</li>
+<li><code>requestedBy</code> 필드 추가: 로그인 사용자명이 PA 검증 기록에 저장됨 (프론트엔드에서 localStorage user 또는 JWT 토큰에서 추출)</li>
+<li>PA History 응답에 <code>requestedBy</code> 필드 포함</li>
+</ul>
+<h3 id="v2-1-5-2026-02-19">v2.1.5 (2026-02-19)</h3>
+<p><strong>PA 검증 DB 필드 확장</strong>:</p>
+<ul>
+<li><code>pkdConformanceText</code> 필드 DB 저장 (PostgreSQL + Oracle)</li>
+<li><code>requestedBy</code>, <code>dscNonConformant</code>, <code>pkdConformanceCode</code>, <code>pkdConformanceText</code> 검증 시 DB 저장</li>
+<li>PA History 응답에 <code>requestedBy</code>, <code>dscNonConformant</code>, <code>pkdConformanceCode</code>, <code>pkdConformanceText</code> 필드 추가</li>
+</ul>
+<h3 id="v2-1-4-2026-02-14">v2.1.4 (2026-02-14)</h3>
+<p><strong>DSC Non-Conformant(비준수) 상태 조회 지원</strong>:</p>
+<ul>
+<li>PA Verify 응답의 <code>certificateChainValidation</code>에 DSC Non-Conformant 필드 추가<ul>
+<li><code>dscNonConformant</code>: DSC가 ICAO PKD Non-Conformant인 경우 <code>true</code> (해당 시에만 포함)</li>
+<li><code>pkdConformanceCode</code>: 비준수 사유 코드 (예: <code>ERR:CSCA.CDP.14</code>)</li>
+<li><code>pkdConformanceText</code>: 비준수 사유 설명</li>
+</ul>
+</li>
+<li>PA Lookup 응답에 DSC_NC conformance 데이터 추가 (<code>pkdConformanceCode</code>, <code>pkdConformanceText</code>, <code>pkdVersion</code>)</li>
+<li>PA Service: SOD에서 추출한 DSC의 fingerprint로 LDAP <code>dc=nc-data</code> 검색하여 Non-Conformant 여부 판별</li>
+<li>PA Service: <code>findDscBySubjectDn()</code> nc-data 폴백 검색 추가 (<code>dc=data</code> → <code>dc=nc-data</code>)</li>
+<li>PKD Management: PA Lookup에서 <code>certificateType=&quot;DSC_NC&quot;</code>인 경우 LDAP nc-data에서 conformance 데이터 보조 조회</li>
+<li>Non-Conformant 상태는 정보성으로만 표시 (검증 결과 VALID/INVALID에 영향 없음)</li>
+<li>자세한 내용: <a href="DSC_NC_HANDLING.html">DSC_NC_HANDLING.md</a></li>
+</ul>
+<h3 id="v2-1-3-2026-02-14">v2.1.3 (2026-02-14)</h3>
+<p><strong>경량 PA 조회 API 추가 (Lightweight PA Lookup)</strong>:</p>
+<ul>
+<li><code>POST /api/certificates/pa-lookup</code> 엔드포인트 추가 (PKD Management 서비스)</li>
+<li>DSC Subject DN 또는 SHA-256 Fingerprint로 기존 Trust Chain 검증 결과 즉시 조회</li>
+<li>SOD/DG 파일 업로드 없이 DB에서 사전 계산된 검증 결과 반환 (5~20ms 응답)</li>
+<li>대소문자 무시 Subject DN 비교 (<code>LOWER()</code>)</li>
+<li><code>subjectDn</code>과 <code>fingerprint</code> 두 가지 조회 키 지원</li>
+<li>Public endpoint (JWT 인증 불필요)</li>
+<li>PostgreSQL + Oracle 모두 지원</li>
+</ul>
+<h3 id="v2-1-2-2026-02-13">v2.1.2 (2026-02-13)</h3>
+<p><strong>CRL 유효기간 검증 추가</strong>:</p>
+<ul>
+<li>CRL Check 단계에서 CRL <code>nextUpdate</code> 기준 만료 여부 확인</li>
+<li>CRL 만료 시 <code>crlStatus: &quot;CRL_EXPIRED&quot;</code> 반환 (폐지 목록 확인 불가)</li>
+<li><code>crlThisUpdate</code>, <code>crlNextUpdate</code> 필드 추가 (CRL 발행일/다음 업데이트 예정일)</li>
+<li>CRL 미만료 시에만 인증서 폐지 여부 확인 수행</li>
+</ul>
+<h3 id="v2-1-1-2026-02-12">v2.1.1 (2026-02-12)</h3>
+<p><strong>DSC Auto-Registration from PA Verification</strong>:</p>
+<ul>
+<li>PA 검증 시 SOD에서 추출한 DSC를 자동으로 Local PKD의 certificate 테이블에 등록</li>
+<li><code>source_type=&#39;PA_EXTRACTED&#39;</code> 로 등록 출처 추적</li>
+<li>SHA-256 fingerprint 기반 중복 검사 (이미 등록된 DSC 재등록 방지)</li>
+<li><strong>대부분의 DSC는 ICAO PKD에서 이미 수신한 인증서와 동일</strong>하므로 중복 검사에 의해 저장되지 않음. ICAO PKD에 없는 신규 DSC만 실제로 저장됨</li>
+<li>X.509 메타데이터 전체 추출 (signature_algorithm, public_key_algorithm, public_key_size, is_self_signed 등)</li>
+<li>응답에 <code>dscAutoRegistration</code> 필드 추가</li>
+<li><code>stored_in_ldap=false</code>로 등록되며, PKD Relay reconciliation을 통해 <strong>ICAO PKD DSC와 동일한 LDAP DIT 경로</strong>(<code>o=dsc,c={COUNTRY},dc=data,...</code>)에 동기화. 출처별 DIT 분리 없음 (ICAO 표준 및 Keyfactor NPKD 관행 준수, 자세한 내용은 <a href="CERTIFICATE_SOURCE_MANAGEMENT.html">CERTIFICATE_SOURCE_MANAGEMENT.md</a> 참조)</li>
+</ul>
+<p><strong>DG2 JPEG2000 → JPEG 자동 변환</strong>:</p>
+<ul>
+<li>브라우저에서 JPEG2000을 렌더링할 수 없으므로 서버에서 자동 변환</li>
+<li>OpenJPEG + libjpeg 사용 (빌드 시 <code>HAS_OPENJPEG</code> 매크로로 조건부 활성화)</li>
+<li>원본 형식은 <code>originalFormat</code> 필드에 보존</li>
+</ul>
+<p><strong>기타 개선</strong>:</p>
+<ul>
+<li>검증 결과에 <code>verificationTimestamp</code>, <code>processingDurationMs</code> 필드 추가</li>
+<li>SOD 바이너리 저장 및 SHA-256 해시 계산</li>
+<li>Oracle 호환성: <code>LIMIT</code> → <code>FETCH FIRST</code>, <code>NOW()</code> → <code>SYSTIMESTAMP</code></li>
+</ul>
+<h3 id="v1-2-0-2026-01-06">v1.2.0 (2026-01-06)</h3>
+<p><strong>Certificate Expiration Handling</strong>:</p>
+<ul>
+<li><code>certificateChainValidation</code> 응답에 인증서 만료 필드 추가</li>
+<li>ICAO 9303 Point-in-Time Validation 지원</li>
+</ul>
+<h3 id="v1-1-0-2026-01-03">v1.1.0 (2026-01-03)</h3>
+<ul>
+<li>API Gateway (포트 8080) 통합</li>
+<li>모든 API 엔드포인트를 API Gateway를 통해 접근하도록 변경</li>
+</ul>
+<h3 id="v1-0-0-2025-12-30">v1.0.0 (2025-12-30)</h3>
+<ul>
+<li>초기 릴리스</li>
+<li>PA 검증, SOD/DG1/DG2 파싱 API</li>
+<li>검증 이력 및 통계 API</li>
+</ul>
+<hr>
+<h2 id="contact">Contact</h2>
+<p>기술 지원이 필요한 경우:</p>
+<ul>
+<li>Email: <a href="mailto:support@smartcoreinc.com">support@smartcoreinc.com</a></li>
+<li>GitHub: <a href="https://github.com/smartcoreinc/icao-local-pkd">https://github.com/smartcoreinc/icao-local-pkd</a></li>
+</ul>
+<hr>
+<p><strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#overview">Overview</a><a href="#base-url" style="padding-left:1rem">Base URL</a><a href="#인증" style="padding-left:1rem">인증</a><a href="#api-endpoints-summary">API Endpoints Summary</a><a href="#1-pa-검증-passive-authentication">1. PA 검증 (Passive Authentication)</a><a href="#검증-프로세스-8단계" style="padding-left:1rem">검증 프로세스 (8단계)</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response-success-valid" style="padding-left:1rem">Response (Success - VALID)</a><a href="#response-failure-invalid" style="padding-left:1rem">Response (Failure - INVALID)</a><a href="#response-error-sod-파싱-실패-등" style="padding-left:1rem">Response (Error - SOD 파싱 실패 등)</a><a href="#certificate-chain-validation-fields" style="padding-left:1rem">Certificate Chain Validation Fields</a><a href="#dsc-auto-registration-fields-v2-1-0" style="padding-left:1rem">DSC Auto-Registration Fields (v2.1.0+)</a><a href="#2-간편-조회-trust-chain-lookup-v2-1-3">2. 간편 조회 - Trust Chain Lookup (v2.1.3+)</a><a href="#전체-검증-vs-간편-조회" style="padding-left:1rem">전체 검증 vs 간편 조회</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response-success-검증-결과-존재" style="padding-left:1rem">Response (Success - 검증 결과 존재)</a><a href="#response-not-found-dsc가-db에-없음" style="padding-left:1rem">Response (Not Found - DSC가 DB에 없음)</a><a href="#response-fields" style="padding-left:1rem">Response Fields</a><a href="#3-sod-파싱-sod-parse">3. SOD 파싱 {#sod-parse}</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response" style="padding-left:1rem">Response</a><a href="#4-dg1-파싱-mrz">4. DG1 파싱 (MRZ)</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response" style="padding-left:1rem">Response</a><a href="#5-dg2-파싱-얼굴-이미지">5. DG2 파싱 (얼굴 이미지)</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response" style="padding-left:1rem">Response</a><a href="#6-mrz-텍스트-파싱">6. MRZ 텍스트 파싱</a><a href="#request" style="padding-left:1rem">Request</a><a href="#response" style="padding-left:1rem">Response</a><a href="#7-검증-이력-조회">7. 검증 이력 조회</a><a href="#query-parameters" style="padding-left:1rem">Query Parameters</a><a href="#response" style="padding-left:1rem">Response</a><a href="#8-검증-상세-조회">8. 검증 상세 조회</a><a href="#response" style="padding-left:1rem">Response</a><a href="#9-data-groups-상세-조회">9. Data Groups 상세 조회</a><a href="#response" style="padding-left:1rem">Response</a><a href="#10-검증-통계">10. 검증 통계</a><a href="#response" style="padding-left:1rem">Response</a><a href="#11-헬스-체크">11. 헬스 체크</a><a href="#서비스-상태" style="padding-left:1rem">서비스 상태</a><a href="#데이터베이스-상태" style="padding-left:1rem">데이터베이스 상태</a><a href="#ldap-상태" style="padding-left:1rem">LDAP 상태</a><a href="#12-ai-인증서-분석-v2-1-7">12. AI 인증서 분석 (v2.1.7+)</a><a href="#12-1-개별-인증서-ai-분석-결과" style="padding-left:1rem">12.1 개별 인증서 AI 분석 결과</a><a href="#12-2-이상-인증서-목록" style="padding-left:1rem">12.2 이상 인증서 목록</a><a href="#12-3-전체-분석-통계" style="padding-left:1rem">12.3 전체 분석 통계</a><a href="#12-4-분석-실행-및-상태-확인" style="padding-left:1rem">12.4 분석 실행 및 상태 확인</a><a href="#12-5-리포트-api" style="padding-left:1rem">12.5 리포트 API</a><a href="#pa-ai-analysis-연동-활용">PA + AI Analysis 연동 활용</a><a href="#integration-examples">Integration Examples</a><a href="#python-requests" style="padding-left:1rem">Python (requests)</a><a href="#java-spring-resttemplate" style="padding-left:1rem">Java (Spring RestTemplate)</a><a href="#c-net" style="padding-left:1rem">C# (.NET)</a><a href="#curl" style="padding-left:1rem">curl</a><a href="#data-group-reference">Data Group Reference</a><a href="#error-codes">Error Codes</a><a href="#openapi-specification">OpenAPI Specification</a><a href="#rate-limiting-v2-1-10">Rate Limiting (v2.1.10+)</a><a href="#rate-limit-초과-시-응답" style="padding-left:1rem">Rate Limit 초과 시 응답</a><a href="#rate-limit-응답-헤더" style="padding-left:1rem">Rate Limit 응답 헤더</a><a href="#retry-로직-예시-python" style="padding-left:1rem">Retry 로직 예시 (Python)</a><a href="#api-key-에러-코드-v2-1-10">API Key 에러 코드 (v2.1.10+)</a><a href="#troubleshooting">Troubleshooting</a><a href="#일반적인-오류" style="padding-left:1rem">일반적인 오류</a><a href="#changelog">Changelog</a><a href="#v2-1-12-2026-02-25" style="padding-left:1rem">v2.1.12 (2026-02-25)</a><a href="#v2-1-11-2026-02-25" style="padding-left:1rem">v2.1.11 (2026-02-25)</a><a href="#v2-1-10-2026-02-25" style="padding-left:1rem">v2.1.10 (2026-02-25)</a><a href="#v2-1-7-2026-02-21" style="padding-left:1rem">v2.1.7 (2026-02-21)</a><a href="#v2-1-6-2026-02-19" style="padding-left:1rem">v2.1.6 (2026-02-19)</a><a href="#v2-1-5-2026-02-19" style="padding-left:1rem">v2.1.5 (2026-02-19)</a><a href="#v2-1-4-2026-02-14" style="padding-left:1rem">v2.1.4 (2026-02-14)</a><a href="#v2-1-3-2026-02-14" style="padding-left:1rem">v2.1.3 (2026-02-14)</a><a href="#v2-1-2-2026-02-13" style="padding-left:1rem">v2.1.2 (2026-02-13)</a><a href="#v2-1-1-2026-02-12" style="padding-left:1rem">v2.1.1 (2026-02-12)</a><a href="#v1-2-0-2026-01-06" style="padding-left:1rem">v1.2.0 (2026-01-06)</a><a href="#v1-1-0-2026-01-03" style="padding-left:1rem">v1.1.0 (2026-01-03)</a><a href="#v1-0-0-2025-12-30" style="padding-left:1rem">v1.0.0 (2025-12-30)</a><a href="#contact">Contact</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

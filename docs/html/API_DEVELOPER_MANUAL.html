@@ -1,0 +1,3473 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Developer Manual — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html" class="active">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>API Developer Manual</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="icao-local-pkd-rest-api-개발자-메뉴얼">ICAO Local PKD — REST API 개발자 메뉴얼</h1>
+<p><strong>Version</strong>: 2.35.0
+<strong>Last Updated</strong>: 2026-03-16
+<strong>대상</strong>: 외부 클라이언트 애플리케이션 개발자
+<strong>Copyright</strong>: SMARTCORE Inc.</p>
+<hr>
+<h2 id="목차">목차</h2>
+<ol>
+<li><a href="#1-개요">개요</a></li>
+<li><a href="#2-시작하기">시작하기</a></li>
+<li><a href="#3-인증-및-권한">인증 및 권한</a></li>
+<li><a href="#4-공통-규약">공통 규약</a></li>
+<li><a href="#5-인증서-검색-및-조회">인증서 검색 및 조회</a></li>
+<li><a href="#6-crl-보고서">CRL 보고서</a></li>
+<li><a href="#7-dsc_nc-비준수-인증서-보고서">DSC_NC 비준수 인증서 보고서</a></li>
+<li><a href="#8-pa-검증-passive-authentication">PA 검증 (Passive Authentication)</a></li>
+<li><a href="#9-ai-인증서-분석">AI 인증서 분석</a></li>
+<li><a href="#10-동기화-모니터링">동기화 모니터링</a></li>
+<li><a href="#11-icao-pkd-버전-모니터링">ICAO PKD 버전 모니터링</a></li>
+<li><a href="#12-업로드-통계-및-이력">업로드 통계 및 이력</a></li>
+<li><a href="#13-코드-마스터-참조-데이터">코드 마스터 (참조 데이터)</a></li>
+<li><a href="#14-시스템-모니터링">시스템 모니터링</a></li>
+<li><a href="#15-연동-예제">연동 예제</a></li>
+<li><a href="#16-에러-코드-참조">에러 코드 참조</a></li>
+<li><a href="#17-faq--트러블슈팅">FAQ / 트러블슈팅</a></li>
+<li><a href="#18-부록">부록</a></li>
+</ol>
+<hr>
+<h2 id="1-개요">1. 개요</h2>
+<h3 id="icao-local-pkd란">ICAO Local PKD란</h3>
+<p>ICAO Local PKD(Public Key Directory)는 전자여권 검증에 필요한 인증서(CSCA, DSC, CRL)를 중앙 관리하는 시스템입니다. 외부 클라이언트 애플리케이션은 REST API를 통해 다음 기능을 사용할 수 있습니다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>활용 사례</th>
+<th>주요 엔드포인트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>여권 진위 검증</strong> (Passive Authentication)</td>
+<td><code>POST /api/pa/verify</code></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>인증서 검색 및 내보내기</strong></td>
+<td><code>GET /api/certificates/search</code></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>AI 기반 인증서 이상 탐지</strong></td>
+<td><code>GET /api/ai/certificate/{fingerprint}</code></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>CRL/비준수 인증서 보고서</strong></td>
+<td><code>GET /api/certificates/crl/report</code></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>DB-LDAP 동기화 모니터링</strong></td>
+<td><code>GET /api/sync/status</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="용어-정의">용어 정의</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용어</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CSCA</strong></td>
+<td>Country Signing Certificate Authority — 국가 최상위 서명 인증서</td>
+</tr>
+<tr>
+<td><strong>DSC</strong></td>
+<td>Document Signer Certificate — 여권 서명 인증서</td>
+</tr>
+<tr>
+<td><strong>DSC_NC</strong></td>
+<td>Non-Conformant DSC — ICAO Doc 9303 기술 사양 비준수 DSC</td>
+</tr>
+<tr>
+<td><strong>MLSC</strong></td>
+<td>Master List Signer Certificate — Master List 서명 인증서</td>
+</tr>
+<tr>
+<td><strong>CRL</strong></td>
+<td>Certificate Revocation List — 인증서 폐기 목록</td>
+</tr>
+<tr>
+<td><strong>SOD</strong></td>
+<td>Security Object Document — 전자여권 보안 객체 (CMS 서명 구조)</td>
+</tr>
+<tr>
+<td><strong>DG</strong></td>
+<td>Data Group — 전자여권 데이터 그룹 (DG1=MRZ, DG2=얼굴 이미지)</td>
+</tr>
+<tr>
+<td><strong>MRZ</strong></td>
+<td>Machine Readable Zone — 여권 기계 판독 영역</td>
+</tr>
+<tr>
+<td><strong>PA</strong></td>
+<td>Passive Authentication — ICAO 9303 수동 인증 (서명 검증)</td>
+</tr>
+<tr>
+<td><strong>Trust Chain</strong></td>
+<td>DSC → CSCA 인증서 신뢰 체인</td>
+</tr>
+<tr>
+<td><strong>Fingerprint</strong></td>
+<td>인증서 SHA-256 해시값 (hex, 64자)</td>
+</tr>
+<tr>
+<td><strong>LDAP DN</strong></td>
+<td>Lightweight Directory Access Protocol Distinguished Name</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="2-시작하기">2. 시작하기</h2>
+<h3 id="2-1-base-url">2.1 Base URL</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>환경</th>
+<th>URL</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>HTTPS (운영, 권장)</strong></td>
+<td><code>https://pkd.smartcoreinc.com/api</code></td>
+<td>Private CA 인증서 필요</td>
+</tr>
+<tr>
+<td><strong>HTTP (내부 네트워크)</strong></td>
+<td><code>http://pkd.smartcoreinc.com/api</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>개발 환경</strong></td>
+<td><code>http://localhost/api</code></td>
+<td>Docker 로컬 환경</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>HTTPS 사용 시</strong> Private CA 인증서(<code>ca.crt</code>)를 클라이언트에 설치해야 합니다. 관리자에게 인증서 파일을 요청하세요. 설정 방법은 <a href="#155-https-private-ca-설정">15.5 HTTPS Private CA 설정</a>을 참조하세요.</p>
+</blockquote>
+<h3 id="2-2-api-key-발급">2.2 API Key 발급</h3>
+<p>API Key는 시스템 관리자가 발급합니다. 관리자에게 다음 정보를 전달하세요:</p>
+<ul>
+<li><strong>클라이언트 이름</strong>: 시스템/서비스 이름 (예: &quot;출입국관리 Agent&quot;)</li>
+<li><strong>필요한 기능</strong>: PA 검증, 인증서 검색 등</li>
+<li><strong>접속 IP</strong>: 클라이언트 서버의 IP 주소 또는 CIDR 대역</li>
+<li><strong>예상 사용량</strong>: 분당/시간당/일일 예상 요청 수</li>
+</ul>
+<p>발급된 API Key 형식:</p>
+<pre><code>icao_{prefix}_{random}
+ │      │        │
+ │      │        └── 32자 랜덤 문자열 (Base62)
+ │      └── 8자 키 접두사 (관리 화면에서 식별용)
+ └── 고정 접두사
+
+예: icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</code></pre>
+<ul>
+<li>총 길이: 46자, 대소문자 구분</li>
+<li>API Key는 발급 시 <strong>한 번만 표시</strong>되며, 시스템에는 SHA-256 해시만 저장됩니다</li>
+<li>분실 시 관리자에게 <strong>재발급</strong> 요청 (기존 키 즉시 무효화)</li>
+</ul>
+<h3 id="2-3-첫-번째-요청">2.3 첫 번째 요청</h3>
+<pre><code class="language-bash"># 1. 헬스 체크 (인증 불필요)
+curl -s https://pkd.smartcoreinc.com/api/health | jq .
+
+# 2. 인증서 검색 (API Key 사용)
+curl -s "https://pkd.smartcoreinc.com/api/certificates/search?country=KR&amp;limit=5" \
+  -H "X-API-Key: icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6" | jq .</code></pre>
+<h3 id="2-4-인증-방식-요약">2.4 인증 방식 요약</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>방식</th>
+<th>용도</th>
+<th>헤더</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>API Key</strong></td>
+<td>외부 클라이언트 M2M 연동 (권장)</td>
+<td><code>X-API-Key: icao_...</code></td>
+</tr>
+<tr>
+<td><strong>JWT Bearer</strong></td>
+<td>웹 UI 사용자 (내부용)</td>
+<td><code>Authorization: Bearer eyJ...</code></td>
+</tr>
+<tr>
+<td><strong>인증 없음</strong></td>
+<td>대부분의 조회 API는 Public</td>
+<td>헤더 불필요</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>대부분의 조회 엔드포인트는 <strong>인증 없이 접근 가능</strong>합니다. API Key는 사용량 추적과 Rate Limiting 개별 관리를 위해 사용합니다.</p>
+</blockquote>
+<hr>
+<h2 id="3-인증-및-권한">3. 인증 및 권한</h2>
+<h3 id="3-1-api-key-인증">3.1 API Key 인증</h3>
+<p>모든 API 요청에 <code>X-API-Key</code> 헤더를 포함합니다:</p>
+<pre><code>X-API-Key: icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</code></pre>
+<p>인증 흐름:</p>
+<pre><code>외부 Client                              ICAO Local PKD
+   |                                          |
+   |  HTTP Request                            |
+   |  X-API-Key: icao_XXXXXXXX_...  ------→   |
+   |                                          | → SHA-256 해시 비교
+   |                                          | → Permission 확인
+   |                                          | → IP 화이트리스트 확인
+   |                                          | → Rate Limit 확인
+   |  ←------  200 OK (JSON Response)         |</code></pre>
+<h3 id="3-2-권한-permissions">3.2 권한 (Permissions)</h3>
+<p>API Key에 할당 가능한 10개 권한:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>설명</th>
+<th>접근 가능 엔드포인트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>cert:read</code></td>
+<td>인증서 검색/조회</td>
+<td><code>/api/certificates/search</code>, <code>/api/certificates/pa-lookup</code>, <code>/api/certificates/validation</code></td>
+</tr>
+<tr>
+<td><code>cert:export</code></td>
+<td>인증서 내보내기</td>
+<td><code>/api/certificates/export/*</code></td>
+</tr>
+<tr>
+<td><code>pa:verify</code></td>
+<td>PA 검증 수행</td>
+<td><code>/api/pa/verify</code>, <code>/api/pa/parse-*</code></td>
+</tr>
+<tr>
+<td><code>pa:read</code></td>
+<td>PA 이력/통계 조회</td>
+<td><code>/api/pa/history</code>, <code>/api/pa/{id}</code>, <code>/api/pa/statistics</code></td>
+</tr>
+<tr>
+<td><code>upload:read</code></td>
+<td>업로드 이력 조회</td>
+<td><code>/api/upload/history</code>, <code>/api/upload/statistics</code></td>
+</tr>
+<tr>
+<td><code>upload:write</code></td>
+<td>파일 업로드</td>
+<td><code>/api/upload/ldif</code>, <code>/api/upload/masterlist</code>, <code>/api/upload/certificate</code></td>
+</tr>
+<tr>
+<td><code>report:read</code></td>
+<td>보고서 조회</td>
+<td><code>/api/certificates/crl/report</code>, <code>/api/certificates/dsc-nc/report</code></td>
+</tr>
+<tr>
+<td><code>ai:read</code></td>
+<td>AI 분석 결과 조회</td>
+<td><code>/api/ai/certificate/*</code>, <code>/api/ai/anomalies</code>, <code>/api/ai/reports/*</code></td>
+</tr>
+<tr>
+<td><code>sync:read</code></td>
+<td>동기화 상태 조회</td>
+<td><code>/api/sync/status</code>, <code>/api/sync/stats</code></td>
+</tr>
+<tr>
+<td><code>icao:read</code></td>
+<td>ICAO 버전 조회</td>
+<td><code>/api/icao/status</code>, <code>/api/icao/latest</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="3-3-rate-limiting">3.3 Rate Limiting</h3>
+<p>API Key 사용 시 3-tier 슬라이딩 윈도우 방식의 Rate Limiting이 적용됩니다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구간</th>
+<th>기본 한도</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>분당</td>
+<td>60 requests</td>
+<td>1분 슬라이딩 윈도우</td>
+</tr>
+<tr>
+<td>시간당</td>
+<td>1,000 requests</td>
+<td>1시간 슬라이딩 윈도우</td>
+</tr>
+<tr>
+<td>일당</td>
+<td>10,000 requests</td>
+<td>24시간 슬라이딩 윈도우</td>
+</tr>
+</tbody></table></div>
+<p>Rate Limit 초과 시 응답:</p>
+<pre><code>HTTP/1.1 429 Too Many Requests
+Retry-After: 45
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1709056500</code></pre>
+<pre><code class="language-json">{
+  "error": "Rate limit exceeded",
+  "message": "Per-minute rate limit exceeded (60/min)",
+  "retryAfter": 45
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>응답 헤더</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>Retry-After</code></td>
+<td>다음 요청까지 대기 시간 (초)</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Limit</code></td>
+<td>현재 구간 최대 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Remaining</code></td>
+<td>현재 구간 남은 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Reset</code></td>
+<td>제한 초기화 시각 (Unix timestamp)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>API Key <strong>없이</strong> 호출하면 Rate Limiting이 적용되지 않습니다.</p>
+</blockquote>
+<h3 id="3-4-ip-화이트리스트">3.4 IP 화이트리스트</h3>
+<p>관리자가 API Key에 IP 화이트리스트를 설정한 경우, 허용되지 않은 IP에서의 요청은 <code>403 Forbidden</code>을 반환합니다. CIDR 표기법을 지원합니다 (예: <code>10.0.0.0/8</code>, <code>192.168.1.0/24</code>).</p>
+<h3 id="3-5-pa-엔드포인트-특이사항">3.5 PA 엔드포인트 특이사항</h3>
+<p>PA Service 엔드포인트(<code>/api/pa/*</code>)는 Public API이므로:</p>
+<ul>
+<li>미등록/유효하지 않은 API Key를 전송해도 <strong>401이 발생하지 않고 정상 처리</strong>됩니다</li>
+<li>등록된 유효한 API Key인 경우에만 사용량 추적이 적용됩니다</li>
+<li>이는 기존 클라이언트의 하위 호환성을 보장합니다</li>
+</ul>
+<h3 id="3-6-공개-엔드포인트">3.6 공개 엔드포인트</h3>
+<p>다음 엔드포인트는 <strong>인증 없이</strong> 접근 가능합니다:</p>
+<ul>
+<li>헬스 체크: <code>/api/health</code>, <code>/api/health/database</code>, <code>/api/health/ldap</code></li>
+<li>인증서 검색: <code>/api/certificates/search</code>, <code>/api/certificates/countries</code>, <code>/api/certificates/validation</code></li>
+<li>인증서 내보내기: <code>/api/certificates/export/*</code></li>
+<li>PA 간편 조회: <code>/api/certificates/pa-lookup</code></li>
+<li>보고서: <code>/api/certificates/crl/report</code>, <code>/api/certificates/dsc-nc/report</code>, <code>/api/certificates/doc9303-checklist</code></li>
+<li>PA 검증: <code>/api/pa/verify</code>, <code>/api/pa/parse-*</code>, <code>/api/pa/history</code>, <code>/api/pa/statistics</code></li>
+<li>AI 분석: <code>/api/ai/*</code> (모든 엔드포인트)</li>
+<li>동기화: <code>/api/sync/status</code>, <code>/api/sync/stats</code></li>
+<li>ICAO: <code>/api/icao/*</code></li>
+<li>업로드 통계: <code>/api/upload/statistics</code>, <code>/api/upload/history</code>, <code>/api/upload/countries</code></li>
+<li>코드 마스터: <code>GET /api/code-master</code></li>
+</ul>
+<p><strong>인증 필수 엔드포인트</strong> (JWT 또는 API Key with <code>upload:write</code>):</p>
+<ul>
+<li>파일 업로드: <code>POST /api/upload/ldif</code>, <code>POST /api/upload/masterlist</code>, <code>POST /api/upload/certificate</code></li>
+<li>업로드 삭제: <code>DELETE /api/upload/{id}</code></li>
+<li>코드 마스터 수정: <code>POST/PUT/DELETE /api/code-master</code></li>
+</ul>
+<hr>
+<h2 id="4-공통-규약">4. 공통 규약</h2>
+<h3 id="4-1-요청-형식">4.1 요청 형식</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Content-Type</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>application/json</code></td>
+<td>POST/PUT 요청 본문</td>
+</tr>
+<tr>
+<td><code>multipart/form-data</code></td>
+<td>파일 업로드</td>
+</tr>
+<tr>
+<td>(없음)</td>
+<td>GET 요청</td>
+</tr>
+</tbody></table></div>
+<p>문자 인코딩: <strong>UTF-8</strong></p>
+<h3 id="4-2-응답-형식">4.2 응답 형식</h3>
+<p><strong>성공 응답</strong> (200/201):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "data": { ... },
+  "message": "설명 (선택)"
+}</code></pre>
+<p><strong>에러 응답</strong> (400/401/403/404/500):</p>
+<pre><code class="language-json">{
+  "success": false,
+  "error": "에러 유형",
+  "message": "상세 설명"
+}</code></pre>
+<blockquote>
+<p>일부 엔드포인트는 <code>data</code> 래퍼 없이 최상위에 필드를 직접 반환합니다. 각 엔드포인트의 응답 예시를 참고하세요.</p>
+</blockquote>
+<h3 id="4-3-페이지네이션">4.3 페이지네이션</h3>
+<p><strong>Offset 기반</strong> (대부분의 엔드포인트):</p>
+<pre><code>GET /api/certificates/search?limit=50&amp;offset=0</code></pre>
+<pre><code class="language-json">{
+  "success": true,
+  "total": 1542,
+  "limit": 50,
+  "offset": 0,
+  "data": [...]
+}</code></pre>
+<p><strong>Page 기반</strong> (PA 이력, AI 이상 목록):</p>
+<pre><code>GET /api/pa/history?page=0&amp;size=20
+GET /api/ai/anomalies?page=1&amp;size=20</code></pre>
+<pre><code class="language-json">{
+  "total": 150,
+  "items": [...]
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>기본값</th>
+<th>최대값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>limit</code></td>
+<td>50</td>
+<td>200</td>
+<td>결과 수 (offset 방식)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>0</td>
+<td>-</td>
+<td>시작 위치 (offset 방식)</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>0 또는 1</td>
+<td>-</td>
+<td>페이지 번호</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>20</td>
+<td>100</td>
+<td>페이지 크기</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-4-날짜-시간-형식">4.4 날짜/시간 형식</h3>
+<p>ISO 8601 형식: <code>2026-02-28T10:30:00</code> (UTC 또는 서버 로컬 시간)</p>
+<h3 id="4-5-국가-코드">4.5 국가 코드</h3>
+<p>ISO 3166-1 alpha-2 (대문자 2자리): <code>KR</code>, <code>US</code>, <code>JP</code>, <code>DE</code>, <code>FR</code> 등 (95+ 국가)</p>
+<h3 id="4-6-인증서-유형-코드">4.6 인증서 유형 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>CSCA</code></td>
+<td>Country Signing Certificate Authority</td>
+</tr>
+<tr>
+<td><code>DSC</code></td>
+<td>Document Signer Certificate</td>
+</tr>
+<tr>
+<td><code>DSC_NC</code></td>
+<td>Non-Conformant DSC (ICAO 비준수)</td>
+</tr>
+<tr>
+<td><code>MLSC</code></td>
+<td>Master List Signer Certificate</td>
+</tr>
+<tr>
+<td><code>CRL</code></td>
+<td>Certificate Revocation List</td>
+</tr>
+<tr>
+<td><code>ML</code></td>
+<td>Master List</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-7-http-상태-코드">4.7 HTTP 상태 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>설명</th>
+<th>대응</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>200</code></td>
+<td>성공</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>201</code></td>
+<td>생성 성공 (업로드)</td>
+<td>-</td>
+</tr>
+<tr>
+<td><code>400</code></td>
+<td>잘못된 요청</td>
+<td>요청 파라미터 확인</td>
+</tr>
+<tr>
+<td><code>401</code></td>
+<td>인증 실패</td>
+<td>API Key 또는 JWT 확인</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>권한 부족 / IP 차단</td>
+<td>관리자에게 권한 확인 요청</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td>리소스 없음</td>
+<td>ID/fingerprint 확인</td>
+</tr>
+<tr>
+<td><code>409</code></td>
+<td>중복 파일</td>
+<td>이미 업로드된 파일</td>
+</tr>
+<tr>
+<td><code>413</code></td>
+<td>파일 크기 초과</td>
+<td>LDIF 100MB / ML 30MB 제한</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>Rate Limit 초과</td>
+<td><code>Retry-After</code> 만큼 대기</td>
+</tr>
+<tr>
+<td><code>500</code></td>
+<td>서버 오류</td>
+<td>관리자에게 보고</td>
+</tr>
+<tr>
+<td><code>503</code></td>
+<td>서비스 불가</td>
+<td>잠시 후 재시도</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-인증서-검색-및-조회">5. 인증서 검색 및 조회</h2>
+<h3 id="5-1-인증서-검색">5.1 인증서 검색</h3>
+<p><code>GET /api/certificates/search</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>country</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>국가 코드 (예: KR, US)</td>
+</tr>
+<tr>
+<td><code>certType</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>인증서 유형: CSCA, DSC, DSC_NC, CRL, ML</td>
+</tr>
+<tr>
+<td><code>validity</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>유효성: VALID, EXPIRED, NOT_YET_VALID, all (기본: all)</td>
+</tr>
+<tr>
+<td><code>searchTerm</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>CN 검색어</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>아니오</td>
+<td>출처: LDIF_PARSED, ML_PARSED, FILE_UPLOAD, PA_EXTRACTED, DL_PARSED</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>결과 수 (기본 50, 최대 200)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>integer</td>
+<td>아니오</td>
+<td>시작 위치 (기본 0)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>주의</strong>: <code>certType</code>만 지정하고 <code>country</code>를 지정하지 않으면 LDAP 계층 구조 특성상 유형 필터링이 효과적이지 않습니다. <strong>항상 <code>country</code>와 함께 사용</strong>하세요.</p>
+</blockquote>
+<pre><code class="language-bash"># 한국 DSC 인증서 검색
+curl -s "https://pkd.smartcoreinc.com/api/certificates/search?country=KR&amp;certType=DSC&amp;limit=10" \
+  -H "X-API-Key: $API_KEY" | jq .</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "total": 227,
+  "limit": 10,
+  "offset": 0,
+  "certificates": [
+    {
+      "dn": "cn=a1b2c3...,o=dsc,c=KR,dc=data,...",
+      "cn": "DS0120080307 1",
+      "sn": "0D",
+      "country": "KR",
+      "certType": "DSC",
+      "subjectDn": "CN=DS0120080307 1,O=certificates,C=KR",
+      "issuerDn": "CN=CSCA,OU=MOFA,O=Government,C=KR",
+      "fingerprint": "a1b2c3d4...",
+      "isSelfSigned": false,
+      "validFrom": "2008-03-07T00:00:00Z",
+      "validTo": "2018-03-07T23:59:59Z",
+      "validity": "EXPIRED",
+      "version": 3,
+      "signatureAlgorithm": "RSA",
+      "signatureHashAlgorithm": "SHA-256",
+      "publicKeyAlgorithm": "RSA",
+      "publicKeySize": 2048,
+      "isCA": false
+    }
+  ]
+}</code></pre>
+<h3 id="5-2-국가-목록">5.2 국가 목록</h3>
+<p><code>GET /api/certificates/countries</code></p>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/certificates/countries" | jq .</code></pre>
+<h3 id="5-3-검증-결과-조회">5.3 검증 결과 조회</h3>
+<p><code>GET /api/certificates/validation?fingerprint={sha256}</code></p>
+<p>Trust Chain 검증 결과를 fingerprint로 조회합니다.</p>
+<h3 id="5-4-pa-간편-조회-lightweight-pa-lookup">5.4 PA 간편 조회 (Lightweight PA Lookup)</h3>
+<p><code>POST /api/certificates/pa-lookup</code></p>
+<p>SOD/DG 파일 없이, DSC의 Subject DN 또는 Fingerprint만으로 기존 Trust Chain 검증 결과를 DB에서 즉시 조회합니다 (5~20ms 응답).</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>전체 검증 (<code>/api/pa/verify</code>)</th>
+<th>간편 조회 (<code>/api/certificates/pa-lookup</code>)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SOD + Data Groups (Base64) 필요</td>
+<td>Subject DN 또는 Fingerprint만 필요</td>
+</tr>
+<tr>
+<td>CMS 파싱, 서명 검증, 해시 비교</td>
+<td>DB 단순 조회</td>
+</tr>
+<tr>
+<td>100~500ms</td>
+<td>5~20ms</td>
+</tr>
+<tr>
+<td>최초 여권 검증</td>
+<td>이미 알려진 DSC 상태 확인</td>
+</tr>
+</tbody></table></div>
+<p><strong>요청</strong>:</p>
+<pre><code class="language-json">{
+  "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"
+}</code></pre>
+<p>또는:</p>
+<pre><code class="language-json">{
+  "fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
+}</code></pre>
+<blockquote>
+<p><code>subjectDn</code>과 <code>fingerprint</code> 중 하나만 제공하면 됩니다. 둘 다 제공 시 <code>subjectDn</code>이 우선입니다.</p>
+</blockquote>
+<pre><code class="language-bash">curl -s -X POST "https://pkd.smartcoreinc.com/api/certificates/pa-lookup" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{"subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"}' | jq .</code></pre>
+<p><strong>응답 (결과 존재)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "validation": {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "certificateType": "DSC",
+    "countryCode": "KR",
+    "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234",
+    "issuerDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "serialNumber": "1A2B3C4D",
+    "validationStatus": "VALID",
+    "trustChainValid": true,
+    "trustChainPath": "DSC → CSCA",
+    "cscaFound": true,
+    "cscaSubjectDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "signatureValid": true,
+    "signatureAlgorithm": "SHA256withRSA",
+    "validityPeriodValid": true,
+    "notBefore": "2024-01-01 00:00:00",
+    "notAfter": "2029-12-31 23:59:59",
+    "revocationStatus": "not_revoked",
+    "crlChecked": true,
+    "fingerprintSha256": "a1b2c3d4e5f6...",
+    "validatedAt": "2026-02-14T10:30:00"
+  }
+}</code></pre>
+<p><strong>응답 (결과 없음)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "validation": null,
+  "message": "No validation result found for the given subjectDn"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>validationStatus</code></td>
+<td><code>VALID</code>, <code>EXPIRED_VALID</code>, <code>INVALID</code>, <code>PENDING</code>, <code>ERROR</code></td>
+</tr>
+<tr>
+<td><code>trustChainValid</code></td>
+<td>DSC → CSCA 신뢰 체인 검증 성공 여부</td>
+</tr>
+<tr>
+<td><code>trustChainPath</code></td>
+<td>체인 경로 (예: &quot;DSC → Link → CSCA&quot;)</td>
+</tr>
+<tr>
+<td><code>cscaFound</code></td>
+<td>CSCA 인증서 검색 성공 여부</td>
+</tr>
+<tr>
+<td><code>revocationStatus</code></td>
+<td><code>not_revoked</code>, <code>revoked</code>, <code>unknown</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="5-5-doc-9303-적합성-체크리스트">5.5 Doc 9303 적합성 체크리스트</h3>
+<p><code>GET /api/certificates/doc9303-checklist?fingerprint={sha256}</code></p>
+<p>인증서의 ICAO Doc 9303 표준 적합성을 ~28개 항목으로 검사합니다.</p>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/certificates/doc9303-checklist?fingerprint=a1b2c3d4..." | jq .</code></pre>
+<h3 id="5-6-인증서-내보내기">5.6 인증서 내보내기</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/certificates/export/file?dn={DN}&amp;format=pem</code></td>
+<td>단일 인증서 내보내기 (PEM/DER)</td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/export/country?country=KR&amp;format=pem</code></td>
+<td>국가별 ZIP</td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/export/all?format=pem</code></td>
+<td>전체 LDAP 데이터 DIT 구조 ZIP</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-bash"># 단일 인증서 PEM 다운로드
+curl -s "https://pkd.smartcoreinc.com/api/certificates/export/file?dn={DN}&amp;format=pem" \
+  -H "X-API-Key: $API_KEY" -o cert.pem
+
+# 한국 인증서 전체 ZIP
+curl -s "https://pkd.smartcoreinc.com/api/certificates/export/country?country=KR&amp;format=pem" \
+  -H "X-API-Key: $API_KEY" -o KR_certs.zip
+
+# 전체 인증서 ZIP (DIT 구조: data/{country}/{type}/)
+curl -s "https://pkd.smartcoreinc.com/api/certificates/export/all?format=der" \
+  -H "X-API-Key: $API_KEY" -o all_certs.zip</code></pre>
+<hr>
+<h2 id="6-crl-보고서">6. CRL 보고서</h2>
+<h3 id="6-1-crl-보고서-조회">6.1 CRL 보고서 조회</h3>
+<p><code>GET /api/certificates/crl/report</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>country</code></td>
+<td>string</td>
+<td>국가 코드 필터</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>페이지 번호</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>integer</td>
+<td>페이지 크기</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/certificates/crl/report" | jq .</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "summary": {
+    "totalCrls": 69,
+    "totalCountries": 67,
+    "validCount": 45,
+    "expiredCount": 24,
+    "totalRevoked": 170
+  },
+  "byCountry": [{"country": "KR", "count": 2}, ...],
+  "bySignatureAlgorithm": [{"algorithm": "SHA256withRSA", "count": 40}, ...],
+  "byRevocationReason": [{"reason": "keyCompromise", "count": 5}, ...],
+  "crls": [
+    {
+      "id": "...",
+      "countryCode": "KR",
+      "issuerDn": "CN=CSCA KR,...",
+      "thisUpdate": "2026-02-01T00:00:00",
+      "nextUpdate": "2026-03-01T00:00:00",
+      "signatureAlgorithm": "SHA256withRSA",
+      "revokedCount": 3,
+      "status": "VALID"
+    }
+  ]
+}</code></pre>
+<h3 id="6-2-crl-상세-조회">6.2 CRL 상세 조회</h3>
+<p><code>GET /api/certificates/crl/{id}</code></p>
+<p>폐기된 인증서 목록과 폐기 사유를 포함합니다.</p>
+<p><strong>RFC 5280 폐기 사유 코드</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>unspecified</code></td>
+<td>미지정</td>
+</tr>
+<tr>
+<td><code>keyCompromise</code></td>
+<td>키 손상</td>
+</tr>
+<tr>
+<td><code>cACompromise</code></td>
+<td>CA 손상</td>
+</tr>
+<tr>
+<td><code>affiliationChanged</code></td>
+<td>소속 변경</td>
+</tr>
+<tr>
+<td><code>superseded</code></td>
+<td>대체됨</td>
+</tr>
+<tr>
+<td><code>cessationOfOperation</code></td>
+<td>운영 중단</td>
+</tr>
+<tr>
+<td><code>certificateHold</code></td>
+<td>인증서 보류</td>
+</tr>
+<tr>
+<td><code>removeFromCRL</code></td>
+<td>CRL에서 제거</td>
+</tr>
+<tr>
+<td><code>privilegeWithdrawn</code></td>
+<td>권한 철회</td>
+</tr>
+<tr>
+<td><code>aACompromise</code></td>
+<td>AA 손상</td>
+</tr>
+</tbody></table></div>
+<h3 id="6-3-crl-바이너리-다운로드">6.3 CRL 바이너리 다운로드</h3>
+<p><code>GET /api/certificates/crl/{id}/download</code></p>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/certificates/crl/{id}/download" \
+  -o certificate.crl</code></pre>
+<p>Content-Type: <code>application/pkix-crl</code></p>
+<hr>
+<h2 id="7-dsc_nc-비준수-인증서-보고서">7. DSC_NC 비준수 인증서 보고서</h2>
+<p><code>GET /api/certificates/dsc-nc/report</code></p>
+<p>ICAO Doc 9303 기술 사양을 준수하지 않는 DSC 인증서 분석 보고서입니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>country</code></td>
+<td>string</td>
+<td>국가 코드 필터</td>
+</tr>
+<tr>
+<td><code>conformanceCode</code></td>
+<td>string</td>
+<td>비준수 사유 코드 필터 (접두사 매칭)</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>integer</td>
+<td>페이지 번호</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>integer</td>
+<td>페이지 크기</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/certificates/dsc-nc/report" | jq .</code></pre>
+<p><strong>응답 (요약)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "summary": {
+    "totalDscNc": 502,
+    "countryCount": 45,
+    "conformanceCodeCount": 12,
+    "expirationRate": 0.85
+  },
+  "conformanceCodes": [{"code": "ERR:CSCA.CDP.14", "count": 120}, ...],
+  "byCountry": [{"country": "DE", "total": 45, "valid": 5, "expired": 40}, ...],
+  "certificates": [...]
+}</code></pre>
+<hr>
+<h2 id="8-pa-검증-passive-authentication">8. PA 검증 (Passive Authentication)</h2>
+<h3 id="8-1-개요">8.1 개요</h3>
+<p>PA 검증은 ICAO 9303 Part 10/11 표준에 따른 전자여권 진위 검증입니다. 전자여권 판독기에서 읽은 SOD와 Data Groups를 전송하면 <strong>8단계 검증 프로세스</strong>를 수행합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Step</th>
+<th>이름</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>SOD Parse</strong></td>
+<td>SOD에서 CMS 구조, 해시 알고리즘, DG 해시 추출</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>DSC Extract</strong></td>
+<td>SOD의 SignedData에서 DSC 인증서 추출</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Trust Chain</strong></td>
+<td>DSC → CSCA 신뢰 체인 검증 (공개키 서명 검증)</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>CSCA Lookup</strong></td>
+<td>LDAP에서 CSCA 인증서 검색 (Link Certificate 포함)</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>SOD Signature</strong></td>
+<td>SOD 서명 유효성 검증</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>DG Hash</strong></td>
+<td>Data Group 해시값 검증 (SOD 내 기대값과 비교)</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>CRL Check</strong></td>
+<td>CRL 유효기간 확인 + DSC 인증서 폐지 여부 확인</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>DSC Registration</strong></td>
+<td>신규 DSC를 Local PKD에 자동 등록</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-2-전체-검증">8.2 전체 검증</h3>
+<p><code>POST /api/pa/verify</code></p>
+<p><strong>요청</strong>:</p>
+<pre><code class="language-json">{
+  "sod": "&lt;Base64 encoded SOD&gt;",
+  "dataGroups": {
+    "1": "&lt;Base64 encoded DG1&gt;",
+    "2": "&lt;Base64 encoded DG2&gt;"
+  },
+  "issuingCountry": "KR",
+  "documentNumber": "M12345678",
+  "requestedBy": "agent-system"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>필수</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>sod</code></td>
+<td>string</td>
+<td><strong>필수</strong></td>
+<td>Base64 인코딩된 SOD</td>
+</tr>
+<tr>
+<td><code>dataGroups</code></td>
+<td>object</td>
+<td><strong>필수</strong></td>
+<td>DG 번호 → Base64 데이터 맵</td>
+</tr>
+<tr>
+<td><code>issuingCountry</code></td>
+<td>string</td>
+<td>선택</td>
+<td>국가 코드 (DSC <code>C=</code> → DG1 MRZ 순으로 자동 추출)</td>
+</tr>
+<tr>
+<td><code>documentNumber</code></td>
+<td>string</td>
+<td>선택</td>
+<td>여권 번호 (DG1 MRZ에서 자동 추출 가능)</td>
+</tr>
+<tr>
+<td><code>requestedBy</code></td>
+<td>string</td>
+<td>선택</td>
+<td>요청자 식별 (기본: <code>anonymous</code>)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><code>dataGroups</code> 키는 <code>&quot;1&quot;</code>, <code>&quot;2&quot;</code> (숫자 문자열) 또는 <code>&quot;DG1&quot;</code>, <code>&quot;DG2&quot;</code> 형식 모두 지원됩니다.</p>
+</blockquote>
+<pre><code class="language-bash">curl -s -X POST "https://pkd.smartcoreinc.com/api/pa/verify" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "sod": "'$(base64 -w0 sod.bin)'",
+    "dataGroups": {
+      "1": "'$(base64 -w0 dg1.bin)'",
+      "2": "'$(base64 -w0 dg2.bin)'"
+    }
+  }' | jq .</code></pre>
+<p><strong>응답 (VALID)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "VALID",
+    "verificationTimestamp": "2026-02-28T10:30:00",
+    "processingDurationMs": 245,
+    "issuingCountry": "KR",
+    "documentNumber": "M12345678",
+
+    "certificateChainValidation": {
+      "valid": true,
+      "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Document Signer KR 01",
+      "dscSerialNumber": "1A2B3C4D5E6F",
+      "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+      "cscaFingerprint": "SHA256:ABCD1234...",
+      "countryCode": "KR",
+      "notBefore": "2024-01-01T00:00:00Z",
+      "notAfter": "2029-12-31T23:59:59Z",
+      "crlStatus": "NOT_REVOKED",
+      "crlThisUpdate": "2026-02-01T00:00:00",
+      "crlNextUpdate": "2026-03-01T00:00:00",
+      "dscExpired": false,
+      "cscaExpired": false,
+      "validAtSigningTime": true,
+      "expirationStatus": "VALID"
+    },
+
+    "sodSignatureValidation": {
+      "valid": true,
+      "hashAlgorithm": "SHA-256",
+      "signatureAlgorithm": "SHA256withRSA"
+    },
+
+    "dataGroupValidation": {
+      "totalGroups": 2,
+      "validGroups": 2,
+      "invalidGroups": 0,
+      "details": {
+        "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
+        "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." }
+      }
+    },
+
+    "dscAutoRegistration": {
+      "registered": true,
+      "newlyRegistered": false,
+      "certificateId": "660e8400-e29b-41d4-a716-446655440099",
+      "fingerprint": "a1b2c3d4e5f6...",
+      "countryCode": "KR"
+    }
+  }
+}</code></pre>
+<p><strong>응답 (INVALID)</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440001",
+    "status": "INVALID",
+    "certificateChainValidation": {
+      "valid": false,
+      "message": "CSCA certificate not found for issuer",
+      "errorCode": "CSCA_NOT_FOUND"
+    },
+    "sodSignatureValidation": { "valid": true },
+    "dataGroupValidation": { "totalGroups": 2, "validGroups": 2, "invalidGroups": 0 }
+  }
+}</code></pre>
+<p><strong>응답 (에러)</strong>:</p>
+<pre><code class="language-json">{
+  "success": false,
+  "error": "SOD parsing failed: Invalid CMS structure"
+}</code></pre>
+<h4 id="certificate-chain-validation-필드">Certificate Chain Validation 필드</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>valid</code></td>
+<td>boolean</td>
+<td>인증서 체인 검증 성공 여부</td>
+</tr>
+<tr>
+<td><code>dscSubject</code></td>
+<td>string</td>
+<td>DSC Subject DN</td>
+</tr>
+<tr>
+<td><code>cscaSubject</code></td>
+<td>string</td>
+<td>CSCA Subject DN</td>
+</tr>
+<tr>
+<td><code>countryCode</code></td>
+<td>string</td>
+<td>국가 코드</td>
+</tr>
+<tr>
+<td><code>notBefore</code> / <code>notAfter</code></td>
+<td>string</td>
+<td>DSC 유효 기간</td>
+</tr>
+<tr>
+<td><code>crlStatus</code></td>
+<td>string</td>
+<td><code>NOT_REVOKED</code>, <code>REVOKED</code>, <code>CRL_EXPIRED</code>, <code>UNKNOWN</code></td>
+</tr>
+<tr>
+<td><code>dscExpired</code> / <code>cscaExpired</code></td>
+<td>boolean</td>
+<td>만료 여부</td>
+</tr>
+<tr>
+<td><code>validAtSigningTime</code></td>
+<td>boolean</td>
+<td>여권 서명 당시 유효 여부 (Point-in-Time Validation)</td>
+</tr>
+<tr>
+<td><code>dscNonConformant</code></td>
+<td>boolean</td>
+<td>ICAO PKD 비준수 DSC인 경우 <code>true</code> (해당 시에만 포함)</td>
+</tr>
+<tr>
+<td><code>pkdConformanceCode</code></td>
+<td>string</td>
+<td>비준수 사유 코드 (해당 시에만 포함)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Point-in-Time Validation</strong>: ICAO 9303 표준에 따라, 인증서가 현재 만료되었더라도 여권 서명 당시에 유효했다면 <code>validAtSigningTime</code>이 <code>true</code>로 설정됩니다.</p>
+</blockquote>
+<h4 id="dsc-auto-registration-필드">DSC Auto-Registration 필드</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>registered</code></td>
+<td>boolean</td>
+<td>DSC 등록 성공 여부</td>
+</tr>
+<tr>
+<td><code>newlyRegistered</code></td>
+<td>boolean</td>
+<td><code>true</code>: 신규 등록, <code>false</code>: 이미 존재</td>
+</tr>
+<tr>
+<td><code>fingerprint</code></td>
+<td>string</td>
+<td>DSC SHA-256 지문 (hex, 64자)</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-3-sod-파싱">8.3 SOD 파싱</h3>
+<p><code>POST /api/pa/parse-sod</code></p>
+<pre><code class="language-json">{ "sod": "&lt;Base64 encoded SOD&gt;" }</code></pre>
+<p><strong>응답</strong>: SOD 메타데이터 (해시 알고리즘, DSC 정보, 포함된 DG 해시 목록)</p>
+<h3 id="8-4-dg1-파싱-mrz">8.4 DG1 파싱 (MRZ)</h3>
+<p><code>POST /api/pa/parse-dg1</code></p>
+<pre><code class="language-json">{ "dg1": "&lt;Base64 encoded DG1&gt;" }</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "documentType": "P",
+  "issuingCountry": "KOR",
+  "surname": "KIM",
+  "givenNames": "MINHO",
+  "fullName": "KIM MINHO",
+  "documentNumber": "M12345678",
+  "nationality": "KOR",
+  "dateOfBirth": "1990-05-15",
+  "sex": "M",
+  "dateOfExpiry": "2030-05-14"
+}</code></pre>
+<h3 id="8-5-dg2-파싱-얼굴-이미지">8.5 DG2 파싱 (얼굴 이미지)</h3>
+<p><code>POST /api/pa/parse-dg2</code></p>
+<pre><code class="language-json">{ "dg2": "&lt;Base64 encoded DG2&gt;" }</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "success": true,
+  "faceCount": 1,
+  "faceImages": [
+    {
+      "index": 1,
+      "imageFormat": "JPEG",
+      "originalFormat": "JPEG2000",
+      "width": 480,
+      "height": 640,
+      "imageDataUrl": "data:image/jpeg;base64,/9j/4AAQ..."
+    }
+  ]
+}</code></pre>
+<blockquote>
+<p>JPEG2000 이미지는 서버에서 자동으로 JPEG로 변환됩니다.</p>
+</blockquote>
+<h3 id="8-6-mrz-텍스트-파싱">8.6 MRZ 텍스트 파싱</h3>
+<p><code>POST /api/pa/parse-mrz-text</code></p>
+<pre><code class="language-json">{ "mrz": "P&lt;KORKIM&lt;&lt;MINHO&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;M123456784KOR9005151M3005148&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;02" }</code></pre>
+<h3 id="8-7-검증-이력">8.7 검증 이력</h3>
+<p><code>GET /api/pa/history?page=0&amp;size=20&amp;status=VALID&amp;issuingCountry=KR</code></p>
+<h3 id="8-8-검증-상세">8.8 검증 상세</h3>
+<p><code>GET /api/pa/{verificationId}</code></p>
+<h3 id="8-9-data-groups-상세">8.9 Data Groups 상세</h3>
+<p><code>GET /api/pa/{verificationId}/datagroups</code></p>
+<p>DG1 MRZ 파싱 결과와 DG2 얼굴 이미지(JPEG)를 포함합니다.</p>
+<h3 id="8-10-검증-통계">8.10 검증 통계</h3>
+<p><code>GET /api/pa/statistics</code></p>
+<pre><code class="language-json">{
+  "totalVerifications": 1500,
+  "successRate": 90.0,
+  "byCountry": [{"country": "KR", "count": 500}, ...],
+  "byStatus": {"VALID": 1350, "INVALID": 150}
+}</code></pre>
+<h3 id="8-11-data-group-참조">8.11 Data Group 참조</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>DG</th>
+<th>이름</th>
+<th>내용</th>
+<th>PA 필요도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DG1</td>
+<td>MRZ</td>
+<td>Machine Readable Zone</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG2</td>
+<td>Face</td>
+<td>얼굴 이미지 (JPEG/JPEG2000)</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG3</td>
+<td>Finger</td>
+<td>지문</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG14</td>
+<td>Security</td>
+<td>Active Auth / PACE 정보</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG15</td>
+<td>AA Key</td>
+<td>Active Authentication 공개키</td>
+<td>선택</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>PA 검증 최소 요구: <strong>SOD + 1개 이상의 DG</strong></p>
+</blockquote>
+<hr>
+<h2 id="9-ai-인증서-분석">9. AI 인증서 분석</h2>
+<p>ML 기반 인증서 이상 탐지 및 패턴 분석 서비스입니다. Isolation Forest + Local Outlier Factor 이중 모델로 45개 특성을 분석합니다. <strong>모든 AI 엔드포인트는 인증 불필요(Public)입니다.</strong></p>
+<h3 id="9-1-개별-인증서-분석-결과">9.1 개별 인증서 분석 결과</h3>
+<p><code>GET /api/ai/certificate/{fingerprint}</code></p>
+<pre><code class="language-bash">curl -s "https://pkd.smartcoreinc.com/api/ai/certificate/a1b2c3d4..." | jq .</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "fingerprint": "a1b2c3d4...",
+  "certificate_type": "DSC",
+  "country_code": "KR",
+  "anomaly_score": 0.12,
+  "anomaly_label": "NORMAL",
+  "risk_score": 15.0,
+  "risk_level": "LOW",
+  "risk_factors": {
+    "algorithm": 5,
+    "key_size": 10,
+    "compliance": 0,
+    "validity": 0,
+    "extensions": 0,
+    "anomaly": 0
+  },
+  "anomaly_explanations": [
+    "국가 평균 대비 유효기간 편차: 평균 대비 1.2σ 낮음",
+    "키 크기: 평균 대비 0.8σ 낮음"
+  ],
+  "analyzed_at": "2026-02-28T03:00:05"
+}</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>anomaly_score</code></td>
+<td>이상 점수 0.0 (정상) ~ 1.0 (이상)</td>
+</tr>
+<tr>
+<td><code>anomaly_label</code></td>
+<td><code>NORMAL</code> (&lt;0.3), <code>SUSPICIOUS</code> (0.3~0.7), <code>ANOMALOUS</code> (&gt;=0.7)</td>
+</tr>
+<tr>
+<td><code>risk_score</code></td>
+<td>위험 점수 0~100 (복합 점수)</td>
+</tr>
+<tr>
+<td><code>risk_level</code></td>
+<td><code>LOW</code> (0<del>25), <code>MEDIUM</code> (26</del>50), <code>HIGH</code> (51<del>75), <code>CRITICAL</code> (76</del>100)</td>
+</tr>
+<tr>
+<td><code>risk_factors</code></td>
+<td>6개 카테고리별 위험 기여 점수</td>
+</tr>
+<tr>
+<td><code>anomaly_explanations</code></td>
+<td>상위 5개 기여 피처와 sigma 편차 (한국어)</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-2-포렌식-상세">9.2 포렌식 상세</h3>
+<p><code>GET /api/ai/certificate/{fingerprint}/forensic</code></p>
+<p>10개 포렌식 카테고리별 상세 분석:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>카테고리</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>algorithm</code></td>
+<td>서명 알고리즘 적합성</td>
+</tr>
+<tr>
+<td><code>key_size</code></td>
+<td>키 크기 적합성</td>
+</tr>
+<tr>
+<td><code>compliance</code></td>
+<td>ICAO 준수성</td>
+</tr>
+<tr>
+<td><code>validity</code></td>
+<td>유효 기간 적절성</td>
+</tr>
+<tr>
+<td><code>extensions</code></td>
+<td>확장 필드 적합성</td>
+</tr>
+<tr>
+<td><code>anomaly</code></td>
+<td>이상치 수준</td>
+</tr>
+<tr>
+<td><code>issuer_reputation</code></td>
+<td>발급자 신뢰도</td>
+</tr>
+<tr>
+<td><code>structural_consistency</code></td>
+<td>구조적 일관성</td>
+</tr>
+<tr>
+<td><code>temporal_pattern</code></td>
+<td>시간적 패턴</td>
+</tr>
+<tr>
+<td><code>dn_consistency</code></td>
+<td>DN 일관성</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-3-이상-인증서-목록">9.3 이상 인증서 목록</h3>
+<p><code>GET /api/ai/anomalies?country=KR&amp;label=ANOMALOUS&amp;risk_level=HIGH&amp;page=1&amp;size=20</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>country</code></td>
+<td>국가 코드 필터</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td>인증서 유형 필터 (CSCA, DSC, DSC_NC, MLSC)</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td>이상 수준 필터 (NORMAL, SUSPICIOUS, ANOMALOUS)</td>
+</tr>
+<tr>
+<td><code>risk_level</code></td>
+<td>위험 수준 필터 (LOW, MEDIUM, HIGH, CRITICAL)</td>
+</tr>
+<tr>
+<td><code>page</code></td>
+<td>페이지 번호 (1부터)</td>
+</tr>
+<tr>
+<td><code>size</code></td>
+<td>페이지 크기 (최대 100)</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-4-전체-분석-통계">9.4 전체 분석 통계</h3>
+<p><code>GET /api/ai/statistics</code></p>
+<pre><code class="language-json">{
+  "total_analyzed": 31212,
+  "normal_count": 27305,
+  "suspicious_count": 3905,
+  "anomalous_count": 2,
+  "risk_distribution": {"LOW": 22396, "MEDIUM": 7405, "HIGH": 919, "CRITICAL": 492},
+  "avg_risk_score": 24.75,
+  "last_analysis_at": "2026-02-28T03:00:05"
+}</code></pre>
+<h3 id="9-5-분석-실행-상태">9.5 분석 실행/상태</h3>
+<p><strong>분석 실행</strong>: <code>POST /api/ai/analyze</code> (비동기 백그라운드, 이미 실행 중이면 <code>409 Conflict</code>)</p>
+<p><strong>증분 분석</strong>: <code>POST /api/ai/analyze/incremental</code> (upload_id 기반)</p>
+<p><strong>진행 상태</strong>: <code>GET /api/ai/analyze/status</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>status</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>IDLE</code></td>
+<td>미실행/초기 상태</td>
+</tr>
+<tr>
+<td><code>RUNNING</code></td>
+<td>분석 진행 중</td>
+</tr>
+<tr>
+<td><code>COMPLETED</code></td>
+<td>분석 완료</td>
+</tr>
+<tr>
+<td><code>FAILED</code></td>
+<td>분석 실패</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-6-리포트-api">9.6 리포트 API</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/ai/reports/country-maturity</code></td>
+<td>국가별 PKI 성숙도 순위</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/algorithm-trends</code></td>
+<td>연도별 알고리즘 사용 추이</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/key-size-distribution</code></td>
+<td>알고리즘 군별 키 크기 분포</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/risk-distribution</code></td>
+<td>위험 수준별 분포</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/country/{code}</code></td>
+<td>특정 국가 상세 분석</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/issuer-profiles</code></td>
+<td>발급자별 프로파일 분석</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/forensic-summary</code></td>
+<td>포렌식 분석 요약</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/reports/extension-anomalies</code></td>
+<td>확장 필드 규칙 위반 목록</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-7-pa-ai-연동-워크플로우">9.7 PA + AI 연동 워크플로우</h3>
+<p>PA 검증 후 DSC fingerprint로 AI 분석 결과를 조합하여 종합 신뢰도를 평가합니다:</p>
+<pre><code>1. POST /api/pa/verify         → PA 검증 수행, DSC fingerprint 획득
+2. GET /api/ai/certificate/{fp} → 해당 DSC의 AI 이상 탐지 결과 조회
+3. PA 결과 (VALID/INVALID) + AI 위험 수준 (LOW~CRITICAL) 종합 판단</code></pre>
+<hr>
+<h2 id="10-동기화-모니터링">10. 동기화 모니터링</h2>
+<p>DB와 LDAP 간 인증서 동기화 상태를 모니터링합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>Method</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/sync/status</code></td>
+<td>GET</td>
+<td>DB-LDAP 동기화 상태 (IN_SYNC / OUT_OF_SYNC)</td>
+</tr>
+<tr>
+<td><code>/api/sync/stats</code></td>
+<td>GET</td>
+<td>동기화 통계 (성공/실패 횟수, DB/LDAP 카운트)</td>
+</tr>
+<tr>
+<td><code>/api/sync/check</code></td>
+<td>POST</td>
+<td>수동 동기화 체크 실행</td>
+</tr>
+<tr>
+<td><code>/api/sync/discrepancies</code></td>
+<td>GET</td>
+<td>현재 불일치 목록</td>
+</tr>
+<tr>
+<td><code>/api/sync/reconcile</code></td>
+<td>POST</td>
+<td>누락 LDAP 엔트리 보정 실행</td>
+</tr>
+<tr>
+<td><code>/api/sync/reconcile/history</code></td>
+<td>GET</td>
+<td>보정 이력</td>
+</tr>
+<tr>
+<td><code>/api/sync/reconcile/{id}</code></td>
+<td>GET</td>
+<td>보정 상세</td>
+</tr>
+<tr>
+<td><code>/api/sync/reconcile/stats</code></td>
+<td>GET</td>
+<td>보정 통계</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-bash"># 동기화 상태 확인
+curl -s "https://pkd.smartcoreinc.com/api/sync/status" | jq .</code></pre>
+<p><strong>응답</strong>:</p>
+<pre><code class="language-json">{
+  "status": "IN_SYNC",
+  "databaseCount": 31212,
+  "ldapCount": 31212,
+  "lastChecked": "2026-02-28T03:00:00",
+  "byType": {
+    "CSCA": {"db": 845, "ldap": 845},
+    "DSC": {"db": 29838, "ldap": 29838},
+    "CRL": {"db": 69, "ldap": 69}
+  }
+}</code></pre>
+<hr>
+<h2 id="11-icao-pkd-버전-모니터링">11. ICAO PKD 버전 모니터링</h2>
+<p>ICAO PKD 최신 버전과 로컬 버전을 비교합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>Method</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/icao/status</code></td>
+<td>GET</td>
+<td>버전 비교 상태 (업데이트 필요 여부)</td>
+</tr>
+<tr>
+<td><code>/api/icao/latest</code></td>
+<td>GET</td>
+<td>최신 ICAO 버전 정보</td>
+</tr>
+<tr>
+<td><code>/api/icao/history</code></td>
+<td>GET</td>
+<td>버전 체크 이력</td>
+</tr>
+<tr>
+<td><code>/api/icao/check-updates</code></td>
+<td>GET</td>
+<td>수동 버전 체크 실행</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="12-업로드-통계-및-이력">12. 업로드 통계 및 이력</h2>
+<p>인증서 업로드 통계를 조회합니다 (읽기 전용).</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>Method</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/upload/statistics</code></td>
+<td>GET</td>
+<td>업로드 통계 요약 (유형별, 출처별 카운트)</td>
+</tr>
+<tr>
+<td><code>/api/upload/history</code></td>
+<td>GET</td>
+<td>업로드 이력 (페이지네이션)</td>
+</tr>
+<tr>
+<td><code>/api/upload/detail/{id}</code></td>
+<td>GET</td>
+<td>업로드 상세</td>
+</tr>
+<tr>
+<td><code>/api/upload/countries</code></td>
+<td>GET</td>
+<td>국가별 통계</td>
+</tr>
+<tr>
+<td><code>/api/upload/countries/detailed</code></td>
+<td>GET</td>
+<td>국가별 상세 카운트</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="13-코드-마스터-참조-데이터">13. 코드 마스터 (참조 데이터)</h2>
+<p>시스템에서 사용하는 코드/상태/열거형 값을 조회합니다 (읽기 전용). 21개 카테고리, ~150개 코드.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>Method</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/code-master?category=CERTIFICATE_TYPE</code></td>
+<td>GET</td>
+<td>카테고리별 코드 목록</td>
+</tr>
+<tr>
+<td><code>/api/code-master/categories</code></td>
+<td>GET</td>
+<td>카테고리 목록</td>
+</tr>
+<tr>
+<td><code>/api/code-master/{id}</code></td>
+<td>GET</td>
+<td>코드 상세</td>
+</tr>
+</tbody></table></div>
+<p>주요 카테고리: <code>CERTIFICATE_TYPE</code>, <code>VALIDATION_STATUS</code>, <code>CRL_STATUS</code>, <code>CRL_REVOCATION_REASON</code>, <code>UPLOAD_STATUS</code>, <code>OPERATION_TYPE</code>, <code>PA_ERROR_CODE</code> 등</p>
+<hr>
+<h2 id="14-csr-관리-icao-pkd">14. CSR 관리 (ICAO PKD)</h2>
+<p>ICAO PKD CSR(Certificate Signing Request) 생성, 외부 CSR 가져오기, 발급 인증서 등록을 관리합니다. <strong>모든 엔드포인트 JWT 인증 필수.</strong></p>
+<p>ICAO 요구사항: RSA 2048 bit 공개키, SHA256withRSA 서명, Base64(PEM) 인코딩.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>Method</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/csr/generate</code></td>
+<td>POST</td>
+<td>CSR 생성 (RSA-2048 + SHA256withRSA)</td>
+</tr>
+<tr>
+<td><code>/api/csr/import</code></td>
+<td>POST</td>
+<td>외부 생성 CSR + 개인키 PEM 가져오기</td>
+</tr>
+<tr>
+<td><code>/api/csr</code></td>
+<td>GET</td>
+<td>CSR 목록 (page, pageSize, status)</td>
+</tr>
+<tr>
+<td><code>/api/csr/{id}</code></td>
+<td>GET</td>
+<td>CSR 상세 (발급 인증서 메타데이터 포함)</td>
+</tr>
+<tr>
+<td><code>/api/csr/{id}/export/pem</code></td>
+<td>GET</td>
+<td>CSR PEM 파일 다운로드</td>
+</tr>
+<tr>
+<td><code>/api/csr/{id}/certificate</code></td>
+<td>POST</td>
+<td>ICAO 발급 인증서 등록 (공개키 매칭 검증)</td>
+</tr>
+<tr>
+<td><code>/api/csr/{id}</code></td>
+<td>DELETE</td>
+<td>CSR 삭제 (개인키 포함 영구 파기)</td>
+</tr>
+</tbody></table></div>
+<h3 id="csr-생성">CSR 생성</h3>
+<pre><code class="language-bash">curl -X POST $API_URL/api/csr/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "countryCode": "KR",
+    "organization": "Government of Korea",
+    "commonName": "Korea PKD",
+    "memo": "ICAO PKD 등록용"
+  }'</code></pre>
+<h3 id="외부-csr-가져오기">외부 CSR 가져오기</h3>
+<pre><code class="language-bash">curl -X POST $API_URL/api/csr/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "csrPem": "-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----",
+    "privateKeyPem": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----",
+    "memo": "외부 생성 CSR"
+  }'</code></pre>
+<h3 id="icao-발급-인증서-등록">ICAO 발급 인증서 등록</h3>
+<pre><code class="language-bash">curl -X POST $API_URL/api/csr/{id}/certificate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "certificatePem": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"
+  }'</code></pre>
+<blockquote>
+<p><strong>보안</strong>: 개인키는 AES-256-GCM 암호화 저장, API 응답에 개인키 미포함. 모든 작업 감사 로그 기록.</p>
+</blockquote>
+<hr>
+<h2 id="15-시스템-모니터링">15. 시스템 모니터링</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>서비스</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/health</code></td>
+<td>PKD Management</td>
+<td>서비스 상태</td>
+</tr>
+<tr>
+<td><code>GET /api/health/database</code></td>
+<td>PKD Management</td>
+<td>DB 연결 상태</td>
+</tr>
+<tr>
+<td><code>GET /api/health/ldap</code></td>
+<td>PKD Management</td>
+<td>LDAP 연결 상태</td>
+</tr>
+<tr>
+<td><code>GET /api/sync/health</code></td>
+<td>PKD Relay</td>
+<td>Relay 서비스 상태</td>
+</tr>
+<tr>
+<td><code>GET /api/ai/health</code></td>
+<td>AI Analysis</td>
+<td>AI 서비스 상태</td>
+</tr>
+<tr>
+<td><code>GET /api/monitoring/health</code></td>
+<td>Monitoring</td>
+<td>모니터링 서비스 상태</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-json">{
+  "service": "pkd-management",
+  "status": "UP",
+  "version": "2.25.5",
+  "timestamp": "2026-02-28T10:30:00Z"
+}</code></pre>
+<hr>
+<h2 id="15-연동-예제">15. 연동 예제</h2>
+<h3 id="15-1-python">15.1 Python</h3>
+<pre><code class="language-python">"""
+ICAO Local PKD — Python SDK 클래스
+pip install requests
+"""
+import requests
+import base64
+import time
+
+
+class IcaoPkdClient:
+    def __init__(self, base_url="https://pkd.smartcoreinc.com/api",
+                 api_key=None, ca_cert=None):
+        self.base_url = base_url
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["X-API-Key"] = api_key
+        self.verify = ca_cert if ca_cert else True  # ca.crt 경로 또는 True
+
+    def _get(self, path, params=None):
+        resp = requests.get(f"{self.base_url}{path}",
+                            params=params, headers=self.headers,
+                            verify=self.verify)
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", 60))
+            time.sleep(retry_after)
+            return self._get(path, params)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _post(self, path, json_data):
+        resp = requests.post(f"{self.base_url}{path}",
+                             json=json_data, headers=self.headers,
+                             verify=self.verify)
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", 60))
+            time.sleep(retry_after)
+            return self._post(path, json_data)
+        resp.raise_for_status()
+        return resp.json()
+
+    # --- 인증서 검색 ---
+    def search_certificates(self, country=None, cert_type=None,
+                            validity=None, limit=50, offset=0):
+        params = {"limit": limit, "offset": offset}
+        if country: params["country"] = country
+        if cert_type: params["certType"] = cert_type
+        if validity: params["validity"] = validity
+        return self._get("/certificates/search", params)
+
+    # --- PA 간편 조회 ---
+    def pa_lookup(self, subject_dn=None, fingerprint=None):
+        body = {}
+        if subject_dn: body["subjectDn"] = subject_dn
+        elif fingerprint: body["fingerprint"] = fingerprint
+        return self._post("/certificates/pa-lookup", body)
+
+    # --- PA 전체 검증 ---
+    def pa_verify(self, sod_bytes, data_groups):
+        """
+        Args:
+            sod_bytes: SOD 바이너리 (bytes)
+            data_groups: {1: dg1_bytes, 2: dg2_bytes}
+        """
+        return self._post("/pa/verify", {
+            "sod": base64.b64encode(sod_bytes).decode(),
+            "dataGroups": {
+                str(k): base64.b64encode(v).decode()
+                for k, v in data_groups.items()
+            }
+        })
+
+    # --- AI 분석 ---
+    def get_ai_analysis(self, fingerprint):
+        return self._get(f"/ai/certificate/{fingerprint}")
+
+    def get_ai_statistics(self):
+        return self._get("/ai/statistics")
+
+
+# 사용 예시
+if __name__ == "__main__":
+    client = IcaoPkdClient(
+        api_key="icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+        ca_cert="/path/to/ca.crt"  # HTTPS 사용 시
+    )
+
+    # 인증서 검색
+    result = client.search_certificates(country="KR", cert_type="DSC", limit=5)
+    print(f"총 {result.get('total', 0)}건")
+
+    # PA 간편 조회
+    lookup = client.pa_lookup(
+        subject_dn="/C=KR/O=Government of Korea/CN=Document Signer 1234")
+    if lookup.get("validation"):
+        print(f"Status: {lookup['validation']['validationStatus']}")
+
+    # PA 전체 검증 (SOD/DG 바이너리 필요)
+    # result = client.pa_verify(sod_bytes, {1: dg1_bytes, 2: dg2_bytes})
+
+    # AI 분석 결합
+    # ai = client.get_ai_analysis(fingerprint)
+    # print(f"Risk: {ai['risk_level']}, Score: {ai['risk_score']}")</code></pre>
+<h3 id="15-2-java-jdk-11">15.2 Java (JDK 11+)</h3>
+<pre><code class="language-java">import java.net.URI;
+import java.net.http.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
+
+public class IcaoPkdClient {
+    private static final String BASE_URL = "https://pkd.smartcoreinc.com/api";
+    private final String apiKey;
+    private final HttpClient client;
+
+    public IcaoPkdClient(String apiKey) {
+        this.apiKey = apiKey;
+        // Private CA 사용 시 SSLContext 설정 필요
+        this.client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+    }
+
+    private HttpRequest.Builder baseRequest(String path) {
+        var builder = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + path));
+        if (apiKey != null) {
+            builder.header("X-API-Key", apiKey);
+        }
+        return builder;
+    }
+
+    /** 인증서 검색 */
+    public String searchCertificates(String country, String certType, int limit)
+            throws Exception {
+        var request = baseRequest(String.format(
+                "/certificates/search?country=%s&amp;certType=%s&amp;limit=%d",
+                country, certType, limit))
+                .GET().build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    /** PA 간편 조회 */
+    public String paLookup(String subjectDn) throws Exception {
+        var body = String.format("{\"subjectDn\":\"%s\"}", subjectDn);
+        var request = baseRequest("/certificates/pa-lookup")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    /** PA 전체 검증 */
+    public String paVerify(Path sodPath, Path dg1Path) throws Exception {
+        var sodB64 = Base64.getEncoder().encodeToString(Files.readAllBytes(sodPath));
+        var dg1B64 = Base64.getEncoder().encodeToString(Files.readAllBytes(dg1Path));
+        var body = String.format(
+                "{\"sod\":\"%s\",\"dataGroups\":{\"1\":\"%s\"}}", sodB64, dg1B64);
+        var request = baseRequest("/pa/verify")
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+
+    /** AI 분석 결과 */
+    public String getAiAnalysis(String fingerprint) throws Exception {
+        var request = baseRequest("/ai/certificate/" + fingerprint)
+                .GET().build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString()).body();
+    }
+}</code></pre>
+<h3 id="15-3-c-net-6">15.3 C# (.NET 6+)</h3>
+<pre><code class="language-csharp">using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text;
+using System.Text.Json;
+
+public class IcaoPkdClient
+{
+    private const string BaseUrl = "https://pkd.smartcoreinc.com/api";
+    private readonly HttpClient _client;
+
+    public IcaoPkdClient(string apiKey = null)
+    {
+        // Private CA 사용 시 HttpClientHandler.ServerCertificateCustomValidationCallback 설정
+        _client = new HttpClient();
+        if (!string.IsNullOrEmpty(apiKey))
+            _client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+    }
+
+    public async Task&lt;string&gt; SearchCertificatesAsync(
+        string country, string certType = "DSC", int limit = 10)
+    {
+        var resp = await _client.GetAsync(
+            $"{BaseUrl}/certificates/search?country={country}&amp;certType={certType}&amp;limit={limit}");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync();
+    }
+
+    public async Task&lt;string&gt; PaLookupAsync(string subjectDn)
+    {
+        var content = new StringContent(
+            JsonSerializer.Serialize(new { subjectDn }),
+            Encoding.UTF8, "application/json");
+        var resp = await _client.PostAsync($"{BaseUrl}/certificates/pa-lookup", content);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync();
+    }
+
+    public async Task&lt;string&gt; PaVerifyAsync(string sodPath, string dg1Path)
+    {
+        var sodB64 = Convert.ToBase64String(await File.ReadAllBytesAsync(sodPath));
+        var dg1B64 = Convert.ToBase64String(await File.ReadAllBytesAsync(dg1Path));
+        var content = new StringContent(JsonSerializer.Serialize(new {
+            sod = sodB64,
+            dataGroups = new Dictionary&lt;string, string&gt; { { "1", dg1B64 } }
+        }), Encoding.UTF8, "application/json");
+        var resp = await _client.PostAsync($"{BaseUrl}/pa/verify", content);
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync();
+    }
+
+    public async Task&lt;string&gt; GetAiAnalysisAsync(string fingerprint)
+    {
+        var resp = await _client.GetAsync($"{BaseUrl}/ai/certificate/{fingerprint}");
+        resp.EnsureSuccessStatusCode();
+        return await resp.Content.ReadAsStringAsync();
+    }
+}</code></pre>
+<h3 id="15-4-curl-명령어-모음">15.4 curl 명령어 모음</h3>
+<pre><code class="language-bash">API_KEY="icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+BASE="https://pkd.smartcoreinc.com"
+
+# ===== 헬스 체크 (인증 불필요) =====
+curl -s "$BASE/api/health" | jq .
+curl -s "$BASE/api/health/database" | jq .
+
+# ===== 인증서 검색 =====
+curl -s "$BASE/api/certificates/search?country=KR&amp;certType=DSC&amp;limit=5" \
+  -H "X-API-Key: $API_KEY" | jq .
+
+# ===== 국가 목록 =====
+curl -s "$BASE/api/certificates/countries" | jq .
+
+# ===== PA 간편 조회 =====
+curl -s -X POST "$BASE/api/certificates/pa-lookup" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{"subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"}' | jq .
+
+# ===== PA 전체 검증 =====
+curl -s -X POST "$BASE/api/pa/verify" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $API_KEY" \
+  -d '{
+    "sod": "'$(base64 -w0 sod.bin)'",
+    "dataGroups": {"1": "'$(base64 -w0 dg1.bin)'", "2": "'$(base64 -w0 dg2.bin)'"}
+  }' | jq .
+
+# ===== 인증서 내보내기 =====
+curl -s "$BASE/api/certificates/export/all?format=pem" \
+  -H "X-API-Key: $API_KEY" -o all_certs.zip
+
+# ===== AI 분석 =====
+curl -s "$BASE/api/ai/certificate/a1b2c3d4..." | jq .
+curl -s "$BASE/api/ai/statistics" | jq .
+curl -s "$BASE/api/ai/anomalies?label=ANOMALOUS&amp;page=1&amp;size=10" | jq .
+curl -s "$BASE/api/ai/reports/country-maturity" | jq .
+curl -s "$BASE/api/ai/reports/country/KR" | jq .
+
+# ===== 동기화 =====
+curl -s "$BASE/api/sync/status" | jq .
+
+# ===== CRL 보고서 =====
+curl -s "$BASE/api/certificates/crl/report" | jq .
+
+# ===== ICAO 버전 =====
+curl -s "$BASE/api/icao/status" | jq .</code></pre>
+<h3 id="15-5-https-private-ca-설정">15.5 HTTPS Private CA 설정</h3>
+<p>ICAO Local PKD는 Private CA 기반 TLS를 사용합니다. 관리자에게 <code>ca.crt</code> 파일을 받아 아래와 같이 설정하세요.</p>
+<p><strong>curl</strong>:</p>
+<pre><code class="language-bash">curl --cacert /path/to/ca.crt -H "X-API-Key: $API_KEY" $URL</code></pre>
+<p><strong>Python (requests)</strong>:</p>
+<pre><code class="language-python">requests.get(url, headers=headers, verify="/path/to/ca.crt")</code></pre>
+<p><strong>Java (keytool)</strong>:</p>
+<pre><code class="language-bash">keytool -import -alias pkd-ca -file ca.crt -keystore cacerts -storepass changeit</code></pre>
+<p><strong>C# (.NET)</strong>:</p>
+<pre><code class="language-csharp">var handler = new HttpClientHandler();
+handler.ServerCertificateCustomValidationCallback = (msg, cert, chain, errors) =&gt; {
+    // CA 인증서 검증 로직 또는 개발 환경에서 true 반환
+    return true;
+};
+var client = new HttpClient(handler);</code></pre>
+<h3 id="15-6-에러-처리-패턴">15.6 에러 처리 패턴</h3>
+<pre><code class="language-python">import time
+
+def call_with_retry(client, func, *args, max_retries=3):
+    """Rate Limit + 네트워크 에러 처리"""
+    for attempt in range(max_retries):
+        try:
+            return func(*args)
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 429:
+                retry_after = int(e.response.headers.get("Retry-After", 60))
+                print(f"Rate limit. {retry_after}초 대기... ({attempt+1}/{max_retries})")
+                time.sleep(retry_after)
+            elif e.response.status_code &gt;= 500:
+                print(f"서버 오류. 5초 대기... ({attempt+1}/{max_retries})")
+                time.sleep(5)
+            else:
+                raise
+        except requests.exceptions.ConnectionError:
+            print(f"연결 실패. 10초 대기... ({attempt+1}/{max_retries})")
+            time.sleep(10)
+    raise Exception("최대 재시도 횟수 초과")</code></pre>
+<hr>
+<h2 id="16-에러-코드-참조">16. 에러 코드 참조</h2>
+<h3 id="http-에러-응답">HTTP 에러 응답</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>에러</th>
+<th>원인</th>
+<th>대응</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>401</code></td>
+<td>Unauthorized</td>
+<td>API Key가 없거나 유효하지 않음</td>
+<td>API Key 확인 (PA 엔드포인트에서는 미발생)</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Forbidden</td>
+<td>비활성 클라이언트, IP 차단, 권한 부족</td>
+<td>관리자에게 상태 확인 요청</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>Rate Limit Exceeded</td>
+<td>분/시/일 Rate Limit 초과</td>
+<td><code>Retry-After</code> 대기 후 재시도</td>
+</tr>
+</tbody></table></div>
+<h3 id="pa-에러-코드">PA 에러 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>심각도</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>MISSING_SOD</code></td>
+<td>CRITICAL</td>
+<td>SOD 데이터 누락</td>
+</tr>
+<tr>
+<td><code>INVALID_SOD</code></td>
+<td>CRITICAL</td>
+<td>SOD 파싱 실패 (CMS 구조 오류)</td>
+</tr>
+<tr>
+<td><code>DSC_EXTRACTION_FAILED</code></td>
+<td>CRITICAL</td>
+<td>SOD에서 DSC 추출 실패</td>
+</tr>
+<tr>
+<td><code>CSCA_NOT_FOUND</code></td>
+<td>CRITICAL</td>
+<td>CSCA 인증서를 찾을 수 없음</td>
+</tr>
+<tr>
+<td><code>CSCA_DN_MISMATCH</code></td>
+<td>CRITICAL</td>
+<td>CSCA Subject DN 불일치</td>
+</tr>
+<tr>
+<td><code>CSCA_SELF_SIGNATURE_FAILED</code></td>
+<td>CRITICAL</td>
+<td>CSCA 자가 서명 검증 실패</td>
+</tr>
+<tr>
+<td><code>TRUST_CHAIN_INVALID</code></td>
+<td>HIGH</td>
+<td>신뢰 체인 검증 실패</td>
+</tr>
+<tr>
+<td><code>SOD_SIGNATURE_INVALID</code></td>
+<td>HIGH</td>
+<td>SOD 서명 검증 실패</td>
+</tr>
+<tr>
+<td><code>DG_HASH_MISMATCH</code></td>
+<td>HIGH</td>
+<td>Data Group 해시 불일치</td>
+</tr>
+<tr>
+<td><code>CERTIFICATE_REVOKED</code></td>
+<td>HIGH</td>
+<td>CRL에 의해 인증서 폐지됨</td>
+</tr>
+<tr>
+<td><code>CERTIFICATE_EXPIRED</code></td>
+<td>MEDIUM</td>
+<td>인증서 유효기간 만료</td>
+</tr>
+<tr>
+<td><code>CRL_EXPIRED</code></td>
+<td>MEDIUM</td>
+<td>CRL 유효기간 만료</td>
+</tr>
+</tbody></table></div>
+<h3 id="검증-상태-코드">검증 상태 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상태</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>VALID</code></td>
+<td>인증서 유효, Trust Chain 검증 성공</td>
+</tr>
+<tr>
+<td><code>EXPIRED_VALID</code></td>
+<td>인증서 만료되었으나 서명 당시 유효 (Point-in-Time)</td>
+</tr>
+<tr>
+<td><code>INVALID</code></td>
+<td>검증 실패 (서명, Trust Chain 등)</td>
+</tr>
+<tr>
+<td><code>PENDING</code></td>
+<td>CSCA 미등록으로 검증 보류</td>
+</tr>
+<tr>
+<td><code>ERROR</code></td>
+<td>검증 중 오류 발생</td>
+</tr>
+</tbody></table></div>
+<h3 id="crl-상태-코드">CRL 상태 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상태</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>NOT_REVOKED</code></td>
+<td>폐기되지 않음</td>
+</tr>
+<tr>
+<td><code>REVOKED</code></td>
+<td>인증서 폐기됨</td>
+</tr>
+<tr>
+<td><code>CRL_EXPIRED</code></td>
+<td>CRL 유효기간 만료 (nextUpdate 경과)</td>
+</tr>
+<tr>
+<td><code>UNKNOWN</code></td>
+<td>CRL 미확인</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="17-faq-트러블슈팅">17. FAQ / 트러블슈팅</h2>
+<h3 id="q-api-key를-분실했습니다">Q. API Key를 분실했습니다.</h3>
+<p>API Key는 발급 시 한 번만 표시됩니다. 관리자에게 <strong>키 재발급</strong>을 요청하세요. 기존 키는 즉시 무효화됩니다.</p>
+<h3 id="q-403-forbidden-오류가-발생합니다">Q. 403 Forbidden 오류가 발생합니다.</h3>
+<p>가능한 원인:</p>
+<ol>
+<li>클라이언트 비활성화 (관리자가 비활성화)</li>
+<li>API Key 만료 (<code>expires_at</code> 설정된 경우)</li>
+<li>IP 화이트리스트 불일치 (현재 IP가 <code>allowed_ips</code>에 없음)</li>
+<li>Permission 부족 (요청 엔드포인트에 대한 권한 없음)</li>
+<li>엔드포인트 제한 (<code>allowed_endpoints</code> 패턴에 불일치)</li>
+</ol>
+<h3 id="q-429-too-many-requests가-자주-발생합니다">Q. 429 Too Many Requests가 자주 발생합니다.</h3>
+<p>요청 빈도를 줄이는 방법:</p>
+<ul>
+<li><code>limit</code> 파라미터를 늘려 페이지 수를 줄이기</li>
+<li>PA 간편 조회(<code>/api/certificates/pa-lookup</code>)로 전체 검증 호출 줄이기</li>
+<li>응답 결과를 로컬 캐싱</li>
+<li>관리자에게 Rate Limit 상향 요청</li>
+</ul>
+<h3 id="q-https-연결-시-인증서-오류가-발생합니다">Q. HTTPS 연결 시 인증서 오류가 발생합니다.</h3>
+<p>Private CA 기반 TLS를 사용하므로 <code>ca.crt</code> 설치가 필요합니다. <a href="#155-https-private-ca-설정">15.5 HTTPS Private CA 설정</a>을 참조하세요.</p>
+<h3 id="q-pa-검증이-invalid로-반환됩니다">Q. PA 검증이 INVALID로 반환됩니다.</h3>
+<p>주요 원인:</p>
+<ol>
+<li><strong>CSCA_NOT_FOUND</strong>: 해당 국가 CSCA가 Local PKD에 미등록 → 관리자에게 Master List 업로드 요청</li>
+<li><strong>TRUST_CHAIN_INVALID</strong>: DSC → CSCA 체인 실패 → CSCA 유효성, Link Certificate 확인</li>
+<li><strong>DG_HASH_MISMATCH</strong>: Data Group 무결성 오류 → NFC 통신 재시도</li>
+</ol>
+<h3 id="q-미등록-api-key로-pa-요청을-보내면">Q. 미등록 API Key로 PA 요청을 보내면?</h3>
+<p>PA 엔드포인트(<code>/api/pa/*</code>)에서는 미등록/유효하지 않은 API Key를 전송해도 <strong>정상 처리</strong>됩니다 (v2.22.1+). 등록된 유효한 키만 사용량 추적이 적용됩니다.</p>
+<blockquote>
+<p>PKD Management 엔드포인트(<code>/api/certificates/*</code> 등)에서는 미등록 API Key가 <code>401</code>을 반환합니다.</p>
+</blockquote>
+<h3 id="q-certtype-필터가-작동하지-않습니다">Q. certType 필터가 작동하지 않습니다.</h3>
+<p>LDAP 계층 구조 특성상, <code>certType</code>만 지정하고 <code>country</code>를 지정하지 않으면 유형 필터링이 효과적이지 않습니다. 반드시 <code>country</code>와 함께 사용하세요.</p>
+<h3 id="q-base64-인코딩-오류가-발생합니다">Q. Base64 인코딩 오류가 발생합니다.</h3>
+<p>Standard Base64 인코딩을 사용하세요 (RFC 4648). URL-safe Base64가 아닌 표준 Base64입니다.</p>
+<hr>
+<h2 id="18-부록">18. 부록</h2>
+<h3 id="a-전체-엔드포인트-quick-reference">A. 전체 엔드포인트 Quick Reference</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Auth</th>
+<th>Permission</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>인증서 검색</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/search</code></td>
+<td>Public</td>
+<td><code>cert:read</code></td>
+<td>인증서 검색</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/countries</code></td>
+<td>Public</td>
+<td><code>cert:read</code></td>
+<td>국가 목록</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/validation</code></td>
+<td>Public</td>
+<td><code>cert:read</code></td>
+<td>검증 결과 조회</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/certificates/pa-lookup</code></td>
+<td>Public</td>
+<td><code>cert:read</code></td>
+<td>PA 간편 조회</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/doc9303-checklist</code></td>
+<td>Public</td>
+<td><code>report:read</code></td>
+<td>Doc 9303 체크리스트</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/export/file</code></td>
+<td>Public</td>
+<td><code>cert:export</code></td>
+<td>단일 인증서 내보내기</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/export/country</code></td>
+<td>Public</td>
+<td><code>cert:export</code></td>
+<td>국가별 내보내기</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/export/all</code></td>
+<td>Public</td>
+<td><code>cert:export</code></td>
+<td>전체 내보내기</td>
+</tr>
+<tr>
+<td><strong>CRL 보고서</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/crl/report</code></td>
+<td>Public</td>
+<td><code>report:read</code></td>
+<td>CRL 보고서</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/crl/{id}</code></td>
+<td>Public</td>
+<td><code>report:read</code></td>
+<td>CRL 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/crl/{id}/download</code></td>
+<td>Public</td>
+<td><code>report:read</code></td>
+<td>CRL 다운로드</td>
+</tr>
+<tr>
+<td><strong>DSC_NC 보고서</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/dsc-nc/report</code></td>
+<td>Public</td>
+<td><code>report:read</code></td>
+<td>비준수 DSC 보고서</td>
+</tr>
+<tr>
+<td><strong>PA 검증</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/verify</code></td>
+<td>Public</td>
+<td><code>pa:verify</code></td>
+<td>PA 전체 검증</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-sod</code></td>
+<td>Public</td>
+<td><code>pa:verify</code></td>
+<td>SOD 파싱</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg1</code></td>
+<td>Public</td>
+<td><code>pa:verify</code></td>
+<td>DG1 파싱</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg2</code></td>
+<td>Public</td>
+<td><code>pa:verify</code></td>
+<td>DG2 파싱</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-mrz-text</code></td>
+<td>Public</td>
+<td><code>pa:verify</code></td>
+<td>MRZ 파싱</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/pa/history</code></td>
+<td>Public</td>
+<td><code>pa:read</code></td>
+<td>검증 이력</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/pa/{id}</code></td>
+<td>Public</td>
+<td><code>pa:read</code></td>
+<td>검증 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/pa/{id}/datagroups</code></td>
+<td>Public</td>
+<td><code>pa:read</code></td>
+<td>DG 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/pa/statistics</code></td>
+<td>Public</td>
+<td><code>pa:read</code></td>
+<td>검증 통계</td>
+</tr>
+<tr>
+<td><strong>AI 분석</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/health</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>AI 서비스 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/certificate/{fp}</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>인증서 분석 결과</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/certificate/{fp}/forensic</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>포렌식 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/anomalies</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>이상 인증서 목록</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/statistics</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>분석 통계</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/ai/analyze</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>전체 분석 실행</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/ai/analyze/incremental</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>증분 분석 실행</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/analyze/status</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>분석 진행 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/country-maturity</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>국가 PKI 성숙도</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/algorithm-trends</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>알고리즘 추이</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/key-size-distribution</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>키 크기 분포</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/risk-distribution</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>위험 수준 분포</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/country/{code}</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>국가 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/issuer-profiles</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>발급자 프로파일</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/forensic-summary</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>포렌식 요약</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/reports/extension-anomalies</code></td>
+<td>Public</td>
+<td><code>ai:read</code></td>
+<td>확장 위반 목록</td>
+</tr>
+<tr>
+<td><strong>동기화 모니터링</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/status</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>동기화 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/stats</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>동기화 통계</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/sync/check</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>수동 체크</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/discrepancies</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>불일치 목록</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/sync/reconcile</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>보정 실행</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/reconcile/history</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>보정 이력</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/reconcile/{id}</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>보정 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/reconcile/stats</code></td>
+<td>Public</td>
+<td><code>sync:read</code></td>
+<td>보정 통계</td>
+</tr>
+<tr>
+<td><strong>ICAO 모니터링</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/icao/status</code></td>
+<td>Public</td>
+<td><code>icao:read</code></td>
+<td>버전 비교</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/icao/latest</code></td>
+<td>Public</td>
+<td><code>icao:read</code></td>
+<td>최신 버전</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/icao/history</code></td>
+<td>Public</td>
+<td><code>icao:read</code></td>
+<td>체크 이력</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/icao/check-updates</code></td>
+<td>Public</td>
+<td><code>icao:read</code></td>
+<td>수동 체크</td>
+</tr>
+<tr>
+<td><strong>업로드 통계</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/upload/statistics</code></td>
+<td>Public</td>
+<td><code>upload:read</code></td>
+<td>업로드 통계</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/upload/history</code></td>
+<td>Public</td>
+<td><code>upload:read</code></td>
+<td>업로드 이력</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/upload/detail/{id}</code></td>
+<td>Public</td>
+<td><code>upload:read</code></td>
+<td>업로드 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/upload/countries</code></td>
+<td>Public</td>
+<td><code>upload:read</code></td>
+<td>국가별 통계</td>
+</tr>
+<tr>
+<td><strong>코드 마스터</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/code-master</code></td>
+<td>Public</td>
+<td>-</td>
+<td>코드 목록</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/code-master/categories</code></td>
+<td>Public</td>
+<td>-</td>
+<td>카테고리 목록</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/code-master/{id}</code></td>
+<td>Public</td>
+<td>-</td>
+<td>코드 상세</td>
+</tr>
+<tr>
+<td><strong>헬스 체크</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/health</code></td>
+<td>Public</td>
+<td>-</td>
+<td>PKD Management 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/health/database</code></td>
+<td>Public</td>
+<td>-</td>
+<td>DB 연결 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/health/ldap</code></td>
+<td>Public</td>
+<td>-</td>
+<td>LDAP 연결 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/sync/health</code></td>
+<td>Public</td>
+<td>-</td>
+<td>PKD Relay 상태</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/health</code></td>
+<td>Public</td>
+<td>-</td>
+<td>AI Service 상태</td>
+</tr>
+</tbody></table></div>
+<h3 id="b-openapi-스펙-참조">B. OpenAPI 스펙 참조</h3>
+<ul>
+<li><strong>Swagger UI</strong>: <code>https://pkd.smartcoreinc.com/api-docs</code></li>
+<li>OpenAPI YAML:<ul>
+<li>PKD Management: <code>docs/openapi/pkd-management.yaml</code></li>
+<li>PA Service: <code>docs/openapi/pa-service.yaml</code></li>
+<li>PKD Relay: <code>docs/openapi/pkd-relay-service.yaml</code></li>
+</ul>
+</li>
+</ul>
+<h3 id="c-변경-이력">C. 변경 이력</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>버전</th>
+<th>날짜</th>
+<th>변경 내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2.35.0</td>
+<td>2026-03-16</td>
+<td>CSR 관리 API 7개 엔드포인트 추가 (§14)</td>
+</tr>
+<tr>
+<td>2.25.5</td>
+<td>2026-03-01</td>
+<td>초기 작성 — 전체 공개 API 종합 개발자 메뉴얼</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><strong>기술 지원</strong>: <a href="mailto:support@smartcoreinc.com">support@smartcoreinc.com</a>
+<strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#목차">목차</a><a href="#1-개요">1. 개요</a><a href="#icao-local-pkd란" style="padding-left:1rem">ICAO Local PKD란</a><a href="#용어-정의" style="padding-left:1rem">용어 정의</a><a href="#2-시작하기">2. 시작하기</a><a href="#2-1-base-url" style="padding-left:1rem">2.1 Base URL</a><a href="#2-2-api-key-발급" style="padding-left:1rem">2.2 API Key 발급</a><a href="#2-3-첫-번째-요청" style="padding-left:1rem">2.3 첫 번째 요청</a><a href="#2-4-인증-방식-요약" style="padding-left:1rem">2.4 인증 방식 요약</a><a href="#3-인증-및-권한">3. 인증 및 권한</a><a href="#3-1-api-key-인증" style="padding-left:1rem">3.1 API Key 인증</a><a href="#3-2-권한-permissions" style="padding-left:1rem">3.2 권한 (Permissions)</a><a href="#3-3-rate-limiting" style="padding-left:1rem">3.3 Rate Limiting</a><a href="#3-4-ip-화이트리스트" style="padding-left:1rem">3.4 IP 화이트리스트</a><a href="#3-5-pa-엔드포인트-특이사항" style="padding-left:1rem">3.5 PA 엔드포인트 특이사항</a><a href="#3-6-공개-엔드포인트" style="padding-left:1rem">3.6 공개 엔드포인트</a><a href="#4-공통-규약">4. 공통 규약</a><a href="#4-1-요청-형식" style="padding-left:1rem">4.1 요청 형식</a><a href="#4-2-응답-형식" style="padding-left:1rem">4.2 응답 형식</a><a href="#4-3-페이지네이션" style="padding-left:1rem">4.3 페이지네이션</a><a href="#4-4-날짜-시간-형식" style="padding-left:1rem">4.4 날짜/시간 형식</a><a href="#4-5-국가-코드" style="padding-left:1rem">4.5 국가 코드</a><a href="#4-6-인증서-유형-코드" style="padding-left:1rem">4.6 인증서 유형 코드</a><a href="#4-7-http-상태-코드" style="padding-left:1rem">4.7 HTTP 상태 코드</a><a href="#5-인증서-검색-및-조회">5. 인증서 검색 및 조회</a><a href="#5-1-인증서-검색" style="padding-left:1rem">5.1 인증서 검색</a><a href="#5-2-국가-목록" style="padding-left:1rem">5.2 국가 목록</a><a href="#5-3-검증-결과-조회" style="padding-left:1rem">5.3 검증 결과 조회</a><a href="#5-4-pa-간편-조회-lightweight-pa-lookup" style="padding-left:1rem">5.4 PA 간편 조회 (Lightweight PA Lookup)</a><a href="#5-5-doc-9303-적합성-체크리스트" style="padding-left:1rem">5.5 Doc 9303 적합성 체크리스트</a><a href="#5-6-인증서-내보내기" style="padding-left:1rem">5.6 인증서 내보내기</a><a href="#6-crl-보고서">6. CRL 보고서</a><a href="#6-1-crl-보고서-조회" style="padding-left:1rem">6.1 CRL 보고서 조회</a><a href="#6-2-crl-상세-조회" style="padding-left:1rem">6.2 CRL 상세 조회</a><a href="#6-3-crl-바이너리-다운로드" style="padding-left:1rem">6.3 CRL 바이너리 다운로드</a><a href="#7-dsc_nc-비준수-인증서-보고서">7. DSC_NC 비준수 인증서 보고서</a><a href="#8-pa-검증-passive-authentication">8. PA 검증 (Passive Authentication)</a><a href="#8-1-개요" style="padding-left:1rem">8.1 개요</a><a href="#8-2-전체-검증" style="padding-left:1rem">8.2 전체 검증</a><a href="#8-3-sod-파싱" style="padding-left:1rem">8.3 SOD 파싱</a><a href="#8-4-dg1-파싱-mrz" style="padding-left:1rem">8.4 DG1 파싱 (MRZ)</a><a href="#8-5-dg2-파싱-얼굴-이미지" style="padding-left:1rem">8.5 DG2 파싱 (얼굴 이미지)</a><a href="#8-6-mrz-텍스트-파싱" style="padding-left:1rem">8.6 MRZ 텍스트 파싱</a><a href="#8-7-검증-이력" style="padding-left:1rem">8.7 검증 이력</a><a href="#8-8-검증-상세" style="padding-left:1rem">8.8 검증 상세</a><a href="#8-9-data-groups-상세" style="padding-left:1rem">8.9 Data Groups 상세</a><a href="#8-10-검증-통계" style="padding-left:1rem">8.10 검증 통계</a><a href="#8-11-data-group-참조" style="padding-left:1rem">8.11 Data Group 참조</a><a href="#9-ai-인증서-분석">9. AI 인증서 분석</a><a href="#9-1-개별-인증서-분석-결과" style="padding-left:1rem">9.1 개별 인증서 분석 결과</a><a href="#9-2-포렌식-상세" style="padding-left:1rem">9.2 포렌식 상세</a><a href="#9-3-이상-인증서-목록" style="padding-left:1rem">9.3 이상 인증서 목록</a><a href="#9-4-전체-분석-통계" style="padding-left:1rem">9.4 전체 분석 통계</a><a href="#9-5-분석-실행-상태" style="padding-left:1rem">9.5 분석 실행/상태</a><a href="#9-6-리포트-api" style="padding-left:1rem">9.6 리포트 API</a><a href="#9-7-pa-ai-연동-워크플로우" style="padding-left:1rem">9.7 PA + AI 연동 워크플로우</a><a href="#10-동기화-모니터링">10. 동기화 모니터링</a><a href="#11-icao-pkd-버전-모니터링">11. ICAO PKD 버전 모니터링</a><a href="#12-업로드-통계-및-이력">12. 업로드 통계 및 이력</a><a href="#13-코드-마스터-참조-데이터">13. 코드 마스터 (참조 데이터)</a><a href="#14-csr-관리-icao-pkd">14. CSR 관리 (ICAO PKD)</a><a href="#csr-생성" style="padding-left:1rem">CSR 생성</a><a href="#외부-csr-가져오기" style="padding-left:1rem">외부 CSR 가져오기</a><a href="#icao-발급-인증서-등록" style="padding-left:1rem">ICAO 발급 인증서 등록</a><a href="#15-시스템-모니터링">15. 시스템 모니터링</a><a href="#15-연동-예제">15. 연동 예제</a><a href="#15-1-python" style="padding-left:1rem">15.1 Python</a><a href="#15-2-java-jdk-11" style="padding-left:1rem">15.2 Java (JDK 11+)</a><a href="#15-3-c-net-6" style="padding-left:1rem">15.3 C# (.NET 6+)</a><a href="#15-4-curl-명령어-모음" style="padding-left:1rem">15.4 curl 명령어 모음</a><a href="#15-5-https-private-ca-설정" style="padding-left:1rem">15.5 HTTPS Private CA 설정</a><a href="#15-6-에러-처리-패턴" style="padding-left:1rem">15.6 에러 처리 패턴</a><a href="#16-에러-코드-참조">16. 에러 코드 참조</a><a href="#http-에러-응답" style="padding-left:1rem">HTTP 에러 응답</a><a href="#pa-에러-코드" style="padding-left:1rem">PA 에러 코드</a><a href="#검증-상태-코드" style="padding-left:1rem">검증 상태 코드</a><a href="#crl-상태-코드" style="padding-left:1rem">CRL 상태 코드</a><a href="#17-faq-트러블슈팅">17. FAQ / 트러블슈팅</a><a href="#q-api-key를-분실했습니다" style="padding-left:1rem">Q. API Key를 분실했습니다.</a><a href="#q-403-forbidden-오류가-발생합니다" style="padding-left:1rem">Q. 403 Forbidden 오류가 발생합니다.</a><a href="#q-429-too-many-requests가-자주-발생합니다" style="padding-left:1rem">Q. 429 Too Many Requests가 자주 발생합니다.</a><a href="#q-https-연결-시-인증서-오류가-발생합니다" style="padding-left:1rem">Q. HTTPS 연결 시 인증서 오류가 발생합니다.</a><a href="#q-pa-검증이-invalid로-반환됩니다" style="padding-left:1rem">Q. PA 검증이 INVALID로 반환됩니다.</a><a href="#q-미등록-api-key로-pa-요청을-보내면" style="padding-left:1rem">Q. 미등록 API Key로 PA 요청을 보내면?</a><a href="#q-certtype-필터가-작동하지-않습니다" style="padding-left:1rem">Q. certType 필터가 작동하지 않습니다.</a><a href="#q-base64-인코딩-오류가-발생합니다" style="padding-left:1rem">Q. Base64 인코딩 오류가 발생합니다.</a><a href="#18-부록">18. 부록</a><a href="#a-전체-엔드포인트-quick-reference" style="padding-left:1rem">A. 전체 엔드포인트 Quick Reference</a><a href="#b-openapi-스펙-참조" style="padding-left:1rem">B. OpenAPI 스펙 참조</a><a href="#c-변경-이력" style="padding-left:1rem">C. 변경 이력</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

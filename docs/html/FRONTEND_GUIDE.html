@@ -1,0 +1,2385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Frontend Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html" class="active">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Frontend Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-spkd-frontend-guide">FASTpass® SPKD — Frontend Guide</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18
+<strong>Tech Stack</strong>: React 19, TypeScript, Tailwind CSS 4, Vite, Lucide Icons, Recharts</p>
+<hr>
+<h2 id="part-1-design-system">Part 1: Design System</h2>
+<hr>
+<h3 id="1-design-concept">1. Design Concept</h3>
+<h4 id="brand-identity">Brand Identity</h4>
+<p>FASTpass® SPKD(SmartCore PKD)는 전자여권 위·변조 검사 시스템으로, <strong>엔터프라이즈급 보안 소프트웨어</strong>에 적합한 디자인을 지향한다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>값</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>로고 아이콘</td>
+<td>Shield + &quot;F&quot; + Speed Lines 커스텀 SVG (<code>favicon.svg</code>)</td>
+</tr>
+<tr>
+<td>브랜드 단색</td>
+<td><code>bg-[#02385e]</code> (FASTpass® SPKD Navy)</td>
+</tr>
+<tr>
+<td>시스템 명</td>
+<td>FASTpass® SPKD (SmartCore PKD)</td>
+</tr>
+<tr>
+<td>부제</td>
+<td>전자여권 위·변조 검사 시스템</td>
+</tr>
+<tr>
+<td>표준 참조</td>
+<td>ICAO Doc 9303, RFC 5280, RFC 5652</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>v2.30.0 변경</strong>: 기존 <code>ShieldCheck</code> 아이콘 + <code>from-blue-600 to-indigo-600</code> 그래디언트에서 커스텀 방패 SVG + 단색 <code>#02385e</code> 버튼으로 전환. 로그인 페이지 모던 리디자인 (카드 래퍼 제거, flat layout, <code>radial-gradient</code> 도트 패턴 배경).</p>
+</blockquote>
+<h4 id="design-principles">Design Principles</h4>
+<ol>
+<li><strong>Enterprise Clarity</strong> — 복잡한 인증서 데이터를 명확하게 전달</li>
+<li><strong>Consistent Tokens</strong> — 동일 역할의 요소는 동일 스타일 적용</li>
+<li><strong>Dark Mode First</strong> — 모든 색상에 light/dark 변형 제공</li>
+<li><strong>Responsive Grid</strong> — Mobile-first, <code>md</code>/<code>lg</code>/<code>xl</code> 반응형 브레이크포인트</li>
+<li><strong>Minimal Decoration</strong> — 기능 중심 UI, 불필요한 장식 배제</li>
+</ol>
+<hr>
+<h3 id="2-color-theme">2. Color Theme</h3>
+<h4 id="2-1-neutral-palette">2.1 Neutral Palette</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용도</th>
+<th>Light</th>
+<th>Dark</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>페이지 배경</td>
+<td><code>bg-gray-50</code></td>
+<td><code>dark:bg-gray-900</code></td>
+</tr>
+<tr>
+<td>카드 배경</td>
+<td><code>bg-white</code></td>
+<td><code>dark:bg-gray-800</code></td>
+</tr>
+<tr>
+<td>1차 텍스트</td>
+<td><code>text-gray-900</code></td>
+<td><code>dark:text-white</code></td>
+</tr>
+<tr>
+<td>2차 텍스트</td>
+<td><code>text-gray-700</code></td>
+<td><code>dark:text-gray-300</code></td>
+</tr>
+<tr>
+<td>3차 텍스트</td>
+<td><code>text-gray-600</code></td>
+<td><code>dark:text-gray-400</code></td>
+</tr>
+<tr>
+<td>보조 텍스트</td>
+<td><code>text-gray-500</code></td>
+<td><code>dark:text-gray-400</code></td>
+</tr>
+<tr>
+<td>아이콘 (기본)</td>
+<td><code>text-gray-400</code></td>
+<td><code>dark:text-gray-500</code></td>
+</tr>
+<tr>
+<td>테두리</td>
+<td><code>border-gray-200</code></td>
+<td><code>dark:border-gray-700</code></td>
+</tr>
+<tr>
+<td>호버 배경</td>
+<td><code>hover:bg-gray-100</code></td>
+<td><code>dark:hover:bg-gray-700</code></td>
+</tr>
+</tbody></table></div>
+<h4 id="2-2-functional-area-gradients-icon-badge">2.2 Functional Area Gradients (Icon Badge)</h4>
+<p>페이지 헤더 아이콘 뱃지에 적용하는 기능별 그래디언트:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영역</th>
+<th>그래디언트</th>
+<th>적용 페이지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD 관리</td>
+<td><code>from-indigo-500 to-purple-600</code></td>
+<td>Dashboard, Upload, UploadHistory</td>
+</tr>
+<tr>
+<td>인증서 검색</td>
+<td><code>from-blue-500 to-indigo-600</code></td>
+<td>CertificateSearch</td>
+</tr>
+<tr>
+<td>보고서 (DSC_NC)</td>
+<td><code>from-teal-500 to-cyan-600</code></td>
+<td>DscNcReport</td>
+</tr>
+<tr>
+<td>보고서 (CRL)</td>
+<td><code>from-amber-500 to-orange-600</code></td>
+<td>CrlReport</td>
+</tr>
+<tr>
+<td>보고서 (Trust Chain)</td>
+<td><code>from-emerald-500 to-teal-600</code></td>
+<td>TrustChainValidationReport</td>
+</tr>
+<tr>
+<td>PA 서비스</td>
+<td><code>from-teal-500 to-cyan-600</code></td>
+<td>PAVerify, PAHistory, PADashboard</td>
+</tr>
+<tr>
+<td>AI 분석</td>
+<td><code>from-purple-500 to-violet-600</code></td>
+<td>AiAnalysisDashboard</td>
+</tr>
+<tr>
+<td>시스템 모니터링</td>
+<td><code>from-blue-500 to-cyan-600</code></td>
+<td>MonitoringDashboard, IcaoStatus</td>
+</tr>
+<tr>
+<td>동기화</td>
+<td><code>from-orange-500 to-rose-600</code></td>
+<td>SyncDashboard</td>
+</tr>
+<tr>
+<td>관리자</td>
+<td><code>from-blue-500 to-indigo-600</code></td>
+<td>UserManagement, AuditLog, OperationAuditLog</td>
+</tr>
+</tbody></table></div>
+<h4 id="2-3-status-colors">2.3 Status Colors</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상태</th>
+<th>배경 (Light)</th>
+<th>배경 (Dark)</th>
+<th>텍스트 (Light)</th>
+<th>텍스트 (Dark)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Success</td>
+<td><code>bg-green-50</code></td>
+<td><code>dark:bg-green-900/30</code></td>
+<td><code>text-green-700</code></td>
+<td><code>dark:text-green-300</code></td>
+</tr>
+<tr>
+<td>Error</td>
+<td><code>bg-red-50</code></td>
+<td><code>dark:bg-red-900/30</code></td>
+<td><code>text-red-700</code></td>
+<td><code>dark:text-red-300</code></td>
+</tr>
+<tr>
+<td>Warning</td>
+<td><code>bg-amber-50</code></td>
+<td><code>dark:bg-amber-900/20</code></td>
+<td><code>text-amber-700</code></td>
+<td><code>dark:text-amber-300</code></td>
+</tr>
+<tr>
+<td>Info</td>
+<td><code>bg-blue-50</code></td>
+<td><code>dark:bg-blue-900/20</code></td>
+<td><code>text-blue-700</code></td>
+<td><code>dark:text-blue-300</code></td>
+</tr>
+</tbody></table></div>
+<h4 id="2-4-certificate-type-badge-colors">2.4 Certificate Type Badge Colors</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>타입</th>
+<th>배경</th>
+<th>텍스트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA</td>
+<td><code>bg-blue-50 dark:bg-blue-900/20</code></td>
+<td><code>text-blue-700 dark:text-blue-300</code></td>
+</tr>
+<tr>
+<td>DSC</td>
+<td><code>bg-green-50 dark:bg-green-900/20</code></td>
+<td><code>text-green-700 dark:text-green-300</code></td>
+</tr>
+<tr>
+<td>MLSC</td>
+<td><code>bg-purple-50 dark:bg-purple-900/20</code></td>
+<td><code>text-purple-700 dark:text-purple-300</code></td>
+</tr>
+<tr>
+<td>DSC_NC</td>
+<td><code>bg-orange-50 dark:bg-orange-900/20</code></td>
+<td><code>text-orange-700 dark:text-orange-300</code></td>
+</tr>
+<tr>
+<td>CRL</td>
+<td><code>bg-amber-50 dark:bg-amber-900/20</code></td>
+<td><code>text-amber-700 dark:text-amber-300</code></td>
+</tr>
+</tbody></table></div>
+<h4 id="2-5-risk-level-colors-ai-analysis">2.5 Risk Level Colors (AI Analysis)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>레벨</th>
+<th>배경</th>
+<th>텍스트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LOW</td>
+<td><code>bg-green-500</code></td>
+<td><code>text-white</code></td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td><code>bg-yellow-500</code></td>
+<td><code>text-white</code></td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td><code>bg-orange-500</code></td>
+<td><code>text-white</code></td>
+</tr>
+<tr>
+<td>CRITICAL</td>
+<td><code>bg-red-500</code></td>
+<td><code>text-white</code></td>
+</tr>
+</tbody></table></div>
+<h4 id="2-6-validation-status-colors">2.6 Validation Status Colors</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상태</th>
+<th>색상</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>VALID</td>
+<td><code>green-500</code></td>
+</tr>
+<tr>
+<td>EXPIRED_VALID</td>
+<td><code>amber-500</code></td>
+</tr>
+<tr>
+<td>EXPIRED</td>
+<td><code>red-500</code></td>
+</tr>
+<tr>
+<td>INVALID</td>
+<td><code>red-600</code></td>
+</tr>
+<tr>
+<td>PENDING</td>
+<td><code>gray-400</code></td>
+</tr>
+<tr>
+<td>NOT_YET_VALID</td>
+<td><code>yellow-500</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="3-typography">3. Typography</h3>
+<h4 id="3-1-heading-hierarchy">3.1 Heading Hierarchy</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>레벨</th>
+<th>클래스</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>H1</td>
+<td><code>text-2xl font-bold text-gray-900 dark:text-white</code></td>
+<td>페이지 제목</td>
+</tr>
+<tr>
+<td>H2</td>
+<td><code>text-xl font-bold text-gray-900 dark:text-white</code></td>
+<td>섹션 제목</td>
+</tr>
+<tr>
+<td>H3</td>
+<td><code>text-lg font-semibold text-gray-900 dark:text-white</code></td>
+<td>카드 제목</td>
+</tr>
+<tr>
+<td>H4</td>
+<td><code>text-sm font-semibold text-gray-700 dark:text-gray-300</code></td>
+<td>서브섹션</td>
+</tr>
+</tbody></table></div>
+<h4 id="3-2-body-text">3.2 Body Text</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용도</th>
+<th>클래스</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>본문</td>
+<td><code>text-sm text-gray-700 dark:text-gray-300</code></td>
+</tr>
+<tr>
+<td>부제 / 설명</td>
+<td><code>text-sm text-gray-500 dark:text-gray-400</code></td>
+</tr>
+<tr>
+<td>소형 캡션</td>
+<td><code>text-xs text-gray-500 dark:text-gray-400</code></td>
+</tr>
+<tr>
+<td>강조</td>
+<td><code>text-base font-medium text-gray-900 dark:text-white</code></td>
+</tr>
+<tr>
+<td>모노스페이스</td>
+<td><code>font-mono text-sm</code> (해시, 시리얼 번호)</td>
+</tr>
+</tbody></table></div>
+<h4 id="3-3-labels">3.3 Labels</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용도</th>
+<th>클래스</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Form label</td>
+<td><code>block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1</code></td>
+</tr>
+<tr>
+<td>Section header (xs)</td>
+<td><code>text-xs font-semibold uppercase tracking-wider text-gray-400</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="4-layout">4. Layout</h3>
+<h4 id="4-1-page-structure">4.1 Page Structure</h4>
+<pre><code>┌──────────────────────────────────────────────────┐
+│ Sidebar (w-64 / w-[70px] collapsed)              │
+│ ┌──────────────────────────────────────────────┐ │
+│ │ Logo + System Name                           │ │
+│ │ Navigation Groups                            │ │
+│ │   Section Header (uppercase)                 │ │
+│ │   NavItem / NavGroupItem (collapsible)       │ │
+│ │   ...                                        │ │
+│ │ Dark Mode Toggle (footer)                    │ │
+│ └──────────────────────────────────────────────┘ │
+│                                                  │
+│ Content Area (lg:ps-64 / lg:ps-[70px])           │
+│ ┌──────────────────────────────────────────────┐ │
+│ │ Header Bar                                   │ │
+│ │ ┌──────────────────────────────────────────┐ │ │
+│ │ │ Page Content                             │ │ │
+│ │ │   w-full px-4 lg:px-6 py-4 space-y-6    │ │ │
+│ │ │                                          │ │ │
+│ │ │   [Page Header — Icon Badge]             │ │ │
+│ │ │   [Stats Cards Grid]                     │ │ │
+│ │ │   [Filter Card]                          │ │ │
+│ │ │   [Content Cards / Tables / Charts]      │ │ │
+│ │ └──────────────────────────────────────────┘ │ │
+│ │ Footer                                       │ │
+│ └──────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────┘</code></pre>
+<h4 id="4-2-page-wrapper">4.2 Page Wrapper</h4>
+<pre><code>w-full px-4 lg:px-6 py-4 space-y-6</code></pre>
+<h4 id="4-3-sidebar">4.3 Sidebar</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>요소</th>
+<th>클래스</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>컨테이너</td>
+<td><code>bg-white dark:bg-gray-800 border-e border-gray-200 dark:border-gray-700</code></td>
+</tr>
+<tr>
+<td>너비 (확장)</td>
+<td><code>w-64</code></td>
+</tr>
+<tr>
+<td>너비 (축소)</td>
+<td><code>w-[70px]</code></td>
+</tr>
+<tr>
+<td>로고 아이콘</td>
+<td><code>w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl shadow-lg</code></td>
+</tr>
+<tr>
+<td>활성 링크</td>
+<td><code>bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-l-2 border-blue-600</code></td>
+</tr>
+<tr>
+<td>비활성 링크</td>
+<td><code>text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700</code></td>
+</tr>
+<tr>
+<td>섹션 헤더</td>
+<td><code>px-3 pt-4 pb-2 text-xs font-semibold uppercase tracking-wider text-gray-400</code></td>
+</tr>
+<tr>
+<td>하위 메뉴</td>
+<td><code>ml-4 pl-3 border-l border-gray-200 dark:border-gray-700</code></td>
+</tr>
+</tbody></table></div>
+<h4 id="4-4-responsive-breakpoints">4.4 Responsive Breakpoints</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Prefix</th>
+<th>너비</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>(base)</td>
+<td>0px+</td>
+<td>모바일 (1열 그리드)</td>
+</tr>
+<tr>
+<td><code>md:</code></td>
+<td>768px+</td>
+<td>태블릿 (2열 그리드)</td>
+</tr>
+<tr>
+<td><code>lg:</code></td>
+<td>1024px+</td>
+<td>데스크톱 (3열+, 사이드바 표시)</td>
+</tr>
+<tr>
+<td><code>xl:</code></td>
+<td>1280px+</td>
+<td>와이드 (3열 확장)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="5-components">5. Components</h3>
+<h4 id="5-1-page-header-icon-badge-pattern">5.1 Page Header (Icon Badge Pattern)</h4>
+<p>모든 페이지에 적용되는 표준 헤더:</p>
+<pre><code>┌─────────────────────────────────────────────┐
+│ [Icon Badge]  Title                         │
+│               Subtitle           [Actions]  │
+└─────────────────────────────────────────────┘</code></pre>
+<pre><code>컨테이너:  mb-6
+아이콘 뱃지: p-3 rounded-xl bg-gradient-to-br from-{C1}-500 to-{C2}-600 shadow-lg
+아이콘 크기: w-7 h-7 text-white
+제목:      text-2xl font-bold text-gray-900 dark:text-white
+부제:      text-sm text-gray-500 dark:text-gray-400</code></pre>
+<h4 id="5-2-cards">5.2 Cards</h4>
+<p><strong>Standard Card</strong>:</p>
+<pre><code>bg-white dark:bg-gray-800 rounded-2xl shadow-lg
+border border-gray-200 dark:border-gray-700  (optional)
+overflow-hidden  (table cards)</code></pre>
+<p><strong>Stats Card (border-l-4)</strong>:</p>
+<pre><code>bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-{color}-500</code></pre>
+<p><strong>Filter Card</strong>:</p>
+<pre><code>bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5</code></pre>
+<p><strong>Table Card</strong>:</p>
+<pre><code>bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden</code></pre>
+<h4 id="5-3-dialogs-modals">5.3 Dialogs / Modals</h4>
+<pre><code>Backdrop:   fixed inset-0 bg-black/50 backdrop-blur-sm z-50
+Container:  flex items-center justify-center p-4
+Content:    bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-{size} w-full
+Header:     px-5 py-4 border-b border-gray-200 dark:border-gray-700
+Body:       px-5 py-4
+Footer:     px-5 py-3 border-t border-gray-200 dark:border-gray-700</code></pre>
+<p><strong>Size Variants:</strong></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>크기</th>
+<th>클래스</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Small</td>
+<td><code>max-w-md</code></td>
+<td>확인 다이얼로그, 비밀번호 변경</td>
+</tr>
+<tr>
+<td>Medium</td>
+<td><code>max-w-2xl</code></td>
+<td>일반 폼</td>
+</tr>
+<tr>
+<td>Large</td>
+<td><code>max-w-3xl</code></td>
+<td>넓은 폼 (사용자 추가)</td>
+</tr>
+<tr>
+<td>XLarge</td>
+<td><code>max-w-4xl</code></td>
+<td>상세 보기</td>
+</tr>
+</tbody></table></div>
+<h4 id="5-4-buttons">5.4 Buttons</h4>
+<p><strong>Primary (Gradient)</strong>:</p>
+<pre><code>bg-gradient-to-r from-blue-500 to-indigo-500
+hover:from-blue-600 hover:to-indigo-600
+text-white rounded-xl shadow-md hover:shadow-lg
+transition-all
+disabled:opacity-50 disabled:cursor-not-allowed</code></pre>
+<p><strong>Secondary</strong>:</p>
+<pre><code>text-gray-700 dark:text-gray-300
+hover:bg-gray-100 dark:hover:bg-gray-700
+rounded-xl transition-colors</code></pre>
+<p><strong>Danger</strong>:</p>
+<pre><code>bg-red-600 hover:bg-red-700
+text-white rounded-xl transition-colors</code></pre>
+<p><strong>Icon-only (Action)</strong>:</p>
+<pre><code>p-2 rounded-lg hover:bg-{color}-50 dark:hover:bg-{color}-900/30
+text-{color}-600 dark:text-{color}-400 transition-colors</code></pre>
+<p><strong>Export (Green)</strong>:</p>
+<pre><code>bg-green-600 hover:bg-green-700
+text-white rounded-lg text-sm font-medium
+flex items-center gap-2 transition-colors</code></pre>
+<h4 id="5-5-form-inputs">5.5 Form Inputs</h4>
+<p><strong>Standard Input</strong>:</p>
+<pre><code>w-full px-3 py-2 text-sm
+border border-gray-300 dark:border-gray-600
+rounded-xl
+bg-white dark:bg-gray-700
+text-gray-900 dark:text-white
+focus:outline-none focus:ring-2 focus:ring-blue-500</code></pre>
+<p><strong>Select Dropdown</strong>:</p>
+<pre><code>w-full px-3 py-2 text-sm
+border border-gray-200 dark:border-gray-600
+rounded-lg
+bg-white dark:bg-gray-700
+text-gray-900 dark:text-white
+focus:outline-none focus:ring-2 focus:ring-blue-500</code></pre>
+<h4 id="5-6-tables">5.6 Tables</h4>
+<pre><code>Table Container:  rounded-2xl shadow-lg overflow-hidden
+Header Row:       bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700
+Header Cell:      px-6 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase
+Body Row:         hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors
+Body Cell:        px-6 py-4 text-sm text-gray-600 dark:text-gray-400
+Divider:          divide-y divide-gray-200 dark:divide-gray-700</code></pre>
+<h4 id="5-7-status-badges-pills">5.7 Status Badges / Pills</h4>
+<p><strong>기본 뱃지</strong>:</p>
+<pre><code>inline-flex items-center gap-1
+px-2 py-0.5
+bg-{color}-100 dark:bg-{color}-900/30
+text-{color}-700 dark:text-{color}-300
+text-xs font-medium rounded-full</code></pre>
+<h4 id="5-8-alerts-notifications">5.8 Alerts / Notifications</h4>
+<p><strong>Success</strong>:</p>
+<pre><code>bg-green-50 dark:bg-green-900/30
+border border-green-200 dark:border-green-800
+rounded-xl p-4 flex items-center gap-2</code></pre>
+<p><strong>Error</strong>:</p>
+<pre><code>bg-red-50 dark:bg-red-900/30
+border border-red-200 dark:border-red-800
+rounded-xl p-4 flex items-center gap-2</code></pre>
+<p><strong>Warning Banner (ICAO Update)</strong>:</p>
+<pre><code>bg-gradient-to-r from-amber-50 to-orange-50
+dark:from-amber-900/20 dark:to-orange-900/20
+border border-amber-200 dark:border-amber-700
+rounded-2xl shadow-lg px-6 py-4</code></pre>
+<h4 id="5-9-loading-states">5.9 Loading States</h4>
+<p><strong>Spinner</strong>: <code>animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full</code></p>
+<p><strong>Skeleton</strong>: <code>bg-gray-200 dark:bg-gray-700 animate-pulse rounded</code></p>
+<h4 id="5-10-pagination">5.10 Pagination</h4>
+<pre><code>flex items-center justify-center gap-2
+Active:     bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-medium
+Inactive:   text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700
+Disabled:   text-gray-300 dark:text-gray-600 cursor-not-allowed</code></pre>
+<h4 id="5-11-glossaryterm-전문-용어-도움말">5.11 GlossaryTerm (전문 용어 도움말)</h4>
+<p>전문 용어(CSCA, DSC, CRL 등) 옆에 <code>?</code> 아이콘을 표시하고 hover 시 풍선 도움말을 제공하는 컴포넌트.</p>
+<pre><code class="language-tsx">import { GlossaryTerm, getGlossaryTooltip } from '@/components/common';
+
+// 정적 라벨 (카드, 섹션 헤더)
+&lt;GlossaryTerm term="CSCA" className="text-xs text-blue-700" /&gt;
+
+// 테이블 셀/동적 영역 (title 속성 방식)
+&lt;span title={getGlossaryTooltip("DSC")}&gt;{certType}&lt;/span&gt;</code></pre>
+<p>지원 용어 (21개): CSCA, DSC, DSC_NC, MLSC, CRL, SOD, DG1, DG2, MRZ, PA, BAC, PKD, LDIF, LDAP, Trust Chain, CSR, Link Certificate, Self-signed, Master List, ML</p>
+<h4 id="5-12-countryflag-국기-국가명-툴팁">5.12 CountryFlag (국기 + 국가명 툴팁)</h4>
+<pre><code class="language-tsx">import { CountryFlag } from '@/components/common';
+
+&lt;CountryFlag code="KR" /&gt;           // KR (hover: "KR — Korea, Republic of")
+&lt;CountryFlag code="KR" size="md" /&gt; // 큰 국기
+&lt;CountryFlag code="KR" showCode={false} /&gt; // 국기만</code></pre>
+<hr>
+<h3 id="6-spacing-system">6. Spacing System</h3>
+<h4 id="6-1-padding">6.1 Padding</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>토큰</th>
+<th>값</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>p-2</code></td>
+<td>8px</td>
+<td>아이콘 버튼, 컴팩트 요소</td>
+</tr>
+<tr>
+<td><code>p-3</code></td>
+<td>12px</td>
+<td>아이콘 뱃지, 컴팩트 카드</td>
+</tr>
+<tr>
+<td><code>p-4</code></td>
+<td>16px</td>
+<td>검색 바, 알림</td>
+</tr>
+<tr>
+<td><code>p-5</code></td>
+<td>20px</td>
+<td>필터 카드, 통계 카드</td>
+</tr>
+<tr>
+<td><code>p-6</code></td>
+<td>24px</td>
+<td>대형 카드 본문</td>
+</tr>
+</tbody></table></div>
+<h4 id="6-2-gap">6.2 Gap</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>토큰</th>
+<th>값</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>gap-1</code></td>
+<td>4px</td>
+<td>뱃지 내부 아이콘-텍스트</td>
+</tr>
+<tr>
+<td><code>gap-2</code></td>
+<td>8px</td>
+<td>버튼 그룹, 뱃지 목록</td>
+</tr>
+<tr>
+<td><code>gap-3</code></td>
+<td>12px</td>
+<td>폼 필드 그리드</td>
+</tr>
+<tr>
+<td><code>gap-4</code></td>
+<td>16px</td>
+<td>카드 그리드</td>
+</tr>
+<tr>
+<td><code>gap-6</code></td>
+<td>24px</td>
+<td>페이지 레벨 간격</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="7-border-radius-shadow">7. Border Radius &amp; Shadow</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>토큰</th>
+<th>값</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>rounded-lg</code></td>
+<td>8px</td>
+<td>입력 필드, 작은 UI</td>
+</tr>
+<tr>
+<td><code>rounded-xl</code></td>
+<td>12px</td>
+<td>아이콘 뱃지, 버튼, 폼 입력</td>
+</tr>
+<tr>
+<td><code>rounded-2xl</code></td>
+<td>16px</td>
+<td>카드, 다이얼로그</td>
+</tr>
+<tr>
+<td><code>rounded-full</code></td>
+<td>100%</td>
+<td>뱃지/필, 아바타</td>
+</tr>
+</tbody></table></div>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>토큰</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>shadow-lg</code></td>
+<td>표준 카드, 아이콘 뱃지</td>
+</tr>
+<tr>
+<td><code>shadow-xl</code></td>
+<td>다이얼로그</td>
+</tr>
+<tr>
+<td><code>shadow-md</code></td>
+<td>호버 버튼</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="8-animation-transitions">8. Animation &amp; Transitions</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>패턴</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>transition-colors</code></td>
+<td>버튼, 링크 호버</td>
+</tr>
+<tr>
+<td><code>transition-all</code></td>
+<td>그래디언트 버튼, 카드 호버</td>
+</tr>
+<tr>
+<td><code>transition-all duration-300</code></td>
+<td>사이드바 확장/축소</td>
+</tr>
+<tr>
+<td><code>animate-spin</code></td>
+<td>로딩 스피너</td>
+</tr>
+<tr>
+<td><code>animate-pulse</code></td>
+<td>스켈레톤 로딩</td>
+</tr>
+<tr>
+<td><code>backdrop-blur-sm</code></td>
+<td>모달 배경</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="9-landing-page-login-tsx">9. Landing Page (Login.tsx)</h3>
+<h4 id="9-1-hero-panel-좌측-68">9.1 Hero Panel (좌측 68%)</h4>
+<pre><code>bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700</code></pre>
+<p><strong>Glassmorphism 카드</strong>: <code>bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 hover:bg-white/10</code></p>
+<p><strong>통계 카드</strong>: <code>bg-white/10 backdrop-blur-sm rounded-xl border border-white/15 hover:bg-white/15</code></p>
+<h4 id="9-2-login-panel-우측">9.2 Login Panel (우측)</h4>
+<pre><code>배경:  bg-gray-50 dark:bg-gray-900
+카드:  bg-white dark:bg-gray-800 rounded-2xl shadow-xl border
+버튼:  bg-gradient-to-r from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25</code></pre>
+<h4 id="9-3-animation">9.3 Animation</h4>
+<pre><code class="language-css">@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}</code></pre>
+<p>Stagger delay: 0.1s -&gt; 0.2s -&gt; 0.3s -&gt; 0.4s</p>
+<hr>
+<h3 id="10-dark-mode">10. Dark Mode</h3>
+<ul>
+<li>Zustand <code>themeStore</code>로 상태 관리 (<code>localStorage</code> persist)</li>
+<li><code>document.documentElement.classList.add/remove(&#39;dark&#39;)</code></li>
+<li>Tailwind CSS <code>darkMode: &#39;class&#39;</code> 전략</li>
+</ul>
+<p>모든 색상 속성에 <code>dark:</code> 변형을 반드시 제공:</p>
+<pre><code>bg-white dark:bg-gray-800
+text-gray-900 dark:text-white
+border-gray-200 dark:border-gray-700</code></pre>
+<hr>
+<h3 id="11-z-index-stack">11. Z-Index Stack</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>값</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>z-10</code></td>
+<td>테이블 sticky header</td>
+</tr>
+<tr>
+<td><code>z-40</code></td>
+<td>페이지 헤더 바 (sticky)</td>
+</tr>
+<tr>
+<td><code>z-50</code></td>
+<td>모달 다이얼로그</td>
+</tr>
+<tr>
+<td><code>z-60</code></td>
+<td>사이드바</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="12-icon-system">12. Icon System</h3>
+<ul>
+<li><strong>라이브러리</strong>: Lucide React (<code>lucide-react</code>)</li>
+<li><strong>페이지 아이콘 크기</strong>: <code>w-7 h-7</code> (헤더 뱃지 내)</li>
+<li><strong>카드 아이콘 크기</strong>: <code>w-5 h-5</code></li>
+<li><strong>인라인 아이콘</strong>: <code>w-4 h-4</code></li>
+<li><strong>뱃지 아이콘</strong>: <code>w-3 h-3</code></li>
+</ul>
+<hr>
+<h3 id="13-grid-patterns-responsive">13. Grid Patterns (Responsive)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용도</th>
+<th>클래스</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>통계 카드</td>
+<td><code>grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4</code></td>
+</tr>
+<tr>
+<td>사용자 카드</td>
+<td><code>grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4</code></td>
+</tr>
+<tr>
+<td>폼 필드</td>
+<td><code>grid grid-cols-1 md:grid-cols-2 gap-3</code></td>
+</tr>
+<tr>
+<td>필터</td>
+<td><code>grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="14-chart-styling-recharts">14. Chart Styling (Recharts)</h3>
+<pre><code>컨테이너: rounded-lg bg-gray-50 dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700
+툴팁:    bg-white dark:bg-gray-800 rounded-lg shadow-lg border
+텍스트:   text-gray-900 dark:text-white</code></pre>
+<hr>
+<h3 id="15-file-structure">15. File Structure</h3>
+<pre><code>frontend/src/
+├── App.tsx                    # Layout (Sidebar + Header + Content)
+├── pages/                     # 29 페이지
+│   ├── Login.tsx              # Landing + Login
+│   ├── Dashboard.tsx          # 홈 대시보드
+│   ├── UserManagement.tsx     # 사용자 관리 (grid 카드)
+│   ├── AuditLog.tsx           # 인증 감사 로그
+│   ├── OperationAuditLog.tsx  # 운영 감사 로그
+│   ├── CertificateSearch.tsx  # 인증서 검색
+│   ├── DscNcReport.tsx        # DSC_NC 보고서
+│   ├── CrlReport.tsx          # CRL 보고서
+│   └── ...
+├── components/                # 공유 컴포넌트
+│   ├── ErrorBoundary.tsx
+│   ├── TreeViewer.tsx
+│   ├── CertificateDetailDialog.tsx
+│   ├── CertificateSearchFilters.tsx
+│   ├── Doc9303ComplianceChecklist.tsx
+│   ├── QuickLookupPanel.tsx
+│   ├── ValidationSummaryPanel.tsx
+│   └── ...
+├── services/                  # API 모듈
+│   ├── api.ts                 # 메인 API (PKD Management)
+│   ├── authApi.ts             # 인증 API
+│   ├── paApi.ts               # PA Service API
+│   ├── monitoringApi.ts       # 모니터링 API
+│   ├── aiAnalysisApi.ts       # AI 분석 API
+│   └── csvExport.ts           # CSV 내보내기 유틸리티
+└── stores/
+    └── themeStore.ts          # 다크 모드 상태</code></pre>
+<hr>
+<h2 id="part-2-page-documentation">Part 2: Page Documentation</h2>
+<hr>
+<p><strong>총 페이지 수</strong>: 29개</p>
+<hr>
+<h3 id="pkd-관리">PKD 관리</h3>
+<h4 id="1-대시보드-dashboard">1. 대시보드 (Dashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/Dashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>시스템 홈 페이지로, 전체 PKD 시스템 현황을 한 눈에 파악할 수 있다.</p>
+<ul>
+<li><strong>실시간 시계</strong>: 1초 간격 갱신, 현재 날짜/시간 표시</li>
+<li><strong>연결 상태 표시기</strong>: DB(PostgreSQL/Oracle) 및 LDAP 연결 상태를 실시간 확인</li>
+<li><strong>ICAO PKD 업데이트 알림 배너</strong>: ICAO 공식 PKD에 새 버전이 감지되면 상단에 알림 표시</li>
+<li><strong>인증서 통계 카드</strong>: CSCA, DSC, CRL, Master List 총 수량 표시</li>
+<li><strong>국가별 인증서 분포</strong>: 상위 10개국의 인증서 수량을 진행 바 차트로 표시</li>
+</ul>
+<p><strong>사용 API</strong>: <code>GET /api/health/database</code>, <code>GET /api/health/ldap</code>, <code>GET /api/upload/countries?limit=10</code>, <code>GET /api/icao/status</code></p>
+<hr>
+<h4 id="2-파일-업로드-fileupload">2. 파일 업로드 (FileUpload)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/upload</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/FileUpload.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT)</td>
+</tr>
+</tbody></table></div>
+<p>LDIF 파일 및 Master List 파일 업로드 전용 페이지. SSE(Server-Sent Events)를 통해 처리 진행 상황을 실시간으로 스트리밍한다.</p>
+<ul>
+<li><strong>드래그 &amp; 드롭</strong>: <code>.ldif</code>, <code>.ml</code> 확장자 파일</li>
+<li><strong>3단계 수평 스테퍼</strong>: PARSING -&gt; VALIDATION -&gt; DB_SAVING/LDAP_SAVING</li>
+<li><strong>실시간 진행 바</strong>: 처리된 항목 수/전체 항목 수</li>
+<li><strong>EventLog 패널</strong>: SSE 이벤트를 시간순으로 누적 표시</li>
+<li><strong>오류 요약 패널</strong>: 파싱/DB/LDAP 오류 분류별 수량 및 상세 메시지</li>
+</ul>
+<p><strong>특수 패턴</strong>: SSE 재연결 시 <code>isProcessingRef</code> (useRef)로 stale closure 방지, LDAP 연결 실패 시 DB 전용 모드로 진행</p>
+<hr>
+<h4 id="3-인증서-업로드-certificateupload">3. 인증서 업로드 (CertificateUpload)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/upload/certificate</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/CertificateUpload.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT)</td>
+</tr>
+</tbody></table></div>
+<p>개별 인증서 파일 업로드. <strong>미리보기-저장 확인(Preview-before-Save)</strong> 워크플로우.</p>
+<ul>
+<li><strong>지원 형식</strong>: PEM, DER, CER, P7B, DL(Deviation List), CRL</li>
+<li><strong>인증서 카드 서브 탭</strong>: 일반(메타데이터) / 상세(TreeViewer) / Doc 9303(준수 체크리스트)</li>
+<li><strong>중복 감지</strong>: SHA-256 해시 기반</li>
+</ul>
+<p><strong>페이지 상태 머신</strong>: <code>IDLE -&gt; FILE_SELECTED -&gt; PREVIEWING -&gt; PREVIEW_READY -&gt; CONFIRMING -&gt; COMPLETED/FAILED</code></p>
+<hr>
+<h4 id="4-업로드-이력-uploadhistory">4. 업로드 이력 (UploadHistory)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/upload-history</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/UploadHistory.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>전체 업로드 이력 관리 페이지.</p>
+<ul>
+<li><strong>필터</strong>: 상태(COMPLETED/FAILED/PROCESSING/PENDING), 파일 형식, 파일명 검색</li>
+<li><strong>자동 갱신</strong>: PENDING/PROCESSING 상태의 업로드가 있으면 5초 간격으로 자동 갱신</li>
+<li><strong>재처리</strong>: FAILED 업로드의 이어하기 재처리 (fingerprint 캐시 기반)</li>
+<li><strong>삭제</strong>: FAILED/PENDING 상태 업로드 삭제</li>
+</ul>
+<hr>
+<h4 id="5-업로드-상세-uploaddetail">5. 업로드 상세 (UploadDetail)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/upload/:uploadId</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/UploadDetail.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>특정 업로드의 전체 상세 정보 페이지. PENDING/PROCESSING 상태일 때 3초마다 자동 갱신.</p>
+<hr>
+<h4 id="6-업로드-대시보드-uploaddashboard">6. 업로드 대시보드 (UploadDashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/upload-dashboard</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/UploadDashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>업로드 및 검증 통계 대시보드. 클릭 가능한 통계 카드와 업로드 트렌드 차트를 제공한다.</p>
+<hr>
+<h4 id="7-인증서-검색-certificatesearch">7. 인증서 검색 (CertificateSearch)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pkd/certificates</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/CertificateSearch.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>LDAP 기반 인증서 검색 및 상세 조회 페이지.</p>
+<ul>
+<li><strong>필터</strong>: 국가, 인증서 유형, 유효성, 출처, 검색어</li>
+<li><strong>4탭 상세 다이얼로그</strong>: 일반 / 상세(TreeViewer) / Doc 9303 / 포렌식(AI)</li>
+<li><strong>내보내기</strong>: 개별 PEM, 국가별 ZIP, 전체 DIT 구조 ZIP</li>
+</ul>
+<p><strong>특수 패턴</strong>: <code>AbortController</code>로 필터 변경 시 이전 검색 요청 자동 취소</p>
+<hr>
+<h3 id="보고서">보고서</h3>
+<h4 id="8-표준-부적합-dsc-보고서-dscncreport">8. 표준 부적합 DSC 보고서 (DscNcReport)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pkd/dsc-nc</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/DscNcReport.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>DSC_NC 인증서 분석 보고서 대시보드.</p>
+<ul>
+<li><strong>5개 차트</strong>: 비준수 코드, 국가별, 발급 연도별, 서명/공개 키 알고리즘</li>
+<li><strong>CSV 내보내기</strong>: 14개 컬럼, BOM 포함 (Excel UTF-8 호환)</li>
+</ul>
+<hr>
+<h4 id="9-crl-보고서-crlreport">9. CRL 보고서 (CrlReport)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pkd/crl</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/CrlReport.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>인증서 폐기 목록(CRL) 분석 보고서 대시보드.</p>
+<ul>
+<li><strong>3개 차트</strong>: 국가별 폐기 인증서, 서명 알고리즘, 폐기 사유</li>
+<li><strong>CRL 다운로드</strong>: <code>.crl</code> 바이너리 파일 (DER 형식)</li>
+<li><strong>폐기 사유 한국어 번역</strong>: RFC 5280 11가지 사유</li>
+</ul>
+<hr>
+<h4 id="10-dsc-trust-chain-보고서-trustchainvalidationreport">10. DSC Trust Chain 보고서 (TrustChainValidationReport)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pkd/trust-chain</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/TrustChainValidationReport.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>DSC Trust Chain 검증 통계 및 샘플 인증서 빠른 조회 페이지.</p>
+<hr>
+<h3 id="passive-authentication">Passive Authentication</h3>
+<h4 id="11-pa-검증-paverify">11. PA 검증 (PAVerify)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pa/verify</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/PAVerify.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+<tr>
+<td><strong>사이드바 권한</strong></td>
+<td><code>pa:verify</code></td>
+</tr>
+</tbody></table></div>
+<p>여권 Passive Authentication(PA) 검증 페이지. ICAO 9303 Part 10 &amp; 11 기반 8단계 검증.</p>
+<p><strong>전체 검증 모드</strong>: SOD 및 DG 파일 업로드하여 8단계 검증 수행 (SOD 파싱, DSC 추출, Trust Chain, CSCA 조회, SOD 서명, DG 해시, CRL 확인, 최종 판정).</p>
+<p><strong>간편 검증 모드</strong>: Subject DN 또는 SHA-256 지문으로 사전 계산된 Trust Chain 결과 즉시 조회 (5~20ms).</p>
+<hr>
+<h4 id="12-pa-이력-pahistory">12. PA 이력 (PAHistory)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pa/history</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/PAHistory.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+<tr>
+<td><strong>사이드바 권한</strong></td>
+<td><code>pa:read</code></td>
+</tr>
+</tbody></table></div>
+<p>PA 검증 이력 목록 페이지. 5건/페이지 기본 표시.</p>
+<ul>
+<li><strong>필터</strong>: 상태(VALID/INVALID/ERROR), 국가, 날짜 범위</li>
+<li><strong>익명 사용자</strong>: <code>anonymous (192.168.1.100)</code> 형식으로 클라이언트 IP 표시</li>
+</ul>
+<hr>
+<h4 id="13-pa-상세-padetail">13. PA 상세 (PADetail)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pa/:paId</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/PADetail.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>특정 PA 검증의 전체 상세 페이지. 3개 검증 카드 (인증서 체인, SOD 서명, DG 해시).</p>
+<hr>
+<h4 id="14-pa-대시보드-padashboard">14. PA 대시보드 (PADashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pa/dashboard</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/PADashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+<tr>
+<td><strong>사이드바 권한</strong></td>
+<td><code>pa:stats</code> (v2.37.0에서 <code>pa:read</code>에서 분리)</td>
+</tr>
+</tbody></table></div>
+<p>PA 검증 통계 대시보드. 도넛 차트, 국가 Top-10, 30일 트렌드.</p>
+<hr>
+<h3 id="동기화-모니터링">동기화 &amp; 모니터링</h3>
+<h4 id="15-동기화-대시보드-syncdashboard">15. 동기화 대시보드 (SyncDashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/sync</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/SyncDashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>DB-LDAP 동기화 상태 모니터링 및 관리 대시보드.</p>
+<ul>
+<li><strong>동기화 상태 카드</strong>: DB vs LDAP 인증서 수량 비교</li>
+<li><strong>인증서 재검증</strong>: 3단계 파이프라인 (만료 상태, Trust Chain, CRL 폐기)</li>
+<li><strong>설정 관리</strong>: 일일 동기화 시간, 자동 재검증, 자동 재조정</li>
+</ul>
+<hr>
+<h4 id="16-icao-상태-icaostatus">16. ICAO 상태 (IcaoStatus)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/icao</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/IcaoStatus.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>ICAO PKD 버전 모니터링 페이지.</p>
+<ul>
+<li><strong>3개 패널</strong>: DSC/CRL, DSC_NC, CSCA Master List 각각의 ICAO 최신 vs 로컬 버전 비교</li>
+<li><strong>버전 이력 테이블</strong>: 5가지 상태 (DETECTED/NOTIFIED/DOWNLOADED/IMPORTED/FAILED)</li>
+</ul>
+<hr>
+<h4 id="17-시스템-모니터링-monitoringdashboard">17. 시스템 모니터링 (MonitoringDashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/monitoring</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/MonitoringDashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (관리자 전용, v2.37.0에서 <code>adminOnly</code> 추가)</td>
+</tr>
+</tbody></table></div>
+<p>시스템 리소스 및 서비스 상태 실시간 모니터링. 10초 간격으로 자동 갱신.</p>
+<ul>
+<li><strong>시스템 메트릭 카드</strong>: CPU, 메모리, 디스크, 네트워크 I/O</li>
+<li><strong>서비스 상태 카드</strong>: 5개 서비스 + DB + LDAP (UP/DEGRADED/DOWN)</li>
+</ul>
+<hr>
+<h4 id="18-ai-인증서-분석-aianalysisdashboard">18. AI 인증서 분석 (AiAnalysisDashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/ai/analysis</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/AiAnalysisDashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>ML 기반 인증서 이상 탐지 및 포렌식 분석 대시보드.</p>
+<ul>
+<li><strong>위험 수준 분포 바</strong>: LOW/MEDIUM/HIGH/CRITICAL</li>
+<li><strong>국가별 PKI 성숙도</strong>: 상위 15개국 수평 막대 차트</li>
+<li><strong>알고리즘 마이그레이션 트렌드</strong>: 연도별 누적 스택 AreaChart</li>
+<li><strong>분석 실행</strong>: 백그라운드 배치 분석, 3초 폴링으로 진행률 표시</li>
+</ul>
+<p><strong>특수 패턴</strong>: <code>Promise.allSettled</code> 7개 통계 API 병렬 호출, <code>AbortController</code> 이상 목록 필터 변경 시 이전 요청 취소</p>
+<hr>
+<h3 id="관리자-보안">관리자 &amp; 보안</h3>
+<h4 id="19-api-클라이언트-관리-apiclientmanagement">19. API 클라이언트 관리 (ApiClientManagement)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/api-clients</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/ApiClientManagement.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT, 관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<p>외부 시스템 API Key 발급 및 접근 권한 관리.</p>
+<ul>
+<li><strong>12가지 API 권한</strong>: cert:read, cert:export, pa:verify, pa:read, pa:stats, upload:read, upload:write, report:read, ai:read, sync:read, icao:read, api-client:manage</li>
+<li><strong>API Key 발급</strong>: 일회성 표시, SHA-256 해시만 저장 (복구 불가)</li>
+<li><strong>사용량 조회</strong>: 7/30/90일 기간별 엔드포인트 요청 수 차트</li>
+</ul>
+<hr>
+<h4 id="20-로그인-이력-auditlog">20. 로그인 이력 (AuditLog)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/audit-log</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/AuditLog.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT, 관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<p>사용자 인증 감사 로그 조회. 이벤트 타입별 배지 색상 (LOGIN=초록, LOGIN_FAILED=빨강, LOGOUT=노랑, TOKEN_REFRESH=보라).</p>
+<hr>
+<h4 id="21-운영-감사-로그-operationauditlog">21. 운영 감사 로그 (OperationAuditLog)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/operation-audit</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/OperationAuditLog.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT, 관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<p>26가지 작업 유형에 대한 운영 감사 로그 (업로드, PA, 동기화, ICAO, API 클라이언트, 코드 마스터, 사용자, 인증서, 기타).</p>
+<hr>
+<h4 id="22-사용자-관리-usermanagement">22. 사용자 관리 (UserManagement)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/users</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/UserManagement.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT, 관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<p>시스템 사용자 및 권한 관리. 그리드 카드 레이아웃으로 사용자 목록을 표시한다.</p>
+<hr>
+<h3 id="공통">공통</h3>
+<h4 id="23-로그인-login">23. 로그인 (Login)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/login</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/Login.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요</td>
+</tr>
+</tbody></table></div>
+<p>시스템 진입점이자 랜딩 페이지. 2패널 레이아웃 (좌측 히어로 + 우측 로그인 폼), JWT 인증, 다크/라이트 모드 토글.</p>
+<hr>
+<h4 id="24-프로필-profile">24. 프로필 (Profile)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/profile</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/Profile.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT)</td>
+</tr>
+</tbody></table></div>
+<p>현재 로그인한 사용자의 프로필 및 비밀번호 변경.</p>
+<hr>
+<h3 id="추가-페이지">추가 페이지</h3>
+<h4 id="25-csr-관리-csrmanagement">25. CSR 관리 (CsrManagement)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/csr</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/CsrManagement.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>JWT 필수 (관리자)</td>
+</tr>
+</tbody></table></div>
+<p>ICAO PKD CSR 생성, 외부 CSR Import, ICAO 발급 인증서 등록을 관리하는 페이지. 모든 데이터 AES-256-GCM 암호화 저장.</p>
+<hr>
+<h4 id="26-dsc-등록-승인-pendingdscapproval">26. DSC 등록 승인 (PendingDscApproval)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/admin/pending-dsc</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/PendingDscApproval.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (JWT, 관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<p>PA 검증에서 자동 추출된 DSC 인증서의 등록 승인/거부 관리.</p>
+<hr>
+<h4 id="27-인증서-품질-보고서-certificatequalityreport">27. 인증서 품질 보고서 (CertificateQualityReport)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/pkd/quality</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/CertificateQualityReport.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개)</td>
+</tr>
+</tbody></table></div>
+<p>ICAO Doc 9303 기반 인증서 품질(준수/미준수/경고) 분석 보고서 대시보드.</p>
+<hr>
+<h4 id="28-api-클라이언트-접근-신청-apiclientrequest">28. API 클라이언트 접근 신청 (ApiClientRequest)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/api-client-request</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/ApiClientRequest.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>불필요 (공개, Layout 외부)</td>
+</tr>
+</tbody></table></div>
+<p>외부 시스템에서 API 클라이언트 접근을 신청하는 공개 페이지. PII 암호화 (AES-256-GCM).</p>
+<hr>
+<h4 id="29-eac-대시보드-eacdashboard">29. EAC 대시보드 (EacDashboard)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라우트</strong></td>
+<td><code>/eac/dashboard</code></td>
+</tr>
+<tr>
+<td><strong>파일</strong></td>
+<td><code>frontend/src/pages/EacDashboard.tsx</code></td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>필요 (관리자 전용, 실험적 기능)</td>
+</tr>
+</tbody></table></div>
+<p>BSI TR-03110 기반 CVC(Card Verifiable Certificate) 인증서 관리 실험적 대시보드.</p>
+<hr>
+<h3 id="공통-패턴-요약">공통 패턴 요약</h3>
+<h4 id="인증-및-접근-제어">인증 및 접근 제어</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>유형</th>
+<th>페이지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>공개 (JWT 불필요)</td>
+<td>Dashboard, CertificateSearch, DscNcReport, CertificateQualityReport, CrlReport, TrustChain, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, IcaoStatus, AiAnalysis, UploadHistory, UploadDetail, UploadDashboard, ApiClientRequest</td>
+</tr>
+<tr>
+<td>JWT 필요 (권한 기반)</td>
+<td>FileUpload, CertificateUpload, Profile</td>
+</tr>
+<tr>
+<td>관리자 전용</td>
+<td>ApiClientManagement, AuditLog, OperationAuditLog, UserManagement, PendingDscApproval, CsrManagement, MonitoringDashboard, EacDashboard</td>
+</tr>
+</tbody></table></div>
+<h4 id="데이터-갱신-방식">데이터 갱신 방식</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>방식</th>
+<th>페이지</th>
+<th>간격</th>
+<th>조건</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SSE (실시간)</td>
+<td>FileUpload</td>
+<td>이벤트 기반</td>
+<td>업로드 진행 중</td>
+</tr>
+<tr>
+<td>폴링</td>
+<td>UploadHistory</td>
+<td>5초</td>
+<td>PENDING/PROCESSING 존재 시</td>
+</tr>
+<tr>
+<td>폴링</td>
+<td>UploadDetail</td>
+<td>3초</td>
+<td>PENDING/PROCESSING 상태 시</td>
+</tr>
+<tr>
+<td>폴링</td>
+<td>MonitoringDashboard</td>
+<td>10초</td>
+<td>항상</td>
+</tr>
+<tr>
+<td>폴링</td>
+<td>AiAnalysisDashboard</td>
+<td>3초</td>
+<td>분석 실행 중</td>
+</tr>
+<tr>
+<td>수동</td>
+<td>나머지 페이지</td>
+<td>-</td>
+<td>사용자 액션 시</td>
+</tr>
+</tbody></table></div>
+<h4 id="성능-최적화-패턴">성능 최적화 패턴</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>패턴</th>
+<th>적용 페이지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>React.lazy()</code> 코드 스플리팅</td>
+<td>전체 27개 페이지 (Login, Dashboard 제외)</td>
+</tr>
+<tr>
+<td><code>AbortController</code> (stale 요청 취소)</td>
+<td>CertificateSearch, DscNcReport, MonitoringDashboard, AiAnalysisDashboard</td>
+</tr>
+<tr>
+<td><code>useRef</code> (stale closure 방지)</td>
+<td>FileUpload, AiAnalysisDashboard</td>
+</tr>
+<tr>
+<td><code>Promise.allSettled</code> (병렬 호출)</td>
+<td>AiAnalysisDashboard, Dashboard</td>
+</tr>
+<tr>
+<td><code>useMemo</code> (재계산 방지)</td>
+<td>AiAnalysisDashboard</td>
+</tr>
+</tbody></table></div>
+<h4 id="차트-라이브러리-recharts">차트 라이브러리 (Recharts)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>차트 유형</th>
+<th>사용 페이지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LineChart</td>
+<td>UploadDashboard</td>
+</tr>
+<tr>
+<td>BarChart (수직)</td>
+<td>DscNcReport, CrlReport, AiAnalysisDashboard, CertificateQualityReport</td>
+</tr>
+<tr>
+<td>BarChart (수평)</td>
+<td>DscNcReport, AiAnalysisDashboard, ApiClientManagement</td>
+</tr>
+<tr>
+<td>PieChart</td>
+<td>DscNcReport, CrlReport, PADashboard, AiAnalysisDashboard</td>
+</tr>
+<tr>
+<td>AreaChart</td>
+<td>PADashboard, AiAnalysisDashboard</td>
+</tr>
+</tbody></table></div>
+<h4 id="oracle-호환성-프론트엔드">Oracle 호환성 (프론트엔드)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>헬퍼</th>
+<th>용도</th>
+<th>사용 페이지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>toBool(v)</code></td>
+<td>true/1/&quot;1&quot;/&quot;true&quot; 처리</td>
+<td>UserManagement</td>
+</tr>
+<tr>
+<td><code>parsePermissions(v)</code></td>
+<td>배열/JSON 문자열/null 처리</td>
+<td>UserManagement</td>
+</tr>
+<tr>
+<td><code>stored_in_ldap</code> 문자열</td>
+<td>&quot;1&quot;/&quot;0&quot; boolean 처리</td>
+<td>CrlReport</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#part-1-design-system">Part 1: Design System</a><a href="#1-design-concept" style="padding-left:1rem">1. Design Concept</a><a href="#2-color-theme" style="padding-left:1rem">2. Color Theme</a><a href="#3-typography" style="padding-left:1rem">3. Typography</a><a href="#4-layout" style="padding-left:1rem">4. Layout</a><a href="#5-components" style="padding-left:1rem">5. Components</a><a href="#6-spacing-system" style="padding-left:1rem">6. Spacing System</a><a href="#7-border-radius-shadow" style="padding-left:1rem">7. Border Radius &amp; Shadow</a><a href="#8-animation-transitions" style="padding-left:1rem">8. Animation &amp; Transitions</a><a href="#9-landing-page-login-tsx" style="padding-left:1rem">9. Landing Page (Login.tsx)</a><a href="#10-dark-mode" style="padding-left:1rem">10. Dark Mode</a><a href="#11-z-index-stack" style="padding-left:1rem">11. Z-Index Stack</a><a href="#12-icon-system" style="padding-left:1rem">12. Icon System</a><a href="#13-grid-patterns-responsive" style="padding-left:1rem">13. Grid Patterns (Responsive)</a><a href="#14-chart-styling-recharts" style="padding-left:1rem">14. Chart Styling (Recharts)</a><a href="#15-file-structure" style="padding-left:1rem">15. File Structure</a><a href="#part-2-page-documentation">Part 2: Page Documentation</a><a href="#pkd-관리" style="padding-left:1rem">PKD 관리</a><a href="#보고서" style="padding-left:1rem">보고서</a><a href="#passive-authentication" style="padding-left:1rem">Passive Authentication</a><a href="#동기화-모니터링" style="padding-left:1rem">동기화 &amp; 모니터링</a><a href="#관리자-보안" style="padding-left:1rem">관리자 &amp; 보안</a><a href="#공통" style="padding-left:1rem">공통</a><a href="#추가-페이지" style="padding-left:1rem">추가 페이지</a><a href="#공통-패턴-요약" style="padding-left:1rem">공통 패턴 요약</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

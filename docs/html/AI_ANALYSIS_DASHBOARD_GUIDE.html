@@ -1,0 +1,1721 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Analysis Dashboard Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html" class="active">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>AI Analysis Dashboard Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="ai-인증서-분석-보고서-가이드">AI 인증서 분석 보고서 가이드</h1>
+<p><strong>Version</strong>: v2.37.0
+<strong>Last Updated</strong>: 2026-03-18
+<strong>페이지</strong>: <code>/ai/analysis</code></p>
+<hr>
+<h2 id="개요">개요</h2>
+<p>AI 인증서 분석 보고서는 FASTpass® SPKD에 등록된 전체 인증서(CSCA, DSC, MLSC, DSC_NC)를
+ML(Machine Learning) 기반으로 분석하여 이상 징후, 보안 위험, PKI 성숙도를 시각화하는 대시보드입니다.</p>
+<h3 id="분석-엔진-구성">분석 엔진 구성</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔진</th>
+<th>방식</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Isolation Forest</strong></td>
+<td>비지도학습</td>
+<td>전체 인증서 대비 통계적 이탈도 측정 (글로벌 이상 탐지)</td>
+</tr>
+<tr>
+<td><strong>Local Outlier Factor</strong></td>
+<td>비지도학습</td>
+<td>같은 국가·유형 인증서 대비 이탈도 측정 (로컬 이상 탐지)</td>
+</tr>
+<tr>
+<td><strong>규칙 기반 위험 점수</strong></td>
+<td>가중 합산</td>
+<td>6개 카테고리별 보안 위험도 수치화 (0~100)</td>
+</tr>
+<tr>
+<td><strong>포렌식 분석</strong></td>
+<td>10개 카테고리</td>
+<td>심층 구조·발급자·시간패턴 분석</td>
+</tr>
+</tbody></table></div>
+<h3 id="ml-특징-feature-수">ML 특징(Feature) 수</h3>
+<ul>
+<li><strong>v1.0</strong>: 25개 특징 (암호, 유효기간, 준수, 확장, 국가 상대값)</li>
+<li><strong>v2.0</strong>: 45개 특징 (+발급자 프로파일, 시간 패턴, DN 구조, 확장 프로파일, 교차 인증서)</li>
+</ul>
+<hr>
+<h2 id="1-요약-카드-summary-cards">1. 요약 카드 (Summary Cards)</h2>
+<p>페이지 상단에 4개 카드로 전체 분석 결과를 요약합니다.</p>
+<h3 id="1-1-분석-완료-total-analyzed">1.1 분석 완료 (Total Analyzed)</h3>
+<ul>
+<li><strong>아이콘</strong>: Brain (파란색)</li>
+<li><strong>값</strong>: <code>total_analyzed</code></li>
+<li><strong>의미</strong>: ML 분석이 완료된 인증서 총 수</li>
+<li><strong>예시</strong>: 31,212 — DB에 등록된 전체 인증서가 분석됨</li>
+</ul>
+<h3 id="1-2-정상-normal">1.2 정상 (Normal)</h3>
+<ul>
+<li><strong>아이콘</strong>: CheckCircle (녹색)</li>
+<li><strong>값</strong>: <code>normal_count</code></li>
+<li><strong>의미</strong>: ML 이상 탐지 모델이 정상 패턴으로 분류한 인증서 수</li>
+<li><strong>판단 기준</strong>: anomaly_score가 낮은 범위에 속하며, 같은 국가·유형 인증서들과 유사한 특징 보유</li>
+</ul>
+<h3 id="1-3-의심-suspicious">1.3 의심 (Suspicious)</h3>
+<ul>
+<li><strong>아이콘</strong>: AlertTriangle (주황색)</li>
+<li><strong>값</strong>: <code>suspicious_count</code></li>
+<li><strong>의미</strong>: 일부 특징이 다수 인증서와 다르지만 명확한 이상은 아닌 경계 영역</li>
+<li><strong>조치</strong>: 추가 검토 권장. 위험 요인(risk_factors)을 확인하여 실제 문제인지 판단</li>
+</ul>
+<h3 id="1-4-이상-anomalous">1.4 이상 (Anomalous)</h3>
+<ul>
+<li><strong>아이콘</strong>: ShieldAlert (빨간색)</li>
+<li><strong>값</strong>: <code>anomalous_count</code></li>
+<li><strong>의미</strong>: ML 모델이 명확한 이상 패턴을 탐지한 인증서</li>
+<li><strong>조치</strong>: 즉시 검토 필요. 해당 인증서의 포렌식 상세 분석 확인 권장</li>
+</ul>
+<h3 id="분류-기준">분류 기준</h3>
+<p>anomaly_score (0.0~1.0)는 Isolation Forest(전체 패턴 대비 이탈도)와 LOF(같은 국가·유형 대비 이탈도)의 가중 평균입니다. 인증서 유형별로 별도 모델이 학습되어 CSCA·DSC·MLSC·DSC_NC 각각의 정상 패턴을 기준으로 이상을 판단합니다.</p>
+<hr>
+<h2 id="2-위험-수준-분포-바-risk-level-distribution">2. 위험 수준 분포 바 (Risk Level Distribution)</h2>
+<p>전체 인증서의 위험 수준을 4단계로 분류하여 비례 막대로 표시합니다.</p>
+<h3 id="위험-수준-정의">위험 수준 정의</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>수준</th>
+<th>색상</th>
+<th>점수 범위</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>LOW</strong></td>
+<td>녹색</td>
+<td>0~25</td>
+<td>표준 준수, 최신 알고리즘, 적절한 키 크기. 정상 인증서</td>
+</tr>
+<tr>
+<td><strong>MEDIUM</strong></td>
+<td>노란색</td>
+<td>25~50</td>
+<td>일부 항목이 권장사항에 미달. 예: SHA-256 사용하지만 키 크기가 최소 기준</td>
+</tr>
+<tr>
+<td><strong>HIGH</strong></td>
+<td>주황색</td>
+<td>50~75</td>
+<td>다수 항목에서 문제 발견. 예: 약한 알고리즘, 만료된 인증서, ICAO 비준수</td>
+</tr>
+<tr>
+<td><strong>CRITICAL</strong></td>
+<td>빨간색</td>
+<td>75~100</td>
+<td>심각한 보안 위험. 예: SHA-1 + RSA-1024 + 다수 ICAO 위반 동시 발생</td>
+</tr>
+</tbody></table></div>
+<h3 id="위험-점수-risk_score-계산">위험 점수(risk_score) 계산</h3>
+<p>6개 카테고리의 가중 합산으로 산출됩니다 (0~100):</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>카테고리</th>
+<th>최대 점수</th>
+<th>측정 내용</th>
+<th>높은 점수 예시</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Algorithm</strong></td>
+<td>40점</td>
+<td>서명 알고리즘 강도</td>
+<td>SHA-1, MD5 사용</td>
+</tr>
+<tr>
+<td><strong>Key Size</strong></td>
+<td>40점</td>
+<td>공개키 크기 적절성</td>
+<td>RSA-1024, EC-160</td>
+</tr>
+<tr>
+<td><strong>Compliance</strong></td>
+<td>20점</td>
+<td>ICAO 9303 표준 준수 여부</td>
+<td>다수 Doc 9303 항목 위반</td>
+</tr>
+<tr>
+<td><strong>Validity</strong></td>
+<td>15점</td>
+<td>유효기간 상태</td>
+<td>만료됨, 비정상 유효기간</td>
+</tr>
+<tr>
+<td><strong>Extensions</strong></td>
+<td>15점</td>
+<td>X.509 확장 필드 규칙 위반</td>
+<td>필수 확장 누락, 금지 확장 포함</td>
+</tr>
+<tr>
+<td><strong>Anomaly</strong></td>
+<td>15점</td>
+<td>ML 이상 탐지 점수 반영</td>
+<td>anomaly_score가 높은 경우</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>해석 예시</strong>: risk_score = 65</p>
+<ul>
+<li>Algorithm 0점 (RSA-SHA256, 양호)</li>
+<li>Key Size 20점 (RSA-2048, 최소 기준)</li>
+<li>Compliance 10점 (ICAO 2개 항목 위반)</li>
+<li>Validity 15점 (인증서 만료됨)</li>
+<li>Extensions 10점 (확장 규칙 2개 위반)</li>
+<li>Anomaly 10점 (ML 이상 탐지)</li>
+</ul>
+</blockquote>
+<h3 id="평균-위험-점수-avg_risk_score">평균 위험 점수 (avg_risk_score)</h3>
+<p>상단 우측에 표시되는 전체 인증서의 평균 위험 점수입니다. 이 값이 낮을수록 전체 FASTpass® SPKD의 보안 상태가 양호합니다.</p>
+<hr>
+<h2 id="3-포렌식-분석-요약-forensic-risk-summary">3. 포렌식 분석 요약 (Forensic Risk Summary)</h2>
+<p>ML 이상 탐지를 넘어 <strong>10개 카테고리</strong>로 세분화된 심층 분석 결과입니다.</p>
+<h3 id="표시-항목">표시 항목</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>포렌식 수준 분포</strong></td>
+<td>포렌식 종합 점수 기준 LOW/MEDIUM/HIGH/CRITICAL 비례 막대</td>
+</tr>
+<tr>
+<td><strong>평균 포렌식 점수</strong></td>
+<td>전체 인증서의 포렌식 위험 평균 (0~100)</td>
+</tr>
+<tr>
+<td><strong>주요 발견 사항</strong> (Top 5)</td>
+<td>가장 빈번하게 발견된 문제와 발생 건수</td>
+</tr>
+</tbody></table></div>
+<h3 id="포렌식-10개-카테고리-상세">포렌식 10개 카테고리 상세</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>카테고리</th>
+<th>최대 점수</th>
+<th>측정 내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>서명 알고리즘</strong> (Algorithm)</td>
+<td>40</td>
+<td>SHA-1, MD5 등 취약 알고리즘 사용 여부. SHA-256 이상이면 0점</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>키 크기</strong> (Key Size)</td>
+<td>40</td>
+<td>ICAO 권장 최소 키 크기 미달 여부. RSA-2048+, ECDSA-256+ 이면 0점</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>ICAO 준수</strong> (Compliance)</td>
+<td>20</td>
+<td>Doc 9303 표준 체크리스트 위반 수. 전체 통과시 0점</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>유효기간</strong> (Validity)</td>
+<td>15</td>
+<td>만료/미시작 상태, 비정상 유효기간 길이. 유효하면 0점</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>확장 필드</strong> (Extensions)</td>
+<td>15</td>
+<td>Key Usage, Basic Constraints 등 필수 확장 규칙 위반. 전체 준수시 0점</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>ML 이상 탐지</strong> (Anomaly)</td>
+<td>15</td>
+<td>Isolation Forest + LOF 모델의 이상 점수 반영</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>발급자 평판</strong> (Issuer Reputation)</td>
+<td>15</td>
+<td>해당 발급자의 전체 인증서 품질 이력. 다른 인증서에도 문제가 많으면 높은 점수</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>구조 일관성</strong> (Structural Consistency)</td>
+<td>20</td>
+<td>X.509 확장 프로파일이 같은 유형·국가 인증서와 얼마나 다른지</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>시간 패턴</strong> (Temporal Pattern)</td>
+<td>10</td>
+<td>발급일·유효기간이 같은 국가의 일반적 패턴과 다른 정도</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>DN 일관성</strong> (DN Consistency)</td>
+<td>10</td>
+<td>Subject/Issuer DN 구조가 같은 국가 인증서와 일관성 있는 정도</td>
+</tr>
+</tbody></table></div>
+<h3 id="주요-발견-사항-top-findings-해석">주요 발견 사항 (Top Findings) 해석</h3>
+<p>발견 사항은 전체 인증서에서 가장 많이 나타나는 문제를 순위별로 나열합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>예시 메시지</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&quot;RSA-1024 키 크기 사용 (권장: 2048+)&quot;</td>
+<td>해당 인증서들이 ICAO 최소 권장 키 크기 미달</td>
+</tr>
+<tr>
+<td>&quot;SHA-1 서명 알고리즘 사용&quot;</td>
+<td>2011년 이후 사용 중단 권고된 취약 알고리즘</td>
+</tr>
+<tr>
+<td>&quot;ICAO 9303 Basic Constraints 규칙 위반&quot;</td>
+<td>필수 X.509 확장이 누락되었거나 값이 부적절</td>
+</tr>
+<tr>
+<td>&quot;인증서 만료됨&quot;</td>
+<td>유효기간이 종료된 인증서</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="4-발급자-프로파일-카드-issuer-profile">4. 발급자 프로파일 카드 (Issuer Profile)</h2>
+<p>각 인증서 발급자(주로 CSCA)별 품질을 분석합니다. 상위 15개 발급자가 수평 막대 차트로 표시됩니다.</p>
+<h3 id="데이터-필드">데이터 필드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>발급자 DN</strong> (<code>issuer_dn</code>)</td>
+<td>인증서를 발급한 CA의 Distinguished Name (예: <code>/C=KR/O=MOGAHA/CN=KOREA CSCA</code>)</td>
+</tr>
+<tr>
+<td><strong>인증서 수</strong> (<code>cert_count</code>)</td>
+<td>해당 발급자가 발급한 인증서 총 수. 막대 길이로 표현</td>
+</tr>
+<tr>
+<td><strong>유형 다양성</strong> (<code>type_diversity</code>)</td>
+<td>발급한 인증서 유형의 다양도 (CSCA, DSC 등)</td>
+</tr>
+<tr>
+<td><strong>주요 알고리즘</strong> (<code>dominant_algorithm</code>)</td>
+<td>가장 많이 사용한 서명 알고리즘</td>
+</tr>
+<tr>
+<td><strong>평균 키 크기</strong> (<code>avg_key_size</code>)</td>
+<td>발급 인증서들의 평균 공개키 크기</td>
+</tr>
+<tr>
+<td><strong>준수율</strong> (<code>compliance_rate</code>)</td>
+<td>ICAO 9303 표준을 통과한 인증서 비율 (0~1). 1.0 = 100% 준수</td>
+</tr>
+<tr>
+<td><strong>만료율</strong> (<code>expired_rate</code>)</td>
+<td>만료된 인증서 비율 (0~1). 높으면 갱신 필요</td>
+</tr>
+<tr>
+<td><strong>위험 지표</strong> (<code>risk_indicator</code>)</td>
+<td>LOW(녹색) / MEDIUM(주황) / HIGH(빨간) 종합 판단</td>
+</tr>
+<tr>
+<td><strong>국가</strong> (<code>country</code>)</td>
+<td>발급자 소속 국가 코드</td>
+</tr>
+</tbody></table></div>
+<h3 id="위험-지표-판단-기준">위험 지표 판단 기준</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>지표</th>
+<th>조건</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>HIGH</strong> (빨간색)</td>
+<td>준수율 낮음 + 만료율 높음 + 취약 알고리즘 사용</td>
+</tr>
+<tr>
+<td><strong>MEDIUM</strong> (주황색)</td>
+<td>일부 항목 미달</td>
+</tr>
+<tr>
+<td><strong>LOW</strong> (녹색)</td>
+<td>준수율 높음 + 최신 알고리즘 + 유효한 인증서</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>HIGH 위험 발급자가 있으면 해당 국가의 PKI 인프라에 구조적 문제가 있을 수 있습니다.
+하단 테이블에서 HIGH 위험 발급자의 상세 정보(준수율, 만료율)를 확인할 수 있습니다.</p>
+</blockquote>
+<hr>
+<h2 id="5-확장-프로파일-규칙-위반-extension-compliance-checklist">5. 확장 프로파일 규칙 위반 (Extension Compliance Checklist)</h2>
+<p>ICAO Doc 9303에서 정의한 X.509 확장 필드 규칙 위반을 검사합니다.</p>
+<h3 id="테이블-컬럼">테이블 컬럼</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>인증서</strong></td>
+<td>SHA-256 fingerprint 앞 16자리 (행 클릭으로 상세 펼침)</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td>CSCA / DSC / MLSC — 인증서 유형에 따라 적용 규칙이 다름</td>
+</tr>
+<tr>
+<td><strong>국가</strong></td>
+<td>2자리 국가 코드</td>
+</tr>
+<tr>
+<td><strong>심각도</strong></td>
+<td>structural_score 기반 자동 분류</td>
+</tr>
+<tr>
+<td><strong>위반 수</strong></td>
+<td>필수 누락 + 권장 누락 + 금지 위반 + 키 사용 위반의 합계</td>
+</tr>
+<tr>
+<td><strong>점수</strong></td>
+<td>structural_score × 100 (0~100). 높을수록 많은 규칙 위반</td>
+</tr>
+</tbody></table></div>
+<h3 id="심각도-분류">심각도 분류</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>심각도</th>
+<th>조건</th>
+<th>색상</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CRITICAL</strong></td>
+<td>structural_score ≥ 0.8</td>
+<td>빨간색</td>
+</tr>
+<tr>
+<td><strong>HIGH</strong></td>
+<td>structural_score ≥ 0.5</td>
+<td>주황색</td>
+</tr>
+<tr>
+<td><strong>MEDIUM</strong></td>
+<td>structural_score ≥ 0.2</td>
+<td>노란색</td>
+</tr>
+<tr>
+<td><strong>LOW</strong></td>
+<td>structural_score &lt; 0.2</td>
+<td>녹색</td>
+</tr>
+</tbody></table></div>
+<h3 id="펼침-상세-내용">펼침 상세 내용</h3>
+<p>행을 클릭하면 해당 인증서의 위반 상세가 표시됩니다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>색상</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>violations_detail</strong></td>
+<td>심각도별</td>
+<td>개별 위반 규칙명과 심각도</td>
+</tr>
+<tr>
+<td><strong>필수 누락</strong> (<code>missing_required</code>)</td>
+<td>빨간색</td>
+<td>반드시 있어야 하는 확장이 없음</td>
+</tr>
+<tr>
+<td><strong>금지 위반</strong> (<code>forbidden_violations</code>)</td>
+<td>주황색</td>
+<td>해당 유형에 있으면 안 되는 확장이 포함됨</td>
+</tr>
+<tr>
+<td><strong>키 사용 위반</strong> (<code>key_usage_violations</code>)</td>
+<td>노란색</td>
+<td>Key Usage 비트가 인증서 유형에 맞지 않음</td>
+</tr>
+</tbody></table></div>
+<h3 id="인증서-유형별-규칙-요약">인증서 유형별 규칙 요약</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>유형</th>
+<th>Key Usage 필수 비트</th>
+<th>Basic Constraints</th>
+<th>기타</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CSCA</strong></td>
+<td>keyCertSign + cRLSign</td>
+<td>CA=true, pathLen=0</td>
+<td>자체서명</td>
+</tr>
+<tr>
+<td><strong>DSC</strong></td>
+<td>digitalSignature</td>
+<td>CA=false</td>
+<td>EKU 없어야 함</td>
+</tr>
+<tr>
+<td><strong>MLSC</strong></td>
+<td>(유형별 상이)</td>
+<td>(유형별 상이)</td>
+<td>EKU OID 2.23.136.1.1.3 필수</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="6-국가별-pki-성숙도-country-pki-maturity">6. 국가별 PKI 성숙도 (Country PKI Maturity)</h2>
+<p>각 국가의 전체 PKI 인프라 품질을 0~100으로 점수화합니다. 상위 15개국이 수평 막대 차트로 표시됩니다.</p>
+<h3 id="성숙도-점수-구성">성숙도 점수 구성</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>의미</th>
+<th>높은 점수 조건</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>maturity_score</strong></td>
+<td>5개 차원의 가중 평균 종합 점수 (0~100)</td>
+<td>모든 차원에서 우수</td>
+</tr>
+<tr>
+<td><strong>algorithm_score</strong></td>
+<td>서명 알고리즘 강도</td>
+<td>SHA-256+, ECDSA, RSA-PSS 비율이 높음</td>
+</tr>
+<tr>
+<td><strong>key_size_score</strong></td>
+<td>공개키 크기 적절성</td>
+<td>RSA-2048+ 또는 ECDSA-256+ 비율이 높음</td>
+</tr>
+<tr>
+<td><strong>compliance_score</strong></td>
+<td>ICAO 9303 표준 준수율</td>
+<td>준수 인증서 비율이 높음</td>
+</tr>
+<tr>
+<td><strong>extension_score</strong></td>
+<td>X.509 확장 필드 규칙 준수율</td>
+<td>확장 규칙 위반이 적음</td>
+</tr>
+<tr>
+<td><strong>freshness_score</strong></td>
+<td>인증서 신선도</td>
+<td>최근 발급·갱신 비율이 높고 만료 인증서가 적음</td>
+</tr>
+</tbody></table></div>
+<h3 id="차트-툴팁">차트 툴팁</h3>
+<p>막대 위에 마우스를 올리면 해당 국가의 상세 점수가 표시됩니다:</p>
+<ul>
+<li>국기 + 국가 코드 + 국가명</li>
+<li>5개 차원별 개별 점수</li>
+<li>해당 국가의 인증서 수</li>
+</ul>
+<h3 id="해석-예시">해석 예시</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>국가</th>
+<th>종합</th>
+<th>알고리즘</th>
+<th>키 크기</th>
+<th>준수</th>
+<th>확장</th>
+<th>신선도</th>
+<th>해석</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>KR 92</td>
+<td>95</td>
+<td>90</td>
+<td>98</td>
+<td>85</td>
+<td>90</td>
+<td>전반적으로 우수한 PKI</td>
+<td></td>
+</tr>
+<tr>
+<td>XX 45</td>
+<td>30</td>
+<td>40</td>
+<td>60</td>
+<td>50</td>
+<td>40</td>
+<td>알고리즘 갱신 및 표준 준수 개선 필요</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="7-알고리즘-마이그레이션-추세-algorithm-migration-trends">7. 알고리즘 마이그레이션 추세 (Algorithm Migration Trends)</h2>
+<p>Stacked Area Chart로 연도별 서명 알고리즘 사용 추이를 보여줍니다.</p>
+<ul>
+<li><strong>X축</strong>: 인증서 발급 연도</li>
+<li><strong>Y축</strong>: 인증서 수</li>
+<li><strong>영역</strong>: 알고리즘별 색상 구분</li>
+</ul>
+<h3 id="알고리즘-종류-및-보안-수준">알고리즘 종류 및 보안 수준</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>차트 표시명</th>
+<th>OID 이름</th>
+<th>보안 수준</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RSA-SHA256</td>
+<td>sha256WithRSAEncryption</td>
+<td>양호</td>
+<td>현재 표준</td>
+</tr>
+<tr>
+<td>RSA-SHA384</td>
+<td>sha384WithRSAEncryption</td>
+<td>우수</td>
+<td></td>
+</tr>
+<tr>
+<td>RSA-SHA512</td>
+<td>sha512WithRSAEncryption</td>
+<td>우수</td>
+<td></td>
+</tr>
+<tr>
+<td>RSA-SHA1</td>
+<td>sha1WithRSAEncryption</td>
+<td><strong>취약</strong></td>
+<td>2011년 이후 사용 중단 권고</td>
+</tr>
+<tr>
+<td>ECDSA-SHA256</td>
+<td>ecdsa-with-SHA256</td>
+<td>우수</td>
+<td>ICAO 권장</td>
+</tr>
+<tr>
+<td>ECDSA-SHA384</td>
+<td>ecdsa-with-SHA384</td>
+<td>우수</td>
+<td></td>
+</tr>
+<tr>
+<td>ECDSA-SHA512</td>
+<td>ecdsa-with-SHA512</td>
+<td>우수</td>
+<td></td>
+</tr>
+<tr>
+<td>RSA-PSS</td>
+<td>id-RSASSA-PSS</td>
+<td>우수</td>
+<td>최신 표준</td>
+</tr>
+</tbody></table></div>
+<h3 id="정상적인-마이그레이션-패턴">정상적인 마이그레이션 패턴</h3>
+<p>최근 연도로 갈수록:</p>
+<ul>
+<li>RSA-SHA1 영역이 줄어듦 (취약 알고리즘 퇴출)</li>
+<li>ECDSA 영역이 늘어남 (타원곡선 암호 채택 증가)</li>
+<li>RSA-PSS가 새로 나타남 (최신 표준 도입)</li>
+</ul>
+<blockquote>
+<p>특정 연도에 RSA-SHA1 비율이 갑자기 증가하면 해당 국가들의 인증서 갱신이 지연되고 있음을 의미합니다.</p>
+</blockquote>
+<hr>
+<h2 id="8-키-크기-분포-key-size-distribution">8. 키 크기 분포 (Key Size Distribution)</h2>
+<p>Pie Chart로 상위 10개 알고리즘+키크기 조합의 비율을 보여줍니다.</p>
+<h3 id="주요-조합-및-해석">주요 조합 및 해석</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>조합</th>
+<th>보안 수준</th>
+<th>ICAO 준수</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RSA 2048</td>
+<td>최소 기준</td>
+<td>준수</td>
+<td>가장 흔한 조합</td>
+</tr>
+<tr>
+<td>RSA 3072</td>
+<td>양호</td>
+<td>준수</td>
+<td>2030년까지 권장</td>
+</tr>
+<tr>
+<td>RSA 4096</td>
+<td>우수</td>
+<td>준수</td>
+<td>장기 보안</td>
+</tr>
+<tr>
+<td>EC 256 (P-256)</td>
+<td>우수</td>
+<td>준수</td>
+<td>RSA 3072과 동등 보안 강도</td>
+</tr>
+<tr>
+<td>EC 384 (P-384)</td>
+<td>매우 우수</td>
+<td>준수</td>
+<td>RSA 7680과 동등</td>
+</tr>
+<tr>
+<td>EC 521 (P-521)</td>
+<td>최고 수준</td>
+<td>준수</td>
+<td></td>
+</tr>
+<tr>
+<td>RSA 1024</td>
+<td><strong>취약</strong></td>
+<td><strong>미달</strong></td>
+<td>즉시 교체 필요</td>
+</tr>
+<tr>
+<td>EC 160</td>
+<td><strong>취약</strong></td>
+<td><strong>미달</strong></td>
+<td>즉시 교체 필요</td>
+</tr>
+</tbody></table></div>
+<h3 id="icao-최소-권장-기준">ICAO 최소 권장 기준</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>알고리즘</th>
+<th>최소 키 크기</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>RSA</td>
+<td>2048비트</td>
+</tr>
+<tr>
+<td>ECDSA</td>
+<td>256비트 (P-256)</td>
+</tr>
+<tr>
+<td>RSA-PSS</td>
+<td>2048비트</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>RSA 1024이나 EC 160이 파이 차트에 보이면 해당 국가의 인증서를 즉시 갱신해야 합니다.</p>
+</blockquote>
+<hr>
+<h2 id="9-인증서-분석-테이블">9. 인증서 분석 테이블</h2>
+<p>필터링 + 페이지네이션이 적용된 개별 인증서 분석 결과 목록입니다.</p>
+<h3 id="테이블-컬럼">테이블 컬럼</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>데이터</th>
+<th>의미</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>국가</strong></td>
+<td><code>country_code</code></td>
+<td>국기 + 2자리 코드. 인증서 발급 국가</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td><code>certificate_type</code></td>
+<td>CSCA(최상위CA), DSC(문서서명), MLSC(마스터리스트서명), DSC_NC(부적합DSC)</td>
+</tr>
+<tr>
+<td><strong>이상 점수</strong></td>
+<td><code>anomaly_score</code></td>
+<td>0.000~1.000. ML 모델이 판단한 이상 정도. <strong>0에 가까울수록 정상</strong></td>
+</tr>
+<tr>
+<td><strong>이상 수준</strong></td>
+<td><code>anomaly_label</code></td>
+<td>정상(NORMAL) / 의심(SUSPICIOUS) / 이상(ANOMALOUS)</td>
+</tr>
+<tr>
+<td><strong>위험 점수</strong></td>
+<td><code>risk_score</code></td>
+<td>0.0~100.0. 6개 카테고리 가중 합산. <strong>0에 가까울수록 안전</strong></td>
+</tr>
+<tr>
+<td><strong>위험 수준</strong></td>
+<td><code>risk_level</code></td>
+<td>LOW / MEDIUM / HIGH / CRITICAL</td>
+</tr>
+<tr>
+<td><strong>주요 위험 요인</strong></td>
+<td><code>risk_factors</code> (상위 3개)</td>
+<td>가장 높은 점수의 위험 카테고리와 점수</td>
+</tr>
+<tr>
+<td><strong>분석 일시</strong></td>
+<td><code>analyzed_at</code></td>
+<td>해당 인증서가 마지막으로 분석된 날짜</td>
+</tr>
+</tbody></table></div>
+<h3 id="필터-옵션">필터 옵션</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필터</th>
+<th>선택지</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>국가</strong></td>
+<td>이상 인증서가 있는 국가 목록</td>
+<td>특정 국가의 인증서만 확인</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td>CSCA / DSC / DSC_NC / MLSC</td>
+<td>특정 인증서 유형만 확인</td>
+</tr>
+<tr>
+<td><strong>이상 수준</strong></td>
+<td>NORMAL / SUSPICIOUS / ANOMALOUS</td>
+<td>ML 이상 탐지 결과 필터</td>
+</tr>
+<tr>
+<td><strong>위험 수준</strong></td>
+<td>LOW / MEDIUM / HIGH / CRITICAL</td>
+<td>규칙 기반 위험도 필터</td>
+</tr>
+</tbody></table></div>
+<h3 id="페이지네이션">페이지네이션</h3>
+<ul>
+<li>페이지당 15건 표시</li>
+<li>하단에 &quot;X / Y pages&quot; 및 &quot;showing X-Y of Z results&quot; 표시</li>
+<li>필터 변경 시 1페이지로 자동 이동</li>
+</ul>
+<h3 id="csv-내보내기">CSV 내보내기</h3>
+<p>상단 버튼으로 전체 필터링 결과를 CSV로 다운로드할 수 있습니다.</p>
+<ul>
+<li>파일명: <code>ai-analysis-report-YYYY-MM-DD.csv</code></li>
+<li>10개 컬럼: Country, Certificate Type, Anomaly Score, Anomaly Label, Risk Score, Risk Level, Top Risk Factors, Anomaly Explanations, Analyzed At, Fingerprint</li>
+<li>UTF-8 BOM 포함 (Excel 호환)</li>
+</ul>
+<hr>
+<h2 id="핵심-개념-비교">핵심 개념 비교</h2>
+<h3 id="anomaly_score-vs-risk_score">anomaly_score vs. risk_score</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th></th>
+<th>anomaly_score</th>
+<th>risk_score</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>범위</strong></td>
+<td>0.0~1.0</td>
+<td>0~100</td>
+</tr>
+<tr>
+<td><strong>산출 방식</strong></td>
+<td>ML 모델 (비지도학습)</td>
+<td>규칙 기반 가중 합산</td>
+</tr>
+<tr>
+<td><strong>의미</strong></td>
+<td>&quot;다른 인증서들과 얼마나 다른가&quot;</td>
+<td>&quot;보안 위험이 얼마나 높은가&quot;</td>
+</tr>
+<tr>
+<td><strong>높은 값</strong></td>
+<td>통계적으로 특이한 인증서</td>
+<td>실제 보안 위험이 있는 인증서</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>주의</strong>: 두 점수는 항상 비례하지 않습니다.</p>
+<ul>
+<li>독특하지만 안전한 인증서: 높은 anomaly_score + 낮은 risk_score</li>
+<li>SHA-1 + RSA-1024 인증서가 흔한 국가: 낮은 anomaly_score + 높은 risk_score</li>
+</ul>
+</blockquote>
+<h3 id="anomaly_label-분류">anomaly_label 분류</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>수준</th>
+<th>의미</th>
+<th>조치</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>NORMAL</strong> (정상)</td>
+<td>같은 유형·국가 인증서와 유사한 패턴</td>
+<td>조치 불필요</td>
+</tr>
+<tr>
+<td><strong>SUSPICIOUS</strong> (의심)</td>
+<td>일부 특징이 비정상적</td>
+<td>risk_factors 확인 후 판단</td>
+</tr>
+<tr>
+<td><strong>ANOMALOUS</strong> (이상)</td>
+<td>명확한 이상 패턴 탐지</td>
+<td>포렌식 상세 분석 + 해당 국가 PKI 검토</td>
+</tr>
+</tbody></table></div>
+<h3 id="risk_level-분류">risk_level 분류</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>수준</th>
+<th>점수</th>
+<th>의미</th>
+<th>조치</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>LOW</strong></td>
+<td>0~25</td>
+<td>보안 위험 없음</td>
+<td>정상 운영</td>
+</tr>
+<tr>
+<td><strong>MEDIUM</strong></td>
+<td>25~50</td>
+<td>일부 개선 필요</td>
+<td>갱신 계획 수립</td>
+</tr>
+<tr>
+<td><strong>HIGH</strong></td>
+<td>50~75</td>
+<td>다수 보안 문제</td>
+<td>우선적 갱신 권고</td>
+</tr>
+<tr>
+<td><strong>CRITICAL</strong></td>
+<td>75~100</td>
+<td>즉각 조치 필요</td>
+<td>해당 인증서 사용 중단 검토</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="분석-실행">분석 실행</h2>
+<h3 id="수동-실행">수동 실행</h3>
+<p>상단 &quot;분석 실행&quot; 버튼으로 전체 배치 분석을 수동 트리거할 수 있습니다.</p>
+<ul>
+<li>실행 중에는 진행 바가 표시됩니다 (처리 인증서 수 / 전체 인증서 수)</li>
+<li>3초 간격으로 진행 상태를 자동 폴링합니다</li>
+<li>완료 시 모든 차트와 테이블이 자동 새로고침됩니다</li>
+</ul>
+<h3 id="자동-스케줄">자동 스케줄</h3>
+<p>APScheduler로 매일 지정된 시각에 자동 분석이 실행됩니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>환경변수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ANALYSIS_SCHEDULE_HOUR</code></td>
+<td>3</td>
+<td>자동 분석 실행 시각 (0~23시)</td>
+</tr>
+<tr>
+<td><code>ANALYSIS_ENABLED</code></td>
+<td>true</td>
+<td>자동 분석 활성화 여부</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="api-엔드포인트-참조">API 엔드포인트 참조</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>엔드포인트</th>
+<th>메서드</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/ai/health</code></td>
+<td>GET</td>
+<td>서비스 상태 확인 (DB 연결 체크 포함)</td>
+</tr>
+<tr>
+<td><code>/api/ai/analyze</code></td>
+<td>POST</td>
+<td>전체 배치 분석 실행</td>
+</tr>
+<tr>
+<td><code>/api/ai/analyze/incremental</code></td>
+<td>POST</td>
+<td>증분 분석 (upload_id 기반)</td>
+</tr>
+<tr>
+<td><code>/api/ai/analyze/status</code></td>
+<td>GET</td>
+<td>분석 작업 상태 조회</td>
+</tr>
+<tr>
+<td><code>/api/ai/certificate/{fingerprint}</code></td>
+<td>GET</td>
+<td>개별 인증서 분석 결과</td>
+</tr>
+<tr>
+<td><code>/api/ai/certificate/{fingerprint}/forensic</code></td>
+<td>GET</td>
+<td>개별 인증서 포렌식 상세 (10개 카테고리)</td>
+</tr>
+<tr>
+<td><code>/api/ai/anomalies</code></td>
+<td>GET</td>
+<td>이상 인증서 목록 (필터, 페이지네이션)</td>
+</tr>
+<tr>
+<td><code>/api/ai/statistics</code></td>
+<td>GET</td>
+<td>전체 분석 통계 (포렌식 점수 포함)</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/country-maturity</code></td>
+<td>GET</td>
+<td>국가별 PKI 성숙도 순위</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/algorithm-trends</code></td>
+<td>GET</td>
+<td>연도별 알고리즘 추이</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/key-size-distribution</code></td>
+<td>GET</td>
+<td>키 크기 분포</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/risk-distribution</code></td>
+<td>GET</td>
+<td>위험 수준 분포</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/country/{code}</code></td>
+<td>GET</td>
+<td>국가별 상세 분석</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/issuer-profiles</code></td>
+<td>GET</td>
+<td>발급자 프로파일 목록</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/forensic-summary</code></td>
+<td>GET</td>
+<td>포렌식 분석 요약</td>
+</tr>
+<tr>
+<td><code>/api/ai/reports/extension-anomalies</code></td>
+<td>GET</td>
+<td>확장 규칙 위반 목록</td>
+</tr>
+</tbody></table></div>
+<h3 id="인증-및-권한">인증 및 권한</h3>
+<p>모든 AI 엔드포인트는 <strong>Public</strong> (JWT 불필요)입니다. 단, 외부 API 클라이언트가 <code>X-API-Key</code> 헤더를 통해 접근하는 경우 해당 클라이언트에 <code>ai:read</code> 권한이 부여되어 있어야 합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증 방식</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>브라우저 (JWT)</strong></td>
+<td>로그인 사용자는 JWT 없이도 AI 엔드포인트에 접근 가능 (Public 엔드포인트)</td>
+</tr>
+<tr>
+<td><strong>API Key (<code>X-API-Key</code>)</strong></td>
+<td>외부 시스템 연동 시 API Key 인증 사용. <code>ai:read</code> 권한 필요 (v2.21.0+)</td>
+</tr>
+</tbody></table></div>
+<h4 id="전체-권한-목록-12개-v2-37-0-기준">전체 권한 목록 (12개, v2.37.0 기준)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>권한</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>icao:read</code></td>
+<td>ICAO 버전 상태 조회</td>
+</tr>
+<tr>
+<td><code>upload:write</code></td>
+<td>파일 업로드 (LDIF/ML/인증서)</td>
+</tr>
+<tr>
+<td><code>upload:read</code></td>
+<td>업로드 이력 조회</td>
+</tr>
+<tr>
+<td><code>cert:read</code></td>
+<td>인증서 조회</td>
+</tr>
+<tr>
+<td><code>cert:export</code></td>
+<td>인증서 내보내기</td>
+</tr>
+<tr>
+<td><code>sync:read</code></td>
+<td>동기화 상태 조회</td>
+</tr>
+<tr>
+<td><code>pa:verify</code></td>
+<td>PA 검증 수행</td>
+</tr>
+<tr>
+<td><code>pa:read</code></td>
+<td>PA 검증 이력 조회</td>
+</tr>
+<tr>
+<td><code>pa:stats</code></td>
+<td>PA 검증 통계 조회</td>
+</tr>
+<tr>
+<td><code>report:read</code></td>
+<td>보고서 조회</td>
+</tr>
+<tr>
+<td><strong><code>ai:read</code></strong></td>
+<td><strong>AI 분석 결과 조회</strong></td>
+</tr>
+<tr>
+<td><code>api-client:manage</code></td>
+<td>API 클라이언트 관리 (관리자 전용)</td>
+</tr>
+</tbody></table></div>
+<h3 id="입력-검증-보안-강화">입력 검증 (보안 강화)</h3>
+<p>모든 API 파라미터는 서버 측에서 정규식으로 검증됩니다 (v2.29.3+):</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>검증 패턴</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>fingerprint</code></td>
+<td><code>^[a-fA-F0-9]{64}$</code></td>
+<td>SHA-256 hex 문자열 (64자)</td>
+</tr>
+<tr>
+<td><code>country</code></td>
+<td><code>^[A-Z]{2,3}$</code></td>
+<td>ISO 3166-1 alpha-2/3 국가 코드</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>^(CSCA|DSC|DSC_NC|MLSC|LC)$</code></td>
+<td>인증서 유형</td>
+</tr>
+<tr>
+<td><code>risk_level</code></td>
+<td><code>^(LOW|MEDIUM|HIGH|CRITICAL)$</code></td>
+<td>위험 수준</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td><code>^(NORMAL|SUSPICIOUS|ANOMALOUS)$</code></td>
+<td>이상 수준</td>
+</tr>
+</tbody></table></div>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#개요">개요</a><a href="#분석-엔진-구성" style="padding-left:1rem">분석 엔진 구성</a><a href="#ml-특징-feature-수" style="padding-left:1rem">ML 특징(Feature) 수</a><a href="#1-요약-카드-summary-cards">1. 요약 카드 (Summary Cards)</a><a href="#1-1-분석-완료-total-analyzed" style="padding-left:1rem">1.1 분석 완료 (Total Analyzed)</a><a href="#1-2-정상-normal" style="padding-left:1rem">1.2 정상 (Normal)</a><a href="#1-3-의심-suspicious" style="padding-left:1rem">1.3 의심 (Suspicious)</a><a href="#1-4-이상-anomalous" style="padding-left:1rem">1.4 이상 (Anomalous)</a><a href="#분류-기준" style="padding-left:1rem">분류 기준</a><a href="#2-위험-수준-분포-바-risk-level-distribution">2. 위험 수준 분포 바 (Risk Level Distribution)</a><a href="#위험-수준-정의" style="padding-left:1rem">위험 수준 정의</a><a href="#위험-점수-risk_score-계산" style="padding-left:1rem">위험 점수(risk_score) 계산</a><a href="#평균-위험-점수-avg_risk_score" style="padding-left:1rem">평균 위험 점수 (avg_risk_score)</a><a href="#3-포렌식-분석-요약-forensic-risk-summary">3. 포렌식 분석 요약 (Forensic Risk Summary)</a><a href="#표시-항목" style="padding-left:1rem">표시 항목</a><a href="#포렌식-10개-카테고리-상세" style="padding-left:1rem">포렌식 10개 카테고리 상세</a><a href="#주요-발견-사항-top-findings-해석" style="padding-left:1rem">주요 발견 사항 (Top Findings) 해석</a><a href="#4-발급자-프로파일-카드-issuer-profile">4. 발급자 프로파일 카드 (Issuer Profile)</a><a href="#데이터-필드" style="padding-left:1rem">데이터 필드</a><a href="#위험-지표-판단-기준" style="padding-left:1rem">위험 지표 판단 기준</a><a href="#5-확장-프로파일-규칙-위반-extension-compliance-checklist">5. 확장 프로파일 규칙 위반 (Extension Compliance Checklist)</a><a href="#테이블-컬럼" style="padding-left:1rem">테이블 컬럼</a><a href="#심각도-분류" style="padding-left:1rem">심각도 분류</a><a href="#펼침-상세-내용" style="padding-left:1rem">펼침 상세 내용</a><a href="#인증서-유형별-규칙-요약" style="padding-left:1rem">인증서 유형별 규칙 요약</a><a href="#6-국가별-pki-성숙도-country-pki-maturity">6. 국가별 PKI 성숙도 (Country PKI Maturity)</a><a href="#성숙도-점수-구성" style="padding-left:1rem">성숙도 점수 구성</a><a href="#차트-툴팁" style="padding-left:1rem">차트 툴팁</a><a href="#해석-예시" style="padding-left:1rem">해석 예시</a><a href="#7-알고리즘-마이그레이션-추세-algorithm-migration-trends">7. 알고리즘 마이그레이션 추세 (Algorithm Migration Trends)</a><a href="#알고리즘-종류-및-보안-수준" style="padding-left:1rem">알고리즘 종류 및 보안 수준</a><a href="#정상적인-마이그레이션-패턴" style="padding-left:1rem">정상적인 마이그레이션 패턴</a><a href="#8-키-크기-분포-key-size-distribution">8. 키 크기 분포 (Key Size Distribution)</a><a href="#주요-조합-및-해석" style="padding-left:1rem">주요 조합 및 해석</a><a href="#icao-최소-권장-기준" style="padding-left:1rem">ICAO 최소 권장 기준</a><a href="#9-인증서-분석-테이블">9. 인증서 분석 테이블</a><a href="#테이블-컬럼" style="padding-left:1rem">테이블 컬럼</a><a href="#필터-옵션" style="padding-left:1rem">필터 옵션</a><a href="#페이지네이션" style="padding-left:1rem">페이지네이션</a><a href="#csv-내보내기" style="padding-left:1rem">CSV 내보내기</a><a href="#핵심-개념-비교">핵심 개념 비교</a><a href="#anomaly_score-vs-risk_score" style="padding-left:1rem">anomaly_score vs. risk_score</a><a href="#anomaly_label-분류" style="padding-left:1rem">anomaly_label 분류</a><a href="#risk_level-분류" style="padding-left:1rem">risk_level 분류</a><a href="#분석-실행">분석 실행</a><a href="#수동-실행" style="padding-left:1rem">수동 실행</a><a href="#자동-스케줄" style="padding-left:1rem">자동 스케줄</a><a href="#api-엔드포인트-참조">API 엔드포인트 참조</a><a href="#인증-및-권한" style="padding-left:1rem">인증 및 권한</a><a href="#입력-검증-보안-강화" style="padding-left:1rem">입력 검증 (보안 강화)</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

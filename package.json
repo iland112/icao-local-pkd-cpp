@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "preline": "^3.2.3"
+  },
+  "devDependencies": {
+    "marked": "^17.0.4",
+    "mermaid": "^11.13.0"
   }
 }

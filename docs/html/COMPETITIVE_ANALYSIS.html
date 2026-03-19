@@ -1,0 +1,1658 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Competitive Analysis — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html" class="active">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Competitive Analysis</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="icao-local-pkd-프로젝트-분석-및-타사-제품-비교-보고서">ICAO Local PKD 프로젝트 분석 및 타사 제품 비교 보고서</h1>
+<p><strong>작성일</strong>: 2026-03-12
+<strong>버전</strong>: v2.31.3 기준
+<strong>목적</strong>: 프로젝트 현황 분석 및 경쟁 제품 대비 장단점 평가</p>
+<hr>
+<h2 id="1-프로젝트-개요">1. 프로젝트 개요</h2>
+<p><strong>ICAO Local PKD</strong>는 전자여권(ePassport) 인증서를 수집·검증·관리하고 Passive Authentication(위·변조 검사)을 수행하는 <strong>통합 플랫폼</strong>입니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>버전</strong></td>
+<td>v2.31.3 (2026-03-12)</td>
+</tr>
+<tr>
+<td><strong>기술 스택</strong></td>
+<td>C++20/Drogon, Python 3.12/FastAPI, React 19/TypeScript</td>
+</tr>
+<tr>
+<td><strong>서비스 수</strong></td>
+<td>5개 마이크로서비스 + nginx Gateway</td>
+</tr>
+<tr>
+<td><strong>DB 지원</strong></td>
+<td>PostgreSQL 15 + Oracle XE 21c (런타임 전환)</td>
+</tr>
+<tr>
+<td><strong>관리 인증서</strong></td>
+<td>31,212건 (95+ 국가)</td>
+</tr>
+<tr>
+<td><strong>프론트엔드</strong></td>
+<td>26개 페이지, 50+ 컴포넌트</td>
+</tr>
+<tr>
+<td><strong>배포 환경</strong></td>
+<td>Docker, Podman(RHEL 9), ARM64(Luckfox)</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-1-아키텍처-구성">1.1 아키텍처 구성</h3>
+<pre><code>Frontend (React 19) → nginx Gateway → 5개 백엔드 서비스 → DB/LDAP
+                                        ├── PKD Management (:8081)  - 인증서 관리 핵심
+                                        ├── PA Service (:8082)      - 위·변조 검사 (ICAO 9303)
+                                        ├── PKD Relay (:8083)       - DB↔LDAP 동기화
+                                        ├── Monitoring (:8084)      - 시스템 모니터링
+                                        └── AI Analysis (:8085)     - ML 이상탐지/포렌식</code></pre>
+<h3 id="1-2-핵심-기능-요약">1.2 핵심 기능 요약</h3>
+<ul>
+<li><strong>인증서 관리</strong>: LDIF/Master List/개별 인증서 업로드, 검색, 내보내기 (CSCA, DSC, DSC_NC, CRL, MLSC)</li>
+<li><strong>Passive Authentication</strong>: ICAO 9303 Part 10 &amp; 11 기반 8단계 풀 검증</li>
+<li><strong>Trust Chain 검증</strong>: DSC→Link Certificate→Root CSCA 다단계 신뢰 체인</li>
+<li><strong>AI 포렌식 분석</strong>: Isolation Forest + LOF 이중 모델, 45개 ML 피처, 10개 카테고리 리스크 스코어링</li>
+<li><strong>DB-LDAP 동기화</strong>: 자동 Reconciliation, DSC 만료 재검증, 실시간 SSE 알림</li>
+<li><strong>ICAO PKD 모니터링</strong>: 버전 자동 감지, 일일 스케줄 체크</li>
+<li><strong>보고서</strong>: DSC_NC 비적합 보고서, CRL 보고서, Trust Chain 분포, 국가 PKI 성숙도</li>
+<li><strong>보안</strong>: JWT + API Key 이중 인증, RBAC, PII 암호화(AES-256-GCM), 감사 로그</li>
+</ul>
+<hr>
+<h2 id="2-타사-주요-경쟁-제품">2. 타사 주요 경쟁 제품</h2>
+<h3 id="2-1-icao-pkd-공식-시스템">2.1 ICAO PKD (공식 시스템)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>ICAO (국제민간항공기구)</td>
+</tr>
+<tr>
+<td><strong>역할</strong></td>
+<td>중앙 CSCA/DSC/CRL/Master List 교환 브로커</td>
+</tr>
+<tr>
+<td><strong>참여국</strong></td>
+<td>82+ 국가 (2024년 기준)</td>
+</tr>
+<tr>
+<td><strong>가격</strong></td>
+<td>등록비 US$15,900 (일회성) + 연간 US$22,680</td>
+</tr>
+<tr>
+<td><strong>특징</strong></td>
+<td>적합성 검사 엔진 내장, nc-data 태깅, LDIF/LDAP 다운로드</td>
+</tr>
+<tr>
+<td><strong>한계</strong></td>
+<td>수신 측 검증/관리 기능 없음, 로컬 PKD 별도 구축 필요</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-2-keyfactor-primekey-npkd">2.2 Keyfactor/PrimeKey NPKD</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>Keyfactor (PrimeKey 인수)</td>
+</tr>
+<tr>
+<td><strong>기술</strong></td>
+<td>Java 기반, EJBCA PKI 플랫폼</td>
+</tr>
+<tr>
+<td><strong>핵심 기능</strong></td>
+<td>ICAO PKD 연동, CSCA/DSC 수집, LDAP 퍼블리싱, 스케줄러 기반 자동화</td>
+</tr>
+<tr>
+<td><strong>인증서 발급</strong></td>
+<td>O (EJBCA Enterprise 연동)</td>
+</tr>
+<tr>
+<td><strong>배포</strong></td>
+<td>On-premise</td>
+</tr>
+<tr>
+<td><strong>가격</strong></td>
+<td>Enterprise 라이선스 (비공개)</td>
+</tr>
+<tr>
+<td><strong>USP</strong></td>
+<td>20+ 년 PKI 경험, EJBCA Community Edition 오픈소스</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-3-entrust-epassport-solution">2.3 Entrust ePassport Solution</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>Entrust</td>
+</tr>
+<tr>
+<td><strong>기술</strong></td>
+<td>Java 기반, HSM 통합</td>
+</tr>
+<tr>
+<td><strong>핵심 기능</strong></td>
+<td>CSCA/DS 발급, BAC/EAC 지원, NPKD + ICAO PKD 연동, SPOC</td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>CC EAL4+</td>
+</tr>
+<tr>
+<td><strong>시장 위치</strong></td>
+<td>&quot;세계 최다 사용 ePassport 솔루션&quot; 자칭</td>
+</tr>
+<tr>
+<td><strong>가격</strong></td>
+<td>US$100K~$1M+ (Enterprise)</td>
+</tr>
+<tr>
+<td><strong>USP</strong></td>
+<td>End-to-end ePassport PKI, 시장 지배력</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-4-eviden-atos-idnomic-epass-pki">2.4 Eviden(Atos) IDnomic ePass PKI</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>Eviden (구 Atos)</td>
+</tr>
+<tr>
+<td><strong>모듈</strong></td>
+<td>BAC Suite (CSCA + DS + N-PKD) + EAC Suite (CVCA + DVCA + SPOC)</td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>CC EAL4+</td>
+</tr>
+<tr>
+<td><strong>특징</strong></td>
+<td>6개 모듈 개별/조합 배포 가능, ICAO Doc 9303 + EU TR 03110 준수</td>
+</tr>
+<tr>
+<td><strong>USP</strong></td>
+<td>Common Criteria 인증, 모듈식 아키텍처</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-5-safelayer-entrust-keyone-emrtd">2.5 Safelayer/Entrust KeyOne eMRTD</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>Safelayer (현 Entrust 소속)</td>
+</tr>
+<tr>
+<td><strong>핵심 기능</strong></td>
+<td>BAC/EAC PKI 풀스택, 대용량 인증서 관리, CRL 다중 배포점</td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>CC EAL4+ (ALC_FLR.2)</td>
+</tr>
+<tr>
+<td><strong>배포 실적</strong></td>
+<td>스페인 국가 ePassport 시스템</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-6-emudhra-emca-epassport">2.6 eMudhra emCA ePassport</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>eMudhra</td>
+</tr>
+<tr>
+<td><strong>핵심 기능</strong></td>
+<td>CSCA~SPOC 풀스택, RSA+ECC, NPKD + ICAO PKD 연동</td>
+</tr>
+<tr>
+<td><strong>인증</strong></td>
+<td>CC EAL4+</td>
+</tr>
+<tr>
+<td><strong>특징</strong></td>
+<td>모듈별 선택 배포, 하드웨어 비종속, 아시아·태평양 시장 강점</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-7-codegic-khatim-e-passport-server">2.7 Codegic Khatim E-Passport Server</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>벤더</strong></td>
+<td>Codegic</td>
+</tr>
+<tr>
+<td><strong>핵심 기능</strong></td>
+<td>CSCA/CVCA/DVCA/SPOC 관리, RESTful API 중심 설계</td>
+</tr>
+<tr>
+<td><strong>표준</strong></td>
+<td>ICAO Doc 9303 + EU Decision 2008/616/JHA + BSI TR-03110/TR-03129</td>
+</tr>
+<tr>
+<td><strong>특징</strong></td>
+<td>현대적 REST API, 관리 UI, 샘플 페이로드 제공</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-8-기타-벤더">2.8 기타 벤더</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>벤더</th>
+<th>제품</th>
+<th>특징</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Netrust</strong></td>
+<td>ePassport Solutions</td>
+<td>싱가포르 2006년 최초 ICAO CSCA 구축</td>
+</tr>
+<tr>
+<td><strong>Multicert</strong></td>
+<td>Electronic Passport PKI</td>
+<td>BAC/SAC + EAC (유럽 시장)</td>
+</tr>
+<tr>
+<td><strong>Thales</strong></td>
+<td>Border Management</td>
+<td>eGate, 생체인증, PKD 연동 국경통제</td>
+</tr>
+<tr>
+<td><strong>SITA</strong></td>
+<td>iBorders</td>
+<td>30+ 국가 배치, 통합 국경관리</td>
+</tr>
+<tr>
+<td><strong>Veridos</strong></td>
+<td>VeriCHECK</td>
+<td>NPKD 통합 eGate/키오스크</td>
+</tr>
+<tr>
+<td><strong>HID Global</strong></td>
+<td>Integrale</td>
+<td>CSCA 키 관리, ePassport 라이프사이클</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-9-오픈소스">2.9 오픈소스</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>프로젝트</th>
+<th>언어</th>
+<th>기능</th>
+<th>한계</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ZeroPass pymrtd</td>
+<td>Python</td>
+<td>LDS 파싱, Trust Chain 검증</td>
+<td>라이브러리만, Web UI/LDAP 없음</td>
+</tr>
+<tr>
+<td>JMRTD</td>
+<td>Java</td>
+<td>MRTD SDK, 카드/호스트 API</td>
+<td>PA 지원 deprecated (v0.5+)</td>
+</tr>
+<tr>
+<td>NFCPassportReader</td>
+<td>Swift</td>
+<td>iOS NFC 여권 리딩</td>
+<td>클라이언트만, 서버 측 PKD 없음</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-기능-비교-매트릭스">3. 기능 비교 매트릭스</h2>
+<h3 id="3-1-핵심-기능-비교">3.1 핵심 기능 비교</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>기능</th>
+<th align="center">본 프로젝트</th>
+<th align="center">Keyfactor NPKD</th>
+<th align="center">Entrust</th>
+<th align="center">IDnomic</th>
+<th align="center">eMudhra</th>
+<th align="center">ICAO PKD</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CSCA/DSC 수집·저장</strong></td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>CRL 관리</strong></td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>Master List 처리</strong></td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>ICAO PKD 동기화</strong></td>
+<td align="center">△ (버전 모니터링)</td>
+<td align="center">O (완전 자동)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td><strong>LDAP 퍼블리싱</strong></td>
+<td align="center">O (MMR 클러스터)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>Trust Chain 검증</strong></td>
+<td align="center">O (Link Cert 지원)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td><strong>Doc 9303 준수 체크</strong></td>
+<td align="center">O (28항목)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>Passive Authentication</strong></td>
+<td align="center"><strong>O (8단계 풀 구현)</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>AI 이상탐지/포렌식</strong></td>
+<td align="center"><strong>O (업계 유일)</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>CSCA/DS 발급 (서명)</strong></td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>EAC (CVCA/DVCA)</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>SPOC (국제 교환)</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>Active Authentication</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>CC EAL4+ 인증</strong></td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>HSM 통합</strong></td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">X</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-2-운영-기술-비교">3.2 운영/기술 비교</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th align="center">본 프로젝트</th>
+<th align="center">Keyfactor</th>
+<th align="center">Entrust</th>
+<th align="center">IDnomic</th>
+<th align="center">eMudhra</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Multi-DBMS</strong></td>
+<td align="center">O (PostgreSQL+Oracle)</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>실시간 모니터링</strong></td>
+<td align="center">O (SSE, 대시보드)</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+</tr>
+<tr>
+<td><strong>보고서/시각화</strong></td>
+<td align="center">O (6종 대시보드)</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+</tr>
+<tr>
+<td><strong>PII 암호화</strong></td>
+<td align="center">O (AES-256-GCM)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>API Key 인증</strong></td>
+<td align="center">O (X-API-Key)</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>감사 로그</strong></td>
+<td align="center">O (25+ 엔드포인트)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>반응형 UI</strong></td>
+<td align="center">O (모바일 대응)</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>i18n (다국어)</strong></td>
+<td align="center">O (한국어/영어)</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>컨테이너 배포</strong></td>
+<td align="center">O (Docker/Podman/ARM64)</td>
+<td align="center">△</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">△</td>
+</tr>
+<tr>
+<td><strong>REST API</strong></td>
+<td align="center">O (OpenAPI 3.0)</td>
+<td align="center">O</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">O</td>
+</tr>
+<tr>
+<td><strong>CSV 내보내기</strong></td>
+<td align="center">O (14+ 보고서)</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+<td align="center">△</td>
+</tr>
+<tr>
+<td><strong>SSE 실시간 알림</strong></td>
+<td align="center">O</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+<td align="center">X</td>
+</tr>
+<tr>
+<td><strong>DSC 등록 승인 워크플로우</strong></td>
+<td align="center">O</td>
+<td align="center">X</td>
+<td align="center">O</td>
+<td align="center">O</td>
+<td align="center">O</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-3-기술-스택-비교">3.3 기술 스택 비교</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>본 프로젝트</th>
+<th>타사 일반</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>백엔드</strong></td>
+<td>C++20 (Drogon) + Python (FastAPI)</td>
+<td>Java (EJBCA, Spring, KeyOne)</td>
+</tr>
+<tr>
+<td><strong>프론트엔드</strong></td>
+<td>React 19, TypeScript, Tailwind CSS 4</td>
+<td>Java JSP/JSF 또는 없음</td>
+</tr>
+<tr>
+<td><strong>DB</strong></td>
+<td>PostgreSQL + Oracle 이중 지원</td>
+<td>벤더 특정 DB</td>
+</tr>
+<tr>
+<td><strong>LDAP</strong></td>
+<td>OpenLDAP MMR</td>
+<td>다양</td>
+</tr>
+<tr>
+<td><strong>ML/AI</strong></td>
+<td>scikit-learn (Isolation Forest + LOF)</td>
+<td>없음</td>
+</tr>
+<tr>
+<td><strong>컨테이너</strong></td>
+<td>Docker + Podman + ARM64</td>
+<td>VM 기반 배포 다수</td>
+</tr>
+<tr>
+<td><strong>API 스타일</strong></td>
+<td>REST + SSE + OpenAPI 3.0</td>
+<td>SOAP/REST 혼합</td>
+</tr>
+<tr>
+<td><strong>차트/시각화</strong></td>
+<td>Recharts</td>
+<td>없거나 기본 수준</td>
+</tr>
+<tr>
+<td><strong>상태 관리</strong></td>
+<td>Zustand + TanStack Query</td>
+<td>N/A</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="4-장점-분석-strengths">4. 장점 분석 (Strengths)</h2>
+<h3 id="4-1-pa-검증-인증서-관리-통합-핵심-차별점">4.1 PA 검증 + 인증서 관리 통합 (핵심 차별점)</h3>
+<p>타사는 <strong>발급 측 PKI</strong>(CSCA/DS 서명)와 <strong>검증 측 시스템</strong>(국경통제)이 분리되어 있습니다. 본 프로젝트는 <strong>수신 국가 관점</strong>에서 인증서 수집 + PA 검증을 <strong>단일 플랫폼</strong>에 통합한 유일한 제품입니다.</p>
+<ul>
+<li>8단계 PA 검증 완전 구현 (MRZ→DG1/DG2→SOD→DSC 체인→CRL→ICAO 준수성)</li>
+<li>DG2 얼굴 이미지 추출 (JPEG2000→JPEG 자동 변환)</li>
+<li>DSC 자동 등록 + 관리자 승인 워크플로우</li>
+<li>간편 PA 조회 (Subject DN/Fingerprint 기반 사전 계산 결과 반환)</li>
+</ul>
+<h3 id="4-2-ai-인증서-포렌식-분석-업계-유일">4.2 AI 인증서 포렌식 분석 (업계 유일)</h3>
+<p><strong>어떤 경쟁 제품에서도 제공하지 않는 완전한 차별화 기능</strong>입니다.</p>
+<ul>
+<li><strong>이중 모델 이상탐지</strong>: Isolation Forest (전역) + Local Outlier Factor (국가/타입별 로컬)</li>
+<li><strong>45개 ML 피처</strong>: 암호학, 유효성, 준수성, 확장, 국가 상대값, 발급자, 시간 패턴, 구조적, DN, 교차 인증서</li>
+<li><strong>인증서 타입별 모델</strong>: CSCA/DSC/DSC_NC/MLSC 개별 최적화 (오염률 조정)</li>
+<li><strong>10개 카테고리 포렌식 리스크 스코어링</strong>: algorithm, key_size, compliance, validity, extensions, anomaly, issuer_reputation, structural_consistency, temporal_pattern, dn_consistency</li>
+<li><strong>발급자 프로파일링</strong>: DBSCAN 클러스터링 기반 행동 분석</li>
+<li><strong>확장 규칙 엔진</strong>: ICAO Doc 9303 기반 인증서 타입별 확장 프로파일 검증</li>
+<li><strong>국가 PKI 성숙도 분석</strong>: 5개 가중 차원 (알고리즘, 키 크기, 준수성, 확장, 최신성)</li>
+</ul>
+<h3 id="4-3-현대적-기술-스택과-ux">4.3 현대적 기술 스택과 UX</h3>
+<ul>
+<li><strong>고성능 백엔드</strong>: C++20 비동기 프레임워크(Drogon) — Java 대비 메모리/CPU 효율 우수</li>
+<li><strong>모던 프론트엔드</strong>: React 19 + TypeScript + Tailwind CSS 4, 26개 페이지의 풍부한 대시보드</li>
+<li><strong>실시간 UX</strong>: SSE 기반 알림, 업로드 진행률, EventLog 스트리밍</li>
+<li><strong>반응형 디자인</strong>: 모바일~데스크톱 13개 페이지 반응형 대응 (v2.31.1)</li>
+<li><strong>클라이언트 사이드 정렬</strong>: 12개 페이지 SortableHeader 컴포넌트</li>
+</ul>
+<h3 id="4-4-multi-dbms-유연성">4.4 Multi-DBMS 유연성</h3>
+<ul>
+<li>PostgreSQL + Oracle <strong>런타임 전환</strong> (<code>DB_TYPE</code> 환경변수)</li>
+<li>IQueryExecutor 패턴으로 <strong>100% SQL 추상화</strong> — Repository 코드 변경 없이 DB 교체</li>
+<li>정부/공공기관의 Oracle 의무 사용 요건 대응</li>
+<li>Query Helpers (<code>boolLiteral</code>, <code>paginationClause</code>, <code>scalarToInt</code>) 로 DB 차이 자동 처리</li>
+</ul>
+<h3 id="4-5-포괄적-보고서-체계">4.5 포괄적 보고서 체계</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>보고서</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DSC_NC 비적합 보고서</td>
+<td>준수코드/국가/연도/알고리즘별 차트 + CSV</td>
+</tr>
+<tr>
+<td>CRL 보고서</td>
+<td>폐기사유/국가/서명알고리즘 분석 + CRL 다운로드</td>
+</tr>
+<tr>
+<td>Trust Chain 분포</td>
+<td>체인 경로별 분포 (DSC→Root, DSC→Link→Root 등)</td>
+</tr>
+<tr>
+<td>업로드 통계 대시보드</td>
+<td>타입별/출처별/국가별 인증서 현황</td>
+</tr>
+<tr>
+<td>AI 분석 대시보드</td>
+<td>이상치/리스크/국가 성숙도/알고리즘 트렌드</td>
+</tr>
+<tr>
+<td>PA 검증 통계</td>
+<td>검증 성공률/국가별/시간대별 분석</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-6-운영-편의성">4.6 운영 편의성</h3>
+<ul>
+<li><strong>다중 배포</strong>: Docker, Podman(RHEL 9 Production), ARM64(Luckfox 엣지)</li>
+<li><strong>40+ 문서</strong>: 아키텍처, API 가이드, 배포, 보안, 운영 가이드</li>
+<li><strong>OpenAPI 스펙 4종</strong>: Swagger UI 통합</li>
+<li><strong>셸 자동화</strong>: start/stop/health/backup/restore 스크립트 (Docker/Podman 동기 관리)</li>
+<li><strong>환경변수 튜닝</strong>: 12+ 리소스 파라미터 외부화 (DB Pool, LDAP Pool, Thread, Upload 등)</li>
+</ul>
+<h3 id="4-7-비용-효율">4.7 비용 효율</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>본 프로젝트</th>
+<th>타사</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>라이선스</td>
+<td>자체 개발 (무료)</td>
+<td>US$100K~$1M+ Enterprise</td>
+</tr>
+<tr>
+<td>운영 비용</td>
+<td>ICAO PKD 연간 $22,680</td>
+<td>동일 + 벤더 유지보수비</td>
+</tr>
+<tr>
+<td>기술 지원</td>
+<td>내부</td>
+<td>벤더 SLA 별도 계약</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-단점-및-부족한-부분-weaknesses-gaps">5. 단점 및 부족한 부분 (Weaknesses/Gaps)</h2>
+<h3 id="5-1-csca-ds-발급-기능-없음-critical-gap">5.1 CSCA/DS 발급 기능 없음 (Critical Gap)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>높음</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>수신 측(인증서 수집·검증)만 구현, 발급 측 PKI 없음</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>Entrust, IDnomic, eMudhra 등은 CSCA 생성 + DS 서명 기능 포함</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>자국 여권 서명 인프라가 필요한 국가에는 단독 사용 불가</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>별도 CA 솔루션(EJBCA 등)과 연동 필요, 또는 자체 CSCA 모듈 개발</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-2-eac-extended-access-control-미지원">5.2 EAC(Extended Access Control) 미지원</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>높음</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>CVCA, DVCA, SPOC 프로토콜 미구현</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>Entrust, IDnomic, eMudhra는 EAC Suite 제공</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>2세대 ePassport 지문/홍채 등 생체정보 접근 불가</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>EU/Schengen 시장 진출 시 EAC 모듈 개발 필요</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-3-보안-인증-cc-eal4-부재">5.3 보안 인증(CC EAL4+) 부재</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>높음 (조달 시)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>Common Criteria 인증 미획득</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>Entrust, IDnomic, Safelayer, eMudhra 모두 CC EAL4+ 보유</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>CC 인증이 조달 필수 요건인 국가에서 배제 가능</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>국내 CC 인증(KECS) 또는 해외 CC 인증 획득 검토</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-4-icao-pkd-자동-동기화-미완성">5.4 ICAO PKD 자동 동기화 미완성</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>중간</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>버전 모니터링(새 버전 감지)만 구현, 자동 다운로드+적용 미구현</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>Keyfactor NPKD는 스케줄러 기반 완전 자동화 제공</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>수동 LDIF 다운로드/업로드 필요, 운영 부담</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>ICAO PKD LDAP 직접 연결 또는 LDIF 자동 다운로드 파이프라인 구현</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-5-active-authentication-aa-미지원">5.5 Active Authentication(AA) 미지원</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>중간</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>Passive Authentication만 구현</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>대부분의 국경통제 시스템은 AA/CA 지원</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>칩 복제 공격 탐지 불가 (PA는 데이터 무결성만 확인)</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>Active Authentication 모듈 추가 개발</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-6-hsm-hardware-security-module-통합-없음">5.6 HSM(Hardware Security Module) 통합 없음</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>중간</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>소프트웨어 기반 키 관리만 사용</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>Thales Luna HSM, nCipher nShield 등과 연동</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>높은 보안 등급(FIPS 140-2 Level 3+) 요구 환경 부적합</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>PKCS#11 인터페이스 기반 HSM 연동 레이어 추가</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-7-고가용성-ha-아키텍처-제한">5.7 고가용성(HA) 아키텍처 제한</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>중간</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>LDAP MMR 2노드 중 1노드 장애(단일 노드), DB 클러스터링 없음</td>
+</tr>
+<tr>
+<td><strong>타사</strong></td>
+<td>HA/DR 구성을 기본 제공하는 경우 다수</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>대규모 국경 인프라(공항 수십 개)에서 가용성 요건 미충족 가능</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>DB 레플리카(PostgreSQL Streaming Replication), LDAP MMR 복구, 서비스 다중 인스턴스</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-8-국제-표준-호환성-제한">5.8 국제 표준 호환성 제한</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>영향도</th>
+<th>낮음~중간 (시장에 따라)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>현황</strong></td>
+<td>ICAO Doc 9303만 준수</td>
+</tr>
+<tr>
+<td><strong>미지원</strong></td>
+<td>BSI TR-03110 (독일), BSI TR-03129, EU Decision 2008/616/JHA, CSN 36 9791</td>
+</tr>
+<tr>
+<td><strong>영향</strong></td>
+<td>EU Schengen 지역 특화 요건 미반영</td>
+</tr>
+<tr>
+<td><strong>대응</strong></td>
+<td>유럽 시장 진출 시 BSI/EU 표준 모듈 추가</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="6-swot-분석">6. SWOT 분석</h2>
+<pre><code>┌─────────────────────────────────────┬─────────────────────────────────────┐
+│           강점 (Strengths)           │           약점 (Weaknesses)          │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ • PA 검증 + 인증서 관리 통합 플랫폼  │ • CSCA/DS 발급(서명) 기능 없음       │
+│ • AI 포렌식 분석 (업계 유일)         │ • EAC (CVCA/DVCA/SPOC) 미지원       │
+│ • C++20 고성능 + React 19 모던 UI   │ • CC EAL4+ 보안 인증 부재            │
+│ • Multi-DBMS (PostgreSQL + Oracle)  │ • HSM 통합 없음                      │
+│ • 6종 보고서 대시보드 + CSV 내보내기  │ • ICAO PKD 자동 동기화 미완성        │
+│ • Docker/Podman/ARM64 다중 배포     │ • Active Authentication 미지원       │
+│ • 비용 효율 (자체 개발)              │ • HA 아키텍처 제한 (단일 노드)        │
+│ • 26페이지 풍부한 웹 인터페이스       │ • 국제 표준(BSI/EU) 호환성 제한      │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│           기회 (Opportunities)       │           위협 (Threats)             │
+├─────────────────────────────────────┼─────────────────────────────────────┤
+│ • ePassport 시장 CAGR 15%+ 성장     │ • Entrust/IDnomic 시장 지배력        │
+│ • 타사 고가($100K+) 대비 비용 우위   │ • CC EAL4+ 정부 조달 필수 요건       │
+│ • AI 분석 차별화로 니치 시장 공략     │ • AA/EAC 필수화 추세 (2세대 여권)    │
+│ • 아시아 시장 ePassport 도입 확대    │ • 오픈소스 EJBCA CE 무료 경쟁        │
+│ • 국내 전자여권 검사 시스템 수요      │ • 대형 벤더의 통합 솔루션 확장        │
+│ • 국경통제 시스템 연동 파트너십       │ • ICAO 표준 개정에 따른 추가 개발    │
+└─────────────────────────────────────┴─────────────────────────────────────┘</code></pre>
+<hr>
+<h2 id="7-경쟁-포지셔닝-맵">7. 경쟁 포지셔닝 맵</h2>
+<pre><code>                        발급 측 PKI ──────────────────────────── 수신 측 검증
+                             │                                      │
+                    Entrust  │                                      │
+                    IDnomic  │                                      │
+                    eMudhra  │                                      │
+                             │                                      │
+       풀스택 ───────────────┼──────────────────────────────────────┼──── 특화
+       ePassport PKI         │         Keyfactor NPKD              │
+                             │                                      │
+                             │                           ┌──────────┤
+                             │                           │본 프로젝트│ ← PA + AI
+                             │                           └──────────┤
+                             │                                      │
+                             │                   Thales/SITA/Veridos│ ← 국경통제
+                             │                                      │</code></pre>
+<p><strong>본 프로젝트의 포지션</strong>: <strong>수신 측 검증 특화</strong> — PA 검증 + 인증서 관리 + AI 포렌식의 고유한 조합</p>
+<hr>
+<h2 id="8-전략적-권고사항">8. 전략적 권고사항</h2>
+<h3 id="8-1-단기-과제-현재-강점-강화">8.1 단기 과제 (현재 강점 강화)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>우선순위</th>
+<th>과제</th>
+<th>기대 효과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>ICAO PKD LDIF 자동 다운로드+적용 파이프라인</td>
+<td>운영 자동화, Keyfactor NPKD 대비 기능 패리티</td>
+</tr>
+<tr>
+<td>2</td>
+<td>AI 분석 PDF 보고서 자동 생성 + 이메일 알림</td>
+<td>보고서 가치 극대화</td>
+</tr>
+<tr>
+<td>3</td>
+<td>PA 검증 성능 벤치마크 공개 문서</td>
+<td>기술 경쟁력 객관적 입증</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-2-중기-과제-gap-해소">8.2 중기 과제 (Gap 해소)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>우선순위</th>
+<th>과제</th>
+<th>기대 효과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>4</td>
+<td>Active Authentication 구현</td>
+<td>칩 복제 탐지, 검증 완전성</td>
+</tr>
+<tr>
+<td>5</td>
+<td>HA 아키텍처 (DB 레플리카, 다중 인스턴스)</td>
+<td>대규모 배포 신뢰성</td>
+</tr>
+<tr>
+<td>6</td>
+<td>BSI TR-03110 호환</td>
+<td>EU 시장 진출 기반</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-3-장기-과제-시장-확대">8.3 장기 과제 (시장 확대)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>우선순위</th>
+<th>과제</th>
+<th>기대 효과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>7</td>
+<td>EAC 모듈 (CVCA/DVCA/SPOC)</td>
+<td>2세대 ePassport 완전 지원</td>
+</tr>
+<tr>
+<td>8</td>
+<td>CC EAL4+ 인증 획득</td>
+<td>정부 조달 자격</td>
+</tr>
+<tr>
+<td>9</td>
+<td>CSCA/DS 발급 모듈</td>
+<td>풀스택 ePassport PKI 전환</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="9-결론">9. 결론</h2>
+<p>본 프로젝트는 <strong>수신 국가 관점의 Local PKD + PA 검증 통합 플랫폼</strong>으로서 독자적인 포지션을 가지고 있습니다.</p>
+<p><strong>핵심 차별화 요소</strong>:</p>
+<ol>
+<li>PA 검증과 인증서 관리의 단일 플랫폼 통합</li>
+<li>AI 기반 인증서 포렌식 분석 (업계 유일)</li>
+<li>C++20 고성능 백엔드 + React 19 모던 프론트엔드</li>
+<li>Multi-DBMS 유연성 (PostgreSQL + Oracle)</li>
+</ol>
+<p><strong>주요 Gap</strong>:</p>
+<ol>
+<li>발급 측 PKI (CSCA/DS 서명) 부재</li>
+<li>EAC / Active Authentication 미지원</li>
+<li>보안 인증 (CC EAL4+) 미획득</li>
+</ol>
+<p>타사 풀스택 ePassport PKI 솔루션(Entrust, IDnomic 등)과 직접 경쟁하기보다는, <strong>&quot;전자여권 위·변조 검사 + 인증서 관리 + AI 분석&quot;</strong> 이라는 **차별화된 니치(niche)**를 공략하는 전략이 효과적입니다. 특히 AI 포렌식 분석은 업계에서 유일한 기능으로, 이를 중심으로 기존 국경통제 시스템과의 <strong>보완적 파트너십</strong>을 구축하는 것이 현실적인 시장 진입 전략입니다.</p>
+<hr>
+<p><em>본 보고서는 2026년 3월 12일 기준 공개 정보를 바탕으로 작성되었습니다.</em></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#1-프로젝트-개요">1. 프로젝트 개요</a><a href="#1-1-아키텍처-구성" style="padding-left:1rem">1.1 아키텍처 구성</a><a href="#1-2-핵심-기능-요약" style="padding-left:1rem">1.2 핵심 기능 요약</a><a href="#2-타사-주요-경쟁-제품">2. 타사 주요 경쟁 제품</a><a href="#2-1-icao-pkd-공식-시스템" style="padding-left:1rem">2.1 ICAO PKD (공식 시스템)</a><a href="#2-2-keyfactor-primekey-npkd" style="padding-left:1rem">2.2 Keyfactor/PrimeKey NPKD</a><a href="#2-3-entrust-epassport-solution" style="padding-left:1rem">2.3 Entrust ePassport Solution</a><a href="#2-4-eviden-atos-idnomic-epass-pki" style="padding-left:1rem">2.4 Eviden(Atos) IDnomic ePass PKI</a><a href="#2-5-safelayer-entrust-keyone-emrtd" style="padding-left:1rem">2.5 Safelayer/Entrust KeyOne eMRTD</a><a href="#2-6-emudhra-emca-epassport" style="padding-left:1rem">2.6 eMudhra emCA ePassport</a><a href="#2-7-codegic-khatim-e-passport-server" style="padding-left:1rem">2.7 Codegic Khatim E-Passport Server</a><a href="#2-8-기타-벤더" style="padding-left:1rem">2.8 기타 벤더</a><a href="#2-9-오픈소스" style="padding-left:1rem">2.9 오픈소스</a><a href="#3-기능-비교-매트릭스">3. 기능 비교 매트릭스</a><a href="#3-1-핵심-기능-비교" style="padding-left:1rem">3.1 핵심 기능 비교</a><a href="#3-2-운영-기술-비교" style="padding-left:1rem">3.2 운영/기술 비교</a><a href="#3-3-기술-스택-비교" style="padding-left:1rem">3.3 기술 스택 비교</a><a href="#4-장점-분석-strengths">4. 장점 분석 (Strengths)</a><a href="#4-1-pa-검증-인증서-관리-통합-핵심-차별점" style="padding-left:1rem">4.1 PA 검증 + 인증서 관리 통합 (핵심 차별점)</a><a href="#4-2-ai-인증서-포렌식-분석-업계-유일" style="padding-left:1rem">4.2 AI 인증서 포렌식 분석 (업계 유일)</a><a href="#4-3-현대적-기술-스택과-ux" style="padding-left:1rem">4.3 현대적 기술 스택과 UX</a><a href="#4-4-multi-dbms-유연성" style="padding-left:1rem">4.4 Multi-DBMS 유연성</a><a href="#4-5-포괄적-보고서-체계" style="padding-left:1rem">4.5 포괄적 보고서 체계</a><a href="#4-6-운영-편의성" style="padding-left:1rem">4.6 운영 편의성</a><a href="#4-7-비용-효율" style="padding-left:1rem">4.7 비용 효율</a><a href="#5-단점-및-부족한-부분-weaknesses-gaps">5. 단점 및 부족한 부분 (Weaknesses/Gaps)</a><a href="#5-1-csca-ds-발급-기능-없음-critical-gap" style="padding-left:1rem">5.1 CSCA/DS 발급 기능 없음 (Critical Gap)</a><a href="#5-2-eac-extended-access-control-미지원" style="padding-left:1rem">5.2 EAC(Extended Access Control) 미지원</a><a href="#5-3-보안-인증-cc-eal4-부재" style="padding-left:1rem">5.3 보안 인증(CC EAL4+) 부재</a><a href="#5-4-icao-pkd-자동-동기화-미완성" style="padding-left:1rem">5.4 ICAO PKD 자동 동기화 미완성</a><a href="#5-5-active-authentication-aa-미지원" style="padding-left:1rem">5.5 Active Authentication(AA) 미지원</a><a href="#5-6-hsm-hardware-security-module-통합-없음" style="padding-left:1rem">5.6 HSM(Hardware Security Module) 통합 없음</a><a href="#5-7-고가용성-ha-아키텍처-제한" style="padding-left:1rem">5.7 고가용성(HA) 아키텍처 제한</a><a href="#5-8-국제-표준-호환성-제한" style="padding-left:1rem">5.8 국제 표준 호환성 제한</a><a href="#6-swot-분석">6. SWOT 분석</a><a href="#7-경쟁-포지셔닝-맵">7. 경쟁 포지셔닝 맵</a><a href="#8-전략적-권고사항">8. 전략적 권고사항</a><a href="#8-1-단기-과제-현재-강점-강화" style="padding-left:1rem">8.1 단기 과제 (현재 강점 강화)</a><a href="#8-2-중기-과제-gap-해소" style="padding-left:1rem">8.2 중기 과제 (Gap 해소)</a><a href="#8-3-장기-과제-시장-확대" style="padding-left:1rem">8.3 장기 과제 (시장 확대)</a><a href="#9-결론">9. 결론</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

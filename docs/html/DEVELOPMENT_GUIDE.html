@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Development Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html" class="active">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Development Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="development-guide-icao-local-pkd">Development Guide - ICAO Local PKD</h1>
+<p><strong>Version</strong>: 2.37.0
+<strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="quick-reference">Quick Reference</h2>
+<h3 id="essential-credentials">Essential Credentials</h3>
+<pre><code class="language-bash"># PostgreSQL
+DB_HOST=postgres
+DB_PORT=5432
+DB_NAME=localpkd
+DB_USER=pkd
+DB_PASSWORD=&lt;from .env file&gt;
+
+# Oracle
+ORACLE_HOST=oracle
+ORACLE_PORT=1521
+ORACLE_SERVICE_NAME=XEPDB1
+ORACLE_USER=pkd_user
+ORACLE_PASSWORD=&lt;from .env file&gt;
+
+# LDAP
+LDAP_HOST=openldap1:389 (or openldap2:389)
+LDAP_ADMIN_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+LDAP_ADMIN_PASSWORD=ldap_test_password_123
+LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com</code></pre>
+<h3 id="service-ports">Service Ports</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Port</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td>8081</td>
+<td>Upload, Certificate Search, ICAO Sync, Auth</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td>8082</td>
+<td>Passive Authentication (ICAO 9303)</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td>8083</td>
+<td>DB-LDAP Sync, Reconciliation</td>
+</tr>
+<tr>
+<td>Monitoring Service</td>
+<td>8084</td>
+<td>System Metrics, Service Health</td>
+</tr>
+<tr>
+<td>AI Analysis Service</td>
+<td>8085</td>
+<td>ML Anomaly Detection, Forensic Analysis (Python/FastAPI)</td>
+</tr>
+<tr>
+<td>API Gateway (HTTP)</td>
+<td>80</td>
+<td>nginx reverse proxy (<code>/api</code> prefix)</td>
+</tr>
+<tr>
+<td>API Gateway (HTTPS)</td>
+<td>443</td>
+<td>TLS 1.2/1.3, Private CA</td>
+</tr>
+<tr>
+<td>API Gateway (Internal)</td>
+<td>8080</td>
+<td>Internal HTTP (legacy)</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>3080</td>
+<td>React 19 SPA</td>
+</tr>
+<tr>
+<td>API Docs</td>
+<td>8090</td>
+<td>Swagger UI</td>
+</tr>
+</tbody></table></div>
+<h3 id="daily-commands">Daily Commands</h3>
+<pre><code class="language-bash"># Start/Stop system
+./docker-start.sh
+./docker-stop.sh
+./docker-health.sh
+
+# Clean init (DB + LDAP reset)
+./docker-clean-and-init.sh
+
+# Rebuild individual services
+./scripts/build/rebuild-pkd-relay.sh [--no-cache]
+./scripts/build/rebuild-frontend.sh
+
+# Helper functions
+source scripts/helpers/ldap-helpers.sh &amp;&amp; ldap_count_all
+source scripts/helpers/db-helpers.sh &amp;&amp; db_count_certs</code></pre>
+<hr>
+<h2 id="architecture-overview">Architecture Overview</h2>
+<h3 id="system-architecture-v2-30-0">System Architecture (v2.30.0)</h3>
+<pre><code>Frontend (React 19) --&gt; API Gateway (nginx :80/:443/:8080) --&gt; Backend Services --&gt; DB/LDAP
+                                                        |
+                                                        +-- PKD Management (:8081)
+                                                        |     Upload, Certificate Search, ICAO Sync, Auth
+                                                        |
+                                                        +-- PA Service (:8082)
+                                                        |     Passive Authentication (ICAO 9303)
+                                                        |
+                                                        +-- PKD Relay (:8083)
+                                                        |     DB-LDAP Sync, Reconciliation
+                                                        |
+                                                        +-- Monitoring Service (:8084)
+                                                        |     System Metrics, Service Health (DB-independent)
+                                                        |
+                                                        +-- AI Analysis Service (:8085)
+                                                              ML Anomaly Detection, Pattern Analysis (Python/FastAPI)</code></pre>
+<h3 id="shared-libraries-shared-lib">Shared Libraries (<code>shared/lib/</code>)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Library</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>icao::database</code></td>
+<td>DB connection pool, Query Executor (PostgreSQL + Oracle)</td>
+</tr>
+<tr>
+<td><code>icao::ldap</code></td>
+<td>Thread-safe LDAP connection pool (min=2, max=10)</td>
+</tr>
+<tr>
+<td><code>icao::audit</code></td>
+<td>Unified audit logging (operation_audit_log)</td>
+</tr>
+<tr>
+<td><code>icao::config</code></td>
+<td>Configuration management</td>
+</tr>
+<tr>
+<td><code>icao::exception</code></td>
+<td>Custom exception types</td>
+</tr>
+<tr>
+<td><code>icao::logging</code></td>
+<td>Structured logging (spdlog)</td>
+</tr>
+<tr>
+<td><code>icao::certificate-parser</code></td>
+<td>X.509 certificate parsing (22 fields)</td>
+</tr>
+<tr>
+<td><code>icao::icao9303</code></td>
+<td>ICAO 9303 SOD/DG parsers</td>
+</tr>
+<tr>
+<td><code>icao::validation</code></td>
+<td>ICAO 9303 certificate validation (trust chain, CRL, extensions, algorithm compliance)</td>
+</tr>
+</tbody></table></div>
+<h3 id="connection-pool-configuration">Connection Pool Configuration</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>LDAP Pool</th>
+<th>DB Pool</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PA Service</td>
+<td>2-10</td>
+<td>5-20</td>
+<td>Verification-heavy</td>
+</tr>
+<tr>
+<td>PKD Management</td>
+<td>3-15</td>
+<td>5-20</td>
+<td>Upload/search operations</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td>2-10</td>
+<td>5-20</td>
+<td>Sync/reconciliation</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>DB-independent (HTTP only)</td>
+</tr>
+</tbody></table></div>
+<h3 id="design-patterns">Design Patterns</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Usage</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Repository Pattern</strong></td>
+<td>100% SQL abstraction - zero SQL in controllers</td>
+</tr>
+<tr>
+<td><strong>Query Executor Pattern</strong></td>
+<td>Database-agnostic queries via <code>IQueryExecutor</code></td>
+</tr>
+<tr>
+<td><strong>Factory Pattern</strong></td>
+<td>Runtime database selection via <code>DB_TYPE</code></td>
+</tr>
+<tr>
+<td><strong>Strategy Pattern</strong></td>
+<td>Processing strategies (AUTO upload mode)</td>
+</tr>
+<tr>
+<td><strong>RAII</strong></td>
+<td>Connection pooling (DB and LDAP)</td>
+</tr>
+<tr>
+<td><strong>Provider/Adapter Pattern</strong></td>
+<td>Infrastructure abstraction for validation (<code>ICscaProvider</code>, <code>ICrlProvider</code>)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="multi-dbms-support">Multi-DBMS Support</h2>
+<h3 id="switching-databases">Switching Databases</h3>
+<pre><code class="language-bash"># Edit .env: DB_TYPE=postgres or DB_TYPE=oracle
+# Then restart services:
+docker compose -f docker/docker-compose.yaml restart pkd-management pa-service pkd-relay</code></pre>
+<h3 id="oracle-compatibility-notes">Oracle Compatibility Notes</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>PostgreSQL</th>
+<th>Oracle</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Column names</td>
+<td>lowercase</td>
+<td>UPPERCASE</td>
+<td>Auto-lowercase in OracleQueryExecutor</td>
+</tr>
+<tr>
+<td>Booleans</td>
+<td>TRUE/FALSE</td>
+<td>1/0</td>
+<td>Database-aware formatting</td>
+</tr>
+<tr>
+<td>Pagination</td>
+<td>LIMIT/OFFSET</td>
+<td>OFFSET ROWS FETCH NEXT</td>
+<td>Database-specific SQL</td>
+</tr>
+<tr>
+<td>Case search</td>
+<td>ILIKE</td>
+<td>UPPER() LIKE UPPER()</td>
+<td>Conditional SQL</td>
+</tr>
+<tr>
+<td>JSONB cast</td>
+<td><code>$1::jsonb</code></td>
+<td><code>$1</code> (no cast)</td>
+<td>Remove cast for Oracle</td>
+</tr>
+<tr>
+<td>Empty string</td>
+<td>&#39;&#39; (empty)</td>
+<td>NULL</td>
+<td>IS NOT NULL filter</td>
+</tr>
+<tr>
+<td>Timestamps</td>
+<td>NOW()</td>
+<td>SYSTIMESTAMP</td>
+<td>Database-specific function</td>
+</tr>
+</tbody></table></div>
+<h3 id="raii-pattern-example">RAII Pattern Example</h3>
+<pre><code class="language-cpp">// Database - Query Executor
+auto&amp; executor = DatabaseConnectionPool::getExecutor();
+auto result = executor.executeQuery(
+    "SELECT * FROM certificate WHERE country_code = $1",
+    {"KR"}
+);
+
+// LDAP - Connection Pool
+auto conn = ldapPool_-&gt;acquire();
+if (!conn.isValid()) {
+    throw std::runtime_error("Failed to acquire LDAP connection");
+}
+LDAP* ld = conn.get();
+// Connection automatically released when 'conn' goes out of scope</code></pre>
+<hr>
+<h2 id="development-workflow">Development Workflow</h2>
+<h3 id="1-code-modification">1. Code Modification</h3>
+<p>Source code locations:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Source Path</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td><code>services/pkd-management/src/</code></td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td><code>services/pa-service/src/</code></td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td><code>services/pkd-relay-service/src/</code></td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td><code>services/monitoring-service/src/</code></td>
+</tr>
+<tr>
+<td>AI Analysis</td>
+<td><code>services/ai-analysis/</code> (Python)</td>
+</tr>
+<tr>
+<td>Shared Libraries</td>
+<td><code>shared/lib/</code></td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td><code>frontend/src/</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-build-and-deploy">2. Build and Deploy</h3>
+<p><strong>Option A: Quick rebuild (recommended)</strong></p>
+<pre><code class="language-bash"># Rebuild specific service
+./scripts/build/rebuild-pkd-relay.sh
+./scripts/build/rebuild-frontend.sh
+
+# Or via docker compose
+docker compose -f docker/docker-compose.yaml build pkd-management
+docker compose -f docker/docker-compose.yaml up -d pkd-management</code></pre>
+<p><strong>Option B: Force fresh build (dependency changes, Dockerfile changes)</strong></p>
+<pre><code class="language-bash">./scripts/build/rebuild-pkd-relay.sh --no-cache</code></pre>
+<p><strong>When to use <code>--no-cache</code>:</strong></p>
+<ul>
+<li>CMakeLists.txt or vcpkg.json changes</li>
+<li>New library additions</li>
+<li>Dockerfile modifications</li>
+<li>Version mismatch between source and binary</li>
+</ul>
+<h3 id="3-testing">3. Testing</h3>
+<pre><code class="language-bash"># Source helper scripts
+source scripts/helpers/ldap-helpers.sh
+source scripts/helpers/db-helpers.sh
+
+# Check all service health
+./docker-health.sh
+
+# Or individually
+curl http://localhost/api/health | jq .
+curl http://localhost/api/pa/health | jq .
+curl http://localhost/api/sync/health | jq .
+curl http://localhost/api/ai/health | jq .
+
+# Data verification
+ldap_count_all          # Count all LDAP entries
+db_count_certs          # Count DB certificates
+
+# Test reconciliation
+curl -X POST http://localhost:8080/api/sync/reconcile \
+  -H "Content-Type: application/json" \
+  -d '{"dryRun": false}' | jq .
+
+# Test PA verification
+curl -X POST http://localhost:8080/api/pa/verify \
+  -H "Content-Type: application/json" \
+  -d '{"sod":"&lt;base64&gt;","dataGroups":{"1":"&lt;base64&gt;","2":"&lt;base64&gt;"}}' | jq .</code></pre>
+<h3 id="unit-tests-438-test-cases">Unit Tests (438 test cases)</h3>
+<pre><code class="language-bash"># C++ certificate-parser tests (122 tests)
+docker build -f shared/lib/certificate-parser/tests/Dockerfile.test \
+  --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
+  -t cert-parser-tests .
+
+# C++ icao::validation tests (86 tests)
+docker build -f shared/lib/icao-validation/tests/Dockerfile.test \
+  --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
+  -t icao-validation-tests .
+
+# Frontend tests (Vitest + React Testing Library, 114 tests)
+cd frontend &amp;&amp; npm test
+
+# AI Analysis tests (pytest, 201 tests)
+cd services/ai-analysis &amp;&amp; python -m pytest</code></pre>
+<p>Test summary:</p>
+<ul>
+<li><strong>C++ certificate-parser</strong>: GTest — 5 files, 122 test cases</li>
+<li><strong>C++ icao::validation</strong>: GTest — 5 files, 86 tests (cert_ops, extension_validator, algorithm_compliance, trust_chain_builder, crl_checker)</li>
+<li><strong>Frontend</strong>: Vitest + RTL — 11 files, 114 passed</li>
+<li><strong>AI Analysis</strong>: pytest — 8 files, 201 passed</li>
+</ul>
+<hr>
+<h2 id="helper-scripts">Helper Scripts</h2>
+<h3 id="directory-structure">Directory Structure</h3>
+<pre><code>scripts/
++-- docker/          # Docker management (start, stop, restart, health, logs, backup)
++-- podman/          # Podman management for Production RHEL 9 (same structure as docker/)
++-- luckfox/         # ARM64 deployment (same structure as docker/)
++-- lib/             # Shared shell library (common.sh)
++-- build/           # Build scripts (build, rebuild-*, check-freshness, verify-*)
++-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
++-- maintenance/     # Data management (reset-all-data, reset-ldap, dn-migration)
++-- monitoring/      # System monitoring (icao-version-check)
++-- ssl/             # SSL certificate management (init-cert, renew-cert)
++-- deploy/          # Deployment (from-github-artifacts)
++-- dev/             # Development scripts (start/stop/rebuild/logs dev services)</code></pre>
+<h3 id="ldap-helpers">LDAP Helpers</h3>
+<pre><code class="language-bash">source scripts/helpers/ldap-helpers.sh
+ldap_info                   # Show connection info
+ldap_count_all              # Count all certificates
+ldap_count_certs CRL        # Count CRLs
+ldap_search_country KR      # Search by country
+ldap_delete_all_crls        # Delete all CRLs (testing)</code></pre>
+<h3 id="database-helpers">Database Helpers</h3>
+<pre><code class="language-bash">source scripts/helpers/db-helpers.sh
+db_info                     # Show connection info
+db_count_certs              # Count certificates by type
+db_count_crls               # Count CRLs
+db_reset_crl_flags          # Reset CRL stored_in_ldap flags
+db_reconciliation_summary 10    # Show last 10 reconciliations
+db_latest_reconciliation_logs   # Show latest reconciliation logs
+db_sync_status 10           # Show sync status history</code></pre>
+<hr>
+<h2 id="common-ldap-operations">Common LDAP Operations</h2>
+<h3 id="correct-ldap-search-commands">Correct LDAP Search Commands</h3>
+<pre><code class="language-bash"># Count CRLs
+docker exec icao-local-pkd-openldap1 \
+  ldapsearch -x \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=cRLDistributionPoint)" dn 2&gt;&amp;1 | \
+  grep "^dn:" | wc -l
+
+# Count certificates
+docker exec icao-local-pkd-openldap1 \
+  ldapsearch -x \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=pkdDownload)" dn 2&gt;&amp;1 | \
+  grep "^dn:" | wc -l</code></pre>
+<p><strong>Common Mistakes:</strong></p>
+<ul>
+<li>Wrong password: <code>admin</code> -&gt; Correct: <code>ldap_test_password_123</code></li>
+<li>Wrong base DN: <code>dc=pkd,...</code> -&gt; Correct: <code>dc=download,dc=pkd,...</code></li>
+<li>Wrong filter: <code>(cn=*)</code> -&gt; Correct: <code>(objectClass=cRLDistributionPoint)</code></li>
+<li>Missing <code>-x</code> flag -&gt; Always use <code>-x</code> for simple authentication</li>
+</ul>
+<hr>
+<h2 id="common-database-operations">Common Database Operations</h2>
+<h3 id="postgresql-commands">PostgreSQL Commands</h3>
+<pre><code class="language-bash"># Count certificates
+docker exec icao-local-pkd-postgres \
+  psql -U pkd -d localpkd \
+  -c "SELECT certificate_type, COUNT(*) FROM certificate GROUP BY certificate_type;"
+
+# Check reconciliation history
+docker exec icao-local-pkd-postgres \
+  psql -U pkd -d localpkd \
+  -c "SELECT id, started_at, status, total_processed
+      FROM reconciliation_summary ORDER BY started_at DESC LIMIT 5;"</code></pre>
+<h3 id="oracle-commands">Oracle Commands</h3>
+<pre><code class="language-bash"># Count certificates
+docker exec icao-local-pkd-oracle bash -c \
+  "echo \"SELECT certificate_type, COUNT(*) FROM certificate GROUP BY certificate_type;\" \
+  | sqlplus -s pkd_user/\${ORACLE_PASSWORD}@//localhost:1521/XEPDB1"</code></pre>
+<p><strong>Common Mistakes:</strong></p>
+<ul>
+<li>Wrong DB name: <code>pkd</code> -&gt; Correct: <code>localpkd</code></li>
+<li>Oracle: remember <code>UPPERCASE</code> column names in result sets</li>
+</ul>
+<hr>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="build-issues">Build Issues</h3>
+<p><strong>Binary version mismatch:</strong></p>
+<pre><code class="language-bash">./scripts/build/rebuild-pkd-relay.sh --no-cache
+docker logs icao-local-pkd-relay --tail 5 | grep version</code></pre>
+<h3 id="ldap-connection-issues">LDAP Connection Issues</h3>
+<p><strong><code>ldap_bind: Invalid credentials (49)</code>:</strong></p>
+<pre><code class="language-bash"># Use correct password
+LDAP_PASSWORD="ldap_test_password_123"  # NOT "admin"
+source scripts/helpers/ldap-helpers.sh &amp;&amp; ldap_count_all</code></pre>
+<p><strong><code>No such object (32)</code>:</strong></p>
+<pre><code class="language-bash"># Check DN hierarchy exists
+docker exec icao-local-pkd-openldap1 \
+  ldapsearch -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn | grep "^dn:"</code></pre>
+<h3 id="oracle-issues">Oracle Issues</h3>
+<p><strong>&quot;Value is not convertible to Int&quot;:</strong></p>
+<ul>
+<li>Oracle returns all values as strings. Use <code>getInt()</code> helper.</li>
+</ul>
+<p><strong>Empty string = NULL:</strong></p>
+<ul>
+<li><code>WHERE column != &#39;&#39;</code> fails on Oracle. Use <code>WHERE column IS NOT NULL</code>.</li>
+</ul>
+<h3 id="502-bad-gateway-after-container-restart">502 Bad Gateway after container restart</h3>
+<p>nginx uses <code>resolver 127.0.0.11 valid=10s</code> with per-request DNS resolution. Usually resolves within 10 seconds.</p>
+<p><strong>Podman 환경</strong>: Podman은 Docker DNS(<code>127.0.0.11</code>)가 없으므로 반드시 관리 스크립트(<code>scripts/podman/start.sh</code>, <code>restart.sh</code>)로 실행해야 aardvark-dns resolver가 자동 적용됩니다.</p>
+<h3 id="https-ssl">HTTPS / SSL</h3>
+<pre><code class="language-bash"># Private CA 초기화 (최초 1회)
+./scripts/ssl/init-cert.sh
+
+# 서버 인증서 갱신 (IP 추가 가능)
+./scripts/ssl/renew-cert.sh --ip 10.0.0.220
+
+# .env에서 SSL 모드 전환
+NGINX_CONF=../nginx/api-gateway-ssl.conf    # HTTPS
+NGINX_CONF=../nginx/api-gateway.conf        # HTTP only</code></pre>
+<h3 id="sync-dashboard-timeout">Sync Dashboard Timeout</h3>
+<p>Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-relay service.</p>
+<hr>
+<h2 id="production-data-summary">Production Data Summary</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Certificate Type</th>
+<th>Count</th>
+<th>LDAP</th>
+<th>Coverage</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA</td>
+<td>845</td>
+<td>845</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>MLSC</td>
+<td>27</td>
+<td>27</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>DSC</td>
+<td>29,838</td>
+<td>29,838</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>DSC_NC</td>
+<td>502</td>
+<td>502</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>CRL</td>
+<td>69</td>
+<td>69</td>
+<td>100%</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>31,212</strong></td>
+<td><strong>31,212</strong></td>
+<td><strong>100%</strong></td>
+</tr>
+</tbody></table></div>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#quick-reference">Quick Reference</a><a href="#essential-credentials" style="padding-left:1rem">Essential Credentials</a><a href="#service-ports" style="padding-left:1rem">Service Ports</a><a href="#daily-commands" style="padding-left:1rem">Daily Commands</a><a href="#architecture-overview">Architecture Overview</a><a href="#system-architecture-v2-30-0" style="padding-left:1rem">System Architecture (v2.30.0)</a><a href="#shared-libraries-shared-lib" style="padding-left:1rem">Shared Libraries (shared/lib/)</a><a href="#connection-pool-configuration" style="padding-left:1rem">Connection Pool Configuration</a><a href="#design-patterns" style="padding-left:1rem">Design Patterns</a><a href="#multi-dbms-support">Multi-DBMS Support</a><a href="#switching-databases" style="padding-left:1rem">Switching Databases</a><a href="#oracle-compatibility-notes" style="padding-left:1rem">Oracle Compatibility Notes</a><a href="#raii-pattern-example" style="padding-left:1rem">RAII Pattern Example</a><a href="#development-workflow">Development Workflow</a><a href="#1-code-modification" style="padding-left:1rem">1. Code Modification</a><a href="#2-build-and-deploy" style="padding-left:1rem">2. Build and Deploy</a><a href="#3-testing" style="padding-left:1rem">3. Testing</a><a href="#unit-tests-438-test-cases" style="padding-left:1rem">Unit Tests (438 test cases)</a><a href="#helper-scripts">Helper Scripts</a><a href="#directory-structure" style="padding-left:1rem">Directory Structure</a><a href="#ldap-helpers" style="padding-left:1rem">LDAP Helpers</a><a href="#database-helpers" style="padding-left:1rem">Database Helpers</a><a href="#common-ldap-operations">Common LDAP Operations</a><a href="#correct-ldap-search-commands" style="padding-left:1rem">Correct LDAP Search Commands</a><a href="#common-database-operations">Common Database Operations</a><a href="#postgresql-commands" style="padding-left:1rem">PostgreSQL Commands</a><a href="#oracle-commands" style="padding-left:1rem">Oracle Commands</a><a href="#troubleshooting">Troubleshooting</a><a href="#build-issues" style="padding-left:1rem">Build Issues</a><a href="#ldap-connection-issues" style="padding-left:1rem">LDAP Connection Issues</a><a href="#oracle-issues" style="padding-left:1rem">Oracle Issues</a><a href="#502-bad-gateway-after-container-restart" style="padding-left:1rem">502 Bad Gateway after container restart</a><a href="#https-ssl" style="padding-left:1rem">HTTPS / SSL</a><a href="#sync-dashboard-timeout" style="padding-left:1rem">Sync Dashboard Timeout</a><a href="#production-data-summary">Production Data Summary</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

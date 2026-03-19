@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Docker Build Cache Troubleshooting — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html" class="active">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Docker Build Cache Troubleshooting</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="docker-build-cache-management-guide">Docker Build Cache Management Guide</h1>
+<p><strong>Version</strong>: 1.0
+<strong>Last Updated</strong>: 2026-01-09
+<strong>Status</strong>: Critical - Read Before Every Deployment</p>
+<hr>
+<h2 id="critical-issue-build-cache-can-hide-code-changes">⚠️ CRITICAL ISSUE: Build Cache Can Hide Code Changes</h2>
+<h3 id="the-problem">The Problem</h3>
+<p><strong>GitHub Actions 빌드 캐시가 소스 코드 변경을 무시할 수 있습니다!</strong></p>
+<p><strong>실제 발생한 문제 (2026-01-09)</strong>:</p>
+<ol>
+<li>중복 검사 기능 코드를 main.cpp에 추가</li>
+<li>커밋 및 푸시 완료</li>
+<li>GitHub Actions 빌드 성공 (5분 48초)</li>
+<li><strong>하지만 모든 레이어가 CACHED로 처리됨</strong></li>
+<li>결과: 새 코드가 컴파일되지 않고 이전 바이너리 사용</li>
+<li>배포 후 기능 작동하지 않음</li>
+</ol>
+<h3 id="why-this-happens">Why This Happens</h3>
+<p>현재 Dockerfile은 4단계 멀티스테이지 빌드를 사용:</p>
+<pre><code class="language-dockerfile"># Stage 1: vcpkg-base (시스템 의존성)
+FROM debian:bookworm AS vcpkg-base
+# ... install packages, clone vcpkg
+
+# Stage 2: vcpkg-deps (패키지 의존성)
+FROM vcpkg-base AS vcpkg-deps
+COPY vcpkg.json ./
+# ... vcpkg install
+
+# Stage 3: builder (애플리케이션 빌드)
+FROM vcpkg-deps AS builder
+COPY CMakeLists.txt ./
+COPY src/ ./src/
+# ... cmake build
+
+# Stage 4: runtime
+FROM debian:bookworm-slim AS runtime
+COPY --from=builder /app/build/bin/pkd-management /app/</code></pre>
+<p><strong>캐시 전략</strong>:</p>
+<ul>
+<li>GitHub Actions는 <code>gha</code> 캐시를 사용</li>
+<li>각 스테이지마다 별도의 캐시 scope 사용</li>
+<li>파일 체크섬이 동일하면 캐시 사용</li>
+</ul>
+<p><strong>문제점</strong>:</p>
+<ul>
+<li><code>COPY src/ ./src/</code> 이후 체크섬이 변경되어야 재빌드</li>
+<li>하지만 <strong>캐시 키가 너무 광범위</strong>하게 설정됨</li>
+<li>BuildKit이 전체 디렉토리 컨텍스트를 캐시 키로 사용할 수 있음</li>
+<li>결과: src/ 내부 파일이 변경되어도 캐시 히트 가능</li>
+</ul>
+<hr>
+<h2 id="detection-how-to-check-if-cache-is-the-problem">Detection: How to Check if Cache is the Problem</h2>
+<h3 id="1-github-actions-로그-확인">1. GitHub Actions 로그 확인</h3>
+<pre><code class="language-bash"># 빌드 로그에서 CACHED 확인
+gh run view &lt;RUN_ID&gt; --repo iland112/icao-local-pkd-cpp --log | grep "CACHED"
+
+# 많은 CACHED가 보이면 의심
+#12 CACHED
+#13 CACHED
+#14 CACHED
+...
+#25 CACHED</code></pre>
+<h3 id="2-배포-후-버전-확인">2. 배포 후 버전 확인</h3>
+<pre><code class="language-bash"># Luckfox에서 로그 확인
+sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management --tail 5"
+
+# 출력 예:
+# [2026-01-09 17:52:58.332] [info] Starting ICAO Local PKD Application (v1.2.0 - Duplicate Detection)...
+
+# 버전이 최신인지 확인!</code></pre>
+<h3 id="3-기능-테스트">3. 기능 테스트</h3>
+<pre><code class="language-bash"># 새로 추가한 기능이 작동하는지 직접 테스트
+# 작동하지 않으면 캐시 문제 의심</code></pre>
+<hr>
+<h2 id="solutions-how-to-force-cache-invalidation">Solutions: How to Force Cache Invalidation</h2>
+<h3 id="solution-1-version-bump-recommended">Solution 1: Version Bump (Recommended) ⭐</h3>
+<p><strong>가장 안전하고 확실한 방법</strong></p>
+<pre><code class="language-bash"># main.cpp에서 버전 문자열 변경
+# Before:
+spdlog::info("Starting ICAO Local PKD Application (v1.1.0 - Manual Mode Support)...");
+
+# After:
+spdlog::info("Starting ICAO Local PKD Application (v1.2.0 - Duplicate Detection)...");
+
+# 커밋 및 푸시
+git add services/pkd-management/src/main.cpp
+git commit -m "fix: Force rebuild to include new features (v1.2.0)"
+git push origin feature/openapi-support</code></pre>
+<p><strong>왜 효과적인가?</strong>:</p>
+<ul>
+<li>main.cpp 파일 체크섬이 변경됨</li>
+<li>Docker COPY src/ 단계의 캐시 무효화</li>
+<li>builder 스테이지 전체 재빌드</li>
+<li>확실하게 새 코드 컴파일</li>
+</ul>
+<h3 id="solution-2-dummy-file-update">Solution 2: Dummy File Update</h3>
+<pre><code class="language-bash"># 더미 파일 생성 또는 수정
+echo "# Build $(date +%s)" &gt; services/pkd-management/BUILD_ID
+
+# Dockerfile에 추가 (builder 스테이지 초반)
+COPY BUILD_ID ./
+
+# 커밋 및 푸시
+git add services/pkd-management/BUILD_ID services/pkd-management/Dockerfile
+git commit -m "fix: Force rebuild with BUILD_ID update"
+git push</code></pre>
+<h3 id="solution-3-github-actions-cache-수동-삭제">Solution 3: GitHub Actions Cache 수동 삭제</h3>
+<pre><code class="language-bash"># GitHub UI에서:
+# Settings → Actions → Caches → Delete specific cache
+# 또는 전체 삭제
+
+# 주의: 다음 빌드가 cold build (60-80분)</code></pre>
+<h3 id="solution-4-workflow-dispatch-with-no-cache">Solution 4: Workflow Dispatch with no-cache</h3>
+<p><strong>.github/workflows/build-arm64.yml 수정</strong>:</p>
+<pre><code class="language-yaml">on:
+  workflow_dispatch:
+    inputs:
+      no-cache:
+        description: 'Force rebuild without cache'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build-pkd-management:
+    steps:
+      - name: Build and export PKD Management Service
+        uses: docker/build-push-action@v5
+        with:
+          no-cache: ${{ inputs.no-cache }}
+          # ... other options</code></pre>
+<p><strong>사용법</strong>:</p>
+<ul>
+<li>GitHub → Actions → &quot;Build ARM64 Docker Images&quot; → Run workflow</li>
+<li>&quot;Force rebuild without cache&quot; 체크</li>
+<li>Run workflow 클릭</li>
+</ul>
+<hr>
+<h2 id="prevention-automated-cache-validation">Prevention: Automated Cache Validation</h2>
+<h3 id="pre-deployment-check-script">Pre-Deployment Check Script</h3>
+<p><strong>파일</strong>: <code>scripts/check-build-freshness.sh</code></p>
+<pre><code class="language-bash">#!/bin/bash
+# Check if the deployed build includes latest commits
+
+set -e
+
+LUCKFOX_HOST="192.168.100.11"
+LUCKFOX_USER="luckfox"
+LUCKFOX_PASS="luckfox"
+SSH_CMD="sshpass -p $LUCKFOX_PASS ssh -o StrictHostKeyChecking=no $LUCKFOX_USER@$LUCKFOX_HOST"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+echo -e "${GREEN}=== Build Freshness Check ===${NC}"
+echo ""
+
+# Get latest local commit
+LOCAL_COMMIT=$(git rev-parse --short HEAD)
+LOCAL_MSG=$(git log -1 --pretty=%B | head -1)
+
+echo -e "${YELLOW}Local commit:${NC}"
+echo "  $LOCAL_COMMIT - $LOCAL_MSG"
+echo ""
+
+# Get latest GitHub Actions build commit
+LATEST_RUN=$(gh run list --repo iland112/icao-local-pkd-cpp --branch feature/openapi-support --limit 1 --json databaseId,headSha,displayTitle,conclusion,createdAt --jq '.[0]')
+RUN_ID=$(echo "$LATEST_RUN" | jq -r '.databaseId')
+RUN_COMMIT=$(echo "$LATEST_RUN" | jq -r '.headSha' | cut -c1-7)
+RUN_TITLE=$(echo "$LATEST_RUN" | jq -r '.displayTitle')
+RUN_STATUS=$(echo "$LATEST_RUN" | jq -r '.conclusion')
+RUN_TIME=$(echo "$LATEST_RUN" | jq -r '.createdAt')
+
+echo -e "${YELLOW}Latest GitHub Actions build:${NC}"
+echo "  Run ID: $RUN_ID"
+echo "  Commit: $RUN_COMMIT"
+echo "  Title: $RUN_TITLE"
+echo "  Status: $RUN_STATUS"
+echo "  Time: $RUN_TIME"
+echo ""
+
+# Check if commits match
+if [ "$LOCAL_COMMIT" != "$RUN_COMMIT" ]; then
+    echo -e "${RED}⚠️  WARNING: Local commit differs from latest build!${NC}"
+    echo -e "${RED}   Push your changes and wait for build to complete.${NC}"
+    exit 1
+fi
+
+if [ "$RUN_STATUS" != "success" ]; then
+    echo -e "${RED}⚠️  WARNING: Latest build failed!${NC}"
+    echo -e "${RED}   Fix build errors before deploying.${NC}"
+    exit 1
+fi
+
+# Check if build used cache excessively
+echo -e "${YELLOW}Checking build cache usage...${NC}"
+CACHE_COUNT=$(gh run view "$RUN_ID" --repo iland112/icao-local-pkd-cpp --log | grep "pkd-management" | grep -c "CACHED" || true)
+echo "  CACHED layers: $CACHE_COUNT"
+
+if [ "$CACHE_COUNT" -gt 15 ]; then
+    echo -e "${YELLOW}⚠️  WARNING: Build used many cached layers ($CACHE_COUNT)${NC}"
+    echo -e "${YELLOW}   This might indicate cache-related issues.${NC}"
+    echo -e "${YELLOW}   Verify deployment includes your changes!${NC}"
+    echo ""
+
+    # Get deployed version from Luckfox
+    echo -e "${YELLOW}Checking deployed version on Luckfox...${NC}"
+    DEPLOYED_VERSION=$($SSH_CMD "docker logs icao-pkd-management 2&gt;&amp;1 | grep 'Starting ICAO Local PKD Application' | tail -1" || echo "")
+
+    if [ -n "$DEPLOYED_VERSION" ]; then
+        echo "  Luckfox: $DEPLOYED_VERSION"
+    else
+        echo "  (Could not retrieve version)"
+    fi
+    echo ""
+fi
+
+echo -e "${GREEN}✓ Build freshness check complete${NC}"
+echo ""
+echo -e "${YELLOW}Next steps:${NC}"
+echo "  1. Deploy: ./scripts/deploy-from-github-artifacts.sh pkd-management"
+echo "  2. Verify: Test your new features work correctly"
+echo ""</code></pre>
+<h3 id="dockerfile-improvement">Dockerfile Improvement</h3>
+<p><strong>현재 문제를 완화하는 Dockerfile 패턴</strong>:</p>
+<pre><code class="language-dockerfile"># Stage 3: builder
+FROM vcpkg-deps AS builder
+
+# Build argument for cache busting
+ARG BUILD_VERSION=unknown
+ENV BUILD_VERSION=${BUILD_VERSION}
+
+WORKDIR /app
+
+# Copy only what's needed in order
+COPY shared/ ./shared/
+COPY services/pkd-management/CMakeLists.txt ./
+COPY services/pkd-management/src/ ./src/
+
+# Force cache invalidation with version check
+RUN echo "Building version: ${BUILD_VERSION}"
+
+# Configure
+RUN cmake -B build -S . \
+    -DCMAKE_TOOLCHAIN_FILE=/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_FLAGS="-DBUILD_VERSION=\\\"${BUILD_VERSION}\\\""
+
+# Build
+RUN cmake --build build -j$(nproc)</code></pre>
+<p><strong>사용법</strong>:</p>
+<pre><code class="language-yaml"># .github/workflows/build-arm64.yml
+- name: Get version from commit
+  id: version
+  run: |
+    VERSION="v1.$(git rev-list --count HEAD)"
+    echo "version=$VERSION" &gt;&gt; $GITHUB_OUTPUT
+
+- name: Build and export PKD Management Service
+  uses: docker/build-push-action@v5
+  with:
+    build-args: |
+      BUILD_VERSION=${{ steps.version.outputs.version }}
+    # ... other options</code></pre>
+<hr>
+<h2 id="best-practices">Best Practices</h2>
+<h3 id="1-always-version-your-changes">1. Always Version Your Changes</h3>
+<p><strong>커밋 메시지에 버전 업데이트 포함</strong>:</p>
+<pre><code class="language-bash"># Good
+git commit -m "feat(duplicate-detection): Add file upload duplicate detection (v1.2.0)"
+
+# Bad
+git commit -m "add feature"</code></pre>
+<h3 id="2-verify-build-logs">2. Verify Build Logs</h3>
+<p><strong>빌드 완료 후 항상 로그 확인</strong>:</p>
+<pre><code class="language-bash"># Check if compilation actually happened
+gh run view &lt;RUN_ID&gt; --repo iland112/icao-local-pkd-cpp --log | grep -E "(Compiling|Building|cmake --build)"
+
+# Should see actual compilation output, not just CACHED</code></pre>
+<h3 id="3-test-immediately-after-deployment">3. Test Immediately After Deployment</h3>
+<p><strong>배포 직후 새 기능 테스트</strong>:</p>
+<pre><code class="language-bash"># Don't wait! Test immediately
+# If something doesn't work → cache problem</code></pre>
+<h3 id="4-document-version-in-commit">4. Document Version in Commit</h3>
+<p><strong>main.cpp에 버전 정보 유지</strong>:</p>
+<pre><code class="language-cpp">// Always update this when making significant changes
+spdlog::info("Starting ICAO Local PKD Application (v1.X.Y - Feature Name)...");</code></pre>
+<h3 id="5-use-check-script-before-deployment">5. Use Check Script Before Deployment</h3>
+<pre><code class="language-bash"># Run before every deployment
+./scripts/check-build-freshness.sh
+
+# Only deploy if check passes
+./scripts/deploy-from-github-artifacts.sh pkd-management</code></pre>
+<hr>
+<h2 id="cache-decision-matrix">Cache Decision Matrix</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Use Cache?</th>
+<th>Action Required</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>vcpkg.json changed</td>
+<td>❌ No</td>
+<td>Automatic (Dockerfile handles)</td>
+</tr>
+<tr>
+<td>CMakeLists.txt changed</td>
+<td>❌ No</td>
+<td>Automatic (Dockerfile handles)</td>
+</tr>
+<tr>
+<td>src/*.cpp changed</td>
+<td>⚠️ Maybe</td>
+<td><strong>Version bump recommended</strong></td>
+</tr>
+<tr>
+<td>New feature added</td>
+<td>❌ No</td>
+<td><strong>Version bump REQUIRED</strong></td>
+</tr>
+<tr>
+<td>Bug fix</td>
+<td>⚠️ Maybe</td>
+<td><strong>Version bump recommended</strong></td>
+</tr>
+<tr>
+<td>Comment only change</td>
+<td>✅ Yes</td>
+<td>Cache OK</td>
+</tr>
+<tr>
+<td>Documentation change</td>
+<td>✅ Yes</td>
+<td>Cache OK (no rebuild needed)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="q-how-do-i-know-if-cache-caused-a-problem">Q: How do I know if cache caused a problem?</h3>
+<p><strong>A</strong>: Check these symptoms:</p>
+<ol>
+<li>Code changed but feature doesn&#39;t work</li>
+<li>Logs show old version number</li>
+<li>Build completed very quickly (&lt;10 min but with code changes)</li>
+<li>GitHub Actions log shows many &quot;CACHED&quot; entries</li>
+</ol>
+<h3 id="q-what-s-the-fastest-way-to-fix-cache-issues">Q: What&#39;s the fastest way to fix cache issues?</h3>
+<p><strong>A</strong>: Version bump in main.cpp (3 minutes total)</p>
+<ol>
+<li>Edit version string (30 sec)</li>
+<li>Commit and push (30 sec)</li>
+<li>Wait for build (10-15 min)</li>
+<li>Deploy (3-5 min)</li>
+</ol>
+<h3 id="q-should-i-always-disable-cache">Q: Should I always disable cache?</h3>
+<p><strong>A</strong>: No! Cache is good for:</p>
+<ul>
+<li>Fast iteration during development</li>
+<li>Rebuilding after minor changes</li>
+<li>Saving CI/CD minutes</li>
+</ul>
+<p>Just be aware of its behavior and verify deployments.</p>
+<h3 id="q-can-i-prevent-this-automatically">Q: Can I prevent this automatically?</h3>
+<p><strong>A</strong>: Partially. Use:</p>
+<ol>
+<li>Pre-deployment check script</li>
+<li>Version argument in Dockerfile</li>
+<li>Automated tests that verify new features</li>
+</ol>
+<hr>
+<h2 id="historical-issues">Historical Issues</h2>
+<h3 id="2026-01-09-duplicate-detection-feature-missing">2026-01-09: Duplicate Detection Feature Missing</h3>
+<p><strong>Problem</strong>:</p>
+<ul>
+<li>Added <code>checkDuplicateFile()</code> function to main.cpp (commit d0efa45)</li>
+<li>Changed version from v1.1.0 to v1.2.0 (commit 8bb5d73)</li>
+<li>Committed and pushed successfully</li>
+<li>GitHub Actions builds succeeded multiple times</li>
+<li>Deployed to Luckfox 3 times with different cache invalidation attempts</li>
+<li><strong>Feature did not work</strong> - function never called</li>
+<li>Deployed binary showed v1.1.0 (old version) instead of v1.2.0</li>
+<li>Binary missing <code>checkDuplicateFile()</code> function (verified with <code>strings</code> command)</li>
+</ul>
+<p><strong>Root Cause</strong>:</p>
+<ul>
+<li><strong>Conflicting cache backends</strong>: Using BOTH <code>BUILDKIT_INLINE_CACHE=1</code> AND <code>type=gha</code> cache</li>
+<li>BuildKit inline cache (mode=min only) conflicted with GitHub Actions cache (mode=max)</li>
+<li>Cache invalidation attempts failed:<ol>
+<li>Version bump (v1.2.0) - FAILED</li>
+<li>BUILD_ID file addition to Dockerfile - FAILED</li>
+<li>BUILD_ID timestamp update - FAILED</li>
+</ol>
+</li>
+<li>BuildKit used stale cached object files despite:<ul>
+<li>Correct code in GitHub repository (verified)</li>
+<li>Correct commit checked out in build (verified)</li>
+<li>Compilation occurring (verified in logs)</li>
+<li>src/ directory being COPY&#39;d (not showing CACHED)</li>
+</ul>
+</li>
+</ul>
+<p><strong>Investigation Process</strong>:</p>
+<ul>
+<li>Verified commits: d0efa45 (duplicate detection), 8bb5d73 (v1.2.0), e145bc8 (BUILD_ID)</li>
+<li>Checked GitHub repository: Code correct via curl to raw.githubusercontent.com</li>
+<li>Analyzed build logs: Commit e145bc8 checked out, compilation occurred</li>
+<li>Inspected deployed binary: <code>docker exec ... strings /app/pkd-management</code><ul>
+<li>Output: v1.1.0 (not v1.2.0)</li>
+<li>No &quot;checkDuplicateFile&quot; string found</li>
+</ul>
+</li>
+<li>Web search: Found Docker BuildKit known issues with inline cache conflicts</li>
+</ul>
+<p><strong>Solution</strong>:</p>
+<ul>
+<li><strong>Removed <code>BUILDKIT_INLINE_CACHE=1</code> from GitHub Actions workflow</strong></li>
+<li>Used only <code>type=gha</code> cache backend (more reliable per Docker docs)</li>
+<li>Rationale:<ul>
+<li>Inline cache only supports mode=min (final stage only)</li>
+<li>GitHub Actions cache supports mode=max (all stages)</li>
+<li>Using both causes cache conflicts and stale artifacts</li>
+<li>Docker documentation recommends GHA cache for GitHub Actions</li>
+</ul>
+</li>
+</ul>
+<p><strong>Files Modified</strong>:</p>
+<ul>
+<li><code>.github/workflows/build-arm64.yml</code> (removed BUILDKIT_INLINE_CACHE=1)</li>
+</ul>
+<p><strong>Prevention Measures</strong>:</p>
+<ol>
+<li>Created <code>scripts/check-build-freshness.sh</code> - validates build before deployment</li>
+<li>Documented in <code>docs/DOCKER_BUILD_CACHE.md</code> - comprehensive cache guide</li>
+<li>Updated <code>docs/LUCKFOX_DEPLOYMENT.md</code> - deployment procedures</li>
+</ol>
+<p><strong>Lesson Learned</strong>:</p>
+<ul>
+<li>Never mix cache backends (inline + GHA cache = conflicts)</li>
+<li>Always verify build logs for excessive CACHED entries</li>
+<li>Version bump alone insufficient if cache backend flawed</li>
+<li>Test immediately after deployment</li>
+<li>Use automated build freshness validation before deployment</li>
+</ul>
+<hr>
+<h2 id="scripts-summary">Scripts Summary</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+<th>When to Use</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>check-build-freshness.sh</code></td>
+<td>Verify build matches local code</td>
+<td>Before every deployment</td>
+</tr>
+<tr>
+<td><code>deploy-from-github-artifacts.sh</code></td>
+<td>Deploy to Luckfox</td>
+<td>After build complete</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="quick-reference">Quick Reference</h2>
+<p><strong>When you change source code</strong>:</p>
+<pre><code class="language-bash"># 1. Update version in main.cpp
+spdlog::info("Starting ICAO Local PKD Application (v1.X.Y - Feature Name)...");
+
+# 2. Commit with version in message
+git commit -m "feat: Your feature (v1.X.Y)"
+
+# 3. Push
+git push origin feature/openapi-support
+
+# 4. Wait for build (10-15 min)
+
+# 5. Check build freshness
+./scripts/check-build-freshness.sh
+
+# 6. Deploy
+./scripts/deploy-from-github-artifacts.sh pkd-management
+
+# 7. Verify version
+sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management --tail 5"
+
+# 8. Test new feature immediately</code></pre>
+<hr>
+<p><strong>Document Owner</strong>: AI Assistant &amp; kbjung
+<strong>Last Incident</strong>: 2026-01-09
+<strong>Next Review</strong>: After each cache-related issue</p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#critical-issue-build-cache-can-hide-code-changes">⚠️ CRITICAL ISSUE: Build Cache Can Hide Code Changes</a><a href="#the-problem" style="padding-left:1rem">The Problem</a><a href="#why-this-happens" style="padding-left:1rem">Why This Happens</a><a href="#detection-how-to-check-if-cache-is-the-problem">Detection: How to Check if Cache is the Problem</a><a href="#1-github-actions-로그-확인" style="padding-left:1rem">1. GitHub Actions 로그 확인</a><a href="#2-배포-후-버전-확인" style="padding-left:1rem">2. 배포 후 버전 확인</a><a href="#3-기능-테스트" style="padding-left:1rem">3. 기능 테스트</a><a href="#solutions-how-to-force-cache-invalidation">Solutions: How to Force Cache Invalidation</a><a href="#solution-1-version-bump-recommended" style="padding-left:1rem">Solution 1: Version Bump (Recommended) ⭐</a><a href="#solution-2-dummy-file-update" style="padding-left:1rem">Solution 2: Dummy File Update</a><a href="#solution-3-github-actions-cache-수동-삭제" style="padding-left:1rem">Solution 3: GitHub Actions Cache 수동 삭제</a><a href="#solution-4-workflow-dispatch-with-no-cache" style="padding-left:1rem">Solution 4: Workflow Dispatch with no-cache</a><a href="#prevention-automated-cache-validation">Prevention: Automated Cache Validation</a><a href="#pre-deployment-check-script" style="padding-left:1rem">Pre-Deployment Check Script</a><a href="#dockerfile-improvement" style="padding-left:1rem">Dockerfile Improvement</a><a href="#best-practices">Best Practices</a><a href="#1-always-version-your-changes" style="padding-left:1rem">1. Always Version Your Changes</a><a href="#2-verify-build-logs" style="padding-left:1rem">2. Verify Build Logs</a><a href="#3-test-immediately-after-deployment" style="padding-left:1rem">3. Test Immediately After Deployment</a><a href="#4-document-version-in-commit" style="padding-left:1rem">4. Document Version in Commit</a><a href="#5-use-check-script-before-deployment" style="padding-left:1rem">5. Use Check Script Before Deployment</a><a href="#cache-decision-matrix">Cache Decision Matrix</a><a href="#troubleshooting">Troubleshooting</a><a href="#q-how-do-i-know-if-cache-caused-a-problem" style="padding-left:1rem">Q: How do I know if cache caused a problem?</a><a href="#q-what-s-the-fastest-way-to-fix-cache-issues" style="padding-left:1rem">Q: What&#39;s the fastest way to fix cache issues?</a><a href="#q-should-i-always-disable-cache" style="padding-left:1rem">Q: Should I always disable cache?</a><a href="#q-can-i-prevent-this-automatically" style="padding-left:1rem">Q: Can I prevent this automatically?</a><a href="#historical-issues">Historical Issues</a><a href="#2026-01-09-duplicate-detection-feature-missing" style="padding-left:1rem">2026-01-09: Duplicate Detection Feature Missing</a><a href="#scripts-summary">Scripts Summary</a><a href="#quick-reference">Quick Reference</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

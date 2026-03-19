@@ -1,0 +1,4266 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture & Design Principles — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html" class="active">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>System Architecture & Design Principles</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-r-spkd-system-architecture-design-principles">FASTpass(R) SPKD -- System Architecture &amp; Design Principles</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18
+<strong>Status</strong>: Production Ready (Multi-DBMS: PostgreSQL + Oracle)</p>
+<hr>
+<h2 id="table-of-contents">Table of Contents</h2>
+<h3 id="part-1-system-architecture">Part 1: System Architecture</h3>
+<ol>
+<li><a href="#system-overview">System Overview</a></li>
+<li><a href="#technical-architecture-diagram">Technical Architecture Diagram</a></li>
+<li><a href="#microservices-architecture">Microservices Architecture</a></li>
+<li><a href="#data-layer-architecture">Data Layer Architecture</a></li>
+<li><a href="#frontend-architecture">Frontend Architecture</a></li>
+<li><a href="#api-gateway-architecture">API Gateway Architecture</a></li>
+<li><a href="#component-details">Component Details</a></li>
+<li><a href="#data-flow-diagrams">Data Flow Diagrams</a></li>
+<li><a href="#deployment-architecture">Deployment Architecture</a></li>
+<li><a href="#security-architecture">Security Architecture</a></li>
+<li><a href="#technology-stack-summary">Technology Stack Summary</a></li>
+<li><a href="#performance-metrics">Performance Metrics</a></li>
+<li><a href="#monitoring--observability">Monitoring &amp; Observability</a></li>
+</ol>
+<h3 id="part-2-design-principles-patterns">Part 2: Design Principles &amp; Patterns</h3>
+<ol start="14">
+<li><a href="#core-design-principles">Core Design Principles</a></li>
+<li><a href="#ddd-domain-driven-design-structure">DDD (Domain-Driven Design) Structure</a></li>
+<li><a href="#servicecontainer-pattern-centralized-di">ServiceContainer Pattern (Centralized DI)</a></li>
+<li><a href="#maincpp-minimization-pattern">main.cpp Minimization Pattern</a></li>
+<li><a href="#strategy-pattern">Strategy Pattern</a></li>
+<li><a href="#single-responsibility-principle-srp">Single Responsibility Principle (SRP)</a></li>
+<li><a href="#query-executor-pattern-database-abstraction">Query Executor Pattern (Database Abstraction)</a></li>
+<li><a href="#query-helpers-pattern">Query Helpers Pattern</a></li>
+<li><a href="#provideradapter-pattern-validation-infrastructure">Provider/Adapter Pattern (Validation Infrastructure)</a></li>
+<li><a href="#shared-libraries">Shared Libraries</a></li>
+<li><a href="#code-structure-rules">Code Structure Rules</a></li>
+<li><a href="#extension-guidelines">Extension Guidelines</a></li>
+<li><a href="#anti-patterns">Anti-Patterns</a></li>
+<li><a href="#code-review-checklist">Code Review Checklist</a></li>
+</ol>
+<h3 id="appendix">Appendix</h3>
+<ol start="28">
+<li><a href="#future-enhancements">Future Enhancements</a></li>
+</ol>
+<hr>
+<h1 id="part-1-system-architecture">Part 1: System Architecture</h1>
+<hr>
+<h2 id="system-overview">System Overview</h2>
+<p>ICAO Local PKD is a <strong>microservices architecture</strong>-based integrated platform for e-Passport certificate management and verification.</p>
+<h3 id="core-principles">Core Principles</h3>
+<ul>
+<li><strong>Microservices</strong>: 5 independently deployable services</li>
+<li><strong>Multi-DBMS</strong>: PostgreSQL + Oracle runtime switching (DB_TYPE environment variable)</li>
+<li><strong>Data Consistency</strong>: DB-LDAP dual storage with automatic synchronization (Reconciliation)</li>
+<li><strong>High Performance</strong>: C++20 high-performance backend</li>
+<li><strong>Modern UI</strong>: React 19 + TypeScript + Tailwind CSS 4</li>
+<li><strong>Security First</strong>: JWT authentication, RBAC, OWASP security hardening</li>
+<li><strong>Shared Validation</strong>: icao::validation shared library (86 unit tests)</li>
+</ul>
+<h3 id="pkd-and-eac-pki-role-separation">PKD and EAC PKI Role Separation</h3>
+<p>This system is specialized for <strong>ICAO 9303 Passive Authentication (PA)</strong> and is independent from the EU EAC (Extended Access Control) system.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Category</th>
+<th>This System (PKD)</th>
+<th>EAC PKI (Separate)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Purpose</strong></td>
+<td>Chip data integrity verification (PA)</td>
+<td>Protected biometric access (TA)</td>
+</tr>
+<tr>
+<td><strong>Certificates</strong></td>
+<td>CSCA -&gt; DSC (X.509)</td>
+<td>CVCA -&gt; DV -&gt; IS (CVC)</td>
+</tr>
+<tr>
+<td><strong>Protected Data</strong></td>
+<td>DG1(MRZ), DG2(Face)</td>
+<td>DG3(Fingerprint), DG4(Iris)</td>
+</tr>
+<tr>
+<td><strong>Distribution</strong></td>
+<td>ICAO PKD Server (Public)</td>
+<td>Bilateral agreement</td>
+</tr>
+<tr>
+<td><strong>EU Passport</strong></td>
+<td><strong>Required</strong> (All countries)</td>
+<td>Only for fingerprint/iris access</td>
+</tr>
+</tbody></table></div>
+<p>EU passport processing uses PKD for PA (Stage 1), and optionally EAC TA (Stage 3) via separate EAC PKI.
+No certificate sharing between the two systems; authentication flows are independent.
+See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PLAN.md</a> Section 1.4 for details.</p>
+<hr>
+<h2 id="technical-architecture-diagram">Technical Architecture Diagram</h2>
+<h3 id="system-overview-v2-37-0">System Overview (v2.37.0)</h3>
+<pre class="mermaid">graph TB
+    %% Layer 1: External Access
+    subgraph L1[" "]
+        direction TB
+        L1Title["Layer 1: External Access"]
+        subgraph L1Nodes[" "]
+            direction LR
+            User["User Browser"]
+            ICAOPortal["ICAO Portal<br/>pkd.icao.int"]
+        end
+    end
+
+    %% Layer 2: DMZ
+    subgraph L2[" "]
+        direction TB
+        L2Title["Layer 2: DMZ - Public Ports"]
+        subgraph L2Nodes[" "]
+            direction LR
+            Frontend["Frontend<br/>React 19 SPA<br/>Port 3080"]
+            APIGateway["API Gateway<br/>Nginx Reverse Proxy<br/>Port 80/443/8080"]
+        end
+    end
+
+    %% Layer 3: Application Services
+    subgraph L3[" "]
+        direction TB
+        L3Title["Layer 3: Application Services - C++ Microservices"]
+        subgraph L3Nodes[" "]
+            direction LR
+            PKD["PKD Management<br/>Upload & Validation<br/>Port 8081"]
+            PA["PA Service<br/>Passive Auth Verify<br/>Port 8082"]
+            Relay["PKD Relay<br/>DB-LDAP Sync<br/>Port 8083"]
+            Monitoring["Monitoring<br/>System Metrics<br/>Port 8084"]
+            AI["AI Analysis<br/>ML Forensics<br/>Port 8085"]
+        end
+    end
+
+    %% Layer 4: Data Storage
+    subgraph L4[" "]
+        direction TB
+        L4Title["Layer 4: Data Storage - Persistent Layer"]
+        subgraph L4Nodes[" "]
+            direction LR
+            DB[("PostgreSQL / Oracle<br/>31K Certificates<br/>Port 5432 / 1521")]
+            LDAPCluster[("LDAP MMR Cluster<br/>Master 1 + Master 2<br/>Ports 3891/3892")]
+        end
+    end
+
+    %% Layer 5: Infrastructure
+    subgraph L5[" "]
+        direction TB
+        L5Title["Layer 5: Infrastructure - Docker Compose Runtime"]
+        Docker["Docker Compose Network"]
+    end
+
+    %% Vertical connections
+    User -->|1. HTTPS| Frontend
+    User -->|2. REST API| APIGateway
+
+    Frontend -->|3. Proxy| APIGateway
+
+    APIGateway -->|4. Route| PKD
+    APIGateway -.-> PA
+    APIGateway -.-> Relay
+    APIGateway -.-> Monitoring
+    APIGateway -.-> AI
+
+    PKD -->|5. Query| DB
+    PA --> DB
+    Relay --> DB
+
+    PKD -->|6. LDAP SLB| LDAPCluster
+    PA --> LDAPCluster
+    Relay --> LDAPCluster
+
+    DB -.->|7. Runtime| Docker
+    LDAPCluster -.-> Docker
+
+    ICAOPortal -.->|Scraping| Relay
+
+    %% Styling
+    classDef titleStyle fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-weight:bold,font-size:14px
+    class L1Title,L2Title,L3Title,L4Title,L5Title titleStyle
+
+    classDef external fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef dmz fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef app fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef data fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef infra fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    class User,ICAOPortal external
+    class Frontend,APIGateway dmz
+    class PKD,PA,Relay,Monitoring,AI app
+    class DB,LDAPCluster data
+    class Docker infra
+
+    classDef containerStyle fill:none,stroke:#475569,stroke-width:1px,stroke-dasharray:5 5
+    class L1,L2,L3,L4,L5 containerStyle
+
+    classDef nodeContainer fill:none,stroke:none
+    class L1Nodes,L2Nodes,L3Nodes,L4Nodes nodeContainer</pre>
+<p><strong>Architecture Highlights</strong>:</p>
+<ol>
+<li><strong>5-Layer Hierarchy</strong>: Clear layer separation for Separation of Concerns</li>
+<li><strong>Minimal Coupling</strong>: Each layer depends only on the layer directly below (Vertical Flow)</li>
+<li><strong>Gateway Pattern</strong>: API Gateway (nginx) provides a single entry point, App-level LDAP SLB</li>
+<li><strong>Data Abstraction</strong>: LDAP MMR cluster integrates 2 Master nodes</li>
+<li><strong>Simplified Topology</strong>: Minimized connection lines to reduce system complexity</li>
+</ol>
+<h3 id="layer-description">Layer Description</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Purpose</th>
+<th>Components</th>
+<th>Key Characteristics</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Layer 1: External</strong></td>
+<td>External access and integration</td>
+<td>User, ICAO Portal</td>
+<td>Public Internet</td>
+</tr>
+<tr>
+<td><strong>Layer 2: DMZ</strong></td>
+<td>Public service zone</td>
+<td>Frontend, API Gateway</td>
+<td>Ports 3080, 80/443/8080</td>
+</tr>
+<tr>
+<td><strong>Layer 3: Application</strong></td>
+<td>Business logic processing</td>
+<td>PKD, PA, Relay, Monitoring (C++20), AI (Python)</td>
+<td>Internal Network</td>
+</tr>
+<tr>
+<td><strong>Layer 4: Data</strong></td>
+<td>Data persistence</td>
+<td>PostgreSQL/Oracle, LDAP MMR</td>
+<td>Internal Storage + App-level SLB</td>
+</tr>
+<tr>
+<td><strong>Layer 5: Infrastructure</strong></td>
+<td>Container runtime</td>
+<td>Docker Compose</td>
+<td>Platform Layer</td>
+</tr>
+</tbody></table></div>
+<h3 id="data-flow-summary">Data Flow Summary</h3>
+<p><strong>Request Flow</strong> (Top -&gt; Bottom):</p>
+<pre><code>User -&gt; Frontend -&gt; API Gateway -&gt; Services (PKD/PA/Relay) -&gt; Data (PostgreSQL/LDAP)</code></pre>
+<p><strong>Service Architecture</strong>:</p>
+<ul>
+<li><strong>5 Microservices</strong>: PKD Management (:8081), PA Service (:8082), PKD Relay (:8083), Monitoring (:8084), AI Analysis (:8085)</li>
+<li><strong>2 Data Stores</strong>: PostgreSQL/Oracle (31,212 certificates), LDAP MMR Cluster (Master 1+2)</li>
+<li><strong>1 Gateway Node</strong>: API Gateway (HTTP :80 / HTTPS :443), App-level LDAP SLB</li>
+<li><strong>1 Frontend</strong>: React 19 SPA (29 pages)</li>
+</ul>
+<hr>
+<h2 id="microservices-architecture">Microservices Architecture</h2>
+<h3 id="service-layout">Service Layout</h3>
+<pre><code>services/
++-- pkd-management/        # PKD Management Service (Port: 8081)
+|   +-- File Upload &amp; Processing (LDIF, Master List)
+|   +-- Certificate Search &amp; Export
+|   +-- ICAO Auto Sync
+|   +-- API Client Authentication (X-API-Key)
+|
++-- pa-service/            # Passive Authentication Service (Port: 8082)
+|   +-- SOD Verification
+|   +-- DG1/DG2 Parsing
+|   +-- CSCA LDAP Lookup
+|
++-- pkd-relay-service/     # PKD Relay Service (Port: 8083)
+|   +-- DB-LDAP Synchronization
+|   +-- Auto Reconciliation
+|   +-- Sync Status Monitoring
+|
++-- monitoring-service/    # Monitoring Service (Port: 8084)
+|   +-- System Resource Monitoring (CPU, Memory, Disk, Network)
+|   +-- Service Health Checks (HTTP Probes)
+|   +-- DB-Independent Architecture (no PostgreSQL/Oracle dependency)
+|
++-- ai-analysis/           # AI Analysis Service (Port: 8085)
+    +-- ML Anomaly Detection (Isolation Forest + LOF)
+    +-- Forensic Risk Scoring
+    +-- Pattern Analysis (Python/FastAPI)</code></pre>
+<h3 id="service-communication">Service Communication</h3>
+<pre><code>+----------------+
+|   Frontend     | :3000
++-------+--------+
+        |
+        v
++----------------+
+| API Gateway    | :8080 (Nginx)
++-------+--------+
+        |
+        +------------------+------------------+------------------+------------------+
+        v                  v                  v                  v                  v
++----------------+   +----------------+   +----------------+   +----------------+   +----------------+
+|     PKD        |   |      PA        |   |  PKD Relay     |   | Monitoring     |   |     AI         |
+|  Management    |   |   Service      |   |   Service      |   |   Service      |   |  Analysis      |
+|    :8081       |   |    :8082       |   |    :8083       |   |    :8084       |   |    :8085       |
++-------+--------+   +-------+--------+   +-------+--------+   +----------------+   +-------+--------+
+        |                     |                     |                                         |
+        +---------------------+---------------------+-----------------------------------------+
+                              |
+                              v
+               +------------------------+
+               |    PostgreSQL DB       |
+               |    OpenLDAP Cluster    |
+               +------------------------+</code></pre>
+<h3 id="1-pkd-management-service-port-8081">1. PKD Management Service (Port 8081)</h3>
+<pre class="mermaid">flowchart LR
+    subgraph API["API Layer"]
+        Upload["Upload API<br/>LDIF/ML"]
+        Cert["Certificate API<br/>Search/Export"]
+        Health["Health API<br/>DB/LDAP"]
+        ICAO["ICAO Sync API<br/>Version"]
+    end
+
+    subgraph Domain["Domain Layer"]
+        UploadDomain["Upload Domain<br/>Business Logic"]
+        CertDomain["Certificate Domain<br/>Validation"]
+        IcaoDomain["ICAO Domain<br/>Version Tracking"]
+    end
+
+    subgraph Service["Service Layer"]
+        UploadService["Upload Service<br/>File Processing"]
+        CertService["Certificate Service<br/>LDAP Operations"]
+        IcaoService["ICAO Service<br/>HTML Parsing"]
+    end
+
+    subgraph Repo["Repository Layer"]
+        UploadRepo["Upload Repository<br/>PostgreSQL"]
+        CertRepo["Certificate Repository<br/>LDAP"]
+        IcaoRepo["ICAO Repository<br/>PostgreSQL"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        LDIF["LDIF Processor"]
+        CMS["CMS Parser"]
+        HTTP["HTTP Client"]
+        HTML["HTML Parser"]
+        Email["Email Sender"]
+    end
+
+    subgraph Strategy["Strategy"]
+        Auto["Auto Processing"]
+        Manual["Manual Processing"]
+    end
+
+    subgraph Data["Data Store"]
+        DB[("PostgreSQL")]
+        LDAPS[("LDAP")]
+    end
+
+    Upload --> UploadDomain --> UploadService --> UploadRepo
+    Cert --> CertDomain --> CertService --> CertRepo
+    ICAO --> IcaoDomain --> IcaoService --> IcaoRepo
+    Health --> CertService
+
+    UploadService --> LDIF
+    UploadService --> CMS
+    UploadService --> Auto
+    UploadService --> Manual
+
+    IcaoService --> HTTP
+    IcaoService --> HTML
+    IcaoService --> Email
+
+    UploadRepo --> DB
+    CertRepo --> LDAPS
+    IcaoRepo --> DB
+
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Strategy fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Data fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    style ICAO fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoRepo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style HTTP fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style HTML fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Email fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li>Clean Architecture (6 Layers) with ServiceContainer (centralized DI, pimpl pattern)</li>
+<li>Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler, CsrHandler (7), MiscHandler</li>
+<li>Query Helpers (<code>common::db::</code>) -- database-agnostic utility functions across 16 repositories</li>
+<li><strong>CSR Management</strong>: ICAO PKD CSR generation (RSA-2048 + SHA256withRSA), external CSR Import, ICAO-issued certificate registration</li>
+<li><strong>DSC Pending Approval</strong>: DSC extracted from PA verification -&gt; auto-registration -&gt; admin approval workflow</li>
+<li><strong>PII Encryption</strong>: AES-256-GCM authenticated encryption (Personal Information Protection Act Article 29 -- CSR private key, PII fields)</li>
+<li>ICAO Auto Sync with Daily Scheduler</li>
+<li>LDIF/Master List Parsing + Individual Certificate Upload (PEM/DER/P7B/DL/CRL)</li>
+<li>Trust Chain Validation (icao::validation shared library)</li>
+<li>Certificate Search &amp; Export (DIT-structured ZIP)</li>
+<li>API Client Authentication (X-API-Key, SHA-256 hash, per-client Rate Limiting)</li>
+<li>JWT Authentication + RBAC (admin/user)</li>
+<li>DSC_NC Report, CRL Report, Certificate Quality Report, PA Lookup API</li>
+<li>Multi-DBMS (PostgreSQL + Oracle)</li>
+</ul>
+<hr>
+<h3 id="2-pa-service-port-8082">2. PA Service (Port 8082)</h3>
+<pre class="mermaid">flowchart LR
+    subgraph API["API Layer"]
+        Verify["PA Verify API<br/>SOD and DG"]
+        ParseSOD["SOD Parsing<br/>Metadata"]
+        ParseDG1["DG1 Parsing<br/>MRZ"]
+        ParseDG2["DG2 Parsing<br/>Face"]
+        Stats["Statistics<br/>Metrics"]
+    end
+
+    subgraph Logic["Business Logic"]
+        SODVerify["SOD Verifier<br/>CMS"]
+        HashVerify["Hash Verifier<br/>DG"]
+        ChainVerify["Trust Chain<br/>CSCA-DSC"]
+        MRZParser["MRZ Parser<br/>TD1/TD2/TD3"]
+        ImageExtractor["Image Extractor<br/>JPEG"]
+    end
+
+    subgraph DataAccess["Data Access"]
+        PARepo["PA Repository<br/>PostgreSQL"]
+        LDAPRepo["LDAP Repository<br/>Certificates"]
+    end
+
+    subgraph Crypto["Cryptography Layer"]
+        OpenSSL["OpenSSL 3.x<br/>CMS/X.509"]
+    end
+
+    subgraph DataStore["Data Store"]
+        DB[("PostgreSQL")]
+        LDAPS[("LDAP")]
+    end
+
+    Verify --> SODVerify
+    Verify --> HashVerify
+    Verify --> ChainVerify
+
+    ParseSOD --> SODVerify
+    ParseDG1 --> MRZParser
+    ParseDG2 --> ImageExtractor
+
+    SODVerify --> OpenSSL
+    HashVerify --> OpenSSL
+    ChainVerify --> LDAPRepo
+    ChainVerify --> OpenSSL
+
+    Stats --> PARepo
+
+    PARepo --> DB
+    LDAPRepo --> LDAPS
+
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Logic fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataAccess fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Crypto fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataStore fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    style Verify fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style OpenSSL fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li>ICAO 9303 PA Compliance (Part 10, 11, 12)</li>
+<li>SOD CMS Verification + DG Hash Validation</li>
+<li>Trust Chain Validation (icao::validation shared library)</li>
+<li>CRL Revocation Checking (RFC 5280)</li>
+<li>DSC Auto-Registration (PA_EXTRACTED source type)</li>
+<li>DSC Non-Conformant (nc-data) Support</li>
+<li>MRZ Parsing (TD1/TD2/TD3) + Face Image Extraction (JPEG2000 conversion)</li>
+<li>ServiceContainer (pImpl DI), Handler Pattern: PaHandler (9), HealthHandler (3), InfoHandler (4)</li>
+<li>Multi-DBMS (PostgreSQL + Oracle)</li>
+</ul>
+<hr>
+<h3 id="3-pkd-relay-service-port-8083">3. PKD Relay Service (Port 8083)</h3>
+<pre class="mermaid">flowchart LR
+    subgraph API["API Layer"]
+        RelayHealth["Relay Health<br/>Status"]
+        RelayStatus["Relay Status<br/>Statistics"]
+        IcaoCheck["ICAO Check<br/>Version"]
+    end
+
+    subgraph Domain["Domain Layer"]
+        IcaoDomain["ICAO Domain<br/>Version Tracking"]
+        RelayDomain["Relay Domain<br/>External Integration"]
+    end
+
+    subgraph Service["Service Layer"]
+        IcaoService["ICAO Service<br/>HTML Parsing"]
+        RelayService["Relay Service<br/>Request Relay"]
+    end
+
+    subgraph Repo["Repository Layer"]
+        IcaoRepo["ICAO Repository<br/>PostgreSQL"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        HTTP["HTTP Client"]
+        HTML["HTML Parser"]
+        Email["Email Sender"]
+    end
+
+    subgraph Scheduler["Scheduler"]
+        CronJob["Cron Job<br/>08:00 KST"]
+    end
+
+    subgraph DataStore["Data Store"]
+        DB[("PostgreSQL")]
+    end
+
+    RelayHealth --> RelayService
+    RelayStatus --> IcaoService
+    IcaoCheck --> IcaoDomain
+
+    IcaoDomain --> IcaoService
+    RelayDomain --> RelayService
+
+    IcaoService --> HTTP
+    IcaoService --> HTML
+    IcaoService --> Email
+    IcaoService --> IcaoRepo
+
+    IcaoRepo --> DB
+
+    CronJob --> IcaoCheck
+
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Scheduler fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataStore fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    style IcaoCheck fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li>ICAO PKD external integration (Version Detection)</li>
+<li>HTML Scraping (Table + Link Fallback)</li>
+<li>DB-LDAP Reconciliation (CSCA, DSC, CRL)</li>
+<li>Daily Auto Version Check Scheduler</li>
+<li>ServiceContainer (pImpl DI), Handler Pattern: SyncHandler (10), ReconciliationHandler (4), HealthHandler (1)</li>
+<li>SyncScheduler with callback-based DI</li>
+<li>Clean Architecture (4 Layers)</li>
+<li>Multi-DBMS (PostgreSQL + Oracle)</li>
+</ul>
+<hr>
+<h3 id="4-monitoring-service-port-8084">4. Monitoring Service (Port 8084)</h3>
+<p><strong>Key Features</strong>:</p>
+<ul>
+<li>System Resource Monitoring (CPU, Memory, Disk, Network)</li>
+<li>Service Health Checks (HTTP Probes to all backend services)</li>
+<li>DB-Independent Architecture (no PostgreSQL/Oracle dependency)</li>
+<li>Handler Pattern: MonitoringHandler (3 endpoints + SystemMetricsCollector + ServiceHealthChecker)</li>
+<li>JSON Metrics API</li>
+</ul>
+<hr>
+<h2 id="data-layer-architecture">Data Layer Architecture</h2>
+<h3 id="database-schema">Database Schema</h3>
+<blockquote>
+<p><strong>Multi-DBMS</strong>: PostgreSQL 15 / Oracle XE 21c 동시 지원. 아래 스키마는 DB-agnostic 표현이며, 런타임에 <code>DB_TYPE</code> 환경변수로 선택됩니다.</p>
+</blockquote>
+<h4 id="core-인증서-검증">Core — 인증서 &amp; 검증</h4>
+<pre class="mermaid">erDiagram
+    UPLOADED_FILE {
+        UUID id PK
+    }
+    CERTIFICATE {
+        UUID id PK
+        UUID upload_id FK
+    }
+    CRL {
+        UUID id PK
+        UUID upload_id FK
+    }
+    MASTER_LIST {
+        UUID id PK
+        UUID upload_id FK
+    }
+    DEVIATION_LIST {
+        UUID id PK
+        UUID upload_id FK
+    }
+    VALIDATION_RESULT {
+        UUID id PK
+        UUID certificate_id FK
+        UUID upload_id FK
+    }
+    LINK_CERTIFICATE {
+        UUID id PK
+        UUID upload_id FK
+    }
+    DUPLICATE_CERTIFICATE {
+        UUID id PK
+        UUID upload_id FK
+    }
+    REVOKED_CERTIFICATE {
+        UUID id PK
+        UUID crl_id FK
+    }
+
+    UPLOADED_FILE ||--o{ CERTIFICATE : "1:N"
+    UPLOADED_FILE ||--o{ CRL : "1:N"
+    UPLOADED_FILE ||--o{ MASTER_LIST : "1:N"
+    UPLOADED_FILE ||--o{ DEVIATION_LIST : "1:N"
+    UPLOADED_FILE ||--o{ LINK_CERTIFICATE : "1:N"
+    UPLOADED_FILE ||--o{ DUPLICATE_CERTIFICATE : "1:N"
+    CERTIFICATE ||--o{ VALIDATION_RESULT : "1:N"
+    UPLOADED_FILE ||--o{ VALIDATION_RESULT : "1:N"
+    CRL ||--o{ REVOKED_CERTIFICATE : "1:N"</pre>
+<h4 id="pa-sync-api">PA &amp; Sync &amp; API</h4>
+<pre class="mermaid">erDiagram
+    PA_VERIFICATION {
+        UUID id PK
+    }
+    PA_DATA_GROUP {
+        UUID id PK
+        UUID verification_id FK
+    }
+    PENDING_DSC_REGISTRATION {
+        UUID id PK
+    }
+    SYNC_STATUS {
+        INTEGER id PK
+    }
+    RECONCILIATION_SUMMARY {
+        UUID id PK
+        INTEGER sync_status_id FK
+    }
+    RECONCILIATION_LOG {
+        INTEGER id PK
+        UUID summary_id FK
+    }
+    USERS {
+        UUID id PK
+    }
+    AUTH_AUDIT_LOG {
+        UUID id PK
+        UUID user_id FK
+    }
+    OPERATION_AUDIT_LOG {
+        UUID id PK
+        UUID user_id FK
+    }
+    API_CLIENTS {
+        UUID id PK
+        UUID created_by FK
+    }
+    API_CLIENT_USAGE_LOG {
+        UUID id PK
+        UUID client_id FK
+    }
+    API_CLIENT_REQUESTS {
+        UUID id PK
+        UUID reviewed_by FK
+    }
+    CSR_REQUEST {
+        UUID id PK
+    }
+    AI_ANALYSIS_RESULT {
+        UUID id PK
+    }
+    CVC_CERTIFICATE {
+        UUID id PK
+    }
+    EAC_TRUST_CHAIN {
+        UUID id PK
+        UUID is_certificate_id FK
+    }
+
+    PA_VERIFICATION ||--o{ PA_DATA_GROUP : "1:N"
+    SYNC_STATUS ||--o{ RECONCILIATION_SUMMARY : "1:N"
+    RECONCILIATION_SUMMARY ||--o{ RECONCILIATION_LOG : "1:N"
+    USERS ||--o{ AUTH_AUDIT_LOG : "1:N"
+    USERS ||--o{ OPERATION_AUDIT_LOG : "1:N"
+    USERS ||--o{ API_CLIENTS : "created_by"
+    USERS ||--o{ API_CLIENT_REQUESTS : "reviewed_by"
+    API_CLIENTS ||--o{ API_CLIENT_USAGE_LOG : "1:N"
+    CVC_CERTIFICATE ||--o{ EAC_TRUST_CHAIN : "1:N"</pre>
+<p><strong>총 37개 테이블</strong> — 15개 카테고리:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>카테고리</th>
+<th>테이블</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>인증서 관리</strong></td>
+<td>uploaded_file, certificate, crl, master_list, deviation_list, deviation_entry</td>
+<td>업로드, X.509 인증서, CRL, Master List, Deviation List</td>
+</tr>
+<tr>
+<td><strong>인증서 검증</strong></td>
+<td>validation_result, revoked_certificate</td>
+<td>신뢰 체인 검증, CRL 폐지 확인</td>
+</tr>
+<tr>
+<td><strong>중복 추적</strong></td>
+<td>duplicate_certificate, certificate_duplicates</td>
+<td>업로드별 중복 인증서 추적</td>
+</tr>
+<tr>
+<td><strong>Link Certificate</strong></td>
+<td>link_certificate, link_certificate_issuers</td>
+<td>CSCA 키 전환 Link 인증서</td>
+</tr>
+<tr>
+<td><strong>PA 검증</strong></td>
+<td>pa_verification, pa_data_group</td>
+<td>Passive Authentication 요청/결과, DG 해시</td>
+</tr>
+<tr>
+<td><strong>DSC 등록</strong></td>
+<td>pending_dsc_registration</td>
+<td>PA 자동 등록 → 관리자 승인 워크플로</td>
+</tr>
+<tr>
+<td><strong>동기화</strong></td>
+<td>sync_status, sync_config, reconciliation_summary, reconciliation_log, revalidation_history, crl_revocation_log</td>
+<td>DB↔LDAP 동기화, 재검증, CRL 체크</td>
+</tr>
+<tr>
+<td><strong>LDAP 마이그레이션</strong></td>
+<td>ldap_dn_migration_status</td>
+<td>V2 DN 마이그레이션 진행 추적</td>
+</tr>
+<tr>
+<td><strong>감사</strong></td>
+<td>audit_log, auth_audit_log, operation_audit_log</td>
+<td>인증, 업무 운영 감사 로그</td>
+</tr>
+<tr>
+<td><strong>사용자</strong></td>
+<td>users</td>
+<td>RBAC 사용자 계정</td>
+</tr>
+<tr>
+<td><strong>API 클라이언트</strong></td>
+<td>api_clients, api_client_usage_log, api_client_requests</td>
+<td>외부 API 키 관리, 사용량 추적, 접근 신청</td>
+</tr>
+<tr>
+<td><strong>코드 관리</strong></td>
+<td>code_master</td>
+<td>중앙 코드/상태/열거형 관리 (21개 카테고리)</td>
+</tr>
+<tr>
+<td><strong>ICAO 버전</strong></td>
+<td>icao_pkd_versions</td>
+<td>ICAO PKD 자동 동기화 버전 추적</td>
+</tr>
+<tr>
+<td><strong>CSR</strong></td>
+<td>csr_request</td>
+<td>CSR 생성 + 암호화된 개인키 + 발급 인증서</td>
+</tr>
+<tr>
+<td><strong>AI 분석</strong></td>
+<td>ai_analysis_result</td>
+<td>ML 이상 탐지, 포렌식 위험도</td>
+</tr>
+<tr>
+<td><strong>EAC/CVC</strong></td>
+<td>cvc_certificate, eac_trust_chain</td>
+<td>BSI TR-03110 CVC 인증서 (실험적)</td>
+</tr>
+<tr>
+<td><strong>모니터링</strong></td>
+<td>system_metrics, service_health</td>
+<td>시스템 성능, 서비스 상태</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h4 id="테이블-상세-명세">테이블 상세 명세</h4>
+<h5 id="1-core-인증서-관리">1. Core — 인증서 관리</h5>
+<p><strong>uploaded_file</strong> — 업로드 파일 추적</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>file_name</td>
+<td>VARCHAR(255)</td>
+<td>저장 파일명</td>
+</tr>
+<tr>
+<td>original_file_name</td>
+<td>VARCHAR(255)</td>
+<td>원본 파일명</td>
+</tr>
+<tr>
+<td>file_size</td>
+<td>BIGINT</td>
+<td>바이트</td>
+</tr>
+<tr>
+<td>file_hash</td>
+<td>VARCHAR(64)</td>
+<td>SHA-256 해시 (중복 감지)</td>
+</tr>
+<tr>
+<td>file_format</td>
+<td>VARCHAR(20)</td>
+<td>LDIF, ML, PEM, DER, CER, P7B, DL, CRL</td>
+</tr>
+<tr>
+<td>status</td>
+<td>VARCHAR(30)</td>
+<td>PENDING → PROCESSING → COMPLETED/FAILED</td>
+</tr>
+<tr>
+<td>processing_mode</td>
+<td>VARCHAR(10)</td>
+<td>AUTO</td>
+</tr>
+<tr>
+<td>upload_timestamp</td>
+<td>TIMESTAMP</td>
+<td></td>
+</tr>
+<tr>
+<td>csca_count / dsc_count / dsc_nc_count / crl_count / ml_count</td>
+<td>INTEGER</td>
+<td>처리 통계</td>
+</tr>
+<tr>
+<td>validation_valid_count / invalid_count / pending_count / error_count</td>
+<td>INTEGER</td>
+<td>검증 통계</td>
+</tr>
+<tr>
+<td>trust_chain_valid_count / invalid_count</td>
+<td>INTEGER</td>
+<td>신뢰 체인 통계</td>
+</tr>
+<tr>
+<td>icao_compliant_count / non_compliant_count / warning_count</td>
+<td>INTEGER</td>
+<td>ICAO 준수 통계</td>
+</tr>
+</tbody></table></div>
+<p><strong>certificate</strong> — X.509 인증서 (CSCA, DSC, DSC_NC, MLSC)</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>upload_id</td>
+<td>UUID FK</td>
+<td>→ uploaded_file</td>
+</tr>
+<tr>
+<td>certificate_type</td>
+<td>VARCHAR(20)</td>
+<td>CSCA, DSC, DSC_NC, MLSC</td>
+</tr>
+<tr>
+<td>country_code</td>
+<td>VARCHAR(3)</td>
+<td>ISO 3166-1 alpha-2/3</td>
+</tr>
+<tr>
+<td>fingerprint_sha256</td>
+<td>VARCHAR(64) UK</td>
+<td>고유 식별자 (type + fingerprint)</td>
+</tr>
+<tr>
+<td>subject_dn / issuer_dn</td>
+<td>TEXT</td>
+<td>X.500 Distinguished Name</td>
+</tr>
+<tr>
+<td>serial_number</td>
+<td>VARCHAR(100)</td>
+<td></td>
+</tr>
+<tr>
+<td>certificate_data</td>
+<td>BLOB</td>
+<td>DER 인코딩 바이너리</td>
+</tr>
+<tr>
+<td>not_before / not_after</td>
+<td>TIMESTAMP</td>
+<td>유효 기간</td>
+</tr>
+<tr>
+<td>signature_algorithm</td>
+<td>VARCHAR(50)</td>
+<td>SHA256withRSA, SHA256withECDSA 등</td>
+</tr>
+<tr>
+<td>public_key_algorithm</td>
+<td>VARCHAR(30)</td>
+<td>RSA, EC</td>
+</tr>
+<tr>
+<td>public_key_size</td>
+<td>INTEGER</td>
+<td>2048, 4096, 256, 384</td>
+</tr>
+<tr>
+<td>public_key_curve</td>
+<td>VARCHAR(50)</td>
+<td>P-256, brainpoolP256r1 등</td>
+</tr>
+<tr>
+<td>is_self_signed / is_ca</td>
+<td>BOOLEAN</td>
+<td>자체 서명 / CA 여부</td>
+</tr>
+<tr>
+<td>validation_status</td>
+<td>VARCHAR(20)</td>
+<td>VALID, INVALID, PENDING, EXPIRED, REVOKED</td>
+</tr>
+<tr>
+<td>source_type</td>
+<td>VARCHAR(50)</td>
+<td>FILE_UPLOAD, PA_EXTRACTED, LDIF_PARSED, ML_PARSED, DL_PARSED</td>
+</tr>
+<tr>
+<td>stored_in_ldap</td>
+<td>BOOLEAN</td>
+<td>LDAP 저장 여부</td>
+</tr>
+<tr>
+<td>ldap_dn_v2</td>
+<td>VARCHAR(512)</td>
+<td>LDAP DN (V2 정규화)</td>
+</tr>
+</tbody></table></div>
+<p><strong>crl</strong> — 인증서 폐지 목록</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>upload_id</td>
+<td>UUID FK</td>
+<td>→ uploaded_file</td>
+</tr>
+<tr>
+<td>country_code</td>
+<td>VARCHAR(3)</td>
+<td></td>
+</tr>
+<tr>
+<td>issuer_dn</td>
+<td>TEXT</td>
+<td>CRL 발행자</td>
+</tr>
+<tr>
+<td>fingerprint_sha256</td>
+<td>VARCHAR(64) UK</td>
+<td></td>
+</tr>
+<tr>
+<td>this_update / next_update</td>
+<td>TIMESTAMP</td>
+<td>CRL 유효 기간</td>
+</tr>
+<tr>
+<td>crl_binary</td>
+<td>BLOB</td>
+<td>DER 인코딩</td>
+</tr>
+<tr>
+<td>stored_in_ldap</td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p><strong>master_list</strong> — ICAO Master List (CMS SignedData)</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>upload_id</td>
+<td>UUID FK</td>
+<td>→ uploaded_file</td>
+</tr>
+<tr>
+<td>signer_country</td>
+<td>VARCHAR(3)</td>
+<td>Master List 서명 국가</td>
+</tr>
+<tr>
+<td>fingerprint_sha256</td>
+<td>VARCHAR(64)</td>
+<td></td>
+</tr>
+<tr>
+<td>csca_certificate_count</td>
+<td>INTEGER</td>
+<td>포함 CSCA 수</td>
+</tr>
+<tr>
+<td>signer_certificate_id</td>
+<td>UUID FK</td>
+<td>→ certificate (MLSC)</td>
+</tr>
+<tr>
+<td>stored_in_ldap</td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p><strong>deviation_list / deviation_entry</strong> — ICAO Deviation List</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>deviation_list.id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>issuer_country</td>
+<td>VARCHAR(3)</td>
+<td></td>
+</tr>
+<tr>
+<td>deviation_count</td>
+<td>INTEGER</td>
+<td>포함 결함 수</td>
+</tr>
+<tr>
+<td>deviation_entry.defect_type_oid</td>
+<td>VARCHAR(50)</td>
+<td>OID</td>
+</tr>
+<tr>
+<td>deviation_entry.defect_category</td>
+<td>VARCHAR(20)</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h5 id="2-검증-신뢰-체인">2. 검증 &amp; 신뢰 체인</h5>
+<p><strong>validation_result</strong> — 인증서 신뢰 체인 검증 결과</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>certificate_id</td>
+<td>UUID FK</td>
+<td>→ certificate</td>
+</tr>
+<tr>
+<td>upload_id</td>
+<td>UUID FK</td>
+<td>→ uploaded_file</td>
+</tr>
+<tr>
+<td>validation_status</td>
+<td>VARCHAR(20)</td>
+<td>VALID, INVALID, PENDING 등</td>
+</tr>
+<tr>
+<td>trust_chain_valid</td>
+<td>BOOLEAN</td>
+<td>CSCA → DSC 체인</td>
+</tr>
+<tr>
+<td>csca_found / signature_valid / validity_period_valid</td>
+<td>BOOLEAN</td>
+<td>개별 검증 결과</td>
+</tr>
+<tr>
+<td>revocation_status</td>
+<td>VARCHAR(20)</td>
+<td>OK, REVOKED, UNKNOWN</td>
+</tr>
+<tr>
+<td>icao_compliant</td>
+<td>BOOLEAN</td>
+<td>Doc 9303 준수 여부</td>
+</tr>
+<tr>
+<td>icao_violations</td>
+<td>TEXT</td>
+<td>미준수 항목</td>
+</tr>
+<tr>
+<td>trust_chain_path</td>
+<td>JSON</td>
+<td>체인 경로</td>
+</tr>
+</tbody></table></div>
+<p><strong>link_certificate</strong> — CSCA 키 전환 Link Certificate</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>country_code</td>
+<td>VARCHAR(3)</td>
+<td></td>
+</tr>
+<tr>
+<td>fingerprint_sha256</td>
+<td>VARCHAR(64) UK</td>
+<td></td>
+</tr>
+<tr>
+<td>subject_dn / issuer_dn</td>
+<td>TEXT</td>
+<td>신/구 CSCA DN</td>
+</tr>
+<tr>
+<td>certificate_data</td>
+<td>BLOB</td>
+<td></td>
+</tr>
+<tr>
+<td>stored_in_ldap</td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h5 id="3-pa-검증">3. PA 검증</h5>
+<p><strong>pa_verification</strong> — Passive Authentication 검증</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id</td>
+<td>UUID PK</td>
+<td></td>
+</tr>
+<tr>
+<td>issuing_country</td>
+<td>VARCHAR(3)</td>
+<td></td>
+</tr>
+<tr>
+<td>document_number</td>
+<td>VARCHAR(1024)</td>
+<td><strong>PII 암호화</strong> (AES-256-GCM)</td>
+</tr>
+<tr>
+<td>verification_status</td>
+<td>VARCHAR(30)</td>
+<td>VALID, INVALID, ERROR, EXPIRED_VALID</td>
+</tr>
+<tr>
+<td>trust_chain_valid / sod_signature_valid / dg_hashes_valid</td>
+<td>BOOLEAN</td>
+<td>8단계 검증 결과</td>
+</tr>
+<tr>
+<td>crl_status</td>
+<td>VARCHAR(20)</td>
+<td></td>
+</tr>
+<tr>
+<td>dsc_fingerprint / csca_fingerprint</td>
+<td>VARCHAR(64)</td>
+<td>사용된 인증서</td>
+</tr>
+<tr>
+<td>client_ip / user_agent</td>
+<td>VARCHAR(1024)</td>
+<td><strong>PII 암호화</strong></td>
+</tr>
+<tr>
+<td>processing_time_ms</td>
+<td>INTEGER</td>
+<td>처리 시간</td>
+</tr>
+</tbody></table></div>
+<p><strong>pa_data_group</strong> — SOD Data Group 해시</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>verification_id</td>
+<td>UUID FK</td>
+<td>→ pa_verification</td>
+</tr>
+<tr>
+<td>dg_number</td>
+<td>INTEGER</td>
+<td>1~16</td>
+</tr>
+<tr>
+<td>expected_hash / actual_hash</td>
+<td>VARCHAR(128)</td>
+<td>기대값 vs 실제값</td>
+</tr>
+<tr>
+<td>hash_valid</td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h5 id="4-동기화-감사">4. 동기화 &amp; 감사</h5>
+<p><strong>sync_status</strong> — DB↔LDAP 동기화 상태</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>db_csca_count / db_dsc_count / db_crl_count</td>
+<td>INTEGER</td>
+<td>DB 측 수량</td>
+</tr>
+<tr>
+<td>ldap_csca_count / ldap_dsc_count / ldap_crl_count</td>
+<td>INTEGER</td>
+<td>LDAP 측 수량</td>
+</tr>
+<tr>
+<td>total_discrepancy</td>
+<td>INTEGER</td>
+<td>불일치 합계</td>
+</tr>
+<tr>
+<td>db_country_stats / ldap_country_stats</td>
+<td>JSON</td>
+<td>국가별 통계</td>
+</tr>
+</tbody></table></div>
+<p><strong>auth_audit_log</strong> — 인증 감사 로그</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>event_type</td>
+<td>VARCHAR(50)</td>
+<td>LOGIN, LOGOUT, TOKEN_REFRESH 등</td>
+</tr>
+<tr>
+<td>username</td>
+<td>VARCHAR(255)</td>
+<td></td>
+</tr>
+<tr>
+<td>ip_address</td>
+<td>VARCHAR(45)</td>
+<td></td>
+</tr>
+<tr>
+<td>success</td>
+<td>BOOLEAN</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<p><strong>operation_audit_log</strong> — 업무 운영 감사 로그</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>operation_type</td>
+<td>VARCHAR(50)</td>
+<td>UPLOAD, EXPORT, SYNC, CSR_CREATE 등</td>
+</tr>
+<tr>
+<td>resource_type / resource_id</td>
+<td>VARCHAR</td>
+<td>대상 엔티티</td>
+</tr>
+<tr>
+<td>username</td>
+<td>VARCHAR(255)</td>
+<td></td>
+</tr>
+<tr>
+<td>metadata</td>
+<td>JSON</td>
+<td>추가 상세</td>
+</tr>
+</tbody></table></div>
+<h5 id="5-api-사용자">5. API &amp; 사용자</h5>
+<p><strong>api_clients</strong> — 외부 API 클라이언트</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>api_key_hash</td>
+<td>VARCHAR(64) UK</td>
+<td>SHA-256 해시 (원본 키 미저장)</td>
+</tr>
+<tr>
+<td>api_key_prefix</td>
+<td>VARCHAR(16)</td>
+<td>식별용 접두사</td>
+</tr>
+<tr>
+<td>permissions</td>
+<td>JSON</td>
+<td>12개 권한 배열</td>
+</tr>
+<tr>
+<td>rate_limit_per_minute / hour / day</td>
+<td>INTEGER</td>
+<td>Rate Limit 설정</td>
+</tr>
+<tr>
+<td>allowed_ips</td>
+<td>JSON</td>
+<td>IP 화이트리스트</td>
+</tr>
+</tbody></table></div>
+<p><strong>csr_request</strong> — ICAO PKD CSR 관리</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>subject_dn</td>
+<td>VARCHAR(1024)</td>
+<td>CSR Subject</td>
+</tr>
+<tr>
+<td>key_algorithm</td>
+<td>VARCHAR(20)</td>
+<td>RSA-2048, RSA-4096, EC-P256 등</td>
+</tr>
+<tr>
+<td>csr_pem / csr_der</td>
+<td>TEXT / BLOB</td>
+<td>CSR 데이터</td>
+</tr>
+<tr>
+<td>private_key_encrypted</td>
+<td>TEXT</td>
+<td><strong>AES-256-GCM 암호화</strong></td>
+</tr>
+<tr>
+<td>issued_certificate_pem</td>
+<td>TEXT</td>
+<td>발급된 인증서 (선택)</td>
+</tr>
+<tr>
+<td>status</td>
+<td>VARCHAR(20)</td>
+<td>CREATED → SUBMITTED → ISSUED</td>
+</tr>
+</tbody></table></div>
+<h5 id="6-ai-eac">6. AI &amp; EAC</h5>
+<p><strong>ai_analysis_result</strong> — ML 이상 탐지</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>certificate_fingerprint</td>
+<td>VARCHAR(128) UK</td>
+<td></td>
+</tr>
+<tr>
+<td>anomaly_score</td>
+<td>FLOAT</td>
+<td>Isolation Forest 점수</td>
+</tr>
+<tr>
+<td>risk_score / risk_level</td>
+<td>FLOAT / VARCHAR</td>
+<td>포렌식 위험도</td>
+</tr>
+<tr>
+<td>forensic_findings</td>
+<td>JSON</td>
+<td>위험 요인 상세</td>
+</tr>
+</tbody></table></div>
+<p><strong>cvc_certificate</strong> — BSI TR-03110 CVC (실험적)</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>타입</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>cvc_type</td>
+<td>VARCHAR(20)</td>
+<td>CVCA, DV, IS</td>
+</tr>
+<tr>
+<td>car / chr</td>
+<td>VARCHAR(255)</td>
+<td>Certificate Authority/Holder Reference</td>
+</tr>
+<tr>
+<td>chat_oid / chat_role</td>
+<td>VARCHAR</td>
+<td>인증서 권한</td>
+</tr>
+<tr>
+<td>fingerprint_sha256</td>
+<td>VARCHAR(128) UK</td>
+<td></td>
+</tr>
+<tr>
+<td>validation_status</td>
+<td>VARCHAR(20)</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="ldap-directory-structure">LDAP Directory Structure</h3>
+<pre class="mermaid">graph TD
+    Root[dc=ldap,dc=smartcoreinc,dc=com]
+    PKD[dc=pkd]
+    Download[dc=download]
+    Data[dc=data]
+    NCData[dc=nc-data]
+
+    Root --> PKD
+    PKD --> Download
+    Download --> Data
+    Download --> NCData
+
+    subgraph "Data Branch"
+        Data --> C1[c=KR]
+        Data --> C2[c=US]
+        Data --> C3[c=JP]
+        Data --> CN[c=... 193 countries]
+
+        C1 --> CSCA1[o=csca<br/>CSCA Certificates]
+        C1 --> DSC1[o=dsc<br/>DSC Certificates]
+        C1 --> CRL1[o=crl<br/>Certificate Revocation Lists]
+        C1 --> ML1[o=ml<br/>Master Lists]
+    end
+
+    subgraph "NC-Data Branch"
+        NCData --> NC1[c=KR]
+        NCData --> NC2[c=US]
+        NCData --> NCN[c=... countries]
+
+        NC1 --> DSCNC[o=dsc<br/>Non-Conformant DSC]
+    end
+
+    style Root fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Data fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style NCData fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style CSCA1 fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DSC1 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style CRL1 fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style ML1 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>LDAP Schema</strong>:</p>
+<ul>
+<li><strong>objectClass</strong>: pkdDownload, cRLDistributionPoint</li>
+<li><strong>Attributes</strong>: userCertificate;binary, cACertificate;binary, certificateRevocationList;binary</li>
+<li><strong>Total Entries</strong>: 31,212 (845 CSCA + 27 MLSC + 29,838 DSC + 502 DSC_NC + 69 CRL)</li>
+</ul>
+<hr>
+<h2 id="frontend-architecture">Frontend Architecture</h2>
+<pre class="mermaid">graph TD
+    subgraph "React Application Structure"
+        subgraph "Entry Point"
+            Main[main.tsx<br/>React 19 Root]
+            App[App.tsx<br/>Router and Layout]
+        end
+
+        subgraph "Layout Components"
+            Sidebar[Sidebar.tsx<br/>Navigation Menu]
+            Header[Header.tsx<br/>User Info and Theme]
+        end
+
+        subgraph "Page Components (29 Pages)"
+            Dashboard[Dashboard.tsx<br/>System Overview]
+            FileUpload[FileUpload.tsx<br/>File Upload]
+            CertUpload[CertificateUpload.tsx<br/>Individual Certificate]
+            CertSearch[CertificateSearch.tsx<br/>Certificate Search]
+            DscNcReport[DscNcReport.tsx<br/>DSC_NC Report]
+            UploadHistory[UploadHistory.tsx<br/>Upload History]
+            UploadDetail[UploadDetail.tsx<br/>Upload Detail]
+            UploadDashboard[UploadDashboard.tsx<br/>Statistics Dashboard]
+            PAVerify[PAVerify.tsx<br/>PA Verification]
+            PAHistory[PAHistory.tsx<br/>Verification History]
+            PADetail[PADetail.tsx<br/>PA Detail]
+            PADashboard[PADashboard.tsx<br/>PA Statistics]
+            SyncDashboard[SyncDashboard.tsx<br/>Sync Status]
+            IcaoStatus[IcaoStatus.tsx<br/>ICAO Version Status]
+            SystemMonitoring[MonitoringDashboard.tsx<br/>System Monitoring]
+            Login[Login.tsx<br/>JWT Authentication]
+            UserMgmt[UserManagement.tsx<br/>User Management]
+            AuditLog[AuditLog.tsx<br/>Auth Audit]
+            OpAuditLog[OperationAuditLog.tsx<br/>Operation Audit]
+            CsrMgmt[CsrManagement.tsx<br/>CSR Management]
+            PendingDsc[PendingDscApproval.tsx<br/>DSC Registration Approval]
+            ApiClientMgmt[ApiClientManagement.tsx<br/>API Client]
+            ApiClientReq[ApiClientRequest.tsx<br/>API Access Request]
+            AiAnalysis[AiAnalysisDashboard.tsx<br/>AI Analysis]
+            CrlReport2[CrlReport.tsx<br/>CRL Report]
+            TrustChain[TrustChainValidationReport.tsx<br/>Trust Chain Report]
+            CertQuality[CertificateQualityReport.tsx<br/>Certificate Quality]
+            EacDash[EacDashboard.tsx<br/>EAC Certificates]
+            ProfilePage[Profile.tsx<br/>User Profile]
+        end
+
+        subgraph "Shared Components"
+            Button[Button.tsx]
+            Card[Card.tsx]
+            Table[Table.tsx]
+            Modal[Modal.tsx]
+            Badge[Badge.tsx]
+            Alert[Alert.tsx]
+        end
+
+        subgraph "Utils & Hooks"
+            CountryCode[countryCode.ts<br/>ISO 3166 Converter]
+            FlagUtils[Flag SVG Utils<br/>Flag Icons]
+            APIClient[API Client<br/>Axios Wrapper]
+        end
+
+        subgraph "Styling"
+            TailwindCSS[TailwindCSS 4<br/>Utility-first CSS]
+            DarkMode[Dark Mode Support<br/>Theme Provider]
+        end
+    end
+
+    Main --> App
+    App --> Sidebar
+    App --> Header
+    App --> Dashboard
+    App --> FileUpload
+    App --> CertSearch
+    App --> UploadHistory
+    App --> UploadDashboard
+    App --> PAVerify
+    App --> PAHistory
+    App --> PADashboard
+    App --> SyncDashboard
+    App --> IcaoStatus
+    App --> SystemMonitoring
+
+    Dashboard --> Card
+    FileUpload --> Button
+    CertSearch --> Table
+    UploadHistory --> Modal
+    PAVerify --> Alert
+    IcaoStatus --> Badge
+
+    CertSearch --> CountryCode
+    IcaoStatus --> FlagUtils
+    PAVerify --> APIClient
+
+    App --> TailwindCSS
+    App --> DarkMode
+
+    style IcaoStatus fill:#78350f,stroke:#fbbf24,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style FlagUtils fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Build Stack</strong>:</p>
+<ul>
+<li><strong>Bundler</strong>: Vite 5</li>
+<li><strong>Language</strong>: TypeScript 5</li>
+<li><strong>UI Framework</strong>: React 19</li>
+<li><strong>Styling</strong>: TailwindCSS 4</li>
+<li><strong>Icons</strong>: Lucide React</li>
+<li><strong>HTTP Client</strong>: Axios</li>
+<li><strong>State Management</strong>: React Hooks (useState, useEffect)</li>
+</ul>
+<hr>
+<h2 id="api-gateway-architecture">API Gateway Architecture</h2>
+<pre class="mermaid">graph TB
+    subgraph Gateway["Nginx API Gateway Port 8080"]
+        subgraph Routes["Routing Rules"]
+            Route1["PKD Route<br/>upload/cert/health/sync"]
+            Route2["PA Route<br/>pa/*"]
+            Route3["Relay Route<br/>relay/*"]
+            Route4["API Docs<br/>api-docs"]
+        end
+
+        subgraph Features["Key Features"]
+            RateLimit["Rate Limiting<br/>100 req/s per IP"]
+            Gzip["Gzip Compression<br/>80% reduction"]
+            SSE["SSE Support<br/>Real-time"]
+            Upload["File Upload<br/>Max 100MB"]
+            Swagger["Swagger UI<br/>OpenAPI 3.0"]
+        end
+
+        subgraph Proxy["Proxy Configuration"]
+            Timeout["Timeout<br/>30s / 300s"]
+            Buffer["Buffer<br/>8 x 16KB"]
+            Keepalive["Keepalive<br/>32 connections"]
+        end
+
+        subgraph Errors["Error Handling"]
+            Error502["502 Bad Gateway"]
+            Error503["503 Unavailable"]
+            Error504["504 Timeout"]
+        end
+    end
+
+    Route1 --> PKD["PKD Management<br/>8081"]
+    Route2 --> PA["PA Service<br/>8082"]
+    Route3 --> RelaySvc["Relay Service<br/>8083"]
+    Route4 --> Swagger
+
+    RateLimit -.-> Route1
+    RateLimit -.-> Route2
+    RateLimit -.-> Route3
+
+    Gzip -.-> PKD
+    Gzip -.-> PA
+    Gzip -.-> RelaySvc
+
+    SSE -.-> PKD
+    Upload -.-> PKD
+
+    style Route1 fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style RateLimit fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style SSE fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Security Features</strong>:</p>
+<ul>
+<li>Backend Service Isolation (Internal Network Only)</li>
+<li>Rate Limiting (DDoS Protection)</li>
+<li>Header Sanitization</li>
+<li>CORS Policy</li>
+<li>Request/Response Logging</li>
+</ul>
+<hr>
+<h2 id="component-details">Component Details</h2>
+<h3 id="ldif-processor">LDIF Processor</h3>
+<pre class="mermaid">graph LR
+    Input[LDIF File<br/>30k+ entries]
+
+    subgraph "Parsing Stage"
+        Read[File Reader<br/>Stream Processing]
+        Parse[LDIF Parser<br/>Entry Extraction]
+        Validate[Entry Validator<br/>DN and Attributes]
+    end
+
+    subgraph "Classification Stage"
+        Detect[Certificate Type Detector<br/>objectClass Analysis]
+        Extract[Attribute Extractor<br/>Binary Data]
+        Country[Country Code Extractor<br/>DN Parsing]
+    end
+
+    subgraph "Processing Stage"
+        AutoProc[Auto Processing<br/>One-shot to DB and LDAP]
+        ManualProc[Manual Processing<br/>3-Stage Workflow]
+    end
+
+    Output[(Database<br/>LDAP)]
+
+    Input --> Read --> Parse --> Validate
+    Validate --> Detect --> Extract --> Country
+    Country --> AutoProc
+    Country --> ManualProc
+    AutoProc --> Output
+    ManualProc --> Output
+
+    style Input fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Detect fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Output fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<hr>
+<h3 id="icao-auto-sync-flow-v1-7-0">ICAO Auto Sync Flow (v1.7.0)</h3>
+<pre class="mermaid">sequenceDiagram
+    participant Cron as Cron Job<br/>(Daily 08:00)
+    participant Script as Shell Script<br/>icao-version-check.sh
+    participant API as API Gateway<br/>:8080
+    participant PKD as PKD Management<br/>:8081
+    participant HTTP as HTTP Client<br/>ICAO Portal
+    participant Parser as HTML Parser<br/>Version Extractor
+    participant DB as PostgreSQL<br/>icao_pkd_versions
+    participant Dashboard as React Frontend<br/>ICAO Version Status
+
+    Cron->>Script: Execute daily
+    Script->>API: POST /api/icao/check-updates
+    API->>PKD: Forward request
+
+    PKD->>HTTP: Fetch ICAO portal HTML
+    HTTP-->>PKD: HTML content
+
+    PKD->>Parser: Parse HTML tables
+    Parser-->>PKD: Version list<br/>(Collection 001/002/003)
+
+    PKD->>DB: Query existing versions
+    DB-->>PKD: Current version records
+
+    PKD->>PKD: Compare versions
+
+    alt New version detected
+        PKD->>DB: INSERT new version<br/>status=DETECTED
+        PKD->>Dashboard: Notify (SSE/Polling)
+        Dashboard-->>Dashboard: Show UPDATE_NEEDED badge
+    else No new version
+        PKD->>Dashboard: Notify (no change)
+        Dashboard-->>Dashboard: Show UP_TO_DATE badge
+    end
+
+    Script->>API: GET /api/icao/latest
+    API->>PKD: Forward request
+    PKD->>DB: Query latest versions
+    DB-->>PKD: Latest version list
+    PKD-->>API: JSON response
+    API-->>Script: Latest versions
+    Script->>Script: Log to file</pre>
+<hr>
+<h2 id="data-flow-diagrams">Data Flow Diagrams</h2>
+<h3 id="upload-flow-auto-mode">Upload Flow (AUTO Mode)</h3>
+<pre class="mermaid">sequenceDiagram
+    participant User
+    participant Frontend
+    participant Gateway as API Gateway
+    participant PKD as PKD Management
+    participant LDIF as LDIF Processor
+    participant DB as PostgreSQL/Oracle
+    participant LDAP as OpenLDAP
+
+    User->>Frontend: Select LDIF file + AUTO mode
+    Frontend->>Gateway: POST /api/upload/ldif<br/>(multipart/form-data)
+    Gateway->>PKD: Forward upload
+
+    PKD->>PKD: Generate UUID<br/>Save temp file
+    PKD->>DB: INSERT uploaded_file<br/>status=PROCESSING
+    PKD-->>Frontend: Upload ID + SSE URL
+
+    Frontend->>Gateway: GET /api/progress/stream/{id}<br/>(SSE)
+
+    PKD->>LDIF: Parse LDIF entries
+    loop For each entry
+        LDIF->>LDIF: Extract DN, attributes
+        LDIF->>LDIF: Classify cert type
+        LDIF-->>PKD: SSE progress update
+        PKD-->>Frontend: PARSING_{percentage}
+    end
+
+    LDIF-->>PKD: Parsed entries (30k+)
+
+    PKD->>DB: BEGIN TRANSACTION
+    PKD->>DB: INSERT certificates (Batch 1000)
+    PKD->>DB: INSERT crls
+    PKD->>DB: INSERT master_lists
+
+    PKD->>LDAP: LDAP BIND (write to primary)
+    PKD->>LDAP: ADD entries (Batch 100)
+    PKD->>DB: UPDATE stored_in_ldap=true
+
+    PKD->>DB: Trust Chain Validation
+    PKD->>DB: INSERT validation_result
+
+    PKD->>DB: UPDATE uploaded_file<br/>status=COMPLETED
+    PKD->>DB: COMMIT TRANSACTION
+
+    PKD-->>Frontend: COMPLETED<br/>SSE close
+    Frontend-->>User: Show success + stats</pre>
+<hr>
+<h3 id="pa-verification-flow">PA Verification Flow</h3>
+<pre class="mermaid">sequenceDiagram
+    participant User
+    participant Frontend
+    participant Gateway
+    participant PA as PA Service
+    participant LDAP
+    participant DB
+
+    User->>Frontend: Upload SOD + DG files
+    Frontend->>Gateway: POST /api/pa/verify<br/>(JSON payload)
+    Gateway->>PA: Forward request
+
+    PA->>PA: Step 1: Parse SOD<br/>(CMS d2i_CMS_bio)
+    PA->>PA: Step 2: Extract signer info
+    PA->>PA: Step 3: Extract DG hashes
+
+    PA->>LDAP: Search DSC certificate<br/>by issuer DN
+    LDAP-->>PA: DSC certificate DER
+
+    PA->>PA: Step 4: Verify SOD signature<br/>(CMS_verify)
+
+    PA->>LDAP: Search CSCA certificate<br/>by DSC issuer DN
+    LDAP-->>PA: CSCA certificate DER
+
+    PA->>PA: Step 5: Verify Trust Chain<br/>(X509_verify)
+
+    PA->>PA: Step 6: Calculate DG hashes<br/>(SHA-256/SHA-384)
+
+    PA->>PA: Step 7: Compare hashes<br/>(SOD vs Calculated)
+
+    PA->>PA: Step 8: Check validity periods
+
+    PA->>DB: INSERT pa_verification<br/>(all steps + results)
+
+    PA-->>Gateway: JSON response<br/>(success + details)
+    Gateway-->>Frontend: Verification result
+    Frontend-->>User: Show step-by-step UI</pre>
+<hr>
+<h2 id="deployment-architecture">Deployment Architecture</h2>
+<h3 id="docker-compose-architecture">Docker Compose Architecture</h3>
+<pre class="mermaid">graph TB
+    subgraph External["External Access"]
+        User["User Browser<br/>Port 3000"]
+        APIClient["API Client<br/>Port 8080"]
+        LDAPClient["LDAP Client<br/>Port 389"]
+    end
+
+    subgraph DockerNetwork["Docker Network: icao-network"]
+        subgraph Presentation["Presentation Layer"]
+            Frontend["Frontend<br/>nginx:alpine<br/>React 19 SPA<br/>:3000"]
+        end
+
+        subgraph Gateway["Gateway Layer"]
+            APIGateway["API Gateway<br/>nginx:1.25<br/>Reverse Proxy<br/>:8080"]
+        end
+
+        subgraph Application["Application Layer"]
+            PKD["PKD Management<br/>Custom C++<br/>Drogon 1.9<br/>:8081"]
+            PA["PA Service<br/>Custom C++<br/>Drogon 1.9<br/>:8082"]
+            Relay["PKD Relay<br/>Custom C++<br/>Drogon 1.9<br/>:8083"]
+            Mon["Monitoring<br/>Custom C++<br/>Drogon 1.9<br/>:8084"]
+        end
+
+        subgraph DataLayer["Data Layer"]
+            PG["PostgreSQL / Oracle<br/>postgres:15 / xe:21c<br/>Multi-DBMS<br/>:5432 / :1521"]
+            LDAP1["OpenLDAP 1<br/>osixia:1.5.0<br/>MMR Primary<br/>:3891"]
+            LDAP2["OpenLDAP 2<br/>osixia:1.5.0<br/>MMR Secondary<br/>:3892"]
+        end
+    end
+
+    subgraph Storage["Persistent Storage"]
+        PGData[("postgres<br/>Database Files")]
+        LDAP1Data[("openldap1<br/>Directory Data")]
+        LDAP2Data[("openldap2<br/>Directory Data")]
+        UploadData[("pkd-uploads<br/>LDIF/ML Files")]
+        LogData[("logs<br/>Service Logs")]
+    end
+
+    %% External to Docker Network
+    User -->|HTTP/3000| Frontend
+    APIClient -->|HTTP/8080| APIGateway
+
+    %% Presentation to Gateway
+    Frontend -->|proxy_pass| APIGateway
+
+    %% Gateway to Application
+    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/auth<br/>/api/icao| PKD
+    APIGateway -->|/api/pa/*| PA
+    APIGateway -->|/api/sync/*| Relay
+    APIGateway -->|/api/monitoring/*| Mon
+
+    %% Application to Data Layer
+    PKD -->|SQL| PG
+    PA -->|SQL| PG
+    Relay -->|SQL| PG
+
+    PKD -->|LDAP Write| LDAP1
+    PKD -->|LDAP Read<br/>App SLB| LDAP1
+    PKD -->|LDAP Read<br/>App SLB| LDAP2
+    PA -->|LDAP Read<br/>App SLB| LDAP1
+    PA -->|LDAP Read<br/>App SLB| LDAP2
+    Relay -->|LDAP Read<br/>App SLB| LDAP1
+    Relay -->|LDAP Read<br/>App SLB| LDAP2
+
+    %% Data Layer Replication
+    LDAP1 <-->|MMR Sync| LDAP2
+
+    %% Data Layer to Storage
+    PG -->|bind mount| PGData
+    LDAP1 -->|bind mount| LDAP1Data
+    LDAP2 -->|bind mount| LDAP2Data
+    PKD -->|bind mount| UploadData
+    PKD -->|bind mount| LogData
+
+    %% Styling - External
+    style User fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style APIClient fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Presentation
+    style Frontend fill:#14532d,stroke:#4ade80,stroke-width:3px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Gateway
+    style APIGateway fill:#78350f,stroke:#fbbf24,stroke-width:3px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Application
+    style PKD fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style PA fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Relay fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Mon fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Data Layer
+    style PG fill:#312e81,stroke:#818cf8,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style LDAP1 fill:#0f4c75,stroke:#0ea5e9,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style LDAP2 fill:#0f4c75,stroke:#0ea5e9,stroke-width:3px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Storage
+    style PGData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP1Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP2Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style UploadData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LogData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Architecture Highlights</strong>:</p>
+<ol>
+<li><strong>Layered Design</strong>: Clear 4-layer structure (Presentation -&gt; Gateway -&gt; Application -&gt; Data)</li>
+<li><strong>Gateway Pattern</strong>: API Gateway (nginx) for service routing and reverse proxy</li>
+<li><strong>App-Level SLB</strong>: LDAP Software Load Balancing (in-service round-robin, HAProxy removed)</li>
+<li><strong>Microservices</strong>: 4 independent C++ services (PKD, PA, Relay, Monitoring)</li>
+<li><strong>Multi-DBMS</strong>: PostgreSQL 15 / Oracle XE 21c runtime switching (DB_TYPE)</li>
+<li><strong>MMR Replication</strong>: OpenLDAP Multi-Master replication for high availability</li>
+<li><strong>Bind Mounts</strong>: All data permanently stored on host filesystem</li>
+</ol>
+<p><strong>Container Details</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Container</th>
+<th>Image</th>
+<th>CPU</th>
+<th>Memory</th>
+<th>Restart</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>frontend</td>
+<td>nginx:alpine + React build</td>
+<td>0.5</td>
+<td>256MB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>api-gateway</td>
+<td>nginx:1.25-alpine</td>
+<td>0.5</td>
+<td>256MB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>pkd-management</td>
+<td>Custom C++ (Debian)</td>
+<td>2.0</td>
+<td>2GB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>pa-service</td>
+<td>Custom C++ (Debian)</td>
+<td>2.0</td>
+<td>2GB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>pkd-relay</td>
+<td>Custom C++ (Debian)</td>
+<td>1.0</td>
+<td>1GB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>monitoring</td>
+<td>Custom C++ (Debian)</td>
+<td>0.5</td>
+<td>256MB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>postgres</td>
+<td>postgres:15-alpine</td>
+<td>2.0</td>
+<td>2GB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>openldap1</td>
+<td>osixia/openldap:1.5.0</td>
+<td>1.0</td>
+<td>1GB</td>
+<td>always</td>
+</tr>
+<tr>
+<td>openldap2</td>
+<td>osixia/openldap:1.5.0</td>
+<td>1.0</td>
+<td>1GB</td>
+<td>always</td>
+</tr>
+</tbody></table></div>
+<p><strong>Total Resources</strong>: 10 cores, 10.5GB RAM (PostgreSQL mode), +2GB for Oracle container</p>
+<hr>
+<h3 id="luckfox-arm64-deployment">Luckfox ARM64 Deployment</h3>
+<pre class="mermaid">graph TB
+    subgraph CICD["CI/CD Pipeline"]
+        GHA["GitHub Actions<br/>ARM64 Build<br/>QEMU + Buildx<br/>~2 hours"]
+        Artifacts["Artifacts<br/>OCI Format<br/>tar.gz<br/>30 days"]
+        Convert["skopeo<br/>OCI to Docker<br/>override-arch<br/>~30 sec"]
+    end
+
+    subgraph Deploy["Deployment"]
+        Transfer["sshpass<br/>SCP Transfer<br/>to Luckfox<br/>~2 min"]
+        Load["Docker Load<br/>Import Images<br/>docker load<br/>~1 min"]
+    end
+
+    subgraph Luckfox["Luckfox Pico ARM64 - 192.168.100.11"]
+        subgraph Network["Host Network Mode"]
+            Frontend3["Frontend<br/>:3000"]
+            APIGateway3["API Gateway<br/>:8080"]
+            PKD3["PKD Mgmt<br/>:8081"]
+            PA3["PA Service<br/>:8082"]
+            Relay3["PKD Relay<br/>:8083"]
+            Mon3["Monitoring<br/>:8084"]
+            PG3["PostgreSQL<br/>:5432"]
+            LDAP5["OpenLDAP1<br/>:3891"]
+            LDAP6["OpenLDAP2<br/>:3892"]
+        end
+
+        subgraph Storage3["Persistent Storage"]
+            ProjectDir[("Project Directory<br/>icao-local-pkd-cpp-v2")]
+            PGData3[("postgres-data<br/>localpkd DB")]
+            LDAP5Data[("openldap1-data<br/>Directory")]
+            LDAP6Data[("openldap2-data<br/>Directory")]
+        end
+    end
+
+    %% CI/CD Flow
+    GHA -->|Build Complete| Artifacts
+    Artifacts -->|Download| Convert
+    Convert -->|OCI Archive| Transfer
+    Transfer -->|SSH/SCP| Load
+
+    %% Deployment to Services
+    Load -->|docker load| Frontend3
+    Load -->|docker load| APIGateway3
+    Load -->|docker load| PKD3
+    Load -->|docker load| PA3
+    Load -->|docker load| Relay3
+    Load -->|docker load| Mon3
+
+    %% Services to Storage
+    PG3 -->|bind mount| PGData3
+    LDAP5 -->|bind mount| LDAP5Data
+    LDAP6 -->|bind mount| LDAP6Data
+    PKD3 -->|bind mount| ProjectDir
+
+    %% Styling - CI/CD
+    style GHA fill:#14532d,stroke:#4ade80,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Artifacts fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Convert fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Deploy
+    style Transfer fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Load fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Services
+    style Frontend3 fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style APIGateway3 fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PKD3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PA3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Relay3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Mon3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PG3 fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP5 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP6 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+
+    %% Styling - Storage
+    style ProjectDir fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PGData3 fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP5Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP6Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Deployment Workflow</strong>:</p>
+<ol>
+<li><p><strong>GitHub Actions Build</strong> (~2 hours)</p>
+<ul>
+<li>Multi-stage Dockerfile with vcpkg caching</li>
+<li>QEMU emulation for ARM64 cross-compilation</li>
+<li>Output: OCI format images (tar.gz)</li>
+</ul>
+</li>
+<li><p><strong>Artifact Conversion</strong> (~30 seconds)</p>
+<ul>
+<li><code>skopeo copy --override-arch arm64 oci-archive:... docker-archive:...</code></li>
+<li>OCI format -&gt; Docker loadable format</li>
+</ul>
+</li>
+<li><p><strong>Transfer to Luckfox</strong> (~2 minutes)</p>
+<ul>
+<li><code>sshpass -p &quot;luckfox&quot; scp image.tar luckfox@192.168.100.11:</code></li>
+<li>Non-interactive SSH authentication</li>
+</ul>
+</li>
+<li><p><strong>Load and Deploy</strong> (~1 minute)</p>
+<ul>
+<li><code>docker load &lt; image.tar</code></li>
+<li><code>docker compose -f docker-compose-luckfox.yaml up -d</code></li>
+<li>Health check verification</li>
+</ul>
+</li>
+</ol>
+<p><strong>Key Differences from Development Environment</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th>Development (AMD64)</th>
+<th>Luckfox (ARM64)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Network Mode</strong></td>
+<td>bridge (icao-network)</td>
+<td>host (direct port mapping)</td>
+</tr>
+<tr>
+<td><strong>PostgreSQL DB</strong></td>
+<td>pkd</td>
+<td>localpkd</td>
+</tr>
+<tr>
+<td><strong>Build Method</strong></td>
+<td>Local build or Docker</td>
+<td>GitHub Actions only</td>
+</tr>
+<tr>
+<td><strong>Deployment</strong></td>
+<td>docker-compose.yaml</td>
+<td>docker-compose-luckfox.yaml</td>
+</tr>
+<tr>
+<td><strong>Image Format</strong></td>
+<td>Docker native</td>
+<td>OCI -&gt; Docker conversion</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="security-architecture">Security Architecture</h2>
+<h3 id="authentication-authorization">Authentication &amp; Authorization</h3>
+<pre class="mermaid">graph TB
+    subgraph "Security Layers (v2.37.0)"
+        subgraph "Auth Layer"
+            JWT["JWT Authentication<br/>HS256, 32+ byte secret"]
+            RBAC["RBAC<br/>admin / user roles"]
+            AuthMiddleware["Auth Middleware<br/>std::regex::optimize"]
+            AuditLog["Dual Audit Logging<br/>auth_audit_log + operation_audit_log"]
+        end
+
+        subgraph "Network Layer"
+            Firewall[Host Firewall<br/>iptables]
+            Docker[Docker Network Isolation<br/>icao-network]
+            NginxHeaders["nginx Security Headers<br/>X-Content-Type-Options<br/>X-Frame-Options<br/>Referrer-Policy"]
+        end
+
+        subgraph "Application Layer"
+            RateLimit2[Rate Limiting<br/>100 req/s per IP]
+            CORS[CORS Policy<br/>Same-Origin]
+            CSP[Content Security Policy<br/>frame-ancestors self]
+            NoSystemCall["Command Injection Prevention<br/>system()/popen() to Native C API"]
+        end
+
+        subgraph "Data Layer"
+            DBAuth[DB Authentication<br/>PostgreSQL / Oracle]
+            LDAPAuth["LDAP Bind<br/>cn=admin DN<br/>DN Escape (RFC 4514)"]
+            PII["PII Encryption<br/>AES-256-GCM<br/>CSR Private Key/PII"]
+            Encryption[TLS/SSL Support<br/>Production]
+        end
+
+        subgraph "Code Layer"
+            Parameterized["Parameterized Queries<br/>100% parameterized SQL"]
+            OrderByWhitelist["ORDER BY Whitelist<br/>SQL Injection Prevention"]
+            Base64Validation["Base64 Input Validation<br/>isValidBase64() pre-check"]
+            NullChecks["OpenSSL Null Checks<br/>24 allocation sites"]
+            BufferOverread["SOD Parser Protection<br/>end pointer boundary"]
+        end
+    end
+
+    JWT --> RBAC
+    RBAC --> AuthMiddleware
+    AuthMiddleware --> AuditLog
+
+    Firewall --> Docker
+    Docker --> NginxHeaders
+
+    NginxHeaders --> RateLimit2
+    RateLimit2 --> CORS
+    CORS --> CSP
+    CSP --> NoSystemCall
+
+    NoSystemCall --> DBAuth
+    NoSystemCall --> LDAPAuth
+    DBAuth --> PII
+    LDAPAuth --> PII
+    PII --> Encryption
+
+    Encryption --> Parameterized
+    Parameterized --> OrderByWhitelist
+    OrderByWhitelist --> Base64Validation
+    Base64Validation --> NullChecks
+    NullChecks --> BufferOverread
+
+    style JWT fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PII fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Encryption fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Parameterized fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style NoSystemCall fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<p><strong>Security Checklist (v2.37.0)</strong>:</p>
+<ul>
+<li>JWT Authentication (HS256) + RBAC (admin/user)</li>
+<li>API Client Authentication (X-API-Key, SHA-256 hash, per-client Rate Limiting, IP/Endpoint restriction)</li>
+<li>Dual audit logging (auth_audit_log + operation_audit_log) with request context (user, IP, path, User-Agent)</li>
+<li><strong>PII Encryption (Personal Information Protection Act Article 29)</strong>: AES-256-GCM authenticated encryption -- CSR private key, passport number, PII fields</li>
+<li><strong>CSR Private Key Security</strong>: AES-256-GCM encrypted storage, private key excluded from API response, permanent destruction on deletion</li>
+<li>Backend services not exposed externally (API Gateway only)</li>
+<li>Rate limiting (DDoS protection, per-IP connection limit)</li>
+<li>100% parameterized SQL queries (all services)</li>
+<li>ORDER BY whitelist validation</li>
+<li>LIKE query parameter escaping (<code>escapeSqlWildcards()</code>)</li>
+<li>Command injection eliminated -- <code>system()</code>/<code>popen()</code> -&gt; Native C API</li>
+<li>XSS prevention (JSON serialization, CSP headers)</li>
+<li>CORS policy (configurable, dynamic origin map)</li>
+<li>nginx security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy, HSTS)</li>
+<li>JWT_SECRET minimum length validation (32 bytes)</li>
+<li>LDAP DN escape utility (RFC 4514)</li>
+<li>Base64 input validation (pre-check before decode)</li>
+<li>SOD parser buffer overread protection (end pointer boundary)</li>
+<li>OpenSSL null pointer checks (24+ allocation sites)</li>
+<li>Frontend OWASP hardening (DEV-only console.error, credential guards, centralized JWT injection)</li>
+<li>Logout audit logging even with expired JWT (best-effort payload decoding)</li>
+<li>Credential externalization (.env)</li>
+<li>File upload validation (MIME type, path sanitization)</li>
+</ul>
+<hr>
+<h2 id="technology-stack-summary">Technology Stack Summary</h2>
+<h3 id="backend">Backend</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Language</td>
+<td>C++20</td>
+<td>GCC 11+</td>
+<td>High performance</td>
+</tr>
+<tr>
+<td>Framework</td>
+<td>Drogon</td>
+<td>1.9+</td>
+<td>Async HTTP server</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL / Oracle</td>
+<td>15 / XE 21c</td>
+<td>Multi-DBMS (runtime switching)</td>
+</tr>
+<tr>
+<td>LDAP</td>
+<td>OpenLDAP</td>
+<td>2.6+</td>
+<td>Certificate storage (MMR cluster)</td>
+</tr>
+<tr>
+<td>Crypto</td>
+<td>OpenSSL</td>
+<td>3.x</td>
+<td>X.509, CMS, Hash</td>
+</tr>
+<tr>
+<td>JSON</td>
+<td>nlohmann/json</td>
+<td>3.11+</td>
+<td>JSON parsing</td>
+</tr>
+<tr>
+<td>Logging</td>
+<td>spdlog</td>
+<td>1.12+</td>
+<td>Structured logging</td>
+</tr>
+<tr>
+<td>Testing</td>
+<td>Google Test</td>
+<td>1.14+</td>
+<td>Unit testing (86 tests)</td>
+</tr>
+<tr>
+<td>Build</td>
+<td>CMake + vcpkg</td>
+<td>3.20+</td>
+<td>Dependency management</td>
+</tr>
+</tbody></table></div>
+<h3 id="frontend">Frontend</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Language</td>
+<td>TypeScript</td>
+<td>5.x</td>
+<td>Type safety</td>
+</tr>
+<tr>
+<td>Framework</td>
+<td>React</td>
+<td>19</td>
+<td>UI library</td>
+</tr>
+<tr>
+<td>Bundler</td>
+<td>Vite</td>
+<td>5.x</td>
+<td>Fast dev server</td>
+</tr>
+<tr>
+<td>Styling</td>
+<td>TailwindCSS</td>
+<td>4.x</td>
+<td>Utility-first CSS</td>
+</tr>
+<tr>
+<td>State</td>
+<td>Zustand</td>
+<td>latest</td>
+<td>State management</td>
+</tr>
+<tr>
+<td>Data Fetching</td>
+<td>TanStack Query</td>
+<td>latest</td>
+<td>Server state</td>
+</tr>
+<tr>
+<td>Charts</td>
+<td>ECharts + Recharts</td>
+<td>latest</td>
+<td>Data visualization</td>
+</tr>
+<tr>
+<td>Icons</td>
+<td>Lucide React</td>
+<td>latest</td>
+<td>SVG icons</td>
+</tr>
+<tr>
+<td>HTTP Client</td>
+<td>Axios</td>
+<td>latest</td>
+<td>API requests</td>
+</tr>
+</tbody></table></div>
+<h3 id="infrastructure">Infrastructure</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Technology</th>
+<th>Version</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>API Gateway</td>
+<td>Nginx</td>
+<td>1.25+</td>
+<td>Reverse proxy, security headers</td>
+</tr>
+<tr>
+<td>LDAP LB</td>
+<td>App-level SLB</td>
+<td>-</td>
+<td>Software load balancing (in-app)</td>
+</tr>
+<tr>
+<td>Container</td>
+<td>Docker</td>
+<td>24+</td>
+<td>Containerization</td>
+</tr>
+<tr>
+<td>Orchestration</td>
+<td>Docker Compose</td>
+<td>2.x</td>
+<td>Multi-container apps</td>
+</tr>
+<tr>
+<td>CI/CD</td>
+<td>GitHub Actions</td>
+<td>-</td>
+<td>ARM64 cross-compilation</td>
+</tr>
+<tr>
+<td>Artifact Conversion</td>
+<td>skopeo</td>
+<td>latest</td>
+<td>OCI -&gt; Docker format</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="performance-metrics">Performance Metrics</h2>
+<h3 id="throughput">Throughput</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Value</th>
+<th>Conditions</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Certificate Search</strong></td>
+<td>2,222 req/s</td>
+<td>10k requests, 100 concurrent</td>
+</tr>
+<tr>
+<td><strong>PA Verification</strong></td>
+<td>416 req/s</td>
+<td>1k requests, 50 concurrent</td>
+</tr>
+<tr>
+<td><strong>PA Lookup</strong></td>
+<td>5~20ms</td>
+<td>Pre-computed validation result</td>
+</tr>
+<tr>
+<td><strong>API Latency</strong></td>
+<td>&lt;100ms</td>
+<td>Average response time</td>
+</tr>
+<tr>
+<td><strong>Database Query</strong></td>
+<td>40ms</td>
+<td>PostgreSQL DISTINCT query (95 countries)</td>
+</tr>
+<tr>
+<td><strong>LDAP Search</strong></td>
+<td>&lt;200ms</td>
+<td>App-level SLB (round-robin)</td>
+</tr>
+</tbody></table></div>
+<h3 id="scalability">Scalability</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Current</th>
+<th>Max Tested</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Certificates</strong></td>
+<td>31,212</td>
+<td>100,000+</td>
+<td>PostgreSQL/Oracle + LDAP</td>
+</tr>
+<tr>
+<td><strong>Concurrent Users</strong></td>
+<td>100</td>
+<td>1,000+</td>
+<td>Nginx workers x connections</td>
+</tr>
+<tr>
+<td><strong>Upload File Size</strong></td>
+<td>100MB</td>
+<td>200MB</td>
+<td>Nginx client_max_body_size</td>
+</tr>
+<tr>
+<td><strong>Batch Size</strong></td>
+<td>1,000</td>
+<td>10,000</td>
+<td>DB insert batch</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="monitoring-observability">Monitoring &amp; Observability</h2>
+<h3 id="health-checks">Health Checks</h3>
+<pre class="mermaid">graph LR
+    subgraph "Health Check Endpoints"
+        GW[GET /health<br/>API Gateway]
+        PKD_H[GET /api/health<br/>PKD Management]
+        PA_H[GET /api/pa/health<br/>PA Service]
+        Relay_H[GET /api/sync/health<br/>PKD Relay Service]
+        Mon_H[GET /api/monitoring/health<br/>Monitoring Service]
+        DB_H[GET /api/health/database<br/>Database Status]
+        LDAP_H[GET /api/health/ldap<br/>LDAP Status]
+    end
+
+    subgraph "Monitoring Tools"
+        Docker[Docker Healthcheck<br/>Container Status]
+        Script[Health Check Script<br/>./docker-health.sh]
+        MonDash[Monitoring Dashboard<br/>/monitoring]
+    end
+
+    GW --> Docker
+    PKD_H --> Docker
+    PA_H --> Docker
+    Relay_H --> Docker
+    Mon_H --> Docker
+
+    DB_H --> Script
+    LDAP_H --> Script
+    MonDash --> Mon_H
+
+    style GW fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Script fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style MonDash fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+<h3 id="logging-strategy">Logging Strategy</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Log Level</th>
+<th>Destination</th>
+<th>Retention</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>PKD Management</strong></td>
+<td>INFO</td>
+<td>/var/log/pkd-management.log</td>
+<td>30 days</td>
+</tr>
+<tr>
+<td><strong>PA Service</strong></td>
+<td>INFO</td>
+<td>/var/log/pa-service.log</td>
+<td>30 days</td>
+</tr>
+<tr>
+<td><strong>PKD Relay Service</strong></td>
+<td>INFO</td>
+<td>/var/log/pkd-relay.log</td>
+<td>30 days</td>
+</tr>
+<tr>
+<td><strong>Monitoring Service</strong></td>
+<td>INFO</td>
+<td>stdout (Docker logs)</td>
+<td>30 days</td>
+</tr>
+<tr>
+<td><strong>Nginx Access</strong></td>
+<td>COMBINED</td>
+<td>/var/log/nginx/access.log</td>
+<td>30 days</td>
+</tr>
+<tr>
+<td><strong>Nginx Error</strong></td>
+<td>WARN</td>
+<td>/var/log/nginx/error.log</td>
+<td>30 days</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h1 id="part-2-design-principles-patterns">Part 2: Design Principles &amp; Patterns</h1>
+<hr>
+<h2 id="core-design-principles">Core Design Principles</h2>
+<h3 id="1-domain-driven-design-ddd">1. Domain-Driven Design (DDD)</h3>
+<p>Domain-centric design for clear separation of business logic.</p>
+<h3 id="2-microservice-architecture">2. Microservice Architecture</h3>
+<p>System composed of independently deployable service units.</p>
+<h3 id="3-strategy-pattern">3. Strategy Pattern</h3>
+<p>Business logic separation based on file type and certificate type.</p>
+<h3 id="4-single-responsibility-principle-srp">4. Single Responsibility Principle (SRP)</h3>
+<p>Each class and module has only one responsibility.</p>
+<h3 id="5-servicecontainer-pimpl-pattern-v2-12-0">5. ServiceContainer + Pimpl Pattern (v2.12.0+)</h3>
+<p>Centralized DI container manages all dependencies. <code>struct Impl</code> pimpl pattern minimizes header dependencies.</p>
+<h3 id="6-handler-extraction-pattern-v2-13-0">6. Handler Extraction Pattern (v2.13.0+)</h3>
+<p>Minimize main.cpp and extract all HTTP handlers to independent classes.</p>
+<hr>
+<h2 id="ddd-domain-driven-design-structure">DDD (Domain-Driven Design) Structure</h2>
+<h3 id="pkd-management-service-layer-structure">PKD Management Service Layer Structure</h3>
+<pre><code>services/pkd-management/src/
+|
++-- infrastructure/               # Infrastructure Layer (v2.12.0+)
+|   +-- service_container.h/.cpp  # ServiceContainer -- Centralized DI (pimpl pattern)
+|   +-- app_config.h              # AppConfig -- Environment variable parsing
+|   +-- http/http_client.h        # HTTP Client
+|   +-- notification/email_sender.h
+|
++-- handlers/                     # Handler Layer (v2.12.0~v2.13.0 extracted from main.cpp)
+|   +-- upload_handler.h/.cpp     # Upload API (10 endpoints)
+|   +-- upload_stats_handler.h/.cpp # Statistics/History API (11 endpoints)
+|   +-- certificate_handler.h/.cpp  # Certificate API (20 endpoints)
+|   +-- auth_handler.h/.cpp       # Auth API
+|   +-- icao_handler.h/.cpp       # ICAO Sync API
+|   +-- code_master_handler.h/.cpp  # Code Master API (6 endpoints)
+|   +-- api_client_handler.h/.cpp   # API Client Management (7 endpoints)
+|   +-- api_client_request_handler.h/.cpp # API Client Request (5 endpoints)
+|   +-- csr_handler.h/.cpp        # CSR Management API (6 endpoints)
+|   +-- misc_handler.h/.cpp       # Health, Audit, Validation, PA proxy, Info
+|
++-- middleware/                   # Auth Middleware
+|   +-- auth_middleware.h/.cpp    # JWT + API Key Auth
+|
++-- repositories/                 # Repository Layer (16 repositories)
+|   +-- upload_repository.h/.cpp
+|   +-- certificate_repository.h/.cpp
+|   +-- validation_repository.h/.cpp
+|   +-- crl_repository.h/.cpp
+|   +-- ldap_certificate_repository.h/.cpp
+|   +-- code_master_repository.h/.cpp
+|   +-- api_client_repository.h/.cpp
+|   +-- pending_dsc_repository.h/.cpp
+|   +-- csr_repository.h/.cpp
+|   +-- ...
+|
++-- services/                     # Service Layer
+|   +-- upload_service.h/.cpp
+|   +-- validation_service.h/.cpp
+|   +-- certificate_service.h/.cpp
+|   +-- icao_sync_service.h/.cpp
+|   +-- ldap_storage_service.h/.cpp  # LDAP Storage (Certificates/CRL/ML)
+|   +-- csr_service.h/.cpp
+|
++-- adapters/                     # icao::validation Adapters
+|   +-- db_csca_provider.cpp      # DB-based CSCA Provider
+|   +-- db_crl_provider.cpp       # DB-based CRL Provider
+|   +-- ldap_csca_provider.cpp    # LDAP-based CSCA Provider (PA Lookup)
+|   +-- ldap_crl_provider.cpp     # LDAP-based CRL Provider (PA Lookup)
+|
++-- auth/                         # Auth Module
+|   +-- personal_info_crypto.h/.cpp  # PII Encryption (AES-256-GCM)
+|   +-- password_hash.h/.cpp     # PBKDF2-HMAC-SHA256
+|
++-- processing_strategy.h         # Strategy Pattern (AUTO)
++-- ldif_processor.h/.cpp         # LDIF Processor
++-- common/
+|   +-- masterlist_processor.h    # Master List Processor
+|   +-- progress_manager.h/.cpp   # SSE Progress Management
+|
++-- main.cpp                      # Entry Point (minimized: ~430 lines, v2.13.0)</code></pre>
+<h3 id="ddd-layer-responsibilities">DDD Layer Responsibilities</h3>
+<h4 id="1-domain-layer">1. Domain Layer</h4>
+<p><strong>Responsibility</strong>: Business rules and core logic</p>
+<ul>
+<li><strong>Models</strong>: Business entities (Certificate, ICAO Version, etc.)</li>
+<li><strong>Domain Services</strong>: Domain logic (validation, computation, etc.)</li>
+</ul>
+<pre><code class="language-cpp">// domain/models/certificate.h
+class Certificate {
+private:
+    std::string id;
+    std::string subjectDn;
+    std::string issuerDn;
+    std::string country;
+    CertificateType type;  // CSCA, DSC, DSC_NC, MLSC
+
+public:
+    // Business rule: Check self-signed
+    bool isSelfSigned() const;
+
+    // Business rule: Check Link Certificate
+    bool isLinkCertificate() const;
+};</code></pre>
+<h4 id="2-repository-layer">2. Repository Layer</h4>
+<p><strong>Responsibility</strong>: Data persistence (DB, LDAP access)</p>
+<ul>
+<li>PostgreSQL data access</li>
+<li>LDAP data access</li>
+<li>Domain model &lt;-&gt; database conversion</li>
+</ul>
+<pre><code class="language-cpp">// repositories/ldap_certificate_repository.h
+class LdapCertificateRepository {
+public:
+    // Query certificate from LDAP
+    std::optional&lt;Certificate&gt; findByFingerprint(const std::string&amp; fingerprint);
+
+    // Save certificate to LDAP
+    void save(const Certificate&amp; cert);
+};</code></pre>
+<h4 id="3-application-service-layer">3. Application Service Layer</h4>
+<p><strong>Responsibility</strong>: Use case orchestration (transactions, combining multiple domain services)</p>
+<ul>
+<li>Upload processing flow management</li>
+<li>Transaction boundary setting</li>
+<li>External API calls</li>
+</ul>
+<pre><code class="language-cpp">// services/upload_service.h
+class UploadService {
+public:
+    // Use case: Process file upload
+    UploadResult processFileUpload(
+        const FileUploadRequest&amp; request,
+        ProcessingStrategy* strategy
+    );
+};</code></pre>
+<h4 id="4-infrastructure-layer">4. Infrastructure Layer</h4>
+<p><strong>Responsibility</strong>: External system integration (HTTP, filesystem, external API)</p>
+<ul>
+<li>ServiceContainer (centralized DI)</li>
+<li>Drogon HTTP handlers (handlers/)</li>
+<li>Filesystem access</li>
+<li>LDAP/PostgreSQL connection management</li>
+</ul>
+<hr>
+<h2 id="servicecontainer-pattern-centralized-di">ServiceContainer Pattern (Centralized DI)</h2>
+<h3 id="design-principles-v2-12-0">Design Principles (v2.12.0+)</h3>
+<p>ServiceContainer is a centralized container that owns all application dependencies and provides dependency injection.
+Replaces 17 global <code>shared_ptr</code> variables from the original main.cpp with a single container instance.</p>
+<h3 id="pimpl-pattern">Pimpl Pattern</h3>
+<p>Only exposes <code>struct Impl</code> forward declaration in header to minimize compilation dependencies:</p>
+<pre><code class="language-cpp">// infrastructure/service_container.h
+class ServiceContainer {
+public:
+    ServiceContainer();
+    ~ServiceContainer();
+
+    // Non-copyable, non-movable
+    ServiceContainer(const ServiceContainer&amp;) = delete;
+    ServiceContainer&amp; operator=(const ServiceContainer&amp;) = delete;
+
+    bool initialize(const AppConfig&amp; config);
+    void shutdown();
+
+    // Non-owning pointer accessors (ownership held by Impl)
+    common::IQueryExecutor* queryExecutor() const;
+    repositories::CertificateRepository* certificateRepository() const;
+    services::UploadService* uploadService() const;
+    handlers::UploadHandler* uploadHandler() const;
+    // ... other accessors
+
+private:
+    struct Impl;
+    std::unique_ptr&lt;Impl&gt; impl_;
+};</code></pre>
+<pre><code class="language-cpp">// infrastructure/service_container.cpp
+struct ServiceContainer::Impl {
+    // Connection pools
+    std::shared_ptr&lt;common::IDbConnectionPool&gt; dbPool;
+    std::unique_ptr&lt;common::IQueryExecutor&gt; queryExecutor;
+    std::shared_ptr&lt;common::LdapConnectionPool&gt; ldapPool;
+
+    // Repositories (16)
+    std::shared_ptr&lt;repositories::UploadRepository&gt; uploadRepository;
+    std::shared_ptr&lt;repositories::CertificateRepository&gt; certificateRepository;
+    // ...
+
+    // Services (8)
+    std::shared_ptr&lt;services::UploadService&gt; uploadService;
+    // ...
+
+    // Handlers (9)
+    std::shared_ptr&lt;handlers::UploadHandler&gt; uploadHandler;
+    // ...
+};</code></pre>
+<h3 id="initialization-order">Initialization Order</h3>
+<p>Strict dependency-ordered initialization:</p>
+<pre><code>Phase 0: PII Encryption (Personal Information Protection Act)
+Phase 1: LDAP Connection Pool
+Phase 2: Certificate Service (LDAP-based search)
+Phase 3: Database Connection Pool + Query Executor
+Phase 4: Repositories (16, all depend on QueryExecutor)
+Phase 4.5: LDAP Storage Service
+Phase 5: ICAO Sync Module
+Phase 6: Business Logic Services
+Phase 7: Handlers (9)
+Phase 8: Ensure Admin User</code></pre>
+<h3 id="resource-release">Resource Release</h3>
+<p><code>shutdown()</code> method releases all resources in reverse order (destructors called automatically):</p>
+<pre><code>Handlers -&gt; Services -&gt; LDAP Providers -&gt; Repositories -&gt; QueryExecutor -&gt; LDAP Pool -&gt; DB Pool</code></pre>
+<h3 id="servicecontainer-adoption-across-services">ServiceContainer Adoption Across Services</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th align="center">ServiceContainer</th>
+<th>Key Components</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td align="center">O</td>
+<td>16 repos, 8 services, 9 handlers</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td align="center">O</td>
+<td>4 repos, 2 parsers, 3 services</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td align="center">O</td>
+<td>5 repos, 3 services, SyncScheduler</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td align="center">-</td>
+<td>DB-independent (direct HTTP/system calls)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="main-cpp-minimization-pattern">main.cpp Minimization Pattern</h2>
+<h3 id="principles-v2-13-0">Principles (v2.13.0+)</h3>
+<p>main.cpp is composed as a minimal orchestration layer only:</p>
+<pre><code>Load config -&gt; Initialize ServiceContainer -&gt; Register routes -&gt; Run server</code></pre>
+<h3 id="structure-pkd-management-430-lines">Structure (PKD Management, ~430 lines)</h3>
+<pre><code class="language-cpp">// main.cpp -- Minimized entry point
+infrastructure::ServiceContainer* g_services = nullptr;
+
+namespace {
+    AppConfig appConfig;
+
+    void initializeLogging() { /* spdlog setup */ }
+    void printBanner() { /* banner output */ }
+    Json::Value checkDatabase() { /* DB health check */ }
+    Json::Value checkLdap() { /* LDAP health check */ }
+
+    void registerRoutes() {
+        auto&amp; app = drogon::app();
+
+        // Call each handler's registerRoutes()
+        if (g_services &amp;&amp; g_services-&gt;authHandler())
+            g_services-&gt;authHandler()-&gt;registerRoutes(app);
+        if (g_services &amp;&amp; g_services-&gt;uploadHandler())
+            g_services-&gt;uploadHandler()-&gt;registerRoutes(app);
+        if (g_services &amp;&amp; g_services-&gt;certificateHandler())
+            g_services-&gt;certificateHandler()-&gt;registerRoutes(app);
+        // ... other handlers
+
+        // MiscHandler (health, audit, etc. -- not managed by ServiceContainer)
+        static handlers::MiscHandler miscHandler(
+            g_services-&gt;auditService(),
+            g_services-&gt;validationService(),
+            checkDatabase, checkLdap
+        );
+        miscHandler.registerRoutes(app);
+    }
+}
+
+int main(int argc, char* argv[]) {
+    printBanner();
+    initializeLogging();
+    appConfig = AppConfig::fromEnvironment();
+
+    g_services = new infrastructure::ServiceContainer();
+    if (!g_services-&gt;initialize(appConfig)) return 1;
+
+    registerRoutes();
+    drogon::app().run();
+
+    delete g_services;
+    return 0;
+}</code></pre>
+<h3 id="handler-extraction-pattern">Handler Extraction Pattern</h3>
+<p>All handlers provide a <code>registerRoutes(HttpAppFramework&amp;)</code> method:</p>
+<pre><code class="language-cpp">// handlers/upload_handler.h
+class UploadHandler {
+public:
+    UploadHandler(UploadService*, ValidationService*, ...);
+
+    // Called from main.cpp
+    void registerRoutes(drogon::HttpAppFramework&amp; app);
+
+private:
+    void handleLdifUpload(const HttpRequestPtr&amp;, ResponseCallback&amp;&amp;);
+    void handleMasterListUpload(const HttpRequestPtr&amp;, ResponseCallback&amp;&amp;);
+    // ... 10 endpoints
+};</code></pre>
+<h3 id="main-cpp-size-across-services">main.cpp Size Across Services</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>v2.11.0</th>
+<th>v2.13.0</th>
+<th>Reduction</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td>8,095 lines</td>
+<td>~430 lines</td>
+<td>-94.7%</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td>2,800 lines</td>
+<td>~281 lines</td>
+<td>-90.0%</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td>1,644 lines</td>
+<td>~457 lines</td>
+<td>-72.2%</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>586 lines</td>
+<td>~93 lines</td>
+<td>-84.1%</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="strategy-pattern">Strategy Pattern</h2>
+<h3 id="1-processing-strategy-file-processing-mode">1. Processing Strategy - File Processing Mode</h3>
+<pre><code class="language-cpp">// processing_strategy.h
+
+// Abstract strategy interface
+class ProcessingStrategy {
+public:
+    virtual void processLdifEntries(...) = 0;
+    virtual void processMasterListContent(...) = 0;
+};
+
+// Concrete strategy: AUTO mode (v2.25.0+ MANUAL mode removed)
+class AutoProcessingStrategy : public ProcessingStrategy {
+    // One-shot processing: Parse -&gt; Validate -&gt; DB -&gt; LDAP
+};
+
+// Factory Pattern
+class ProcessingStrategyFactory {
+    static std::unique_ptr&lt;ProcessingStrategy&gt; create(const std::string&amp; mode);
+};</code></pre>
+<p><strong>Usage Example</strong>:</p>
+<pre><code class="language-cpp">// upload_handler.cpp
+auto strategy = ProcessingStrategyFactory::create("AUTO");
+strategy-&gt;processLdifEntries(uploadId, entries, conn, ld);</code></pre>
+<h3 id="2-certificate-type-strategy-per-type-validation">2. Certificate Type Strategy - Per-Type Validation</h3>
+<pre><code class="language-cpp">// Per-certificate-type validation strategy separation
+
+// CSCA validation strategy
+ValidationResult validateCscaCertificate(X509* cert) {
+    // CSCA validation logic (Self-signed, CA:TRUE, keyCertSign)
+}
+
+// DSC validation strategy
+ValidationResult validateDscCertificate(X509* cert, PGconn* conn) {
+    // DSC validation logic (Trust Chain, CRL check)
+}
+
+// Link Certificate validation strategy
+bool isLinkCertificate(X509* cert) {
+    // Link Certificate detection logic (CA:TRUE, keyCertSign, not self-signed)
+}</code></pre>
+<h3 id="3-file-type-strategy-per-file-type-processing">3. File Type Strategy - Per-File-Type Processing</h3>
+<pre><code class="language-cpp">// LDIF file processing
+class LdifProcessor {
+    ProcessingCounts process(const std::string&amp; content);
+};
+
+// Master List file processing
+class MasterListProcessor {
+    MasterListStats process(const std::vector&lt;uint8_t&gt;&amp; content);
+};</code></pre>
+<hr>
+<h2 id="single-responsibility-principle-srp">Single Responsibility Principle (SRP)</h2>
+<h3 id="good-example-responsibility-separation">Good Example: Responsibility Separation</h3>
+<pre><code class="language-cpp">// 1. Only responsible for LDIF parsing
+class LdifParser {
+    std::vector&lt;LdifEntry&gt; parse(const std::string&amp; content);
+};
+
+// 2. Only responsible for certificate validation
+class CertificateValidator {
+    ValidationResult validate(X509* cert);
+};
+
+// 3. Only responsible for LDAP storage
+class LdapCertificateRepository {
+    void save(const Certificate&amp; cert);
+};
+
+// 4. Orchestration of overall flow
+class UploadService {
+    void processUpload() {
+        auto entries = ldifParser.parse(content);      // Parsing
+        auto result = validator.validate(cert);        // Validation
+        repository.save(cert);                         // Storage
+    }
+};</code></pre>
+<h3 id="bad-example-mixed-responsibilities">Bad Example: Mixed Responsibilities</h3>
+<pre><code class="language-cpp">// One class performs parsing, validation, and storage (SRP violation)
+class EverythingProcessor {
+    void processEverything(const std::string&amp; content) {
+        // Parse
+        auto entries = /* parse LDIF */;
+
+        // Validate
+        auto result = /* validate certificate */;
+
+        // DB save
+        /* save to PostgreSQL */;
+
+        // LDAP save
+        /* save to LDAP */;
+    }
+};</code></pre>
+<h3 id="class-responsibility-definitions">Class Responsibility Definitions</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Class/Module</th>
+<th>Single Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LdifProcessor</code></td>
+<td>LDIF file parsing</td>
+</tr>
+<tr>
+<td><code>MasterListProcessor</code></td>
+<td>Master List CMS parsing</td>
+</tr>
+<tr>
+<td><code>AutoProcessingStrategy</code></td>
+<td>AUTO mode processing flow</td>
+</tr>
+<tr>
+<td><code>Certificate</code> (Domain Model)</td>
+<td>Certificate domain rules</td>
+</tr>
+<tr>
+<td><code>LdapCertificateRepository</code></td>
+<td>LDAP data access</td>
+</tr>
+<tr>
+<td><code>CertificateValidator</code></td>
+<td>Certificate validation logic</td>
+</tr>
+<tr>
+<td><code>TrustChainBuilder</code></td>
+<td>Trust Chain construction</td>
+</tr>
+<tr>
+<td><code>CscaCache</code></td>
+<td>CSCA cache management</td>
+</tr>
+<tr>
+<td><code>ServiceContainer</code></td>
+<td>Dependency ownership and initialization</td>
+</tr>
+<tr>
+<td><code>UploadHandler</code></td>
+<td>Upload HTTP handler</td>
+</tr>
+<tr>
+<td><code>LdapStorageService</code></td>
+<td>LDAP write operations</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="query-executor-pattern-database-abstraction">Query Executor Pattern (Database Abstraction)</h2>
+<p>Database abstraction pattern for Multi-DBMS support (PostgreSQL + Oracle).</p>
+<h3 id="iqueryexecutor-interface">IQueryExecutor Interface</h3>
+<pre><code class="language-cpp">// shared/lib/database/i_query_executor.h
+class IQueryExecutor {
+public:
+    virtual QueryResult executeQuery(const std::string&amp; sql,
+                                      const std::vector&lt;std::string&gt;&amp; params) = 0;
+    virtual int executeNonQuery(const std::string&amp; sql,
+                                 const std::vector&lt;std::string&gt;&amp; params) = 0;
+    virtual DatabaseType getDatabaseType() const = 0;
+
+    // Batch mode (v2.26.1+)
+    virtual void beginBatch() {}
+    virtual void endBatch() {}
+    virtual void savepoint(const std::string&amp; name) {}
+    virtual void rollbackToSavepoint(const std::string&amp; name) {}
+};</code></pre>
+<h3 id="implementations">Implementations</h3>
+<ul>
+<li><strong>PostgreSqlQueryExecutor</strong>: libpq-based (10-50x faster)</li>
+<li><strong>OracleQueryExecutor</strong>: OCI Session Pool-based</li>
+</ul>
+<h3 id="runtime-selection">Runtime Selection</h3>
+<pre><code class="language-cpp">// Factory Pattern selects at runtime based on DB_TYPE environment variable
+auto executor = QueryExecutorFactory::create(DB_TYPE);  // "postgres" or "oracle"</code></pre>
+<p>All repositories execute SQL through <code>IQueryExecutor</code>, enabling database replacement.</p>
+<hr>
+<h2 id="query-helpers-pattern">Query Helpers Pattern</h2>
+<h3 id="common-db-utility-functions">common::db:: Utility Functions</h3>
+<p>Helper functions abstracting SQL syntax differences between databases (v2.12.0+).</p>
+<pre><code class="language-cpp">// shared/lib/database/query_helpers.h
+namespace common::db {
+    // JSON -&gt; integer safe conversion (Oracle returns all values as strings)
+    int scalarToInt(const Json::Value&amp; val, int defaultVal = 0);
+
+    // DB-specific boolean literal ("TRUE"/"FALSE" vs "1"/"0")
+    std::string boolLiteral(const std::string&amp; dbType, bool value);
+
+    // DB-specific pagination ("LIMIT $N OFFSET $M" vs "OFFSET $M ROWS FETCH NEXT $N ROWS ONLY")
+    std::string paginationClause(const std::string&amp; dbType, int limit, int offset);
+
+    // DB-specific hex prefix ("\\x" vs empty string)
+    std::string hexPrefix(const std::string&amp; dbType);
+
+    // DB-specific current timestamp ("NOW()" vs "SYSTIMESTAMP")
+    std::string currentTimestamp(const std::string&amp; dbType);
+
+    // DB-specific case-insensitive condition ("ILIKE" vs "UPPER() LIKE UPPER()")
+    std::string ilikeCond(const std::string&amp; dbType, const std::string&amp; column, const std::string&amp; paramRef);
+
+    // DB-specific LIMIT clause
+    std::string limitClause(const std::string&amp; dbType, int limit);
+
+    // JSON boolean safe reading (Oracle NUMBER(1) -&gt; bool)
+    bool getBool(const Json::Value&amp; row, const std::string&amp; key, bool defaultVal = false);
+}</code></pre>
+<h3 id="usage-example">Usage Example</h3>
+<pre><code class="language-cpp">// Remove DB branching in repositories
+std::string dbType = queryExecutor_-&gt;getDatabaseType();
+
+std::string sql = "SELECT * FROM certificate WHERE stored_in_ldap = " +
+    common::db::boolLiteral(dbType, false) +
+    " ORDER BY created_at " +
+    common::db::paginationClause(dbType, limit, offset);</code></pre>
+<h3 id="impact">Impact</h3>
+<ul>
+<li>Eliminated 204 inline DB branches across 15 repositories in 3 services</li>
+<li>New repositories automatically get DB compatibility</li>
+</ul>
+<hr>
+<h2 id="provider-adapter-pattern-validation-infrastructure">Provider/Adapter Pattern (Validation Infrastructure)</h2>
+<p>Pattern separating validation logic from data sources (DB vs LDAP).</p>
+<h3 id="provider-interface">Provider Interface</h3>
+<pre><code class="language-cpp">// shared/lib/icao-validation/include/icao/validation/providers.h
+class ICscaProvider {
+public:
+    virtual std::vector&lt;X509*&gt; findAllCscasByIssuerDn(const std::string&amp; issuerDn) = 0;
+    virtual X509* findCscaByIssuerDn(const std::string&amp; issuerDn,
+                                      const std::string&amp; countryCode = "") = 0;
+};
+
+class ICrlProvider {
+public:
+    virtual X509_CRL* findCrlByCountry(const std::string&amp; countryCode) = 0;
+};</code></pre>
+<h3 id="adapter-implementations">Adapter Implementations</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>CSCA Provider</th>
+<th>CRL Provider</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td><code>DbCscaProvider</code> -&gt; CertificateRepository</td>
+<td><code>DbCrlProvider</code> -&gt; CrlRepository</td>
+</tr>
+<tr>
+<td>PKD Management (PA Lookup)</td>
+<td><code>LdapCscaProvider</code> -&gt; LdapPool</td>
+<td><code>LdapCrlProvider</code> -&gt; LdapPool</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td><code>LdapCscaProvider</code> -&gt; LdapCertificateRepository</td>
+<td><code>LdapCrlProvider</code> -&gt; LdapCrlRepository</td>
+</tr>
+</tbody></table></div>
+<p>Each service implements Adapters matching its own data access layer. The <code>icao::validation</code> library contains no infrastructure code.</p>
+<hr>
+<h2 id="shared-libraries">Shared Libraries</h2>
+<h3 id="library-structure-shared-lib">Library Structure (shared/lib/)</h3>
+<p>Common ICAO certificate functionality extracted into shared libraries to eliminate code duplication across services.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Library</th>
+<th>Namespace</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>database</code></td>
+<td><code>common::</code> / <code>common::db::</code></td>
+<td>DB connection pool, Query Executor (PostgreSQL + Oracle), Query Helpers</td>
+</tr>
+<tr>
+<td><code>ldap</code></td>
+<td><code>common::</code></td>
+<td>Thread-safe LDAP connection pool (min=2, max=10)</td>
+</tr>
+<tr>
+<td><code>icao-validation</code></td>
+<td><code>icao::validation::</code></td>
+<td>ICAO 9303 certificate validation (trust chain, CRL, extensions, algorithm)</td>
+</tr>
+<tr>
+<td><code>certificate-parser</code></td>
+<td><code>icao::</code></td>
+<td>X.509 certificate parsing</td>
+</tr>
+<tr>
+<td><code>cvc-parser</code></td>
+<td><code>icao::cvc::</code></td>
+<td>BSI TR-03110 CVC certificate parsing</td>
+</tr>
+<tr>
+<td><code>icao9303</code></td>
+<td><code>icao::</code></td>
+<td>ICAO 9303 SOD/DG parser</td>
+</tr>
+<tr>
+<td><code>audit</code></td>
+<td><code>icao::audit::</code></td>
+<td>Unified audit logging (operation_audit_log)</td>
+</tr>
+<tr>
+<td><code>config</code></td>
+<td><code>icao::config::</code></td>
+<td>Configuration management</td>
+</tr>
+<tr>
+<td><code>exception</code></td>
+<td><code>icao::</code></td>
+<td>Custom exception types</td>
+</tr>
+<tr>
+<td><code>logging</code></td>
+<td><code>icao::logging::</code></td>
+<td>Structured logging (spdlog)</td>
+</tr>
+</tbody></table></div>
+<h3 id="shared-validation-library-icao-validation-v2-11-0">Shared Validation Library (icao::validation, v2.11.0+)</h3>
+<p>Pattern extracting ICAO 9303 certificate validation logic into a shared library.</p>
+<h4 id="design-principles">Design Principles</h4>
+<ul>
+<li><strong>Pure Function</strong>: Uses only OpenSSL X509 API without infrastructure dependencies</li>
+<li><strong>Idempotent</strong>: Same input -&gt; same output (idempotency guaranteed)</li>
+<li><strong>Provider Pattern</strong>: Data sources injected through interfaces</li>
+</ul>
+<h4 id="module-structure">Module Structure</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Module</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>cert_ops</code></td>
+<td>Pure X509 operations (fingerprint, validity, DN extraction, normalization)</td>
+</tr>
+<tr>
+<td><code>trust_chain_builder</code></td>
+<td>Multi-CSCA trust chain construction (key rollover support)</td>
+</tr>
+<tr>
+<td><code>crl_checker</code></td>
+<td>RFC 5280 CRL revocation checking</td>
+</tr>
+<tr>
+<td><code>extension_validator</code></td>
+<td>X.509 extension field validation (key usage, critical extensions)</td>
+</tr>
+<tr>
+<td><code>algorithm_compliance</code></td>
+<td>ICAO Doc 9303 Part 12 algorithm requirements</td>
+</tr>
+</tbody></table></div>
+<h4 id="testing">Testing</h4>
+<p>86 unit tests (GTest). All modules include idempotency verification (50-100 iterations).</p>
+<h3 id="shared-database-library-icao-database">Shared Database Library (icao::database)</h3>
+<h4 id="query-executor-query-helpers">Query Executor + Query Helpers</h4>
+<ul>
+<li><code>IQueryExecutor</code>: DB abstraction interface (PostgreSQL + Oracle)</li>
+<li><code>QueryHelpers</code> (<code>common::db::</code>): SQL syntax difference abstraction utilities</li>
+<li><code>handler_utils.h</code>: <code>sendJsonSuccess()</code>, <code>notFound()</code> response helpers</li>
+</ul>
+<h4 id="connection-pooling">Connection Pooling</h4>
+<ul>
+<li><code>DbConnectionPool</code>: Thread-safe DB connection pool (RAII)</li>
+<li><code>DbConnectionPoolFactory</code>: Environment variable-based pool creation</li>
+</ul>
+<hr>
+<h2 id="code-structure-rules">Code Structure Rules</h2>
+<h3 id="1-file-organization-rules">1. File Organization Rules</h3>
+<pre><code>service-name/
++-- src/
+|   +-- infrastructure/         # Infrastructure Layer (ServiceContainer, AppConfig)
+|   |
+|   +-- handlers/               # HTTP Handlers (registerRoutes pattern)
+|   |
+|   +-- middleware/              # Auth Middleware
+|   |
+|   +-- domain/                 # Domain Layer (Business core)
+|   |   +-- models/             # Entities
+|   |   +-- services/           # Domain services
+|   |
+|   +-- repositories/           # Data access (LDAP, PostgreSQL)
+|   |
+|   +-- services/               # Application services
+|   |
+|   +-- adapters/               # Provider adapters (icao::validation)
+|   |
+|   +-- auth/                   # Auth/encryption module
+|   |
+|   +-- common/                 # Utilities (common functions)
+|   |
+|   +-- {strategy_name}_strategy.h   # Strategy pattern
+|   +-- {processor_name}_processor.h # Processor
+|   |
+|   +-- main.cpp               # Minimal entry point (~430 lines)
+|
++-- tests/                     # Unit tests</code></pre>
+<h3 id="2-naming-conventions">2. Naming Conventions</h3>
+<h4 id="class-naming">Class Naming</h4>
+<ul>
+<li><strong>Domain Model</strong>: <code>Certificate</code>, <code>IcaoVersion</code> (nouns)</li>
+<li><strong>Repository</strong>: <code>LdapCertificateRepository</code>, <code>CrlRepository</code></li>
+<li><strong>Service</strong>: <code>UploadService</code>, <code>CertificateService</code></li>
+<li><strong>Handler</strong>: <code>UploadHandler</code>, <code>CertificateHandler</code> (v2.12.0+)</li>
+<li><strong>Strategy</strong>: <code>AutoProcessingStrategy</code></li>
+<li><strong>Processor</strong>: <code>LdifProcessor</code>, <code>MasterListProcessor</code></li>
+<li><strong>Validator</strong>: <code>CertificateValidator</code>, <code>TrustChainValidator</code></li>
+<li><strong>Container</strong>: <code>ServiceContainer</code> (DI container)</li>
+</ul>
+<h4 id="function-naming">Function Naming</h4>
+<ul>
+<li><strong>Domain rules</strong>: <code>isSelfSigned()</code>, <code>isLinkCertificate()</code></li>
+<li><strong>Repository</strong>: <code>findByFingerprint()</code>, <code>save()</code>, <code>findAll()</code></li>
+<li><strong>Service</strong>: <code>processUpload()</code>, <code>validateCertificate()</code></li>
+<li><strong>Handler</strong>: <code>handleLdifUpload()</code>, <code>handleCertificateSearch()</code></li>
+<li><strong>Route Registration</strong>: <code>registerRoutes(HttpAppFramework&amp;)</code></li>
+<li><strong>Strategy</strong>: <code>processLdifEntries()</code>, <code>processMasterListContent()</code></li>
+</ul>
+<h3 id="3-dependency-direction">3. Dependency Direction</h3>
+<pre><code>+-------------------------------------------+
+|     main.cpp (Minimal Orchestration)      |
+|    config -&gt; DI -&gt; routes -&gt; run          |
++-------------------+---------------------+
+                    |
+                    v
++-------------------------------------------+
+|   ServiceContainer (DI + Handlers)        |
+|     Owns all dependencies (pimpl)         |
++-------------------+---------------------+
+                    |
+                    v
++-------------------------------------------+
+|      Application Service Layer            |
+|     (UploadService, etc.)                 |
++-------------------+---------------------+
+                    |
+                    v
++-------------------------------------------+
+|         Domain Layer                      |
+|  (Certificate, CertificateValidator)      |
++-------------------+---------------------+
+                    |
+                    v
++-------------------------------------------+
+|    Infrastructure Layer                   |
+|  (LdapRepository, PostgresRepository)     |
++-------------------------------------------+</code></pre>
+<p><strong>Dependency Rules</strong>:</p>
+<ul>
+<li>Domain Layer does not depend on other layers (Pure Business Logic)</li>
+<li>Application Service depends on Domain Layer</li>
+<li>Infrastructure depends on Domain Layer (Dependency Inversion)</li>
+<li>Handler depends on Service + Repository</li>
+<li>ServiceContainer owns all layers but minimizes header exposure via Pimpl</li>
+<li>main.cpp depends only on ServiceContainer</li>
+</ul>
+<hr>
+<h2 id="extension-guidelines">Extension Guidelines</h2>
+<h3 id="1-adding-a-new-file-type">1. Adding a New File Type</h3>
+<pre><code class="language-cpp">// 1. Create Processor (SRP)
+class NewFileTypeProcessor {
+    ProcessingResult process(const std::vector&lt;uint8_t&gt;&amp; content);
+};
+
+// 2. Add method to Strategy
+class ProcessingStrategy {
+    virtual void processNewFileType(...) = 0;
+};
+
+// 3. Implement concrete strategy
+class AutoProcessingStrategy {
+    void processNewFileType(...) override;
+};</code></pre>
+<h3 id="2-adding-a-new-certificate-type">2. Adding a New Certificate Type</h3>
+<pre><code class="language-cpp">// 1. Extend CertificateType enum
+enum class CertificateType {
+    CSCA, DSC, DSC_NC, MLSC, NEW_TYPE  // Added
+};
+
+// 2. Add validation strategy (SRP)
+ValidationResult validateNewTypeCertificate(X509* cert) {
+    // NEW_TYPE validation logic
+}
+
+// 3. Add LDAP DN strategy
+std::string buildLdapDnForNewType(const Certificate&amp; cert) {
+    // NEW_TYPE LDAP DN generation logic
+}</code></pre>
+<h3 id="3-adding-a-new-handler-v2-12-0-pattern">3. Adding a New Handler (v2.12.0+ Pattern)</h3>
+<pre><code class="language-cpp">// 1. Create handlers/new_handler.h/.cpp
+class NewHandler {
+public:
+    NewHandler(SomeService*, SomeRepository*, IQueryExecutor*);
+    void registerRoutes(drogon::HttpAppFramework&amp; app);
+private:
+    void handleSomeEndpoint(const HttpRequestPtr&amp;, ResponseCallback&amp;&amp;);
+};
+
+// 2. Add member to ServiceContainer's Impl
+struct ServiceContainer::Impl {
+    std::shared_ptr&lt;handlers::NewHandler&gt; newHandler;
+};
+
+// 3. Create in ServiceContainer::initialize()
+impl_-&gt;newHandler = std::make_shared&lt;handlers::NewHandler&gt;(...);
+
+// 4. Add accessor to ServiceContainer
+handlers::NewHandler* newHandler() const;
+
+// 5. Register in main.cpp's registerRoutes()
+if (g_services &amp;&amp; g_services-&gt;newHandler())
+    g_services-&gt;newHandler()-&gt;registerRoutes(app);</code></pre>
+<h3 id="4-adding-a-new-microservice">4. Adding a New Microservice</h3>
+<pre><code class="language-cpp">// 1. Create services/{new-service-name}/ directory
+// 2. Apply DDD structure (infrastructure/, handlers/, repositories/, services/)
+// 3. Apply ServiceContainer + AppConfig pattern
+// 4. Apply main.cpp minimization pattern (~100-500 lines)
+// 5. Create Dockerfile, CMakeLists.txt
+// 6. Add service to docker-compose.yaml
+// 7. Add routing to API Gateway (nginx.conf)</code></pre>
+<hr>
+<h2 id="anti-patterns">Anti-Patterns</h2>
+<h3 id="god-class">God Class</h3>
+<pre><code class="language-cpp">// BAD: All responsibilities concentrated in one class
+class Everything {
+    void parseFile();
+    void validateCertificate();
+    void saveToDatabase();
+    void saveToLdap();
+    void sendEmail();
+    void logEverything();
+};</code></pre>
+<h3 id="fat-main-cpp">Fat main.cpp</h3>
+<pre><code class="language-cpp">// BAD: All handler logic implemented directly in main.cpp (pre-v2.11.0 pattern)
+int main() {
+    app.registerHandler("/api/upload/ldif", [](req, callback) {
+        // 500 lines of upload handler logic...
+    });
+    app.registerHandler("/api/certificates/search", [](req, callback) {
+        // 300 lines of search logic...
+    });
+    // ... 8,095 lines
+}</code></pre>
+<p><strong>Correct approach</strong>: Extract to Handler classes + ServiceContainer DI</p>
+<h3 id="global-variables">Global Variables</h3>
+<pre><code class="language-cpp">// BAD: 17 global shared_ptr variables (pre-v2.11.0 pattern)
+std::shared_ptr&lt;UploadRepository&gt; g_uploadRepo;
+std::shared_ptr&lt;CertificateRepository&gt; g_certRepo;
+// ... 15 more</code></pre>
+<p><strong>Correct approach</strong>: ServiceContainer owns all dependencies</p>
+<h3 id="anemic-domain-model">Anemic Domain Model</h3>
+<pre><code class="language-cpp">// BAD: Domain model has only data, logic is in external service
+class Certificate {
+    std::string subjectDn;  // Only getter/setter
+    std::string issuerDn;
+};
+
+class CertificateService {
+    bool isSelfSigned(const Certificate&amp; cert);  // Domain logic in service
+};</code></pre>
+<p><strong>Correct approach</strong>:</p>
+<pre><code class="language-cpp">// GOOD: Domain logic placed inside model
+class Certificate {
+private:
+    std::string subjectDn;
+    std::string issuerDn;
+
+public:
+    bool isSelfSigned() const {  // Domain logic inside model
+        return subjectDn == issuerDn;
+    }
+};</code></pre>
+<h3 id="tight-coupling">Tight Coupling</h3>
+<pre><code class="language-cpp">// BAD: Direct dependency on concrete class
+class UploadService {
+    PostgresCertificateRepository repo;  // Depends on concrete class
+
+    void save(Certificate cert) {
+        repo.save(cert);  // Not replaceable
+    }
+};</code></pre>
+<p><strong>Correct approach</strong>:</p>
+<pre><code class="language-cpp">// GOOD: Depend on interface/abstract class (Dependency Inversion)
+class UploadService {
+    CertificateRepository* repo;  // Depends on abstract interface
+
+    UploadService(CertificateRepository* r) : repo(r) {}
+
+    void save(Certificate cert) {
+        repo-&gt;save(cert);  // Replaceable (LDAP/Postgres)
+    }
+};</code></pre>
+<h3 id="inline-db-branching">Inline DB Branching</h3>
+<pre><code class="language-cpp">// BAD: Repeated DB-specific if/else in every repository (pre-v2.11.0 pattern)
+if (dbType == "oracle") {
+    sql += " OFFSET " + std::to_string(offset) + " ROWS FETCH NEXT " + std::to_string(limit) + " ROWS ONLY";
+} else {
+    sql += " LIMIT " + std::to_string(limit) + " OFFSET " + std::to_string(offset);
+}</code></pre>
+<p><strong>Correct approach</strong>:</p>
+<pre><code class="language-cpp">// GOOD: Use Query Helpers
+sql += common::db::paginationClause(dbType, limit, offset);</code></pre>
+<hr>
+<h2 id="code-review-checklist">Code Review Checklist</h2>
+<p>Verify the following when writing new code:</p>
+<h3 id="ddd-compliance">DDD Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Is domain logic located in the Domain Layer?</li>
+<li><input disabled="" type="checkbox"> Does the Repository handle only data access?</li>
+<li><input disabled="" type="checkbox"> Does the Application Service only orchestrate use cases?</li>
+</ul>
+<h3 id="servicecontainer-pattern-compliance">ServiceContainer Pattern Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Are new dependencies registered in ServiceContainer?</li>
+<li><input disabled="" type="checkbox"> Are ServiceContainer accessors used instead of global variables?</li>
+<li><input disabled="" type="checkbox"> Does initialization order follow dependency direction?</li>
+</ul>
+<h3 id="handler-extraction-compliance">Handler Extraction Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Is HTTP handler logic in Handler classes, not main.cpp?</li>
+<li><input disabled="" type="checkbox"> Does the Handler provide a <code>registerRoutes(HttpAppFramework&amp;)</code> method?</li>
+<li><input disabled="" type="checkbox"> Does main.cpp perform only minimal orchestration?</li>
+</ul>
+<h3 id="strategy-pattern-compliance">Strategy Pattern Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Are Processors separated by file type?</li>
+<li><input disabled="" type="checkbox"> Is validation logic separated by certificate type?</li>
+<li><input disabled="" type="checkbox"> Is mode-specific processing separated through ProcessingStrategy?</li>
+</ul>
+<h3 id="srp-compliance">SRP Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Does each class have only one responsibility?</li>
+<li><input disabled="" type="checkbox"> Does the class name clearly express its responsibility?</li>
+<li><input disabled="" type="checkbox"> Does each function do only one thing?</li>
+</ul>
+<h3 id="multi-dbms-compliance">Multi-DBMS Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Are Query Helpers (<code>common::db::</code>) used to eliminate DB branching?</li>
+<li><input disabled="" type="checkbox"> Is SQL executed through <code>IQueryExecutor</code>?</li>
+<li><input disabled="" type="checkbox"> Has it been tested on both Oracle/PostgreSQL?</li>
+</ul>
+<h3 id="microservice-compliance">Microservice Compliance</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Does inter-service communication go through the API Gateway?</li>
+<li><input disabled="" type="checkbox"> Is each service independently deployable?</li>
+<li><input disabled="" type="checkbox"> Are databases separated per service (or clearly separated tables)?</li>
+</ul>
+<h3 id="dependency-direction">Dependency Direction</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Does the Domain Layer not depend on other layers?</li>
+<li><input disabled="" type="checkbox"> Does Infrastructure depend on Domain? (Dependency Inversion)</li>
+<li><input disabled="" type="checkbox"> Are there no circular references?</li>
+</ul>
+<hr>
+<h1 id="appendix">Appendix</h1>
+<hr>
+<h2 id="future-enhancements">Future Enhancements</h2>
+<h3 id="completed-previously-planned">Completed (Previously Planned)</h3>
+<ul>
+<li>JWT Authentication (v1.8.0)</li>
+<li>Role-Based Access Control -- RBAC admin/user (v1.9.0)</li>
+<li>Multi-DBMS Support -- PostgreSQL + Oracle (v2.6.0)</li>
+<li>Monitoring Service -- DB-independent system metrics (v2.7.1)</li>
+<li>OWASP Security Hardening -- Full audit (v2.10.5)</li>
+<li>ICAO 9303 Validation Library -- 86 unit tests (v2.10.6)</li>
+</ul>
+<h3 id="phase-1-planned">Phase 1 (Planned)</h3>
+<ul>
+<li>HTTPS/TLS Support (Let&#39;s Encrypt)</li>
+<li>Horizontal Scaling (Multiple instances)</li>
+<li>Redis Caching Layer</li>
+</ul>
+<h3 id="phase-2-research-in-progress">Phase 2 (Research / In Progress)</h3>
+<ul>
+<li>ICAO PKD LDAP V3 Direct Connection -- Certificate auto-synchronization (March 2026~ ICAO transition)</li>
+<li>ICAO PKD REST API Integration -- HTTP-based certificate download</li>
+<li>Kubernetes Deployment</li>
+<li>Prometheus + Grafana Monitoring</li>
+</ul>
+<hr>
+<h2 id="conclusion">Conclusion</h2>
+<p>FASTpass(R) SPKD v2.37.0 provides high performance, scalability, and security through <strong>microservices architecture</strong>, <strong>Multi-DBMS</strong>, <strong>full ICAO 9303 compliance</strong>, and <strong>CSR-based PKD integration</strong>.</p>
+<p><strong>Key Strengths</strong>:</p>
+<ul>
+<li>5 independent microservices (PKD Management, PA, Relay, Monitoring, AI Analysis)</li>
+<li>Multi-DBMS support -- PostgreSQL 15 / Oracle XE 21c runtime switching</li>
+<li><strong>ICAO PKD CSR Management</strong> -- RSA-2048 CSR generation/Import, issued certificate registration, public key matching verification</li>
+<li><strong>DSC Registration Approval Workflow</strong> -- PA-extracted DSC auto-registration -&gt; admin approval/rejection</li>
+<li>JWT Authentication + RBAC (12 permissions, including pa:stats) + API Key Authentication (X-API-Key) + Dual Audit Logging</li>
+<li><strong>PII Encryption</strong> (AES-256-GCM) -- CSR private key, passport number, PII fields</li>
+<li>OWASP security hardening complete (Command Injection elimination, SQL Injection prevention)</li>
+<li>AI certificate forensic analysis (Isolation Forest + LOF, 10-category forensic risk scoring)</li>
+<li>icao::validation shared library (ICAO 9303 Part 12)</li>
+<li>DB-LDAP data consistency guaranteed (31,212 certificates, 100% synchronization)</li>
+<li>C++20 high-performance backend + React 19 modern frontend (29 pages)</li>
+<li>ARM64 CI/CD pipeline (GitHub Actions -&gt; Luckfox deployment)</li>
+<li>Docker / Podman flexible deployment (local, Production RHEL 9, ARM64)</li>
+</ul>
+<hr>
+<p><strong>Document Created</strong>: 2026-03-18
+<strong>Author</strong>: ICAO Local PKD Development Team
+<strong>Organization</strong>: SMARTCORE Inc.</p>
+<hr>
+<h2 id="references">References</h2>
+<ul>
+<li><strong><a href="../CLAUDE.md">CLAUDE.md</a></strong> - Project overview and current version (v2.37.0)</li>
+<li><strong><a href="SECURITY_AUDIT_REPORT.html">SECURITY_AUDIT_REPORT.md</a></strong> - Security audit report</li>
+<li><strong><a href="DEVELOPMENT_GUIDE.html">DEVELOPMENT_GUIDE.md</a></strong> - Development guide</li>
+</ul>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#table-of-contents">Table of Contents</a><a href="#part-1-system-architecture" style="padding-left:1rem">Part 1: System Architecture</a><a href="#part-2-design-principles-patterns" style="padding-left:1rem">Part 2: Design Principles &amp; Patterns</a><a href="#appendix" style="padding-left:1rem">Appendix</a><a href="#system-overview">System Overview</a><a href="#core-principles" style="padding-left:1rem">Core Principles</a><a href="#pkd-and-eac-pki-role-separation" style="padding-left:1rem">PKD and EAC PKI Role Separation</a><a href="#technical-architecture-diagram">Technical Architecture Diagram</a><a href="#system-overview-v2-37-0" style="padding-left:1rem">System Overview (v2.37.0)</a><a href="#layer-description" style="padding-left:1rem">Layer Description</a><a href="#data-flow-summary" style="padding-left:1rem">Data Flow Summary</a><a href="#microservices-architecture">Microservices Architecture</a><a href="#service-layout" style="padding-left:1rem">Service Layout</a><a href="#service-communication" style="padding-left:1rem">Service Communication</a><a href="#1-pkd-management-service-port-8081" style="padding-left:1rem">1. PKD Management Service (Port 8081)</a><a href="#2-pa-service-port-8082" style="padding-left:1rem">2. PA Service (Port 8082)</a><a href="#3-pkd-relay-service-port-8083" style="padding-left:1rem">3. PKD Relay Service (Port 8083)</a><a href="#4-monitoring-service-port-8084" style="padding-left:1rem">4. Monitoring Service (Port 8084)</a><a href="#data-layer-architecture">Data Layer Architecture</a><a href="#database-schema" style="padding-left:1rem">Database Schema</a><a href="#ldap-directory-structure" style="padding-left:1rem">LDAP Directory Structure</a><a href="#frontend-architecture">Frontend Architecture</a><a href="#api-gateway-architecture">API Gateway Architecture</a><a href="#component-details">Component Details</a><a href="#ldif-processor" style="padding-left:1rem">LDIF Processor</a><a href="#icao-auto-sync-flow-v1-7-0" style="padding-left:1rem">ICAO Auto Sync Flow (v1.7.0)</a><a href="#data-flow-diagrams">Data Flow Diagrams</a><a href="#upload-flow-auto-mode" style="padding-left:1rem">Upload Flow (AUTO Mode)</a><a href="#pa-verification-flow" style="padding-left:1rem">PA Verification Flow</a><a href="#deployment-architecture">Deployment Architecture</a><a href="#docker-compose-architecture" style="padding-left:1rem">Docker Compose Architecture</a><a href="#luckfox-arm64-deployment" style="padding-left:1rem">Luckfox ARM64 Deployment</a><a href="#security-architecture">Security Architecture</a><a href="#authentication-authorization" style="padding-left:1rem">Authentication &amp; Authorization</a><a href="#technology-stack-summary">Technology Stack Summary</a><a href="#backend" style="padding-left:1rem">Backend</a><a href="#frontend" style="padding-left:1rem">Frontend</a><a href="#infrastructure" style="padding-left:1rem">Infrastructure</a><a href="#performance-metrics">Performance Metrics</a><a href="#throughput" style="padding-left:1rem">Throughput</a><a href="#scalability" style="padding-left:1rem">Scalability</a><a href="#monitoring-observability">Monitoring &amp; Observability</a><a href="#health-checks" style="padding-left:1rem">Health Checks</a><a href="#logging-strategy" style="padding-left:1rem">Logging Strategy</a><a href="#core-design-principles">Core Design Principles</a><a href="#1-domain-driven-design-ddd" style="padding-left:1rem">1. Domain-Driven Design (DDD)</a><a href="#2-microservice-architecture" style="padding-left:1rem">2. Microservice Architecture</a><a href="#3-strategy-pattern" style="padding-left:1rem">3. Strategy Pattern</a><a href="#4-single-responsibility-principle-srp" style="padding-left:1rem">4. Single Responsibility Principle (SRP)</a><a href="#5-servicecontainer-pimpl-pattern-v2-12-0" style="padding-left:1rem">5. ServiceContainer + Pimpl Pattern (v2.12.0+)</a><a href="#6-handler-extraction-pattern-v2-13-0" style="padding-left:1rem">6. Handler Extraction Pattern (v2.13.0+)</a><a href="#ddd-domain-driven-design-structure">DDD (Domain-Driven Design) Structure</a><a href="#pkd-management-service-layer-structure" style="padding-left:1rem">PKD Management Service Layer Structure</a><a href="#ddd-layer-responsibilities" style="padding-left:1rem">DDD Layer Responsibilities</a><a href="#servicecontainer-pattern-centralized-di">ServiceContainer Pattern (Centralized DI)</a><a href="#design-principles-v2-12-0" style="padding-left:1rem">Design Principles (v2.12.0+)</a><a href="#pimpl-pattern" style="padding-left:1rem">Pimpl Pattern</a><a href="#initialization-order" style="padding-left:1rem">Initialization Order</a><a href="#resource-release" style="padding-left:1rem">Resource Release</a><a href="#servicecontainer-adoption-across-services" style="padding-left:1rem">ServiceContainer Adoption Across Services</a><a href="#main-cpp-minimization-pattern">main.cpp Minimization Pattern</a><a href="#principles-v2-13-0" style="padding-left:1rem">Principles (v2.13.0+)</a><a href="#structure-pkd-management-430-lines" style="padding-left:1rem">Structure (PKD Management, ~430 lines)</a><a href="#handler-extraction-pattern" style="padding-left:1rem">Handler Extraction Pattern</a><a href="#main-cpp-size-across-services" style="padding-left:1rem">main.cpp Size Across Services</a><a href="#strategy-pattern">Strategy Pattern</a><a href="#1-processing-strategy-file-processing-mode" style="padding-left:1rem">1. Processing Strategy - File Processing Mode</a><a href="#2-certificate-type-strategy-per-type-validation" style="padding-left:1rem">2. Certificate Type Strategy - Per-Type Validation</a><a href="#3-file-type-strategy-per-file-type-processing" style="padding-left:1rem">3. File Type Strategy - Per-File-Type Processing</a><a href="#single-responsibility-principle-srp">Single Responsibility Principle (SRP)</a><a href="#good-example-responsibility-separation" style="padding-left:1rem">Good Example: Responsibility Separation</a><a href="#bad-example-mixed-responsibilities" style="padding-left:1rem">Bad Example: Mixed Responsibilities</a><a href="#class-responsibility-definitions" style="padding-left:1rem">Class Responsibility Definitions</a><a href="#query-executor-pattern-database-abstraction">Query Executor Pattern (Database Abstraction)</a><a href="#iqueryexecutor-interface" style="padding-left:1rem">IQueryExecutor Interface</a><a href="#implementations" style="padding-left:1rem">Implementations</a><a href="#runtime-selection" style="padding-left:1rem">Runtime Selection</a><a href="#query-helpers-pattern">Query Helpers Pattern</a><a href="#common-db-utility-functions" style="padding-left:1rem">common::db:: Utility Functions</a><a href="#usage-example" style="padding-left:1rem">Usage Example</a><a href="#impact" style="padding-left:1rem">Impact</a><a href="#provider-adapter-pattern-validation-infrastructure">Provider/Adapter Pattern (Validation Infrastructure)</a><a href="#provider-interface" style="padding-left:1rem">Provider Interface</a><a href="#adapter-implementations" style="padding-left:1rem">Adapter Implementations</a><a href="#shared-libraries">Shared Libraries</a><a href="#library-structure-shared-lib" style="padding-left:1rem">Library Structure (shared/lib/)</a><a href="#shared-validation-library-icao-validation-v2-11-0" style="padding-left:1rem">Shared Validation Library (icao::validation, v2.11.0+)</a><a href="#shared-database-library-icao-database" style="padding-left:1rem">Shared Database Library (icao::database)</a><a href="#code-structure-rules">Code Structure Rules</a><a href="#1-file-organization-rules" style="padding-left:1rem">1. File Organization Rules</a><a href="#2-naming-conventions" style="padding-left:1rem">2. Naming Conventions</a><a href="#3-dependency-direction" style="padding-left:1rem">3. Dependency Direction</a><a href="#extension-guidelines">Extension Guidelines</a><a href="#1-adding-a-new-file-type" style="padding-left:1rem">1. Adding a New File Type</a><a href="#2-adding-a-new-certificate-type" style="padding-left:1rem">2. Adding a New Certificate Type</a><a href="#3-adding-a-new-handler-v2-12-0-pattern" style="padding-left:1rem">3. Adding a New Handler (v2.12.0+ Pattern)</a><a href="#4-adding-a-new-microservice" style="padding-left:1rem">4. Adding a New Microservice</a><a href="#anti-patterns">Anti-Patterns</a><a href="#god-class" style="padding-left:1rem">God Class</a><a href="#fat-main-cpp" style="padding-left:1rem">Fat main.cpp</a><a href="#global-variables" style="padding-left:1rem">Global Variables</a><a href="#anemic-domain-model" style="padding-left:1rem">Anemic Domain Model</a><a href="#tight-coupling" style="padding-left:1rem">Tight Coupling</a><a href="#inline-db-branching" style="padding-left:1rem">Inline DB Branching</a><a href="#code-review-checklist">Code Review Checklist</a><a href="#ddd-compliance" style="padding-left:1rem">DDD Compliance</a><a href="#servicecontainer-pattern-compliance" style="padding-left:1rem">ServiceContainer Pattern Compliance</a><a href="#handler-extraction-compliance" style="padding-left:1rem">Handler Extraction Compliance</a><a href="#strategy-pattern-compliance" style="padding-left:1rem">Strategy Pattern Compliance</a><a href="#srp-compliance" style="padding-left:1rem">SRP Compliance</a><a href="#multi-dbms-compliance" style="padding-left:1rem">Multi-DBMS Compliance</a><a href="#microservice-compliance" style="padding-left:1rem">Microservice Compliance</a><a href="#dependency-direction" style="padding-left:1rem">Dependency Direction</a><a href="#future-enhancements">Future Enhancements</a><a href="#completed-previously-planned" style="padding-left:1rem">Completed (Previously Planned)</a><a href="#phase-1-planned" style="padding-left:1rem">Phase 1 (Planned)</a><a href="#phase-2-research-in-progress" style="padding-left:1rem">Phase 2 (Research / In Progress)</a><a href="#conclusion">Conclusion</a><a href="#references">References</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

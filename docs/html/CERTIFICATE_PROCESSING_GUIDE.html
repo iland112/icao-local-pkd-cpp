@@ -1,0 +1,1668 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificate Processing Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html" class="active">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Certificate Processing Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-spkd-certificate-processing-guide">FASTpass® SPKD — Certificate Processing Guide</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="part-1-certificate-source-management">Part 1: Certificate Source Management</h2>
+<hr>
+<h3 id="1-개요">1. 개요</h3>
+<p>ICAO Local PKD 시스템은 다양한 경로를 통해 인증서를 수집한다. 본 문서는 각 출처(source)의 특성, DB/LDAP 저장 정책, 그리고 출처가 다른 인증서가 동일한 LDAP DIT 경로에 저장되는 이유를 설명한다.</p>
+<h4 id="핵심-원칙">핵심 원칙</h4>
+<blockquote>
+<p><strong>인증서의 LDAP DIT 위치는 인증서 유형(type)과 국가(country)에 의해 결정되며, 출처(source)에 의해 결정되지 않는다.</strong>
+출처 추적은 DB 레벨의 <code>source_type</code> 컬럼으로 관리한다.</p>
+</blockquote>
+<hr>
+<h3 id="2-인증서-출처-유형">2. 인증서 출처 유형</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>source_type</th>
+<th>설명</th>
+<th>수집 경로</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LDIF_PARSED</code></td>
+<td>ICAO PKD LDIF 파일에서 파싱</td>
+<td><code>icaopkd-001</code> (CSCA, DSC, CRL), <code>icaopkd-003</code> (DSC_NC)</td>
+</tr>
+<tr>
+<td><code>ML_PARSED</code></td>
+<td>Master List 파일에서 추출</td>
+<td><code>icaopkd-002</code> (Master List 내 CSCA/MLSC)</td>
+</tr>
+<tr>
+<td><code>FILE_UPLOAD</code></td>
+<td>개별 인증서 파일 직접 업로드</td>
+<td>PEM, DER, P7B, DL, CRL 파일 업로드</td>
+</tr>
+<tr>
+<td><code>PA_EXTRACTED</code></td>
+<td>PA 검증 시 SOD에서 DSC 추출</td>
+<td><code>POST /api/pa/verify</code> 요청 시 자동 등록</td>
+</tr>
+<tr>
+<td><code>DL_PARSED</code></td>
+<td>Deviation List에서 파싱</td>
+<td>DL 파일 업로드</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="3-ldap-dit-저장-정책">3. LDAP DIT 저장 정책</h3>
+<h4 id="3-1-dit-구조-인증서-유형-기반">3.1 DIT 구조 (인증서 유형 기반)</h4>
+<pre><code>dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+├── dc=data                                    ← 모든 출처의 준수 인증서
+│   └── c={COUNTRY}
+│       ├── o=csca   (CSCA)
+│       ├── o=dsc    (DSC)        ← LDIF_PARSED, FILE_UPLOAD, PA_EXTRACTED 모두 동일 경로
+│       ├── o=lc     (Link Certificate)
+│       ├── o=crl    (CRL)
+│       ├── o=mlsc   (MLSC)
+│       └── o=ml     (Master List)
+└── dc=nc-data                                 ← ICAO 비준수 인증서 (deprecated 2021)
+    └── c={COUNTRY}
+        └── o=dsc    (DSC_NC)</code></pre>
+<h4 id="3-2-dn-구성-규칙">3.2 DN 구성 규칙</h4>
+<p>모든 인증서의 DN은 출처와 무관하게 동일한 규칙으로 구성된다:</p>
+<pre><code>cn={FINGERPRINT_SHA256},o={TYPE},c={COUNTRY},{CONTAINER},{BASE_DN}</code></pre>
+<p>예시:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서</th>
+<th>source_type</th>
+<th>LDAP DN</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>한국 DSC (ICAO PKD)</td>
+<td><code>LDIF_PARSED</code></td>
+<td><code>cn=abc123...,o=dsc,c=KR,dc=data,...</code></td>
+</tr>
+<tr>
+<td>한국 DSC (PA 추출)</td>
+<td><code>PA_EXTRACTED</code></td>
+<td><code>cn=5fed6d...,o=dsc,c=KR,dc=data,...</code></td>
+</tr>
+<tr>
+<td>한국 DSC (직접 업로드)</td>
+<td><code>FILE_UPLOAD</code></td>
+<td><code>cn=def456...,o=dsc,c=KR,dc=data,...</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>Fingerprint(SHA-256)가 동일하면 동일 인증서</strong>이므로, 출처가 달라도 LDAP에 중복 저장되지 않는다.</p>
+<h4 id="3-3-출처별-분리하지-않는-이유">3.3 출처별 분리하지 않는 이유</h4>
+<p>ICAO 표준, 상용 레퍼런스 구현(Keyfactor NPKD), 오픈소스 구현(JMRTD) 모두 출처별 DIT 분리를 하지 않는다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>근거</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>ICAO 중앙 PKD</strong></td>
+<td>DIT 분리 기준은 <strong>적합성</strong>(dc=data vs dc=nc-data)이지 소스가 아님. nc-data는 2021년 폐지</td>
+</tr>
+<tr>
+<td><strong>Keyfactor NPKD</strong> (상용)</td>
+<td>DB의 <code>importedFrom</code> 컬럼으로 출처 추적. LDAP 게시는 동일 DN 템플릿 사용</td>
+</tr>
+<tr>
+<td><strong>JMRTD</strong> (오픈소스)</td>
+<td>ICAO PKD, BSI, 커뮤니티 등 다양한 출처 인증서를 동일 DIT에 로드</td>
+</tr>
+<tr>
+<td><strong>ICAO PKD White Paper (2020)</strong></td>
+<td>Local PKD 내부 구조는 각 국가 구현에 위임. 출처별 분리 요구사항 없음</td>
+</tr>
+</tbody></table></div>
+<p><strong>기술적 이유</strong>:</p>
+<ol>
+<li><strong>인증서 동일성은 소스와 무관</strong> — DSC는 fingerprint(SHA-256)로 고유 식별됨. ICAO PKD에서 받든, PA 검증에서 추출하든, 바이너리 내용과 fingerprint가 동일하면 같은 인증서</li>
+<li><strong>검사 시스템은 type + country로 조회</strong> — 출입국 시스템이 <code>o=dsc,c=KR,dc=data,...</code>에서 DSC를 검색할 때 출처를 구분하지 않음</li>
+<li><strong>LDAP 스키마 호환성</strong> — pkdDownload, cRLDistributionPoint 등 표준 objectClass에 출처 속성이 없음. 커스텀 속성 추가는 상호운용성을 저해</li>
+</ol>
+<hr>
+<h3 id="4-pa_extracted-dsc-처리-상세">4. PA_EXTRACTED DSC 처리 상세</h3>
+<h4 id="4-1-저장-흐름">4.1 저장 흐름</h4>
+<pre><code>PA 검증 요청 (POST /api/pa/verify)
+  │
+  ├─ SOD에서 DSC 추출
+  │
+  ├─ Fingerprint(SHA-256) 계산
+  │
+  ├─ DB 중복 검사 (fingerprint 기반)
+  │   ├─ 이미 존재 → 저장하지 않음 (대부분의 경우)
+  │   └─ 미존재 → DB INSERT (source_type='PA_EXTRACTED', stored_in_ldap=FALSE)
+  │
+  └─ PA 검증 결과 반환 (dscAutoRegistration 필드 포함)
+
+                    ↓ (비동기, PKD Relay Reconciliation)
+
+PKD Relay Reconciliation
+  │
+  ├─ stored_in_ldap=FALSE 인증서 조회
+  │
+  ├─ buildDn() → cn={FINGERPRINT},o=dsc,c={COUNTRY},dc=data,...
+  │
+  ├─ LDAP에 추가 (addCertificate)
+  │
+  └─ stored_in_ldap=TRUE 업데이트</code></pre>
+<h4 id="4-2-중복-방지-메커니즘">4.2 중복 방지 메커니즘</h4>
+<p>PA 검증에서 추출한 DSC는 대부분 ICAO PKD에서 이미 수신한 인증서와 동일하다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>중복 방지 방법</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>DB 저장</strong></td>
+<td>SHA-256 fingerprint 인메모리 캐시 + DB SELECT 폴백</td>
+</tr>
+<tr>
+<td><strong>LDAP 저장</strong></td>
+<td>Reconciliation이 stored_in_ldap=FALSE만 처리 (이미 LDAP에 있으면 TRUE)</td>
+</tr>
+</tbody></table></div>
+<p><strong>운영 데이터 증거</strong> (31,428건 중):</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>source_type</th>
+<th>건수</th>
+<th>비율</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LDIF_PARSED</code></td>
+<td>31,427</td>
+<td>99.997%</td>
+<td>ICAO PKD LDIF 파일에서 파싱</td>
+</tr>
+<tr>
+<td><code>PA_EXTRACTED</code></td>
+<td>1</td>
+<td>0.003%</td>
+<td>PA 검증에서 추출한 신규 DSC</td>
+</tr>
+<tr>
+<td><code>ML_PARSED</code></td>
+<td>0</td>
+<td>—</td>
+<td>ML 컬렉션은 LDIF 형식으로 배포</td>
+</tr>
+<tr>
+<td><code>FILE_UPLOAD</code></td>
+<td>0</td>
+<td>—</td>
+<td>개별 업로드 없음</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>참고</strong>: ICAO PKD 컬렉션 002(Master List)도 LDIF 형식으로 배포되어 <code>ldif_processor.cpp</code>를 통해 처리되므로 <code>LDIF_PARSED</code>로 분류된다. <code>.ml</code> 파일 직접 업로드 시에만 <code>ML_PARSED</code>가 사용된다.</p>
+</blockquote>
+<p>PA 검증으로 중복 저장된 인증서는 <strong>0건</strong>. 유일한 PA_EXTRACTED 1건은 ICAO PKD LDIF에 포함되지 않았던 신규 DSC.</p>
+<h4 id="4-3-pa_extracted-dsc가-ldap에-저장되는-경우">4.3 PA_EXTRACTED DSC가 LDAP에 저장되는 경우</h4>
+<p>PA_EXTRACTED DSC가 LDAP에 저장되는 것은 <strong>ICAO PKD에 없는 신규 DSC</strong>인 경우에만 해당:</p>
+<ul>
+<li>ICAO PKD에 미참여 국가가 발급한 DSC</li>
+<li>최근 발급되어 ICAO PKD에 아직 미반영된 DSC</li>
+<li>양자간(bilateral) 교환으로만 배포된 DSC</li>
+</ul>
+<p>이런 DSC를 LDAP에 저장하면 다른 검사 시스템에서도 PA 검증 시 해당 DSC를 조회할 수 있다.</p>
+<hr>
+<h3 id="5-출처-추적-db-레벨">5. 출처 추적 (DB 레벨)</h3>
+<h4 id="5-1-certificate-테이블">5.1 certificate 테이블</h4>
+<pre><code class="language-sql">SELECT source_type, COUNT(*) as count
+FROM certificate
+GROUP BY source_type;</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>source_type</code></td>
+<td>인증서 출처 (LDIF_PARSED, ML_PARSED, FILE_UPLOAD, PA_EXTRACTED, DL_PARSED)</td>
+</tr>
+<tr>
+<td><code>upload_id</code></td>
+<td>출처 업로드 ID (PA_EXTRACTED는 NULL)</td>
+</tr>
+<tr>
+<td><code>stored_in_ldap</code></td>
+<td>LDAP 동기화 상태</td>
+</tr>
+<tr>
+<td><code>ldap_dn</code></td>
+<td>LDAP DN (업로드 시 설정, Reconciliation은 미설정)</td>
+</tr>
+</tbody></table></div>
+<h4 id="5-2-source_type-저장-구조">5.2 source_type 저장 구조</h4>
+<p>인증서 저장 시 <code>source_type</code>은 호출 경로에 따라 자동 설정된다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>처리 모듈</th>
+<th>소스 파일</th>
+<th>source_type</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LDIF 파싱</td>
+<td><code>ldif_processor.cpp</code></td>
+<td><code>LDIF_PARSED</code></td>
+</tr>
+<tr>
+<td>Master List 파싱</td>
+<td><code>masterlist_processor.cpp</code></td>
+<td><code>ML_PARSED</code></td>
+</tr>
+<tr>
+<td>Master List (핸들러 직접 저장)</td>
+<td><code>upload_handler.cpp</code></td>
+<td><code>ML_PARSED</code></td>
+</tr>
+<tr>
+<td>개별 인증서 업로드</td>
+<td><code>upload_service.cpp</code></td>
+<td><code>FILE_UPLOAD</code></td>
+</tr>
+<tr>
+<td>PA 검증 DSC 추출</td>
+<td><code>dsc_auto_registration_service.cpp</code></td>
+<td><code>PA_EXTRACTED</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>구현 상세</strong>: <code>saveCertificateWithDuplicateCheck()</code> 함수의 <code>sourceType</code> 파라미터 (기본값: <code>&quot;FILE_UPLOAD&quot;</code>)로 INSERT 시 <code>source_type</code> 컬럼에 저장된다.</p>
+<blockquote>
+<p><strong>v2.29.0 수정</strong>: v2.28.2 이전에는 INSERT 쿼리에 <code>source_type</code> 컬럼이 누락되어 모든 인증서가 DB DEFAULT <code>FILE_UPLOAD</code>로 저장되었다. v2.29.0에서 <code>sourceType</code> 파라미터를 추가하고 각 호출부에서 올바른 타입을 전달하도록 수정.</p>
+</blockquote>
+<h4 id="5-3-프론트엔드-활용">5.3 프론트엔드 활용</h4>
+<ul>
+<li><strong>Dashboard</strong>: &quot;인증서 출처별 현황&quot; 카드 (source_type별 가로 바 차트)</li>
+<li><strong>Certificate Search</strong>: source 필터 (드롭다운)</li>
+<li><strong>Upload Statistics API</strong>: <code>bySource</code> 필드 (GROUP BY source_type)</li>
+</ul>
+<hr>
+<h3 id="6-참고-자료-certificate-source-management">6. 참고 자료 (Certificate Source Management)</h3>
+<h4 id="icao-문서">ICAO 문서</h4>
+<ul>
+<li>ICAO Doc 9303 Part 12: Public Key Infrastructure (PKI)</li>
+<li>ICAO PKD White Paper (July 2020)</li>
+<li>ICAO PKD Regulations (July 2020)</li>
+<li>ICAO PKD Participant Guide (2021): nc-data deprecation notice</li>
+</ul>
+<h4 id="레퍼런스-구현">레퍼런스 구현</h4>
+<ul>
+<li><a href="https://docs.keyfactor.com/npkd/latest/">Keyfactor NPKD Documentation</a> — 상용 National PKD 솔루션</li>
+<li><a href="https://jmrtd.org/certificates.shtml">JMRTD Project</a> — 오픈소스 Java MRTD 구현</li>
+</ul>
+<h4 id="관련-내부-문서">관련 내부 문서</h4>
+<ul>
+<li><a href="DSC_NC_HANDLING.html">DSC_NC_HANDLING.md</a> — DSC_NC 비준수 인증서 처리 가이드</li>
+<li><a href="PA_API_GUIDE.html">PA_API_GUIDE.md</a> — PA Service API 가이드 (DSC Auto-Registration 포함)</li>
+<li><a href="LDAP_QUERY_GUIDE.html">LDAP_QUERY_GUIDE.md</a> — LDAP 조회 가이드</li>
+<li><a href="SOFTWARE_ARCHITECTURE.html">SOFTWARE_ARCHITECTURE.md</a> — 시스템 아키텍처</li>
+</ul>
+<hr>
+<h2 id="part-2-master-list-processing">Part 2: Master List Processing</h2>
+<hr>
+<h3 id="1-overview">1. Overview</h3>
+<h4 id="what-is-a-master-list">What is a Master List?</h4>
+<p>ICAO Master List는 <strong>전 세계 국가의 CSCA 인증서를 포함하는 CMS SignedData 파일</strong>입니다. UN(ICAO)이 서명하여 배포하며, 각국의 여권 발급 인증서(CSCA)와 Link Certificate를 포함합니다.</p>
+<h4 id="purpose">Purpose</h4>
+<ul>
+<li><strong>CSCA 배포</strong>: 각국의 Country Signing CA (CSCA) 인증서 배포</li>
+<li><strong>Trust Chain</strong>: Link Certificate를 통한 CSCA 키 교체 및 조직 변경 지원</li>
+<li><strong>검증 기준</strong>: UN 서명으로 Master List의 무결성 보장</li>
+</ul>
+<h4 id="file-types">File Types</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Source</th>
+<th>Format</th>
+<th>Certificate Count</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Direct File</strong></td>
+<td>ICAO Portal</td>
+<td><code>.ml</code> (binary CMS)</td>
+<td>537 (1 MLSC + 536 CSCA/LC)</td>
+</tr>
+<tr>
+<td><strong>LDIF Entry</strong></td>
+<td>Collection 002</td>
+<td>LDIF (base64 CMS)</td>
+<td>27 entries x ~186 certs/entry</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="2-master-list-file-format">2. Master List File Format</h3>
+<h4 id="cms-signeddata-structure">CMS SignedData Structure</h4>
+<p>Master List는 <strong>PKCS#7 CMS SignedData</strong> 형식입니다:</p>
+<pre><code>ICAO_ml_December2025.ml (CMS SignedData)
+├── version: INTEGER
+├── digestAlgorithms: SET OF AlgorithmIdentifier
+├── encapContentInfo: ContentInfo
+│   ├── contentType: id-data (1.2.840.113549.1.7.1)
+│   └── content: OCTET STRING
+│       └── MasterList ::= SEQUENCE {
+│               version    INTEGER OPTIONAL,
+│               certList   SET OF Certificate  (536개)
+│           }
+├── certificates: [0] IMPLICIT CertificateSet OPTIONAL  (비어있음!)
+└── signerInfos: SET OF SignerInfo
+    └── SignerInfo (1개)
+        ├── version: INTEGER
+        ├── sid: SignerIdentifier
+        ├── digestAlgorithm: AlgorithmIdentifier
+        ├── signedAttrs: [0] IMPLICIT Attributes OPTIONAL
+        ├── signatureAlgorithm: AlgorithmIdentifier
+        ├── signature: OCTET STRING
+        └── unsignedAttrs: [1] IMPLICIT Attributes OPTIONAL</code></pre>
+<h4 id="key-insight-two-level-certificate-storage">Key Insight: Two-Level Certificate Storage</h4>
+<p><strong>중요</strong>: ICAO Master List는 인증서를 <strong>2곳</strong>에 저장합니다:</p>
+<ol>
+<li><strong>SignerInfo</strong>: MLSC (Master List Signer Certificate) - UN이 서명한 인증서</li>
+<li><strong>encapContentInfo (pkiData)</strong>: CSCA + Link Certificate (536개)</li>
+</ol>
+<h4 id="asn-1-structure">ASN.1 Structure</h4>
+<pre><code class="language-asn1">-- Master List Structure (ICAO Doc 9303 Part 12)
+MasterList ::= SEQUENCE {
+    version    [0] INTEGER OPTIONAL,  -- v0(0)
+    certList   SET OF Certificate
+}
+
+-- Certificate는 표준 X.509 Certificate 구조
+Certificate ::= SEQUENCE {
+    tbsCertificate       TBSCertificate,
+    signatureAlgorithm   AlgorithmIdentifier,
+    signature            BIT STRING
+}</code></pre>
+<h4 id="file-size-structure">File Size &amp; Structure</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Size</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Total File</strong></td>
+<td>~800 KB</td>
+<td>CMS SignedData wrapper</td>
+</tr>
+<tr>
+<td><strong>CMS Header</strong></td>
+<td>~3 KB</td>
+<td>SignedData structure metadata</td>
+</tr>
+<tr>
+<td><strong>SignerInfo</strong></td>
+<td>~10 KB</td>
+<td>1 MLSC certificate + signature</td>
+</tr>
+<tr>
+<td><strong>pkiData</strong></td>
+<td>~790 KB</td>
+<td>536 CSCA/LC certificates</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="3-processing-architecture">3. Processing Architecture</h3>
+<h4 id="overview">Overview</h4>
+<p>Master List 처리는 <strong>2단계 추출 방식</strong>을 사용합니다:</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│ Master List File (.ml or LDIF entry)                    │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+         ┌─────────────────┐
+         │ Parse CMS       │
+         │ d2i_CMS_bio()   │
+         └────────┬────────┘
+                  │
+        ┌─────────┴─────────┐
+        │                   │
+        ▼                   ▼
+┌───────────────┐   ┌──────────────────┐
+│ Step 1:       │   │ Step 2:          │
+│ SignerInfo    │   │ pkiData          │
+│ (MLSC 1개)    │   │ (CSCA/LC 536개)  │
+└───────┬───────┘   └────────┬─────────┘
+        │                    │
+        ▼                    ▼
+┌───────────────┐   ┌──────────────────┐
+│ o=mlsc,c=UN   │   │ o=csca,c={국가}  │
+│ (LDAP)        │   │ o=lc,c={국가}    │
+└───────────────┘   └──────────────────┘</code></pre>
+<h4 id="step-1-extract-mlsc-from-signerinfo">Step 1: Extract MLSC from SignerInfo</h4>
+<pre><code class="language-cpp">// Get SignerInfo entries
+STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+
+for (int i = 0; i &lt; sk_CMS_SignerInfo_num(signerInfos); i++) {
+    CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, i);
+
+    // Extract signer certificate
+    X509* signerCert = nullptr;
+    CMS_SignerInfo_get0_algs(si, nullptr, &amp;signerCert, nullptr, nullptr);
+
+    // signerCert is the MLSC (Master List Signer Certificate)
+    // Subject: /C=UN/O=United Nations/OU=Master List Signers/CN=ICAO Master List Signer
+    // Issuer: Same (self-signed)
+
+    // Save to: o=mlsc,c=UN
+}</code></pre>
+<p><strong>Result</strong>: 1 MLSC certificate</p>
+<h4 id="step-2-extract-csca-lc-from-pkidata">Step 2: Extract CSCA/LC from pkiData</h4>
+<pre><code class="language-cpp">// Get encapsulated content
+ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
+int contentLen = ASN1_STRING_length(*contentPtr);
+
+// Parse MasterList ASN.1 structure
+const unsigned char* p = contentData;
+
+// 1. Parse outer SEQUENCE
+int tag, xclass;
+long seqLen;
+ASN1_get_object(&amp;p, &amp;seqLen, &amp;tag, &amp;xclass, remaining);
+
+// 2. Skip version (INTEGER) if present
+if (tag == V_ASN1_INTEGER) {
+    p += elemLen;
+    ASN1_get_object(&amp;p, &amp;elemLen, &amp;tag, &amp;xclass, seqEnd - p);
+}
+
+// 3. Parse certList (SET)
+if (tag == V_ASN1_SET) {
+    const unsigned char* certPtr = p;
+    const unsigned char* certSetEnd = p + elemLen;
+
+    // 4. Extract each certificate
+    while (certPtr &lt; certSetEnd) {
+        X509* cert = d2i_X509(nullptr, &amp;certPtr, certSetEnd - certPtr);
+
+        // Classify: CSCA or Link Certificate
+        bool isLinkCert = (subjectDn != issuerDn);
+
+        if (isLinkCert) {
+            // Save to: o=lc,c={country}
+        } else {
+            // Save to: o=csca,c={country}
+        }
+    }
+}</code></pre>
+<p><strong>Result</strong>: 536 certificates (476 CSCA + 60 Link Certificates)</p>
+<h4 id="country-code-extraction">Country Code Extraction</h4>
+<p><strong>Challenge</strong>: X509_NAME_oneline() returns slash-separated DN format (<code>/C=LV/O=...</code>), not comma-separated (<code>C=LV, O=...</code>).</p>
+<p><strong>Solution</strong>: Regex pattern supporting both formats</p>
+<pre><code class="language-cpp">// Before (comma only) - WRONG
+static const std::regex countryRegex(R"((?:^|,\s*)C=([A-Z]{2,3})(?:,|$))", ...);
+
+// After (slash + comma) - CORRECT
+static const std::regex countryRegex(R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))", ...);</code></pre>
+<p><strong>Fallback Order</strong>:</p>
+<ol>
+<li>Subject DN의 C= 추출</li>
+<li>Issuer DN의 C= 추출 (Link Certificate용)</li>
+<li>LDAP Entry DN의 c= 추출 (LDIF 처리 시)</li>
+<li>실패 시 &quot;XX&quot; 반환</li>
+</ol>
+<hr>
+<h3 id="4-implementation-details">4. Implementation Details</h3>
+<h4 id="file-locations">File Locations</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Component</th>
+<th>File</th>
+<th>Lines</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Master List Processor</strong></td>
+<td><code>services/pkd-management/src/common/masterlist_processor.cpp</code></td>
+<td>97-665</td>
+</tr>
+<tr>
+<td><strong>Header</strong></td>
+<td><code>services/pkd-management/src/common/masterlist_processor.h</code></td>
+<td>56-62</td>
+</tr>
+<tr>
+<td><strong>Country Code Extractor</strong></td>
+<td><code>services/pkd-management/src/main.cpp</code></td>
+<td>1879</td>
+</tr>
+<tr>
+<td><strong>Certificate Utils</strong></td>
+<td><code>services/pkd-management/src/common/certificate_utils.cpp</code></td>
+<td>-</td>
+</tr>
+</tbody></table></div>
+<h4 id="function-signatures">Function Signatures</h4>
+<pre><code class="language-cpp">// Direct file processing
+bool processMasterListFile(
+    PGconn* conn,
+    LDAP* ld,
+    const std::string&amp; uploadId,
+    const std::vector&lt;uint8_t&gt;&amp; content,
+    MasterListStats&amp; stats
+);
+
+// LDIF entry processing
+bool parseMasterListEntryV2(
+    PGconn* conn,
+    LDAP* ld,
+    const std::string&amp; uploadId,
+    const LdifEntry&amp; entry,
+    MasterListStats&amp; stats
+);</code></pre>
+<h4 id="database-schema">Database Schema</h4>
+<pre><code class="language-sql">-- Certificate table
+CREATE TABLE certificate (
+    id UUID PRIMARY KEY,
+    certificate_type VARCHAR(20) CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
+    country_code VARCHAR(3) NOT NULL,
+    subject_dn TEXT NOT NULL,
+    issuer_dn TEXT NOT NULL,
+    serial_number VARCHAR(100) NOT NULL,
+    fingerprint_sha256 VARCHAR(64) NOT NULL UNIQUE,
+    not_before TIMESTAMP NOT NULL,
+    not_after TIMESTAMP NOT NULL,
+    certificate_data BYTEA NOT NULL,
+    stored_in_ldap BOOLEAN DEFAULT FALSE,
+    ldap_dn TEXT,
+    upload_id UUID REFERENCES uploaded_file(id),
+    ...
+);
+
+-- Master List metadata
+CREATE TABLE master_list (
+    id UUID PRIMARY KEY,
+    upload_id UUID REFERENCES uploaded_file(id),
+    country_code VARCHAR(3) NOT NULL,
+    signer_dn TEXT NOT NULL,
+    fingerprint_sha256 VARCHAR(64) NOT NULL,
+    csca_count INTEGER NOT NULL,
+    master_list_data BYTEA NOT NULL,
+    stored_in_ldap BOOLEAN DEFAULT FALSE,
+    ldap_dn TEXT,
+    ...
+);</code></pre>
+<h4 id="ldap-structure">LDAP Structure</h4>
+<pre><code>dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+├── c=UN
+│   └── o=mlsc
+│       └── cn={fingerprint}  (MLSC, 1 entry)
+│           ├── objectClass: pkdDownload
+│           ├── userCertificate;binary: {DER}
+│           └── description: Self-signed Master List Signer
+│
+├── c=CN (China)
+│   └── o=csca
+│       ├── cn={fingerprint1}  (CSCA)
+│       ├── cn={fingerprint2}  (CSCA)
+│       └── ...  (34 entries)
+│
+├── c=LV (Latvia)
+│   ├── o=csca
+│   │   ├── cn={fingerprint1}  (CSCA)
+│   │   └── ...  (9 entries)
+│   └── o=lc
+│       ├── cn={fingerprint2}  (Link Cert)
+│       └── ...  (7 entries)
+│
+└── ... (95 countries total)</code></pre>
+<p><strong>DN Format</strong>:</p>
+<ul>
+<li>Fingerprint-based: <code>cn={sha256_hex},o={type},c={country},dc=data,...</code></li>
+<li>Example: <code>cn=64b542ae9f8c...,o=csca,c=LV,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com</code></li>
+</ul>
+<hr>
+<h3 id="5-common-pitfalls-solutions">5. Common Pitfalls &amp; Solutions</h3>
+<h4 id="pitfall-1-using-cms_get1_certs">Pitfall 1: Using CMS_get1_certs()</h4>
+<p><strong>Problem</strong>: <code>CMS_get1_certs(cms)</code> only returns <code>SignedData.certificates</code> field, which is <strong>empty</strong> in ICAO Master Lists.</p>
+<pre><code class="language-cpp">// WRONG - Only returns 0-2 certificates
+STACK_OF(X509)* certs = CMS_get1_certs(cms);
+// certs is NULL or empty!</code></pre>
+<p><strong>Why</strong>: ICAO Master List stores certificates in pkiData (encapContentInfo), not in the certificates field.</p>
+<p><strong>Solution</strong>: Use two-step extraction (SignerInfo + pkiData)</p>
+<h4 id="pitfall-2-ignoring-signerinfo">Pitfall 2: Ignoring SignerInfo</h4>
+<p><strong>Problem</strong>: MLSC (Master List Signer Certificate) is <strong>only</strong> in SignerInfo, not in pkiData.</p>
+<p><strong>Solution</strong>: Always extract SignerInfo first</p>
+<pre><code class="language-cpp">STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+// Extract MLSC from SignerInfo</code></pre>
+<h4 id="pitfall-3-wrong-country-code-regex">Pitfall 3: Wrong Country Code Regex</h4>
+<p><strong>Problem</strong>: Regex <code>(?:^|,\s*)C=([A-Z]{2,3})(?:,|$)</code> only matches comma-separated DN (<code>C=LV, O=...</code>), but OpenSSL returns slash-separated DN (<code>/C=LV/O=...</code>).</p>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>All certificates stored with country_code=&#39;XX&#39;</li>
+<li>LDAP entries created at wrong locations</li>
+</ul>
+<p><strong>Solution</strong>: Update regex to support both formats</p>
+<pre><code class="language-cpp">// Supports: /C=LV/O=... AND C=LV, O=...
+static const std::regex countryRegex(
+    R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))",
+    std::regex::icase
+);</code></pre>
+<h4 id="pitfall-4-wrong-fallback-for-country-code">Pitfall 4: Wrong Fallback for Country Code</h4>
+<p><strong>Problem</strong>: Using UN as fallback country code for all CSCA/LC</p>
+<pre><code class="language-cpp">// WRONG
+if (certCountryCode == "XX") {
+    certCountryCode = countryCode;  // countryCode = "UN" from Master List
+}
+// Result: All certificates stored at c=UN instead of their own countries</code></pre>
+<p><strong>Solution</strong>: Use Subject DN -&gt; Issuer DN -&gt; Entry DN -&gt; &quot;XX&quot; fallback chain</p>
+<pre><code class="language-cpp">// CORRECT
+std::string certCountryCode = extractCountryCode(meta.subjectDn);
+if (certCountryCode == "XX") {
+    // Try issuer DN (for link certificates)
+    certCountryCode = extractCountryCode(meta.issuerDn);
+    if (certCountryCode == "XX") {
+        // Try LDAP entry DN (LDIF processing only)
+        certCountryCode = extractCountryCodeFromDn(entry.dn);
+        // Keep as "XX" if still not found - do NOT use "UN"
+    }
+}</code></pre>
+<h4 id="pitfall-5-missing-mlsc-constraint">Pitfall 5: Missing MLSC Constraint</h4>
+<p><strong>Problem</strong>: Database rejects MLSC certificate type</p>
+<pre><code>ERROR: new row violates check constraint "chk_certificate_type"
+DETAIL: Failing row contains (..., MLSC, UN, ...)</code></pre>
+<p><strong>Solution</strong>: Add MLSC to constraint</p>
+<pre><code class="language-sql">ALTER TABLE certificate DROP CONSTRAINT IF EXISTS chk_certificate_type;
+ALTER TABLE certificate ADD CONSTRAINT chk_certificate_type
+    CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC'));</code></pre>
+<h4 id="pitfall-6-memory-leaks-in-openssl">Pitfall 6: Memory Leaks in OpenSSL</h4>
+<p><strong>Problem</strong>: Not freeing OpenSSL structures causes memory leaks</p>
+<p><strong>Solution</strong>: Always free structures</p>
+<pre><code class="language-cpp">CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+// ... processing ...
+
+// Cleanup
+CMS_ContentInfo_free(cms);  // Frees cms and internal structures
+X509_free(cert);            // Free individual certificates
+sk_X509_pop_free(certs, X509_free);  // Free certificate stack</code></pre>
+<h4 id="pitfall-7-asn-1-parsing-errors">Pitfall 7: ASN.1 Parsing Errors</h4>
+<p><strong>Problem</strong>: Incorrect ASN.1 tag checking or pointer arithmetic</p>
+<p><strong>Common Issues</strong>:</p>
+<ul>
+<li>Not checking return value of <code>ASN1_get_object()</code></li>
+<li>Wrong pointer advancement</li>
+<li>Buffer overrun</li>
+</ul>
+<p><strong>Solution</strong>: Always validate ASN.1 parsing</p>
+<pre><code class="language-cpp">int ret = ASN1_get_object(&amp;p, &amp;seqLen, &amp;tag, &amp;xclass, remaining);
+if (ret == 0x80) {
+    // Error: indefinite length or invalid
+    spdlog::error("ASN.1 parsing error");
+    return false;
+}
+
+if (tag != V_ASN1_SEQUENCE) {
+    spdlog::error("Expected SEQUENCE, got tag {}", tag);
+    return false;
+}
+
+// Verify buffer bounds
+if (p + seqLen &gt; bufferEnd) {
+    spdlog::error("Buffer overrun");
+    return false;
+}</code></pre>
+<hr>
+<h3 id="6-testing-verification">6. Testing &amp; Verification</h3>
+<h4 id="test-files">Test Files</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Source</th>
+<th>Size</th>
+<th>Certificates</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ICAO_ml_December2025.ml</code></td>
+<td>ICAO Portal</td>
+<td>791 KB</td>
+<td>537 (1 MLSC + 536 CSCA/LC)</td>
+</tr>
+<tr>
+<td><code>icaopkd-002-complete-000333.ldif</code></td>
+<td>Collection 002</td>
+<td>10.5 MB</td>
+<td>27 ML entries x ~186 certs</td>
+</tr>
+</tbody></table></div>
+<h4 id="verification-checklist">Verification Checklist</h4>
+<h5 id="certificate-extraction">Certificate Extraction</h5>
+<pre><code class="language-bash"># Check uploaded file statistics
+docker compose -f docker/docker-compose.yaml exec -T postgres psql -U pkd -d localpkd -c "
+SELECT
+    file_name,
+    status,
+    ml_count,
+    csca_count,
+    csca_extracted_from_ml,
+    csca_duplicates
+FROM uploaded_file
+WHERE file_name LIKE '%ml%'
+ORDER BY upload_timestamp DESC
+LIMIT 5;
+"</code></pre>
+<p><strong>Expected</strong>:</p>
+<ul>
+<li>Direct file: <code>ml_count=1</code>, <code>csca_count=0</code>, <code>csca_extracted_from_ml=536</code></li>
+<li>LDIF file: <code>ml_count=27</code>, <code>csca_count=309</code>, <code>csca_extracted_from_ml=5017</code></li>
+</ul>
+<h5 id="certificate-types">Certificate Types</h5>
+<pre><code class="language-sql">SELECT certificate_type, COUNT(*)
+FROM certificate
+WHERE upload_id = '{upload_id}'
+GROUP BY certificate_type;</code></pre>
+<p><strong>Expected</strong>:</p>
+<ul>
+<li>CSCA: 476-536</li>
+<li>MLSC: 1-27 (depending on ML count)</li>
+</ul>
+<h5 id="country-distribution">Country Distribution</h5>
+<pre><code class="language-sql">SELECT country_code, COUNT(*) as count
+FROM certificate
+WHERE certificate_type IN ('CSCA', 'MLSC')
+GROUP BY country_code
+ORDER BY count DESC
+LIMIT 10;</code></pre>
+<p><strong>Expected Top Countries</strong>:</p>
+<ul>
+<li>CN (China): 34</li>
+<li>HU (Hungary): 21</li>
+<li>LV (Latvia): 16</li>
+<li>NL (Netherlands): 15</li>
+<li>NZ (New Zealand): 13</li>
+</ul>
+<h5 id="ldap-storage">LDAP Storage</h5>
+<pre><code class="language-bash"># Count MLSC
+ldapsearch -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "o=mlsc,c=UN,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=pkdDownload)" dn | grep -c "^dn:"
+
+# Count CSCA for specific country
+ldapsearch -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "o=csca,c=CN,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=pkdDownload)" dn | grep -c "^dn:"</code></pre>
+<p><strong>Expected</strong>:</p>
+<ul>
+<li>MLSC at c=UN: 1 entry</li>
+<li>CSCA at c=CN: 34 entries</li>
+<li>LC at c=LV: 7 entries</li>
+</ul>
+<h5 id="no-xx-country-codes">No XX Country Codes</h5>
+<pre><code class="language-sql">SELECT COUNT(*) FROM certificate WHERE country_code = 'XX';</code></pre>
+<p><strong>Expected</strong>: 0 (no unknown country codes)</p>
+<h5 id="link-certificate-classification">Link Certificate Classification</h5>
+<pre><code class="language-sql">SELECT
+    CASE
+        WHEN subject_dn = issuer_dn THEN 'Self-signed'
+        ELSE 'Link Certificate'
+    END as cert_class,
+    COUNT(*)
+FROM certificate
+WHERE certificate_type = 'CSCA'
+  AND upload_id = '{upload_id}'
+GROUP BY cert_class;</code></pre>
+<p><strong>Expected</strong>:</p>
+<ul>
+<li>Self-signed: ~476</li>
+<li>Link Certificate: ~60</li>
+</ul>
+<h4 id="log-verification">Log Verification</h4>
+<h5 id="successful-processing-logs">Successful Processing Logs</h5>
+<pre><code>[ML-FILE] Processing Master List file: 810009 bytes
+[ML-FILE] CMS SignedData parsed successfully
+[ML-FILE] Found 1 SignerInfo entries
+[ML-FILE] MLSC 1/1 - Signer DN: /C=UN/O=United Nations/OU=Master List Signers/CN=ICAO Master List Signer, Country: UN
+[ML-FILE] MLSC 1/1 - NEW - fingerprint: c632cb9094d9a892..., cert_id: ca557879-...
+[ML-FILE] MLSC 1/1 - Saved to LDAP: cn=c632cb...,o=mlsc,c=UN,...
+[ML-FILE] Encapsulated content length: 806391 bytes
+[ML-FILE] Found certList SET: 806378 bytes
+[ML-FILE] CSCA (Self-signed) 1 - NEW - Country: LV, fingerprint: 64b542ae...
+[ML-FILE] LC (Link Certificate) 4 - NEW - Country: LV, fingerprint: d7c8eeac...
+...
+[ML-FILE] Extracted 536 CSCA/LC certificates: 536 new, 0 duplicates
+[ML-FILE] Saved Master List to DB: id=b707f6aa-...
+AUTO mode: Master List processing completed - 1 MLSC, 536 CSCA/LC extracted</code></pre>
+<h5 id="error-patterns-to-watch">Error Patterns to Watch</h5>
+<pre><code>[ML-FILE] Failed to parse Master List as CMS SignedData
+→ File is not a valid CMS structure
+
+[ML-FILE] MLSC 1/1 - Failed to save to DB, reason: Database operation failed
+→ Check database constraint (MLSC type allowed?)
+
+[ML-FILE] Certificate 123 - Could not extract country from Subject or Issuer DN
+→ Certificate has non-standard DN format
+
+[ML-FILE] Certificate 456 - Failed to save to LDAP, reason: LDAP operation failed
+→ Check LDAP connection and parent DN existence</code></pre>
+<hr>
+<h3 id="7-troubleshooting">7. Troubleshooting</h3>
+<h4 id="issue-only-2-certificates-extracted">Issue: Only 2 Certificates Extracted</h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Upload shows <code>csca_extracted_from_ml=2</code></li>
+<li>Logs show &quot;Master List contains 2 CSCAs&quot;</li>
+</ul>
+<p><strong>Cause</strong>: Using <code>CMS_get1_certs()</code> instead of two-step extraction</p>
+<p><strong>Fix</strong>: Update to use <code>CMS_get0_SignerInfos()</code> + <code>CMS_get0_content()</code></p>
+<h4 id="issue-all-certificates-at-c-xx">Issue: All Certificates at c=XX</h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>LDAP shows all entries under <code>c=XX</code></li>
+<li>Database has <code>country_code=&#39;XX&#39;</code> for all</li>
+</ul>
+<p><strong>Cause</strong>: Regex pattern not matching slash-separated DN</p>
+<p><strong>Fix</strong>: Update country code extraction regex:</p>
+<pre><code class="language-cpp">static const std::regex countryRegex(R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))", ...);</code></pre>
+<h4 id="issue-all-certificates-at-c-un">Issue: All Certificates at c=UN</h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>LDAP shows CSCA/LC under <code>c=UN</code> instead of their countries</li>
+<li>Database has <code>country_code=&#39;UN&#39;</code> for CSCA</li>
+</ul>
+<p><strong>Cause</strong>: Using UN as fallback for all certificates</p>
+<p><strong>Fix</strong>: Remove UN fallback for CSCA/LC, only use for MLSC</p>
+<h4 id="issue-mlsc-not-saved">Issue: MLSC Not Saved</h4>
+<p><strong>Symptoms</strong>:</p>
+<pre><code>ERROR: new row violates check constraint "chk_certificate_type"</code></pre>
+<p><strong>Cause</strong>: Database constraint doesn&#39;t allow MLSC type</p>
+<p><strong>Fix</strong>:</p>
+<pre><code class="language-sql">ALTER TABLE certificate DROP CONSTRAINT IF EXISTS chk_certificate_type;
+ALTER TABLE certificate ADD CONSTRAINT chk_certificate_type
+    CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC'));</code></pre>
+<h4 id="issue-memory-leaks">Issue: Memory Leaks</h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Service memory grows over time</li>
+<li>OOM errors after processing many files</li>
+</ul>
+<p><strong>Cause</strong>: Not freeing OpenSSL structures</p>
+<p><strong>Fix</strong>: Always call cleanup functions:</p>
+<pre><code class="language-cpp">CMS_ContentInfo_free(cms);
+X509_free(cert);
+sk_X509_pop_free(certs, X509_free);</code></pre>
+<h4 id="issue-buffer-overrun-in-asn-1-parsing">Issue: Buffer Overrun in ASN.1 Parsing</h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Segmentation fault during processing</li>
+<li>Random data corruption</li>
+</ul>
+<p><strong>Cause</strong>: Pointer arithmetic error in ASN.1 parsing</p>
+<p><strong>Fix</strong>: Always check buffer bounds:</p>
+<pre><code class="language-cpp">while (certPtr &lt; certSetEnd) {
+    if (certPtr + 4 &gt; certSetEnd) {
+        // Not enough data for next certificate
+        break;
+    }
+    X509* cert = d2i_X509(nullptr, &amp;certPtr, certSetEnd - certPtr);
+    if (!cert) break;
+}</code></pre>
+<hr>
+<h3 id="8-performance-considerations">8. Performance Considerations</h3>
+<h4 id="processing-time">Processing Time</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>File Type</th>
+<th>Size</th>
+<th>Certificates</th>
+<th>Time</th>
+<th>Rate</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Direct ML</td>
+<td>791 KB</td>
+<td>537</td>
+<td>~3s</td>
+<td>179 certs/s</td>
+</tr>
+<tr>
+<td>LDIF ML</td>
+<td>11 MB</td>
+<td>5,017</td>
+<td>~30s</td>
+<td>167 certs/s</td>
+</tr>
+</tbody></table></div>
+<h4 id="optimization-opportunities">Optimization Opportunities</h4>
+<ol>
+<li><p><strong>Batch Insert</strong>: Currently inserts certificates one by one</p>
+<ul>
+<li><strong>Current</strong>: 537 x (1 DB INSERT + 1 LDAP ADD)</li>
+<li><strong>Optimized</strong>: 1 DB COPY + batch LDAP ADD</li>
+<li><strong>Improvement</strong>: 5-10x faster</li>
+</ul>
+</li>
+<li><p><strong>Parallel Processing</strong>: LDIF entries can be processed in parallel</p>
+<ul>
+<li><strong>Current</strong>: Sequential processing of 27 ML entries</li>
+<li><strong>Optimized</strong>: Thread pool with 4-8 workers</li>
+<li><strong>Improvement</strong>: 3-4x faster</li>
+</ul>
+</li>
+<li><p><strong>Connection Pooling</strong>: Reuse DB/LDAP connections</p>
+<ul>
+<li><strong>Current</strong>: New connection per entry</li>
+<li><strong>Optimized</strong>: Connection pool</li>
+<li><strong>Improvement</strong>: 20-30% faster</li>
+</ul>
+</li>
+</ol>
+<h4 id="memory-usage">Memory Usage</h4>
+<ul>
+<li><strong>Peak Memory</strong>: ~50 MB per Master List</li>
+<li><strong>Breakdown</strong>:<ul>
+<li>CMS structure: ~1 MB</li>
+<li>Certificate parsing: ~10 MB</li>
+<li>OpenSSL internal: ~20 MB</li>
+<li>Application data: ~20 MB</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h3 id="9-references-master-list-processing">9. References (Master List Processing)</h3>
+<h4 id="icao-standards">ICAO Standards</h4>
+<ul>
+<li><strong>ICAO Doc 9303</strong>: Machine Readable Travel Documents<ul>
+<li>Part 12: Public Key Infrastructure for MRTDs</li>
+<li>Annex G: Master List Format</li>
+</ul>
+</li>
+</ul>
+<h4 id="openssl-documentation">OpenSSL Documentation</h4>
+<ul>
+<li><a href="https://www.openssl.org/docs/man3.0/man3/CMS_get0_SignerInfos.html">CMS Functions</a></li>
+<li><a href="https://www.openssl.org/docs/man3.0/man3/ASN1_get_object.html">ASN.1 Parsing</a></li>
+<li><a href="https://www.openssl.org/docs/man3.0/man3/X509_get_subject_name.html">X509 Certificate</a></li>
+</ul>
+<h4 id="internal-documents">Internal Documents</h4>
+<ul>
+<li><a href="ML_FILE_PROCESSING_COMPLETION.html">ML_FILE_PROCESSING_COMPLETION.md</a> - Initial implementation completion</li>
+<li><a href="archive/MLSC_ROOT_CAUSE_ANALYSIS.md">MLSC_ROOT_CAUSE_ANALYSIS.md</a> - Bug analysis</li>
+<li><a href="archive/MLSC_EXTRACTION_FIX.md">MLSC_EXTRACTION_FIX.md</a> - Fix implementation</li>
+<li><a href="SPRINT3_COMPLETION_SUMMARY.md">SPRINT3_COMPLETION_SUMMARY.md</a> - Sprint 3 summary</li>
+</ul>
+<h4 id="code-references">Code References</h4>
+<ul>
+<li><a href="../services/pkd-management/src/common/masterlist_processor.cpp">masterlist_processor.cpp</a> - Main implementation</li>
+<li><a href="../services/pkd-management/src/common/certificate_utils.cpp">certificate_utils.cpp</a> - Database operations</li>
+<li><a href="../services/pkd-management/src/main.cpp#L1879">main.cpp</a> - Country code extraction</li>
+</ul>
+<hr>
+<h3 id="appendix-a-test-master-list-structure">Appendix A: Test Master List Structure</h3>
+<h4 id="icao_ml_december2025-ml-analysis">ICAO_ml_December2025.ml Analysis</h4>
+<pre><code class="language-bash"># Analyze with OpenSSL
+openssl cms -in ICAO_ml_December2025.ml -inform DER -cmsout -print
+
+# Output (abbreviated):
+CMS_ContentInfo:
+  contentType: pkcs7-signedData (1.2.840.113549.1.7.2)
+  d.signedData:
+    version: 3
+    digestAlgorithms:
+      algorithm: sha256 (2.16.840.1.101.3.4.2.1)
+    encapContentInfo:
+      eContentType: pkcs7-data (1.2.840.113549.1.7.1)
+      eContent:
+        &lt;OCTET STRING&gt; (806391 bytes)
+    signerInfos:
+      version: 3
+      d.issuerAndSerialNumber:
+        issuer: C=UN, O=United Nations, OU=Master List Signers, CN=ICAO Master List Signer
+        serialNumber: 0x1234567890ABCDEF
+      digestAlgorithm:
+        algorithm: sha256
+      signatureAlgorithm:
+        algorithm: rsaEncryption
+      signature:
+        &lt;OCTET STRING&gt; (256 bytes)</code></pre>
+<h4 id="certificate-distribution-by-type">Certificate Distribution by Type</h4>
+<pre><code>Total: 537 certificates
+├── MLSC: 1 (0.2%)
+│   └── UN: 1
+├── Self-signed CSCA: 476 (88.6%)
+│   ├── CN: 30
+│   ├── HU: 18
+│   ├── LV: 9
+│   └── ... (92 more countries)
+└── Link Certificates: 60 (11.2%)
+    ├── LV: 7
+    ├── PH: 6
+    ├── EE: 4
+    └── ... (25 more countries)</code></pre>
+<hr>
+<h3 id="appendix-b-quick-reference-commands">Appendix B: Quick Reference Commands</h3>
+<h4 id="development">Development</h4>
+<pre><code class="language-bash"># Rebuild service
+docker compose -f docker/docker-compose.yaml build pkd-management
+
+# Restart service
+docker compose -f docker/docker-compose.yaml restart pkd-management
+
+# View logs
+docker logs icao-local-pkd-management -f --tail 100 | grep "ML-FILE\|ML-LDIF"</code></pre>
+<h4 id="testing">Testing</h4>
+<pre><code class="language-bash"># Upload Master List file
+curl -X POST http://localhost:8080/api/upload/masterlist \
+  -F "file=@data/uploads/ICAO_ml_December2025.ml" \
+  -F "processingMode=AUTO"
+
+# Upload LDIF file
+curl -X POST http://localhost:8080/api/upload/ldif \
+  -F "file=@data/uploads/icaopkd-002-complete-000333.ldif" \
+  -F "processingMode=AUTO"
+
+# Check upload status
+curl http://localhost:8080/api/upload/history | jq '.data.uploads[0]'</code></pre>
+<h4 id="database-queries">Database Queries</h4>
+<pre><code class="language-bash"># Connect to database
+docker compose -f docker/docker-compose.yaml exec -T postgres psql -U pkd -d localpkd
+
+# Count certificates by type
+SELECT certificate_type, COUNT(*) FROM certificate GROUP BY certificate_type;
+
+# Count certificates by country (Top 10)
+SELECT country_code, COUNT(*) FROM certificate
+WHERE certificate_type IN ('CSCA', 'MLSC')
+GROUP BY country_code ORDER BY COUNT(*) DESC LIMIT 10;
+
+# Check LDAP storage rate
+SELECT
+    COUNT(*) as total,
+    SUM(CASE WHEN stored_in_ldap THEN 1 ELSE 0 END) as stored,
+    ROUND(100.0 * SUM(CASE WHEN stored_in_ldap THEN 1 ELSE 0 END) / COUNT(*), 2) as percentage
+FROM certificate
+WHERE certificate_type IN ('CSCA', 'MLSC');</code></pre>
+<h4 id="ldap-queries">LDAP Queries</h4>
+<pre><code class="language-bash"># Source helper functions
+source scripts/ldap-helpers.sh
+
+# Count all certificates
+ldap_count_all
+
+# Count by country
+ldap_search_country CN
+
+# Count MLSC
+ldapsearch -x -H ldap://localhost:389 \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
+  -w "ldap_test_password_123" \
+  -b "o=mlsc,c=UN,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=pkdDownload)" dn | grep -c "^dn:"</code></pre>
+<hr>
+<p><strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#part-1-certificate-source-management">Part 1: Certificate Source Management</a><a href="#1-개요" style="padding-left:1rem">1. 개요</a><a href="#2-인증서-출처-유형" style="padding-left:1rem">2. 인증서 출처 유형</a><a href="#3-ldap-dit-저장-정책" style="padding-left:1rem">3. LDAP DIT 저장 정책</a><a href="#4-pa_extracted-dsc-처리-상세" style="padding-left:1rem">4. PA_EXTRACTED DSC 처리 상세</a><a href="#5-출처-추적-db-레벨" style="padding-left:1rem">5. 출처 추적 (DB 레벨)</a><a href="#6-참고-자료-certificate-source-management" style="padding-left:1rem">6. 참고 자료 (Certificate Source Management)</a><a href="#part-2-master-list-processing">Part 2: Master List Processing</a><a href="#1-overview" style="padding-left:1rem">1. Overview</a><a href="#2-master-list-file-format" style="padding-left:1rem">2. Master List File Format</a><a href="#3-processing-architecture" style="padding-left:1rem">3. Processing Architecture</a><a href="#4-implementation-details" style="padding-left:1rem">4. Implementation Details</a><a href="#5-common-pitfalls-solutions" style="padding-left:1rem">5. Common Pitfalls &amp; Solutions</a><a href="#6-testing-verification" style="padding-left:1rem">6. Testing &amp; Verification</a><a href="#7-troubleshooting" style="padding-left:1rem">7. Troubleshooting</a><a href="#8-performance-considerations" style="padding-left:1rem">8. Performance Considerations</a><a href="#9-references-master-list-processing" style="padding-left:1rem">9. References (Master List Processing)</a><a href="#appendix-a-test-master-list-structure" style="padding-left:1rem">Appendix A: Test Master List Structure</a><a href="#appendix-b-quick-reference-commands" style="padding-left:1rem">Appendix B: Quick Reference Commands</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

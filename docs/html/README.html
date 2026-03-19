@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documentation Index — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html" class="active">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Documentation Index</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-spkd-documentation">FASTpass® SPKD — Documentation</h1>
+<p><strong>Version</strong>: v2.37.0
+<strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="essential-documents-start-here">Essential Documents (Start Here)</h2>
+<h3 id="development-operations">Development &amp; Operations</h3>
+<ul>
+<li><p><strong><a href="DEVELOPMENT_GUIDE.html">DEVELOPMENT_GUIDE.md</a></strong> — <strong>START HERE</strong></p>
+<ul>
+<li>Credentials (PostgreSQL, Oracle, LDAP)</li>
+<li>Helper scripts, daily workflow</li>
+<li>Multi-DBMS support (PostgreSQL + Oracle)</li>
+<li>Build process, testing (438 test cases), troubleshooting</li>
+</ul>
+</li>
+<li><p><strong><a href="DEPLOYMENT_GUIDE.html">DEPLOYMENT_GUIDE.md</a></strong> — 통합 배포 가이드</p>
+<ul>
+<li>Local (WSL2, Docker), Production (10.0.0.220, RHEL 9, Podman), Luckfox (ARM64)</li>
+<li>서버 설정, CI/CD 파이프라인, Build SOP, 트러블슈팅</li>
+</ul>
+</li>
+<li><p><strong><a href="LDAP_QUERY_GUIDE.html">LDAP_QUERY_GUIDE.md</a></strong> — LDAP Operations</p>
+</li>
+</ul>
+<h3 id="api-integration">API &amp; Integration</h3>
+<ul>
+<li><p><strong><a href="API_DEVELOPER_MANUAL.html">API_DEVELOPER_MANUAL.md</a></strong> — REST API 개발자 매뉴얼</p>
+<ul>
+<li>전체 API 레퍼런스 (인증서, PA, AI, 동기화, ICAO, CSR 관리, 코드 마스터)</li>
+</ul>
+</li>
+<li><p><strong><a href="PA_API_GUIDE.html">PA_API_GUIDE.md</a></strong> — Passive Authentication API</p>
+<ul>
+<li>12 endpoints, 8-step verification, DSC auto-registration, DG2 face image</li>
+</ul>
+</li>
+<li><p><strong><a href="API_CLIENT_GUIDE.html">API_CLIENT_GUIDE.md</a></strong> — API Client 통합 가이드</p>
+<ul>
+<li>관리자: API Key 관리, 권한, Rate Limiting</li>
+<li>사용자: 외부 연동 가이드, Python/Java/C#/curl 예제</li>
+<li>Certificate Search Quick Start</li>
+</ul>
+</li>
+</ul>
+<h3 id="architecture-design">Architecture &amp; Design</h3>
+<ul>
+<li><p><strong><a href="ARCHITECTURE.html">ARCHITECTURE.md</a></strong> — 시스템 아키텍처 &amp; 설계 원칙</p>
+<ul>
+<li>마이크로서비스 아키텍처, DB 스키마, LDAP DIT</li>
+<li>DDD, ServiceContainer, Handler Pattern, Query Helpers</li>
+</ul>
+</li>
+<li><p><strong><a href="FRONTEND_GUIDE.html">FRONTEND_GUIDE.md</a></strong> — 프론트엔드 통합 가이드</p>
+<ul>
+<li>Design System: 색상, 타이포그래피, 컴포넌트, 토큰</li>
+<li>29개 페이지 전체 기능 명세, 권한, 라우팅</li>
+</ul>
+</li>
+</ul>
+<h3 id="icao-compliance-security">ICAO Compliance &amp; Security</h3>
+<ul>
+<li><strong><a href="ICAO_COMPLIANCE_MANUAL.html">ICAO_COMPLIANCE_MANUAL.md</a></strong> — ICAO 규격 준수 매뉴얼<ul>
+<li>ePassport Trust Chain, Doc 9303 Compliance Checks</li>
+<li>BSI TR-03110 Algorithm Support, DSC Non-Conformant Handling</li>
+<li>PKD 인증서 분석 결과, PII 암호화 (개인정보보호법)</li>
+</ul>
+</li>
+</ul>
+<h3 id="certificate-ai">Certificate &amp; AI</h3>
+<ul>
+<li><p><strong><a href="CERTIFICATE_PROCESSING_GUIDE.html">CERTIFICATE_PROCESSING_GUIDE.md</a></strong> — 인증서 처리 통합 가이드</p>
+<ul>
+<li>Certificate Source Management (5가지 소스 타입)</li>
+<li>Master List Processing (CMS SignedData 파싱)</li>
+</ul>
+</li>
+<li><p><strong><a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI_ANALYSIS_DASHBOARD_GUIDE.md</a></strong> — AI Dashboard Guide</p>
+</li>
+<li><p><strong><a href="COMPETITIVE_ANALYSIS.html">COMPETITIVE_ANALYSIS.md</a></strong> — Competitive Analysis</p>
+</li>
+</ul>
+<h3 id="reference">Reference</h3>
+<ul>
+<li><strong><a href="ICAO_PKD_COST_ANALYSIS.html">ICAO_PKD_COST_ANALYSIS.md</a></strong> — ICAO PKD Cost Analysis</li>
+<li><strong><a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PLAN.md</a></strong> — EAC Service (Experimental)</li>
+<li><strong><a href="DOCKER_BUILD_CACHE.html">DOCKER_BUILD_CACHE.md</a></strong> — Build Cache Troubleshooting</li>
+<li><strong><a href="VERSION_HISTORY.html">VERSION_HISTORY.md</a></strong> — 전체 버전 이력</li>
+</ul>
+<h3 id="legal">Legal</h3>
+<ul>
+<li><strong><a href="EULA.html">EULA.md</a></strong> — End User License Agreement</li>
+<li><strong><a href="LICENSE_COMPLIANCE.html">LICENSE_COMPLIANCE.md</a></strong> — License Compliance</li>
+</ul>
+<hr>
+<h2 id="api-specifications">API Specifications</h2>
+<p><strong>Location</strong>: <a href="openapi/">openapi/</a></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Spec</th>
+<th>Service</th>
+<th>Version</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="openapi/pkd-management.yaml">pkd-management.yaml</a></td>
+<td>PKD Management</td>
+<td>v2.36.0</td>
+</tr>
+<tr>
+<td><a href="openapi/pa-service.yaml">pa-service.yaml</a></td>
+<td>PA Service</td>
+<td>v2.1.7</td>
+</tr>
+<tr>
+<td><a href="openapi/pkd-relay-service.yaml">pkd-relay-service.yaml</a></td>
+<td>PKD Relay</td>
+<td>v2.36.0</td>
+</tr>
+<tr>
+<td><a href="openapi/monitoring-service.yaml">monitoring-service.yaml</a></td>
+<td>Monitoring</td>
+<td>v1.2.0</td>
+</tr>
+</tbody></table></div>
+<p><strong>Swagger UI</strong>: <a href="http://localhost:18090">http://localhost:18090</a></p>
+<hr>
+<h2 id="archived-documents">Archived Documents</h2>
+<p><strong>Location</strong>: <a href="archive/">archive/</a></p>
+<p>170+ historical implementation documents including:</p>
+<ul>
+<li>Sprint planning and completion summaries</li>
+<li>Phase completion reports (Security, Oracle migration, Repository pattern)</li>
+<li>Feature design and implementation plans (completed)</li>
+<li>Fix reports, security audit reports, load test results, troubleshooting records</li>
+<li>Merged source documents (pre-consolidation individual files)</li>
+</ul>
+<p>These documents are for historical reference only. All current information is captured in the active reference docs above and in <a href="../CLAUDE.md">CLAUDE.md</a>.</p>
+<hr>
+<h2 id="quick-reference">Quick Reference</h2>
+<h3 id="common-tasks">Common Tasks</h3>
+<ul>
+<li><strong>Start development</strong>: <a href="DEVELOPMENT_GUIDE.html#daily-commands">DEVELOPMENT_GUIDE.md</a></li>
+<li><strong>Build a service</strong>: <a href="DEVELOPMENT_GUIDE.html#2-build-and-deploy">DEVELOPMENT_GUIDE.md</a></li>
+<li><strong>Deploy to Production</strong>: <a href="DEPLOYMENT_GUIDE.html#3-production-100220-rhel-9-podman">DEPLOYMENT_GUIDE.md</a></li>
+<li><strong>Deploy to Luckfox</strong>: <a href="DEPLOYMENT_GUIDE.html#4-luckfox-arm64">DEPLOYMENT_GUIDE.md</a></li>
+<li><strong>Troubleshoot build</strong>: <a href="DOCKER_BUILD_CACHE.html">DOCKER_BUILD_CACHE.md</a></li>
+<li><strong>Use PA API</strong>: <a href="PA_API_GUIDE.html">PA_API_GUIDE.md</a></li>
+<li><strong>Switch DB (PostgreSQL/Oracle)</strong>: <a href="DEVELOPMENT_GUIDE.html#switching-databases">DEVELOPMENT_GUIDE.md</a></li>
+<li><strong>SSL setup</strong>: <a href="DEPLOYMENT_GUIDE.html#39-ssl-인증서">DEPLOYMENT_GUIDE.md</a></li>
+</ul>
+<h3 id="related">Related</h3>
+<ul>
+<li><strong><a href="../CLAUDE.md">../CLAUDE.md</a></strong> - Project quick reference (v2.37.0)<ul>
+<li>Architecture overview, API endpoints, version history</li>
+<li>Helper scripts, common issues, key decisions</li>
+</ul>
+</li>
+</ul>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#essential-documents-start-here">Essential Documents (Start Here)</a><a href="#development-operations" style="padding-left:1rem">Development &amp; Operations</a><a href="#api-integration" style="padding-left:1rem">API &amp; Integration</a><a href="#architecture-design" style="padding-left:1rem">Architecture &amp; Design</a><a href="#icao-compliance-security" style="padding-left:1rem">ICAO Compliance &amp; Security</a><a href="#certificate-ai" style="padding-left:1rem">Certificate &amp; AI</a><a href="#reference" style="padding-left:1rem">Reference</a><a href="#legal" style="padding-left:1rem">Legal</a><a href="#api-specifications">API Specifications</a><a href="#archived-documents">Archived Documents</a><a href="#quick-reference">Quick Reference</a><a href="#common-tasks" style="padding-left:1rem">Common Tasks</a><a href="#related" style="padding-left:1rem">Related</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

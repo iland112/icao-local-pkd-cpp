@@ -551,6 +551,26 @@ services:
       timeout: 10s
       retries: 3
 
+  # ---------------------------------------------------------------------------
+  # Documentation Site (nginx static HTML)
+  # ---------------------------------------------------------------------------
+  docs:
+    build:
+      context: ../docs
+      dockerfile: Dockerfile
+    image: docker-docs:latest
+    container_name: icao-local-pkd-docs
+    ports:
+      - "13090:80"
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 # =============================================================================
 # Networks
 # =============================================================================

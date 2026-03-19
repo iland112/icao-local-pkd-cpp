@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>License Compliance — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html" class="active">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>License Compliance</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="오픈소스-라이선스-준수-보고서-license-compliance-report">오픈소스 라이선스 준수 보고서 (License Compliance Report)</h1>
+<p><strong>Version</strong>: 2.37.0
+<strong>Last Updated</strong>: 2026-03-18
+<strong>대상</strong>: 상용 배포 라이선스 검토
+<strong>프로젝트</strong>: ICAO Local PKD v2.37.0</p>
+<hr>
+<h2 id="1-개요">1. 개요</h2>
+<p>본 문서는 ICAO Local PKD 프로젝트의 상용(Commercial) 배포 시 사용되는 모든 오픈소스 및 서드파티 라이브러리의 라이선스 현황과 준수 사항을 정리한 것이다.</p>
+<h3 id="1-1-배포-구성-전제">1.1 배포 구성 전제</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>데이터베이스</strong></td>
+<td>고객사 Oracle Enterprise DB 서버 사용 — 우리 제품에 DB 서버 미포함</td>
+</tr>
+<tr>
+<td><strong>LDAP</strong></td>
+<td>고객사 상용 LDAP 서버 사용 — 우리 제품에 LDAP 서버 미포함</td>
+</tr>
+<tr>
+<td><strong>Oracle Client</strong></td>
+<td>Oracle Instant Client를 Docker 이미지에 포함하여 배포 (클라이언트만)</td>
+</tr>
+<tr>
+<td><strong>LDAP Client</strong></td>
+<td>libldap (OpenLDAP 클라이언트 라이브러리)를 Docker 이미지에 포함하여 배포</td>
+</tr>
+<tr>
+<td><strong>Python Oracle Driver</strong></td>
+<td><code>oracledb</code> Thin 모드 (순수 Python, Oracle Client 불필요)</td>
+</tr>
+<tr>
+<td><strong>배포 형태</strong></td>
+<td>Docker 컨테이너 이미지</td>
+</tr>
+<tr>
+<td><strong>개발/테스트 전용</strong></td>
+<td>PostgreSQL, OpenLDAP 서버 — 상용 배포 미포함</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-2-위험도-총괄-요약">1.2 위험도 총괄 요약</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>위험도</th>
+<th>항목 수</th>
+<th>해당 라이브러리</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>HIGH</strong></td>
+<td>0개</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>MEDIUM</strong></td>
+<td>2개</td>
+<td>Oracle Instant Client (OTN), psycopg2-binary (LGPL-3.0)</td>
+</tr>
+<tr>
+<td><strong>LOW</strong></td>
+<td>1개</td>
+<td>Preline UI (MIT + Fair Use)</td>
+</tr>
+<tr>
+<td><strong>NONE</strong></td>
+<td>~54개</td>
+<td>전부 Permissive (MIT / BSD / Apache / ISC 등)</td>
+</tr>
+</tbody></table></div>
+<p><strong>GPL/AGPL 라이선스 라이브러리: 0개</strong> — 카피레프트 오염 위험 없음</p>
+<hr>
+<h2 id="2-c-backend-라이브러리-4개-서비스-공통">2. C++ Backend 라이브러리 (4개 서비스 공통)</h2>
+<p>패키지 관리: vcpkg + system packages | 빌드: CMake 3.20+, C++20</p>
+<h3 id="2-1-핵심-라이브러리">2.1 핵심 라이브러리</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>라이브러리</th>
+<th>라이선스 (SPDX)</th>
+<th>유형</th>
+<th>상용 배포</th>
+<th>주요 의무사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Drogon</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Trantor (Drogon 의존)</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>3</td>
+<td>OpenSSL 3.0+</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>NOTICE 파일 포함, 변경 사항 명시</td>
+</tr>
+<tr>
+<td>4</td>
+<td>libpq (PostgreSQL)</td>
+<td>PostgreSQL License</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Oracle Instant Client</strong></td>
+<td><strong>OTN License</strong></td>
+<td><strong>Proprietary</strong></td>
+<td><strong>조건부</strong></td>
+<td>EULA에 Oracle 조항 필수 (§3 참조)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>nlohmann/json</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>7</td>
+<td>jsoncpp</td>
+<td>MIT / Public Domain</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>8</td>
+<td>spdlog</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>9</td>
+<td>fmt</td>
+<td>MIT (with fmt-exception)</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>바이너리 배포 시 고지 면제</td>
+</tr>
+<tr>
+<td>10</td>
+<td>libzip</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>11</td>
+<td>zlib</td>
+<td>Zlib</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작 변경 시 명시</td>
+</tr>
+<tr>
+<td>12</td>
+<td>OpenLDAP (libldap, liblber)</td>
+<td>OLDAP-2.8</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 + 라이선스 사본 포함</td>
+</tr>
+<tr>
+<td>13</td>
+<td>libuuid</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>14</td>
+<td>curl / libcurl</td>
+<td>curl (MIT-derivative)</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>15</td>
+<td>c-ares</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>16</td>
+<td>brotli</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>17</td>
+<td>OpenJPEG (libopenjp2)</td>
+<td>BSD-2-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>저작권 고지 포함</td>
+</tr>
+<tr>
+<td>18</td>
+<td>libjpeg-turbo</td>
+<td>IJG + BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+<td>IJG 귀속 문구 필수 (§4.1 참조)</td>
+</tr>
+</tbody></table></div>
+<h3 id="2-2-테스트-프레임워크-운영-배포-미포함">2.2 테스트 프레임워크 (운영 배포 미포함)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>라이브러리</th>
+<th>라이선스 (SPDX)</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Catch2 v3</td>
+<td>BSL-1.0</td>
+<td>테스트 전용 — 바이너리 배포 시 귀속 불필요</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Google Test</td>
+<td>BSD-3-Clause</td>
+<td>테스트 전용</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-oracle-instant-client-재배포-조건-medium-risk">3. Oracle Instant Client — 재배포 조건 (MEDIUM RISK)</h2>
+<h3 id="3-1-라이선스-정보">3.1 라이선스 정보</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라이선스명</strong></td>
+<td>OTN Development and Distribution License</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td>Proprietary Freeware (오픈소스 아님)</td>
+</tr>
+<tr>
+<td><strong>사용료</strong></td>
+<td>무료 (개발 + 운영 + 재배포)</td>
+</tr>
+<tr>
+<td><strong>재배포</strong></td>
+<td>허용 (조건부)</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-2-제품-eula-필수-포함-조항">3.2 제품 EULA 필수 포함 조항</h3>
+<p>Oracle Instant Client를 Docker 이미지에 포함하여 배포할 경우, 제품의 최종사용자 라이선스 계약(EULA)에 아래 4개 조항을 <strong>반드시</strong> 포함해야 한다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>필수 EULA 조항</th>
+<th>원문 요지</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>사용 범위 제한</strong></td>
+<td>최종사용자의 비즈니스 운영(internal business operations) 목적으로만 사용 가능</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>재배포 금지</strong></td>
+<td>최종사용자가 Oracle 프로그램을 제3자에게 재배포할 수 없음</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>역공학 금지</strong></td>
+<td>Oracle 프로그램의 역공학, 디컴파일, 디스어셈블리 금지</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>소유권 귀속</strong></td>
+<td>Oracle 프로그램의 소유권(title)은 Oracle Corporation에 귀속</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-3-추가-제한사항">3.3 추가 제한사항</h3>
+<ul>
+<li>GPL 라이선스 코드와 동일 바이너리에서 결합 불가 (본 프로젝트에 GPL 코드 없으므로 해당 없음)</li>
+<li>Oracle Instant Client 자체를 수정할 수 없음</li>
+<li>Oracle 상표를 제품 마케팅에 사용 불가</li>
+</ul>
+<h3 id="3-4-python-oracledb-드라이버">3.4 Python oracledb 드라이버</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라이선스</strong></td>
+<td>UPL-1.0 OR Apache-2.0 (이중 라이선스, 선택 가능)</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td>Permissive</td>
+</tr>
+<tr>
+<td><strong>동작 모드</strong></td>
+<td>Thin 모드 (순수 Python, Oracle Client 불필요)</td>
+</tr>
+<tr>
+<td><strong>상용 배포</strong></td>
+<td><strong>안전</strong> — 추가 조건 없음</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>Thin 모드 확인: AI Analysis Service에서 <code>oracledb.init_oracle_client()</code>를 호출하지 않으므로 Thin 모드로만 동작한다. OTN License 대상인 Oracle Instant Client를 사용하지 않는다.</p>
+</blockquote>
+<hr>
+<h2 id="4-특별-주의-라이브러리">4. 특별 주의 라이브러리</h2>
+<h3 id="4-1-libjpeg-turbo-ijg-귀속-문구">4.1 libjpeg-turbo — IJG 귀속 문구</h3>
+<p>PA Service에서 DG2 여권 얼굴 이미지의 JPEG2000→JPEG 변환에 사용된다.</p>
+<p><strong>바이너리 배포 시 문서에 아래 문구를 포함해야 한다:</strong></p>
+<blockquote>
+<p>&quot;This software is based in part on the work of the Independent JPEG Group.&quot;</p>
+</blockquote>
+<h3 id="4-2-psycopg2-binary-lgpl-3-0-medium-risk">4.2 psycopg2-binary — LGPL-3.0 (MEDIUM RISK)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라이선스</strong></td>
+<td>LGPL-3.0-or-later (OpenSSL 예외 포함)</td>
+</tr>
+<tr>
+<td><strong>유형</strong></td>
+<td>Weak Copyleft</td>
+</tr>
+<tr>
+<td><strong>사용 방식</strong></td>
+<td>SQLAlchemy 표준 DB-API를 통한 간접 사용</td>
+</tr>
+</tbody></table></div>
+<h4 id="안전한-이유">안전한 이유</h4>
+<ol>
+<li>Python의 <code>import psycopg2</code>는 <strong>동적 링킹</strong>에 해당하므로, 응용프로그램은 &quot;Library를 사용하는 저작물(work that uses the Library)&quot;이지 파생 저작물이 아니다</li>
+<li>psycopg2 소스코드를 수정하지 않는다</li>
+<li>psycopg2 원저자(Daniele Varrazzo)가 공식적으로 &quot;DB-API 인터페이스를 통한 사용은 파생 저작물이 아님&quot;을 확인한 바 있다</li>
+<li>pip 설치 방식이므로 사용자가 다른 버전으로 교체 가능 (LGPL 재링킹 요건 자동 충족)</li>
+</ol>
+<h4 id="준수-사항">준수 사항</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>의무사항</th>
+<th>충족 여부</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>LGPL-3.0 라이선스 전문을 THIRD-PARTY-NOTICES에 포함</td>
+<td>필요</td>
+</tr>
+<tr>
+<td>2</td>
+<td>psycopg2를 정적 링킹하지 않을 것</td>
+<td>pip 설치이므로 자동 충족</td>
+</tr>
+<tr>
+<td>3</td>
+<td>사용자가 psycopg2를 다른 버전으로 교체할 수 있을 것</td>
+<td>pip이므로 자동 충족</td>
+</tr>
+</tbody></table></div>
+<h4 id="대안">대안</h4>
+<p>LGPL이 우려될 경우, 프로젝트에 이미 포함된 <code>asyncpg</code> (Apache-2.0)로 통합하여 psycopg2-binary를 제거할 수 있다.</p>
+<h3 id="4-3-preline-ui-fair-use-license-low-risk">4.3 Preline UI — Fair Use License (LOW RISK)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>라이선스</strong></td>
+<td>MIT + Preline UI Fair Use License (이중 라이선스)</td>
+</tr>
+<tr>
+<td><strong>경쟁금지 조항</strong></td>
+<td>Preline UI와 직접 경쟁하는 UI 컴포넌트 라이브러리 제작 금지</td>
+</tr>
+<tr>
+<td><strong>라이선스 해지</strong></td>
+<td>위반 시 저작자가 라이선스 철회 가능</td>
+</tr>
+</tbody></table></div>
+<h4 id="안전한-이유">안전한 이유</h4>
+<p>ICAO Local PKD는 PKD 관리 시스템이지 UI 컴포넌트 라이브러리가 아니므로, Fair Use License가 명시적으로 허용하는 &quot;End-User Products&quot; 카테고리에 해당한다:</p>
+<blockquote>
+<p>&quot;Applications, websites, or software that use Preline UI for their User Interface; e-commerce websites; custom dashboards for businesses; and SaaS platforms where Preline UI is simply part of the UI.&quot;</p>
+</blockquote>
+<h4 id="주의사항">주의사항</h4>
+<ul>
+<li>프로젝트 범위가 변경되어 Preline 컴포넌트를 재배포 가능한 UI 키트로 제공할 경우 Fair Use License 위반</li>
+<li>비표준 SPDX 식별자이므로 자동 라이선스 스캐너에서 경고 발생 가능</li>
+</ul>
+<hr>
+<h2 id="5-python-ai-analysis-service-라이브러리">5. Python AI Analysis Service 라이브러리</h2>
+<p>런타임: Python 3.12 (PSF-2.0, Permissive)</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>라이브러리</th>
+<th>버전</th>
+<th>라이선스 (SPDX)</th>
+<th>유형</th>
+<th>상용 배포</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>FastAPI</td>
+<td>0.115.6</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Uvicorn</td>
+<td>0.34.0</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>SQLAlchemy</td>
+<td>2.0.37</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>asyncpg</td>
+<td>0.30.0</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>psycopg2-binary</strong></td>
+<td><strong>2.9.10</strong></td>
+<td><strong>LGPL-3.0</strong></td>
+<td><strong>Weak Copyleft</strong></td>
+<td><strong>조건부</strong> (§4.2 참조)</td>
+</tr>
+<tr>
+<td>6</td>
+<td>oracledb</td>
+<td>2.5.1</td>
+<td>UPL-1.0 OR Apache-2.0</td>
+<td>Permissive</td>
+<td><strong>안전</strong> (§3.4 참조)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>scikit-learn</td>
+<td>1.6.1</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td>pandas</td>
+<td>2.2.3</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>9</td>
+<td>numpy</td>
+<td>2.2.2</td>
+<td>BSD-3-Clause</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Pydantic</td>
+<td>2.10.5</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>11</td>
+<td>pydantic-settings</td>
+<td>2.7.1</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>12</td>
+<td>APScheduler</td>
+<td>3.11.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="6-frontend-라이브러리">6. Frontend 라이브러리</h2>
+<p>빌드: Vite 7, TypeScript 5.9, Tailwind CSS 4</p>
+<h3 id="6-1-production-dependencies-운영-배포-포함">6.1 Production Dependencies (운영 배포 포함)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>패키지</th>
+<th>버전</th>
+<th>라이선스 (SPDX)</th>
+<th>유형</th>
+<th>상용 배포</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>React</td>
+<td>^19.2.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>2</td>
+<td>React DOM</td>
+<td>^19.2.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>3</td>
+<td>React Router</td>
+<td>^7.11.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Axios</td>
+<td>^1.13.2</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>5</td>
+<td>TanStack Query</td>
+<td>^5.90.15</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Zustand</td>
+<td>^5.0.9</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>7</td>
+<td>Recharts</td>
+<td>^3.6.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>8</td>
+<td>Lucide React</td>
+<td>^0.562.0</td>
+<td>ISC</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>9</td>
+<td>react-arborist</td>
+<td>^3.4.3</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>10</td>
+<td>i18n-iso-countries</td>
+<td>^7.14.0</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td><strong>안전</strong></td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Preline</strong></td>
+<td><strong>^3.2.3</strong></td>
+<td><strong>MIT + Fair Use</strong></td>
+<td><strong>Custom</strong></td>
+<td><strong>조건부</strong> (§4.3 참조)</td>
+</tr>
+</tbody></table></div>
+<h3 id="6-2-dev-dependencies-운영-배포-미포함">6.2 Dev Dependencies (운영 배포 미포함)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>패키지</th>
+<th>버전</th>
+<th>라이선스 (SPDX)</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>Vite</td>
+<td>^7.2.4</td>
+<td>MIT</td>
+<td>빌드 도구</td>
+</tr>
+<tr>
+<td>2</td>
+<td>@vitejs/plugin-react</td>
+<td>^5.1.1</td>
+<td>MIT</td>
+<td>Vite 플러그인</td>
+</tr>
+<tr>
+<td>3</td>
+<td>TypeScript</td>
+<td>~5.9.3</td>
+<td>Apache-2.0</td>
+<td>컴파일러 (런타임 미포함)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Tailwind CSS</td>
+<td>^4.1.18</td>
+<td>MIT</td>
+<td>CSS 생성기 (런타임 미포함)</td>
+</tr>
+<tr>
+<td>5</td>
+<td>ESLint</td>
+<td>^9.39.1</td>
+<td>MIT</td>
+<td>린터</td>
+</tr>
+<tr>
+<td>6</td>
+<td>typescript-eslint</td>
+<td>^8.46.4</td>
+<td>MIT</td>
+<td>ESLint 플러그인</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="7-infrastructure-소프트웨어">7. Infrastructure 소프트웨어</h2>
+<h3 id="7-0-배포-범위">7.0 배포 범위</h3>
+<p>상용 배포 시 DB 서버와 LDAP 서버는 고객사가 별도로 확보한다. 우리 제품에는 클라이언트 라이브러리만 포함된다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구분</th>
+<th>소프트웨어</th>
+<th>배포 포함</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>배포 포함</strong></td>
+<td>nginx, Swagger UI</td>
+<td>O</td>
+<td>Docker 컨테이너 이미지에 포함</td>
+</tr>
+<tr>
+<td><strong>클라이언트만 포함</strong></td>
+<td>Oracle Instant Client, libldap</td>
+<td>O</td>
+<td>서버 미포함, 클라이언트 라이브러리만</td>
+</tr>
+<tr>
+<td><strong>개발/테스트 전용</strong></td>
+<td>PostgreSQL 15, OpenLDAP Server</td>
+<td>X</td>
+<td>상용 배포 미포함</td>
+</tr>
+<tr>
+<td><strong>고객 인프라</strong></td>
+<td>Oracle DB Enterprise, 상용 LDAP</td>
+<td>X</td>
+<td>고객 책임 (EULA 제6조)</td>
+</tr>
+</tbody></table></div>
+<h3 id="7-1-배포-포함-소프트웨어">7.1 배포 포함 소프트웨어</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>소프트웨어</th>
+<th>라이선스</th>
+<th>유형</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>nginx (open source)</td>
+<td>BSD-2-Clause</td>
+<td>Permissive</td>
+<td>nginx Plus 아님</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Swagger UI</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+<td>SmartBear 상용 제품 아님</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Docker Engine</td>
+<td>Apache-2.0</td>
+<td>Permissive</td>
+<td>CE 버전, 고객 환경 설치</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Node.js</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td>빌드 전용</td>
+</tr>
+</tbody></table></div>
+<h3 id="7-2-개발-테스트-전용-상용-배포-미포함">7.2 개발/테스트 전용 (상용 배포 미포함)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>소프트웨어</th>
+<th>라이선스</th>
+<th>유형</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>PostgreSQL 15</td>
+<td>PostgreSQL License</td>
+<td>Permissive</td>
+<td>개발 DB</td>
+</tr>
+<tr>
+<td>2</td>
+<td>OpenLDAP Server</td>
+<td>OLDAP-2.8</td>
+<td>Permissive</td>
+<td>개발 LDAP</td>
+</tr>
+<tr>
+<td>3</td>
+<td>osixia/docker-openldap</td>
+<td>MIT</td>
+<td>Permissive</td>
+<td>Docker 래퍼</td>
+</tr>
+</tbody></table></div>
+<h3 id="7-1-docker-desktop-참고사항">7.1 Docker Desktop 참고사항</h3>
+<p>Docker Desktop은 Docker Engine과 별도 라이선스이다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>조건</th>
+<th>Docker Engine (서버)</th>
+<th>Docker Desktop (개발 PC)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>라이선스</td>
+<td>Apache-2.0 (무료)</td>
+<td>Proprietary (Freemium)</td>
+</tr>
+<tr>
+<td>무료 조건</td>
+<td>제한 없음</td>
+<td>직원 250명 미만 <strong>AND</strong> 매출 $10M 미만</td>
+</tr>
+<tr>
+<td>유료 구간</td>
+<td>해당 없음</td>
+<td>Pro $5/월, Team $9/월, Business $24/월</td>
+</tr>
+</tbody></table></div>
+<p>운영 서버(Linux)에는 Docker Engine만 설치하므로 라이선스 비용이 발생하지 않는다. 개발자 PC에서 Docker Desktop을 사용하는 경우 조직 규모에 따라 유료 구독이 필요할 수 있다.</p>
+<hr>
+<h2 id="8-라이선스-유형별-분류">8. 라이선스 유형별 분류</h2>
+<h3 id="8-1-permissive-허용적-라이선스-54개">8.1 Permissive (허용적 라이선스) — 54개</h3>
+<p>소스 코드 공개 의무 없이 상용 제품에 자유롭게 포함 가능. 저작권 고지만 유지하면 된다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이선스</th>
+<th>해당 라이브러리 수</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MIT</td>
+<td>28개</td>
+</tr>
+<tr>
+<td>BSD-3-Clause</td>
+<td>12개</td>
+</tr>
+<tr>
+<td>Apache-2.0</td>
+<td>6개</td>
+</tr>
+<tr>
+<td>BSD-2-Clause</td>
+<td>2개</td>
+</tr>
+<tr>
+<td>ISC</td>
+<td>1개</td>
+</tr>
+<tr>
+<td>PostgreSQL License</td>
+<td>1개</td>
+</tr>
+<tr>
+<td>OLDAP-2.8</td>
+<td>1개</td>
+</tr>
+<tr>
+<td>Zlib</td>
+<td>1개</td>
+</tr>
+<tr>
+<td>curl</td>
+<td>1개</td>
+</tr>
+<tr>
+<td>BSL-1.0</td>
+<td>1개 (테스트 전용)</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-2-weak-copyleft-약한-카피레프트-1개">8.2 Weak Copyleft (약한 카피레프트) — 1개</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이선스</th>
+<th>라이브러리</th>
+<th>영향</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LGPL-3.0</td>
+<td>psycopg2-binary</td>
+<td>동적 링킹이므로 응용프로그램 소스 공개 의무 없음</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-3-strong-copyleft-강한-카피레프트-0개">8.3 Strong Copyleft (강한 카피레프트) — 0개</h3>
+<p>GPL, AGPL 라이선스 라이브러리 없음.</p>
+<h3 id="8-4-proprietary-독점적-1개">8.4 Proprietary (독점적) — 1개</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이선스</th>
+<th>라이브러리</th>
+<th>영향</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OTN License</td>
+<td>Oracle Instant Client</td>
+<td>EULA에 4개 조항 포함 필수 (§3.2 참조)</td>
+</tr>
+</tbody></table></div>
+<h3 id="8-5-custom-비표준-1개">8.5 Custom (비표준) — 1개</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>라이선스</th>
+<th>라이브러리</th>
+<th>영향</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>MIT + Fair Use</td>
+<td>Preline UI</td>
+<td>경쟁 UI 컴포넌트 라이브러리 제작 금지</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="9-상용-배포-준수-체크리스트">9. 상용 배포 준수 체크리스트</h2>
+<h3 id="9-1-필수-조치-must">9.1 필수 조치 (MUST)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>조치</th>
+<th>대상</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>THIRD-PARTY-NOTICES 파일 생성</td>
+<td>전체 오픈소스 라이브러리 저작권 고지 + 라이선스 전문</td>
+<td>미완료</td>
+</tr>
+<tr>
+<td>2</td>
+<td>OpenSSL NOTICE 파일 포함</td>
+<td>Apache-2.0 요구사항</td>
+<td>미완료</td>
+</tr>
+<tr>
+<td>3</td>
+<td>IJG 귀속 문구 포함</td>
+<td>libjpeg-turbo (PA Service)</td>
+<td>미완료</td>
+</tr>
+<tr>
+<td>4</td>
+<td>LGPL-3.0 라이선스 전문 포함</td>
+<td>psycopg2-binary</td>
+<td>미완료</td>
+</tr>
+<tr>
+<td>5</td>
+<td>제품 EULA에 Oracle 호환 조항 추가</td>
+<td>Oracle Instant Client (§3.2의 4개 조항)</td>
+<td><strong>완료</strong> (<code>docs/EULA.md</code> 제5조)</td>
+</tr>
+</tbody></table></div>
+<h3 id="9-2-권장-조치-should">9.2 권장 조치 (SHOULD)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>조치</th>
+<th>이유</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>6</td>
+<td>psycopg2-binary → asyncpg 통합 검토</td>
+<td>LGPL 우려 완전 해소 (Apache-2.0)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Preline Fair Use License 법률 검토 기록</td>
+<td>라이선스 해지 조항 존재</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Docker Desktop 유료 구독 검토</td>
+<td>직원 250명+ 또는 매출 $10M+ 조직 해당 시</td>
+</tr>
+<tr>
+<td>9</td>
+<td>라이선스 스캐너 CI 통합</td>
+<td>신규 의존성 추가 시 자동 감지</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="10-결론">10. 결론</h2>
+<h3 id="postgresql-전용-배포-시">PostgreSQL 전용 배포 시</h3>
+<p>Oracle 관련 컴포넌트를 제외하면, 프로젝트의 <strong>모든 라이브러리가 Permissive 라이선스</strong>이다 (LGPL인 psycopg2 포함 — 동적 링킹으로 안전). <strong>소스 코드 공개 의무 없이 상용 배포 가능</strong>하며, THIRD-PARTY-NOTICES 파일 작성만으로 라이선스 준수가 완료된다.</p>
+<h3 id="oracle-포함-배포-시-기본-배포-구성">Oracle 포함 배포 시 (기본 배포 구성)</h3>
+<p>Oracle Instant Client(OTN License)의 재배포 조건을 제품 EULA에 반영 완료 (<code>docs/EULA.md</code> 제5조). Oracle DB 서버 및 상용 LDAP 서버는 고객사가 별도로 확보하므로 해당 서버의 라이선스는 고객사 책임이다 (<code>docs/EULA.md</code> 제6조).</p>
+<h3 id="위험-요약">위험 요약</h3>
+<ul>
+<li><strong>HIGH RISK: 0개</strong> — 상용 배포를 차단하는 라이선스 문제 없음</li>
+<li><strong>MEDIUM RISK: 2개</strong> — EULA 조항 추가 및 라이선스 텍스트 포함으로 해결</li>
+<li><strong>GPL/AGPL 오염: 없음</strong> — 전체 프로젝트에 카피레프트 라이선스 0개</li>
+</ul>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#1-개요">1. 개요</a><a href="#1-1-배포-구성-전제" style="padding-left:1rem">1.1 배포 구성 전제</a><a href="#1-2-위험도-총괄-요약" style="padding-left:1rem">1.2 위험도 총괄 요약</a><a href="#2-c-backend-라이브러리-4개-서비스-공통">2. C++ Backend 라이브러리 (4개 서비스 공통)</a><a href="#2-1-핵심-라이브러리" style="padding-left:1rem">2.1 핵심 라이브러리</a><a href="#2-2-테스트-프레임워크-운영-배포-미포함" style="padding-left:1rem">2.2 테스트 프레임워크 (운영 배포 미포함)</a><a href="#3-oracle-instant-client-재배포-조건-medium-risk">3. Oracle Instant Client — 재배포 조건 (MEDIUM RISK)</a><a href="#3-1-라이선스-정보" style="padding-left:1rem">3.1 라이선스 정보</a><a href="#3-2-제품-eula-필수-포함-조항" style="padding-left:1rem">3.2 제품 EULA 필수 포함 조항</a><a href="#3-3-추가-제한사항" style="padding-left:1rem">3.3 추가 제한사항</a><a href="#3-4-python-oracledb-드라이버" style="padding-left:1rem">3.4 Python oracledb 드라이버</a><a href="#4-특별-주의-라이브러리">4. 특별 주의 라이브러리</a><a href="#4-1-libjpeg-turbo-ijg-귀속-문구" style="padding-left:1rem">4.1 libjpeg-turbo — IJG 귀속 문구</a><a href="#4-2-psycopg2-binary-lgpl-3-0-medium-risk" style="padding-left:1rem">4.2 psycopg2-binary — LGPL-3.0 (MEDIUM RISK)</a><a href="#4-3-preline-ui-fair-use-license-low-risk" style="padding-left:1rem">4.3 Preline UI — Fair Use License (LOW RISK)</a><a href="#5-python-ai-analysis-service-라이브러리">5. Python AI Analysis Service 라이브러리</a><a href="#6-frontend-라이브러리">6. Frontend 라이브러리</a><a href="#6-1-production-dependencies-운영-배포-포함" style="padding-left:1rem">6.1 Production Dependencies (운영 배포 포함)</a><a href="#6-2-dev-dependencies-운영-배포-미포함" style="padding-left:1rem">6.2 Dev Dependencies (운영 배포 미포함)</a><a href="#7-infrastructure-소프트웨어">7. Infrastructure 소프트웨어</a><a href="#7-0-배포-범위" style="padding-left:1rem">7.0 배포 범위</a><a href="#7-1-배포-포함-소프트웨어" style="padding-left:1rem">7.1 배포 포함 소프트웨어</a><a href="#7-2-개발-테스트-전용-상용-배포-미포함" style="padding-left:1rem">7.2 개발/테스트 전용 (상용 배포 미포함)</a><a href="#7-1-docker-desktop-참고사항" style="padding-left:1rem">7.1 Docker Desktop 참고사항</a><a href="#8-라이선스-유형별-분류">8. 라이선스 유형별 분류</a><a href="#8-1-permissive-허용적-라이선스-54개" style="padding-left:1rem">8.1 Permissive (허용적 라이선스) — 54개</a><a href="#8-2-weak-copyleft-약한-카피레프트-1개" style="padding-left:1rem">8.2 Weak Copyleft (약한 카피레프트) — 1개</a><a href="#8-3-strong-copyleft-강한-카피레프트-0개" style="padding-left:1rem">8.3 Strong Copyleft (강한 카피레프트) — 0개</a><a href="#8-4-proprietary-독점적-1개" style="padding-left:1rem">8.4 Proprietary (독점적) — 1개</a><a href="#8-5-custom-비표준-1개" style="padding-left:1rem">8.5 Custom (비표준) — 1개</a><a href="#9-상용-배포-준수-체크리스트">9. 상용 배포 준수 체크리스트</a><a href="#9-1-필수-조치-must" style="padding-left:1rem">9.1 필수 조치 (MUST)</a><a href="#9-2-권장-조치-should" style="padding-left:1rem">9.2 권장 조치 (SHOULD)</a><a href="#10-결론">10. 결론</a><a href="#postgresql-전용-배포-시" style="padding-left:1rem">PostgreSQL 전용 배포 시</a><a href="#oracle-포함-배포-시-기본-배포-구성" style="padding-left:1rem">Oracle 포함 배포 시 (기본 배포 구성)</a><a href="#위험-요약" style="padding-left:1rem">위험 요약</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

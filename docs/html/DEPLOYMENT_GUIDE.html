@@ -1,0 +1,2389 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deployment Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html" class="active">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>Deployment Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="icao-local-pkd-deployment-guide">ICAO Local PKD — Deployment Guide</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="1-overview">1. Overview</h2>
+<p>This document describes deployment processes for all three target environments.</p>
+<h3 id="environments">Environments</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Environment</th>
+<th>Host</th>
+<th>Runtime</th>
+<th>Method</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Local Development</strong></td>
+<td>WSL2</td>
+<td>Docker</td>
+<td><code>docker-start.sh</code>, <code>scripts/build/rebuild-*.sh</code></td>
+</tr>
+<tr>
+<td><strong>Production</strong></td>
+<td>10.0.0.220 (RHEL 9)</td>
+<td>Podman</td>
+<td><code>rsync</code> + <code>podman-compose build</code>, Podman scripts</td>
+</tr>
+<tr>
+<td><strong>Luckfox (ARM64)</strong></td>
+<td>192.168.100.10</td>
+<td>Docker</td>
+<td>GitHub Actions CI/CD, OCI artifacts, <code>from-github-artifacts.sh</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="services">Services</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Port</th>
+<th>Technology</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td>:8081</td>
+<td>C++/Drogon</td>
+<td>Core certificate management</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td>:8082</td>
+<td>C++/Drogon</td>
+<td>Passive Authentication (ICAO 9303)</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td>:8083</td>
+<td>C++/Drogon</td>
+<td>DB-LDAP sync, reconciliation</td>
+</tr>
+<tr>
+<td>Monitoring Service</td>
+<td>:8084</td>
+<td>C++/Drogon</td>
+<td>System metrics, DB-independent</td>
+</tr>
+<tr>
+<td>AI Analysis Service</td>
+<td>:8085</td>
+<td>Python/FastAPI</td>
+<td>ML anomaly detection</td>
+</tr>
+<tr>
+<td>EAC Service</td>
+<td>:8086</td>
+<td>C++/Drogon</td>
+<td>BSI TR-03110 CVC (experimental)</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>—</td>
+<td>React 19</td>
+<td>Served via nginx</td>
+</tr>
+</tbody></table></div>
+<h3 id="supporting-infrastructure">Supporting Infrastructure</h3>
+<ul>
+<li><strong>API Gateway</strong>: nginx (ports 80/443/8080)</li>
+<li><strong>Database</strong>: PostgreSQL 15 (default) or Oracle XE 21c (via <code>DB_TYPE</code>)</li>
+<li><strong>LDAP</strong>: OpenLDAP MMR cluster (2 nodes)</li>
+<li><strong>Swagger UI</strong>: API documentation</li>
+</ul>
+<h3 id="source-code-locations">Source Code Locations</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td><code>services/pkd-management/src/</code></td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td><code>services/pa-service/src/</code></td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td><code>services/pkd-relay-service/src/</code></td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td><code>services/monitoring-service/src/</code></td>
+</tr>
+<tr>
+<td>AI Analysis</td>
+<td><code>services/ai-analysis/</code></td>
+</tr>
+<tr>
+<td>EAC Service</td>
+<td><code>services/eac-service/src/</code></td>
+</tr>
+<tr>
+<td>Shared Libraries</td>
+<td><code>shared/lib/</code></td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td><code>frontend/src/</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="2-local-development-wsl2-docker">2. Local Development (WSL2, Docker)</h2>
+<h3 id="quick-start">Quick Start</h3>
+<pre><code class="language-bash"># Start all services
+./docker-start.sh
+
+# Health check
+./docker-health.sh
+
+# Stop all services
+./docker-stop.sh</code></pre>
+<h3 id="rebuilding-services">Rebuilding Services</h3>
+<pre><code class="language-bash"># Rebuild specific service (cached, 2-3 min)
+./scripts/build/rebuild-pkd-relay.sh
+./scripts/build/rebuild-pkd-management.sh
+./scripts/build/rebuild-frontend.sh
+
+# Clean rebuild (no cache, 20-30 min)
+./scripts/build/rebuild-pkd-relay.sh --no-cache
+
+# Or use docker compose directly
+docker compose -f docker/docker-compose.yaml build &lt;service-name&gt;
+docker compose -f docker/docker-compose.yaml build --no-cache &lt;service-name&gt;</code></pre>
+<h3 id="full-reset-clean-install">Full Reset (Clean Install)</h3>
+<pre><code class="language-bash"># Complete data reset + LDAP DIT initialization
+./docker-clean-and-init.sh</code></pre>
+<h3 id="development-environment-isolated">Development Environment (Isolated)</h3>
+<pre><code class="language-bash"># Separate containers/ports from main environment
+docker compose -f docker/docker-compose.dev.yaml up -d
+docker compose -f docker/docker-compose.dev.yaml build --no-cache pkd-management-dev</code></pre>
+<h3 id="access-urls">Access URLs</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend</td>
+<td><a href="http://localhost:13080">http://localhost:13080</a></td>
+</tr>
+<tr>
+<td>API Gateway</td>
+<td><a href="http://localhost:18080/api">http://localhost:18080/api</a></td>
+</tr>
+<tr>
+<td>Swagger UI</td>
+<td><a href="http://localhost:18090">http://localhost:18090</a></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-production-10-0-0-220-rhel-9-podman">3. Production (10.0.0.220, RHEL 9, Podman)</h2>
+<p>Production uses <strong>Podman</strong> (rootless, daemonless) instead of Docker.</p>
+<h3 id="3-1-server-hardware-os">3.1 Server Hardware &amp; OS</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hardware</td>
+<td>Dell PowerEdge R440</td>
+</tr>
+<tr>
+<td>Firmware</td>
+<td>1.6.11</td>
+</tr>
+<tr>
+<td>CPU</td>
+<td>Intel Xeon Silver 4110 @ 2.10GHz</td>
+</tr>
+<tr>
+<td>Socket / Core / Thread</td>
+<td>1 socket / 8 cores / 16 threads (HT)</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>16 GB (used 2.1GB / available 12GB)</td>
+</tr>
+<tr>
+<td>Swap</td>
+<td>7.7 GB</td>
+</tr>
+<tr>
+<td>Disk</td>
+<td>558.4 GB (sda)</td>
+</tr>
+<tr>
+<td>Architecture</td>
+<td>x86_64</td>
+</tr>
+</tbody></table></div>
+<h4 id="disk-partitions-lvm">Disk Partitions (LVM)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Partition</th>
+<th>Size</th>
+<th>Mount</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>sda1</td>
+<td>1 GB</td>
+<td>/boot</td>
+</tr>
+<tr>
+<td>rhel_friendlyelec-root</td>
+<td>70 GB</td>
+<td>/ (used 5.4GB, free 65GB)</td>
+</tr>
+<tr>
+<td>rhel_friendlyelec-swap</td>
+<td>7.7 GB</td>
+<td>[SWAP]</td>
+</tr>
+<tr>
+<td>rhel_friendlyelec-home</td>
+<td>479.7 GB</td>
+<td>/home</td>
+</tr>
+</tbody></table></div>
+<h4 id="os-information">OS Information</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OS</td>
+<td>Red Hat Enterprise Linux 9.7 (Plow)</td>
+</tr>
+<tr>
+<td>Kernel</td>
+<td>5.14.0-611.5.1.el9_7.x86_64</td>
+</tr>
+<tr>
+<td>Machine ID</td>
+<td>4604d25bd0f04c788af3815ec535cada</td>
+</tr>
+<tr>
+<td>SELinux</td>
+<td>enforcing (targeted)</td>
+</tr>
+<tr>
+<td>Firewall</td>
+<td>running (firewalld)</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-2-network-firewall">3.2 Network &amp; Firewall</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Hostname</td>
+<td>pkd.smartcoreinc.com</td>
+</tr>
+<tr>
+<td>IP Address</td>
+<td>10.0.0.220/24 (static)</td>
+</tr>
+<tr>
+<td>Interface</td>
+<td>eno1</td>
+</tr>
+<tr>
+<td>Gateway</td>
+<td>10.0.0.255 (broadcast)</td>
+</tr>
+</tbody></table></div>
+<h4 id="etc-hosts">/etc/hosts</h4>
+<pre><code>127.0.0.1   pkd.smartcoreinc.com pkd localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6</code></pre>
+<h4 id="hostname-change">Hostname Change</h4>
+<pre><code class="language-bash">sudo hostnamectl set-hostname pkd.smartcoreinc.com</code></pre>
+<ul>
+<li>Before: <code>FriendlyELEC.smartcore.kr</code></li>
+<li>After: <code>pkd.smartcoreinc.com</code></li>
+<li><code>/etc/hosts</code> updated: <code>127.0.0.1 pkd.smartcoreinc.com pkd localhost ...</code></li>
+</ul>
+<h4 id="red-hat-subscription-manager">Red Hat Subscription Manager</h4>
+<pre><code class="language-bash">sudo subscription-manager register --username=kbjung112 --password='****'</code></pre>
+<p><strong>Registration Result</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>System ID</td>
+<td><code>541a236f-c759-41c3-a911-527a0655ac22</code></td>
+</tr>
+<tr>
+<td>System Name</td>
+<td>pkd.smartcoreinc.com</td>
+</tr>
+<tr>
+<td>Organization</td>
+<td>20252037</td>
+</tr>
+<tr>
+<td>Registration Server</td>
+<td>subscription.rhsm.redhat.com:443/subscription</td>
+</tr>
+<tr>
+<td>Content Access</td>
+<td>Simple Content Access (SCA)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>SCA (Simple Content Access)</strong> mode: no individual subscription attachment required, <code>dnf</code> packages available immediately</p>
+</blockquote>
+<h4 id="registration-verification">Registration Verification</h4>
+<pre><code class="language-bash">sudo subscription-manager status
+sudo subscription-manager identity
+sudo subscription-manager repos --list-enabled</code></pre>
+<h4 id="firewall-configuration">Firewall Configuration</h4>
+<pre><code class="language-bash">sudo firewall-cmd --permanent --add-service=http    # 80/tcp
+sudo firewall-cmd --permanent --add-service=https   # 443/tcp
+sudo firewall-cmd --permanent --add-port=8080/tcp   # API Gateway (internal)
+sudo firewall-cmd --reload</code></pre>
+<p>Open ports: <code>http</code>, <code>https</code>, <code>ssh</code>, <code>cockpit</code>, <code>8080/tcp</code></p>
+<h3 id="3-3-ssh-access">3.3 SSH Access</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SSH</td>
+<td><code>ssh scpkd@10.0.0.220</code></td>
+</tr>
+<tr>
+<td>Account</td>
+<td>scpkd</td>
+</tr>
+<tr>
+<td>Password</td>
+<td>core</td>
+</tr>
+<tr>
+<td>sudo</td>
+<td>available (password: core)</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-4-podman-setup">3.4 Podman Setup</h3>
+<pre><code class="language-bash"># Podman is included by default in RHEL 9
+sudo dnf install -y podman
+
+# podman-compose (pip install — dnf version is outdated)
+pip3 install --user podman-compose
+# Ensure ~/.local/bin is in PATH
+
+# CNI DNS plugin (required for container hostname resolution)
+sudo dnf install -y podman-plugins
+
+# Allow rootless binding of ports 80/443
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+
+# Verify versions
+podman --version          # 5.6.0+
+podman-compose --version  # 1.5.0+</code></pre>
+<h4 id="installed-package-versions">Installed Package Versions</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Version</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Podman</td>
+<td>5.6.0</td>
+<td>Included in RHEL 9</td>
+</tr>
+<tr>
+<td>podman-compose</td>
+<td>1.5.0</td>
+<td>pip3 install</td>
+</tr>
+<tr>
+<td>podman-plugins</td>
+<td>5.6.0-14</td>
+<td>dnsname CNI plugin</td>
+</tr>
+<tr>
+<td>aardvark-dns</td>
+<td>1.16.0</td>
+<td>Installed (unused, CNI backend)</td>
+</tr>
+<tr>
+<td>netavark</td>
+<td>1.16.0</td>
+<td>Installed (unused, CNI backend)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Network backend</strong>: CNI (not netavark). <code>podman-plugins</code> dnsname plugin handles DNS resolution.</p>
+</blockquote>
+<h3 id="3-5-docker-to-podman-migration">3.5 Docker to Podman Migration</h3>
+<pre><code class="language-bash"># 1. Stop Docker containers
+sudo docker compose -f docker/docker-compose.yaml down
+
+# 2. Copy Docker images to Podman (skopeo)
+for img in docker-pkd-management docker-pa-service docker-pkd-relay \
+           docker-frontend docker-monitoring-service docker-ai-analysis; do
+    sudo skopeo copy docker-daemon:$img:latest \
+         containers-storage:docker.io/library/$img:latest
+done
+
+# 3. Remove Docker CE
+sudo systemctl stop docker
+sudo dnf remove -y docker-ce docker-ce-cli containerd.io \
+    docker-buildx-plugin docker-compose-plugin
+sudo rm -rf /var/lib/docker /var/lib/containerd</code></pre>
+<h4 id="key-differences-from-docker">Key Differences from Docker</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Docker (Local)</th>
+<th>Podman (Production)</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Daemon</td>
+<td>dockerd (root)</td>
+<td>Daemonless (rootless)</td>
+<td>Security improvement</td>
+</tr>
+<tr>
+<td>CLI</td>
+<td><code>docker</code></td>
+<td><code>podman</code></td>
+<td>Compatible</td>
+</tr>
+<tr>
+<td>Compose</td>
+<td><code>docker compose</code></td>
+<td><code>podman-compose</code></td>
+<td>Separate install</td>
+</tr>
+<tr>
+<td>DNS</td>
+<td><code>127.0.0.11</code> (built-in)</td>
+<td>dnsname CNI plugin</td>
+<td><code>podman-plugins</code> required</td>
+</tr>
+<tr>
+<td><code>depends_on</code> condition</td>
+<td><code>service_healthy</code></td>
+<td>Script-based wait</td>
+<td><strong>Script change</strong></td>
+</tr>
+<tr>
+<td>Init containers</td>
+<td><code>service_completed_successfully</code></td>
+<td>Script-based</td>
+<td><strong>Script change</strong></td>
+</tr>
+<tr>
+<td>Rootless</td>
+<td>Supported</td>
+<td><strong>Default</strong></td>
+<td>SELinux MCS note</td>
+</tr>
+<tr>
+<td>SELinux volumes</td>
+<td><code>:Z</code> auto-label</td>
+<td><code>chcon</code> pre-labeling</td>
+<td><code>:Z</code> not usable</td>
+</tr>
+<tr>
+<td>Privileged ports</td>
+<td>root daemon</td>
+<td>sysctl required</td>
+<td><code>ip_unprivileged_port_start=80</code></td>
+</tr>
+<tr>
+<td>Network names</td>
+<td><code>{project}_{network}</code></td>
+<td>Same</td>
+<td>project = compose file directory name</td>
+</tr>
+</tbody></table></div>
+<h4 id="compose-file-comparison">Compose File Comparison</h4>
+<p><strong>Docker (<code>docker-compose.yaml</code>)</strong>:</p>
+<pre><code class="language-yaml">depends_on:
+  openldap1:
+    condition: service_healthy
+  openldap2:
+    condition: service_healthy</code></pre>
+<p><strong>Podman (<code>docker-compose.podman.yaml</code>)</strong>:</p>
+<pre><code class="language-yaml">depends_on:
+  - openldap1
+  - openldap2</code></pre>
+<blockquote>
+<p>Podman version removes <code>condition:</code>. Service readiness is ensured by script wait logic.</p>
+</blockquote>
+<h4 id="nginx-dns-resolution">nginx DNS Resolution</h4>
+<p>Docker uses built-in DNS (127.0.0.11), but Podman CNI uses the dnsname plugin.
+<code>scripts/podman/start.sh</code> automatically:</p>
+<ol>
+<li>Detects the gateway IP of the Podman network (<code>docker_pkd-network</code>)</li>
+<li>Copies the Docker nginx config + replaces the resolver IP (e.g., <code>resolver 10.89.1.1</code>)</li>
+<li>Mounts the generated config at <code>.docker-data/nginx/api-gateway.conf</code></li>
+</ol>
+<blockquote>
+<p><strong>Note</strong>: nginx upstream blocks resolve DNS only once at startup. After network recreation, the api-gateway container must also be restarted.</p>
+</blockquote>
+<h3 id="3-6-selinux-rootless-podman">3.6 SELinux + Rootless Podman</h3>
+<p>RHEL 9 SELinux Enforcing mode with rootless Podman requires special handling:</p>
+<ol>
+<li><strong><code>:Z</code>/<code>:z</code> volume labels not usable</strong> — rootless Podman lacks <code>CAP_MAC_ADMIN</code>, causing <code>lsetxattr</code> call failure</li>
+<li><strong>MCS category mismatch</strong> — each rootless container runs with a unique MCS label (e.g., <code>s0:c737,c1010</code>), mismatching host file MCS categories</li>
+<li><strong>Solution</strong>: Pre-<code>chcon</code> labeling (2 steps)<pre><code class="language-bash"># Step 1: Set SELinux type to container_file_t
+chcon -Rt container_file_t .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi
+# Step 2: Remove MCS categories (leave only s0 — allows access from all containers)
+chcon -R -l s0 .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi</code></pre>
+</li>
+<li><strong>OpenLDAP data directories</strong> — files created by rootless containers can only be deleted on host with <code>podman unshare rm</code></li>
+</ol>
+<h3 id="3-7-env-configuration">3.7 .env Configuration</h3>
+<p>Project deployment on server:</p>
+<pre><code class="language-bash">sudo dnf install -y git
+cd /home/scpkd
+git clone https://github.com/iland112/icao-local-pkd-cpp.git icao-local-pkd
+cd icao-local-pkd
+git checkout main</code></pre>
+<h4 id="env-file-home-scpkd-icao-local-pkd-env">.env File (<code>/home/scpkd/icao-local-pkd/.env</code>)</h4>
+<pre><code>DB_TYPE=oracle
+ORACLE_USER=pkd_user
+ORACLE_PASSWORD=pkd_password
+LDAP_READ_HOSTS=openldap1:389,openldap2:389
+LDAP_WRITE_HOST=openldap1
+LDAP_WRITE_PORT=389
+LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+LDAP_BIND_PASSWORD=ldap_test_password_123
+LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+POSTGRES_USER=pkd
+POSTGRES_PASSWORD=pkd_test_password_123
+LDAP_ADMIN_PASSWORD=ldap_test_password_123
+LDAP_CONFIG_PASSWORD=config_test_123
+JWT_SECRET_KEY=ab19525f...
+JWT_ISSUER=icao-pkd
+JWT_EXPIRATION_SECONDS=3600
+AUTH_ENABLED=true
+NGINX_CONF=../nginx/api-gateway-ssl.conf</code></pre>
+<blockquote>
+<p><code>.env</code> must also be copied to <code>docker/</code> directory (docker compose working directory issue)</p>
+</blockquote>
+<h3 id="3-8-ssl-certificates">3.8 SSL Certificates</h3>
+<p>Private CA-based self-signed certificate generation:</p>
+<pre><code class="language-bash">cd /home/scpkd/icao-local-pkd
+mkdir -p .docker-data/ssl
+# CA (RSA 4096, 10 years) + Server cert (RSA 2048, 1 year)
+# SAN: pkd.smartcoreinc.com, localhost, 127.0.0.1, 10.0.0.220
+
+# Generate certificates
+scripts/ssl/init-cert.sh --ip 10.0.0.220</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>.docker-data/ssl/ca.key</code></td>
+<td>CA private key (keep secret)</td>
+</tr>
+<tr>
+<td><code>.docker-data/ssl/ca.crt</code></td>
+<td>CA certificate (distribute to clients)</td>
+</tr>
+<tr>
+<td><code>.docker-data/ssl/server.key</code></td>
+<td>Server private key</td>
+</tr>
+<tr>
+<td><code>.docker-data/ssl/server.crt</code></td>
+<td>Server certificate (CA-signed)</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>CA validity: 2026-02-27 ~ 2036-02-25</li>
+<li>Server validity: 2026-02-27 ~ 2027-02-27</li>
+<li>Renewal: <code>scripts/ssl/renew-cert.sh</code></li>
+</ul>
+<h3 id="3-9-system-startup-podman">3.9 System Startup (Podman)</h3>
+<pre><code class="language-bash">cd /home/scpkd/icao-local-pkd
+
+# First install: complete initialization (Oracle + LDAP DIT + services)
+./podman-clean-and-init.sh
+
+# Normal start
+./podman-start.sh
+
+# Health check
+./podman-health.sh</code></pre>
+<h4 id="container-status-after-podman-migration">Container Status (after Podman migration)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Container</th>
+<th>Status</th>
+<th>Runtime</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>icao-local-pkd-api-gateway</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-management</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-pa-service</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-relay</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-monitoring</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-ai-analysis</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-frontend</td>
+<td>Up</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-oracle</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-openldap1</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-openldap2</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+<tr>
+<td>icao-local-pkd-swagger</td>
+<td>healthy</td>
+<td>Podman</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-10-deployment-procedure">3.10 Deployment Procedure</h3>
+<h4 id="deployment-pipeline">Deployment Pipeline</h4>
+<pre><code>1. Code Changes (Local WSL2)
+   +-&gt; Edit source files, test locally with Docker
+
+2. Transfer to Production
+   +-&gt; rsync or git pull on server
+
+3. Build on Server (Podman)
+   +-&gt; podman-compose -f docker/docker-compose.podman.yaml build &lt;service&gt;
+
+4. Start/Restart
+   +-&gt; ./podman-start.sh or scripts/podman/restart.sh &lt;service&gt;</code></pre>
+<h4 id="transfer-code">Transfer Code</h4>
+<pre><code class="language-bash"># Option A: rsync from local
+rsync -avz --exclude='.docker-data' --exclude='node_modules' \
+    . scpkd@10.0.0.220:/home/scpkd/icao-local-pkd/
+
+# Option B: git pull on server
+ssh scpkd@10.0.0.220 "cd ~/icao-local-pkd &amp;&amp; git pull origin main"</code></pre>
+<h4 id="build-deploy">Build &amp; Deploy</h4>
+<pre><code class="language-bash"># SSH to server
+ssh scpkd@10.0.0.220
+cd ~/icao-local-pkd
+
+# Rebuild specific service
+podman-compose -f docker/docker-compose.podman.yaml build pkd-management
+podman-compose -f docker/docker-compose.podman.yaml up -d pkd-management
+
+# Or rebuild without cache
+podman-compose -f docker/docker-compose.podman.yaml build --no-cache pkd-management
+
+# Restart (recommended: stop + start for dependency ordering)
+scripts/podman/restart.sh pkd-management</code></pre>
+<h4 id="daily-operations">Daily Operations</h4>
+<pre><code class="language-bash">./podman-start.sh              # Start all
+./podman-stop.sh               # Stop all
+./podman-health.sh             # Health check
+scripts/podman/logs.sh pkd-management 50   # Logs
+scripts/podman/backup.sh       # Backup
+scripts/podman/restore.sh ./backups/20260318_103000  # Restore</code></pre>
+<h4 id="full-reset">Full Reset</h4>
+<pre><code class="language-bash">./podman-clean-and-init.sh     # Oracle + LDAP DIT + services</code></pre>
+<h3 id="3-11-ldap-initialization">3.11 LDAP Initialization</h3>
+<h4 id="docker-init-container-approach">Docker: Init Container Approach</h4>
+<pre><code class="language-yaml"># Defined in docker-compose.yaml
+ldap-mmr-setup1:
+  depends_on:
+    openldap1:
+      condition: service_healthy
+  ...
+  restart: "no"
+
+ldap-init:
+  depends_on:
+    ldap-mmr-setup1:
+      condition: service_completed_successfully
+  ...</code></pre>
+<h4 id="podman-script-approach">Podman: Script Approach</h4>
+<pre><code class="language-bash"># clean-and-init.sh Step 6
+# 1. Wait for OpenLDAP readiness (podman exec ldapsearch)
+# 2. Configure MMR (podman exec ldapmodify — both nodes)
+# 3. Initialize DIT (podman exec — init-pkd-dit.sh execution)
+# 4. Verify (ldapsearch to check entries)</code></pre>
+<h3 id="3-12-client-pc-https-setup">3.12 Client PC HTTPS Setup</h3>
+<p>Since certificates use a Private CA, the CA certificate must be trusted on client PCs.</p>
+<h4 id="automated-setup-script">Automated Setup Script</h4>
+<p>Copy the two files from <code>scripts/client/</code> to the client PC and run:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>setup-pkd-access.bat</code></td>
+<td>Double-click to run (auto-requests admin privileges)</td>
+</tr>
+<tr>
+<td><code>setup-pkd-access.ps1</code></td>
+<td>Actual setup script</td>
+</tr>
+</tbody></table></div>
+<p><strong>Usage</strong>: Copy both files to the same folder -&gt; double-click <code>setup-pkd-access.bat</code> -&gt; UAC &quot;Yes&quot;</p>
+<p><strong>Script actions</strong>:</p>
+<ol>
+<li>Add <code>10.0.0.220 pkd.smartcoreinc.com</code> to <code>hosts</code> file</li>
+<li>Delete all existing &quot;ICAO Local PKD Private CA&quot; certificates (Subject CN-based)</li>
+<li>Register new Private CA certificate in Windows Trusted Root Certification Authorities</li>
+<li>Flush DNS cache</li>
+<li>Test connection to <code>https://pkd.smartcoreinc.com/health</code></li>
+</ol>
+<blockquote>
+<p><strong>Note</strong>: When CA certificate is reissued (<code>init-cert.sh --force</code>) or server IP changes, re-running the script will automatically delete old certificates and register new ones. (v2.24.1)</p>
+</blockquote>
+<blockquote>
+<p><strong>Note</strong>: Firefox does not use the Windows certificate store and requires separate certificate import (Settings -&gt; Privacy &amp; Security -&gt; Certificates -&gt; View Certificates -&gt; Authorities -&gt; Import)</p>
+</blockquote>
+<h4 id="manual-setup">Manual Setup</h4>
+<ol>
+<li><p><code>hosts</code> file (<code>C:\Windows\System32\drivers\etc\hosts</code>):</p>
+<pre><code>10.0.0.220    pkd.smartcoreinc.com</code></pre>
+</li>
+<li><p>CA certificate registration: Double-click <code>.docker-data/ssl/ca.crt</code> -&gt; &quot;Install Certificate&quot; -&gt; &quot;Local Machine&quot; -&gt; &quot;Trusted Root Certification Authorities&quot;</p>
+</li>
+</ol>
+<h3 id="3-13-production-environment-summary">3.13 Production Environment Summary</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>OS</td>
+<td>RHEL 9.7 (SELinux Enforcing)</td>
+</tr>
+<tr>
+<td>Podman</td>
+<td>5.6.0 (rootless)</td>
+</tr>
+<tr>
+<td>podman-compose</td>
+<td>1.5.0 (pip)</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Oracle XE 21c</td>
+</tr>
+<tr>
+<td>Network</td>
+<td>CNI + dnsname plugin</td>
+</tr>
+<tr>
+<td>Network name</td>
+<td>docker_pkd-network</td>
+</tr>
+<tr>
+<td>Compose file</td>
+<td><code>docker/docker-compose.podman.yaml</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="3-14-service-names-compose">3.14 Service Names (Compose)</h3>
+<p>When specifying services in <code>logs.sh</code>, <code>restart.sh</code>, use compose file service names:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service Name</th>
+<th>Container Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pkd-management</code></td>
+<td><code>icao-local-pkd-management</code></td>
+</tr>
+<tr>
+<td><code>pa-service</code></td>
+<td><code>icao-local-pkd-pa-service</code></td>
+</tr>
+<tr>
+<td><code>pkd-relay</code></td>
+<td><code>icao-local-pkd-relay</code></td>
+</tr>
+<tr>
+<td><code>api-gateway</code></td>
+<td><code>icao-local-pkd-api-gateway</code></td>
+</tr>
+<tr>
+<td><code>monitoring-service</code></td>
+<td><code>icao-local-pkd-monitoring</code></td>
+</tr>
+<tr>
+<td><code>ai-analysis</code></td>
+<td><code>icao-local-pkd-ai-analysis</code></td>
+</tr>
+<tr>
+<td><code>frontend</code></td>
+<td><code>icao-local-pkd-frontend</code></td>
+</tr>
+<tr>
+<td><code>openldap1</code> / <code>openldap2</code></td>
+<td><code>icao-local-pkd-openldap1</code> / <code>openldap2</code></td>
+</tr>
+<tr>
+<td><code>swagger-ui</code></td>
+<td><code>icao-local-pkd-swagger</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="3-15-profile-flag">3.15 --profile Flag</h3>
+<p><code>stop.sh</code>, <code>start.sh</code>, <code>restart.sh</code> read <code>DB_TYPE</code> from <code>.env</code> and automatically add <code>--profile oracle</code> or <code>--profile postgres</code>. Running <code>podman-compose down</code> without the profile flag will not stop the DB container, so always use the scripts.</p>
+<h3 id="3-16-access-urls-production">3.16 Access URLs (Production)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Frontend (HTTPS)</td>
+<td><a href="https://pkd.smartcoreinc.com">https://pkd.smartcoreinc.com</a></td>
+</tr>
+<tr>
+<td>Frontend (HTTP)</td>
+<td><a href="http://pkd.smartcoreinc.com">http://pkd.smartcoreinc.com</a></td>
+</tr>
+<tr>
+<td>API Gateway (HTTPS)</td>
+<td><a href="https://pkd.smartcoreinc.com/api">https://pkd.smartcoreinc.com/api</a></td>
+</tr>
+<tr>
+<td>API Gateway (HTTP)</td>
+<td><a href="http://pkd.smartcoreinc.com/api">http://pkd.smartcoreinc.com/api</a></td>
+</tr>
+<tr>
+<td>API Gateway (internal)</td>
+<td><a href="http://localhost:18080/api">http://localhost:18080/api</a></td>
+</tr>
+<tr>
+<td>Frontend (direct)</td>
+<td><a href="http://localhost:13080">http://localhost:13080</a></td>
+</tr>
+<tr>
+<td>Swagger UI</td>
+<td><a href="http://localhost:18090">http://localhost:18090</a></td>
+</tr>
+<tr>
+<td>Oracle</td>
+<td>localhost:11521 (XEPDB1)</td>
+</tr>
+<tr>
+<td>OpenLDAP 1</td>
+<td>ldap://localhost:13891</td>
+</tr>
+<tr>
+<td>OpenLDAP 2</td>
+<td>ldap://localhost:13892</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-17-production-setup-checklist">3.17 Production Setup Checklist</h3>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Hostname change (<code>pkd.smartcoreinc.com</code>)</li>
+<li><input checked="" disabled="" type="checkbox"> <code>/etc/hosts</code> update</li>
+<li><input checked="" disabled="" type="checkbox"> Red Hat Developer account registration (SCA active)</li>
+<li><input checked="" disabled="" type="checkbox"> Docker CE 29.2.1 install -&gt; <strong>Migrated to Podman 5.6.0</strong></li>
+<li><input checked="" disabled="" type="checkbox"> Docker CE removal, image skopeo migration</li>
+<li><input checked="" disabled="" type="checkbox"> podman-compose 1.5.0 install (pip)</li>
+<li><input checked="" disabled="" type="checkbox"> podman-plugins install (CNI dnsname DNS)</li>
+<li><input checked="" disabled="" type="checkbox"> sysctl privileged port allow (80/443)</li>
+<li><input checked="" disabled="" type="checkbox"> Firewall port setup (80, 443, 8080)</li>
+<li><input checked="" disabled="" type="checkbox"> Project source deployment (git clone main)</li>
+<li><input checked="" disabled="" type="checkbox"> SSL certificate generation (Private CA, SAN: 10.0.0.220)</li>
+<li><input checked="" disabled="" type="checkbox"> All services started (11 containers, Podman rootless)</li>
+<li><input checked="" disabled="" type="checkbox"> SELinux MCS labeling resolved</li>
+<li><input checked="" disabled="" type="checkbox"> API health check verified (HTTP + HTTPS)</li>
+<li><input checked="" disabled="" type="checkbox"> Client HTTPS setup script (<code>scripts/client/</code>)</li>
+<li><input disabled="" type="checkbox"> Data upload (LDIF/Master List)</li>
+<li><input disabled="" type="checkbox"> DNS configuration (pkd.smartcoreinc.com -&gt; 10.0.0.220)</li>
+</ul>
+<hr>
+<h2 id="4-luckfox-arm64">4. Luckfox (ARM64)</h2>
+<p>ARM64 Docker images are built via GitHub Actions CI/CD and deployed to Luckfox device.
+All services use <code>network_mode: host</code> (luckfox kernel lacks iptables DNAT).</p>
+<h3 id="4-1-architecture">4.1 Architecture</h3>
+<pre><code>192.168.100.10: OpenLDAP1 (:389) - Master Node (currently the only active node)
+192.168.100.11: OpenLDAP2 (:389) + Docker Apps - Luckfox (hardware failure, stopped)</code></pre>
+<blockquote>
+<p><strong>Current Status (2026-03-18)</strong>: <code>192.168.100.11</code> (Luckfox) stopped due to hardware failure.
+OpenLDAP MMR replication is operating on <code>192.168.100.10</code> single node.
+Docker service deployment target also needs to be changed to <code>192.168.100.10</code>.</p>
+</blockquote>
+<h3 id="4-2-hardware-specs-services">4.2 Hardware Specs &amp; Services</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Port</th>
+<th>Image</th>
+<th>Container</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>API Gateway</td>
+<td>8080</td>
+<td>nginx:alpine</td>
+<td>icao-pkd-api-gateway</td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td>80</td>
+<td>icao-local-pkd-frontend:arm64</td>
+<td>icao-pkd-frontend</td>
+</tr>
+<tr>
+<td>PKD Management</td>
+<td>8081</td>
+<td>icao-local-management:arm64</td>
+<td>icao-pkd-management</td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td>8082</td>
+<td>icao-local-pa:arm64</td>
+<td>icao-pkd-pa-service</td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td>8083</td>
+<td>icao-local-pkd-relay:arm64</td>
+<td>icao-pkd-relay</td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td>8084</td>
+<td>icao-local-monitoring:arm64</td>
+<td>icao-pkd-monitoring</td>
+</tr>
+<tr>
+<td>Swagger UI</td>
+<td>8888</td>
+<td>swaggerapi/swagger-ui</td>
+<td>icao-pkd-swagger</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td>5432</td>
+<td>postgres:15</td>
+<td>icao-pkd-postgres</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-3-prerequisites">4.3 Prerequisites</h3>
+<h4 id="local-machine">Local Machine</h4>
+<pre><code class="language-bash"># Required tools
+sudo apt-get install sshpass skopeo gh  # Debian/Ubuntu
+
+# Verify
+command -v sshpass &amp;&amp; command -v skopeo &amp;&amp; command -v gh &amp;&amp; echo "All OK"</code></pre>
+<h4 id="luckfox">Luckfox</h4>
+<ul>
+<li>Docker installed and running</li>
+<li><del>SSH access: <code>luckfox@192.168.100.11</code> (password: luckfox)</del> -- <strong>Hardware failure, unavailable</strong></li>
+<li>Currently active node: <code>luckfox@192.168.100.10</code> (password: luckfox)</li>
+<li>Project directory: <code>/home/luckfox/icao-local-pkd-cpp-v2</code></li>
+</ul>
+<h3 id="4-4-github-actions-ci-cd-pipeline">4.4 GitHub Actions CI/CD Pipeline</h3>
+<h4 id="workflow">Workflow</h4>
+<p>File: <code>.github/workflows/build-arm64.yml</code></p>
+<pre><code>Push to main -&gt; Detect Changes -&gt; Build vcpkg-base (GHCR) -&gt; Build Services -&gt; Upload Artifacts</code></pre>
+<p><strong>Change detection</strong>: Only builds services with actual file changes (dorny/paths-filter).</p>
+<p><strong>Triggers</strong>:</p>
+<ul>
+<li>Push to <code>main</code> branch (paths: services/, shared/, frontend/, nginx/, docker/)</li>
+<li>Manual dispatch with <code>force_build_all</code> and <code>no_cache</code> options</li>
+</ul>
+<pre><code class="language-yaml"># Detected service changes:
+pkd-management: services/pkd-management/** or shared/**
+pa-service: services/pa-service/** or shared/**
+pkd-relay: services/pkd-relay-service/** or shared/**
+monitoring: services/monitoring-service/** or shared/**
+frontend: frontend/** or nginx/** or shared/static/**</code></pre>
+<p><strong>Build Strategy</strong>:</p>
+<ul>
+<li>GHCR-hosted <code>vcpkg-base</code> image (pre-built ARM64 dependencies)</li>
+<li>Multi-stage Dockerfile with BuildKit inline cache</li>
+<li>ARM64 cross-compilation via <code>docker/setup-buildx-action</code></li>
+<li>PostgreSQL only (no Oracle in ARM64 builds)</li>
+</ul>
+<p><strong>Monitor Build</strong>:</p>
+<pre><code class="language-bash">gh run list --limit 5
+gh run watch &lt;run-id&gt;</code></pre>
+<h4 id="build-artifacts">Build Artifacts</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Artifact</th>
+<th>Image Tag</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>pkd-management-arm64.tar.gz</td>
+<td>icao-local-management:arm64</td>
+</tr>
+<tr>
+<td>pkd-pa-arm64.tar.gz</td>
+<td>icao-local-pa:arm64</td>
+</tr>
+<tr>
+<td>pkd-relay-arm64.tar.gz</td>
+<td>icao-local-pkd-relay:arm64</td>
+</tr>
+<tr>
+<td>monitoring-service-arm64.tar.gz</td>
+<td>icao-local-monitoring:arm64</td>
+</tr>
+<tr>
+<td>pkd-frontend-arm64.tar.gz</td>
+<td>icao-local-pkd-frontend:arm64</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-5-artifact-download">4.5 Artifact Download</h3>
+<pre><code class="language-bash"># List runs to find the latest
+gh run list --limit 3
+
+# Download specific service artifact
+gh run download &lt;run-id&gt; --name pkd-frontend-arm64
+
+# Or download all artifacts
+gh run download &lt;run-id&gt;</code></pre>
+<p><strong>Important</strong>: Delete old artifact directories before downloading to avoid deploying stale images.</p>
+<h3 id="4-6-deployment">4.6 Deployment</h3>
+<h4 id="automated-deployment">Automated Deployment</h4>
+<pre><code class="language-bash"># Deploy specific service
+bash scripts/deploy/from-github-artifacts.sh pkd-management
+
+# Deploy all services
+bash scripts/deploy/from-github-artifacts.sh all
+
+# Available targets: pkd-management | pa-service | pkd-relay | monitoring-service | frontend | all</code></pre>
+<p><strong>What it does:</strong></p>
+<ol>
+<li>Downloads artifacts from latest GitHub Actions run (via <code>gh</code> CLI)</li>
+<li>Converts OCI format -&gt; Docker archive (via <code>skopeo</code>)</li>
+<li>Stops old container on Luckfox</li>
+<li>Transfers Docker archive via SCP</li>
+<li>Loads image and starts service via <code>docker compose</code></li>
+<li>Verifies health check</li>
+</ol>
+<h4 id="manual-deployment">Manual Deployment</h4>
+<pre><code class="language-bash"># 1. Download artifact
+gh run download &lt;RUN_ID&gt; -n monitoring-service-arm64 --dir github-artifacts
+
+# 2. Convert OCI -&gt; Docker
+mkdir -p /tmp/oci-dir
+tar -xzf github-artifacts/monitoring-service-arm64/monitoring-service-arm64.tar.gz -C /tmp/oci-dir
+skopeo copy --override-arch arm64 \
+    oci:/tmp/oci-dir \
+    docker-archive:/tmp/monitoring-docker.tar:icao-local-monitoring:arm64
+
+# 3. Transfer to luckfox
+sshpass -p luckfox scp /tmp/monitoring-docker.tar luckfox@192.168.100.11:/home/luckfox/
+
+# 4. Load and start
+sshpass -p luckfox ssh luckfox@192.168.100.11 "
+    docker load &lt; /home/luckfox/monitoring-docker.tar
+    rm -f /home/luckfox/monitoring-docker.tar
+    cd /home/luckfox/icao-local-pkd-cpp-v2
+    docker compose -f docker-compose-luckfox.yaml up -d monitoring-service
+"</code></pre>
+<h4 id="config-update-without-rebuild">Config Update (without rebuild)</h4>
+<p>When only config files change (nginx, docker-compose):</p>
+<pre><code class="language-bash"># Copy configs
+sshpass -p luckfox scp docker-compose-luckfox.yaml luckfox@192.168.100.11:/home/luckfox/icao-local-pkd-cpp-v2/
+sshpass -p luckfox scp nginx/api-gateway-luckfox.conf luckfox@192.168.100.11:/home/luckfox/icao-local-pkd-cpp-v2/nginx/
+
+# Reload nginx (no downtime)
+sshpass -p luckfox ssh luckfox@192.168.100.11 "docker exec icao-pkd-api-gateway nginx -s reload"
+
+# Or restart specific service
+sshpass -p luckfox ssh luckfox@192.168.100.11 "
+    cd /home/luckfox/icao-local-pkd-cpp-v2
+    docker compose -f docker-compose-luckfox.yaml up -d monitoring-service
+"</code></pre>
+<h3 id="4-7-luckfox-management-scripts">4.7 Luckfox Management Scripts</h3>
+<p>Located in <code>scripts/luckfox/</code> (also copied to luckfox project root):</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>start.sh</code></td>
+<td>Start all services, create data directories</td>
+</tr>
+<tr>
+<td><code>stop.sh</code></td>
+<td>Stop all services</td>
+</tr>
+<tr>
+<td><code>restart.sh</code></td>
+<td>Restart all or specific service</td>
+</tr>
+<tr>
+<td><code>health.sh</code></td>
+<td>Health check all services, DB stats</td>
+</tr>
+<tr>
+<td><code>logs.sh</code></td>
+<td>View service logs (supports -f follow)</td>
+</tr>
+<tr>
+<td><code>clean.sh</code></td>
+<td>Full data reset (--force for non-interactive)</td>
+</tr>
+<tr>
+<td><code>backup.sh</code></td>
+<td>Backup configs, logs, image info</td>
+</tr>
+<tr>
+<td><code>restore.sh</code></td>
+<td>Restore from backup</td>
+</tr>
+</tbody></table></div>
+<pre><code class="language-bash"># On luckfox directly
+cd /home/luckfox/icao-local-pkd-cpp-v2
+./scripts/luckfox/health.sh
+
+# Or from dev machine
+sshpass -p luckfox ssh luckfox@192.168.100.11 "cd /home/luckfox/icao-local-pkd-cpp-v2 &amp;&amp; ./scripts/luckfox/health.sh"</code></pre>
+<h3 id="4-8-key-configuration-files">4.8 Key Configuration Files</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>docker-compose-luckfox.yaml</code></td>
+<td>Service definitions (host network, 127.0.0.1 for DB)</td>
+</tr>
+<tr>
+<td><code>nginx/api-gateway-luckfox.conf</code></td>
+<td>API routing (8080 -&gt; backend services)</td>
+</tr>
+<tr>
+<td><code>frontend/nginx-luckfox.conf</code></td>
+<td>Frontend nginx (port 80, proxy to 8080)</td>
+</tr>
+<tr>
+<td><code>docker/init-scripts/</code></td>
+<td>PostgreSQL schema initialization</td>
+</tr>
+</tbody></table></div>
+<h4 id="api-gateway-routes">API Gateway Routes</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Route</th>
+<th>Backend</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>/api/upload</code>, <code>/api/certificates</code>, <code>/api/progress</code></td>
+<td>PKD Management (:8081)</td>
+</tr>
+<tr>
+<td><code>/api/auth</code>, <code>/api/audit</code>, <code>/api/icao</code></td>
+<td>PKD Management (:8081)</td>
+</tr>
+<tr>
+<td><code>/api/health</code></td>
+<td>PKD Management (:8081)</td>
+</tr>
+<tr>
+<td><code>/api/pa/*</code></td>
+<td>PA Service (:8082)</td>
+</tr>
+<tr>
+<td><code>/api/sync/*</code></td>
+<td>PKD Relay (:8083)</td>
+</tr>
+<tr>
+<td><code>/api/monitoring/*</code></td>
+<td>Monitoring (:8084)</td>
+</tr>
+<tr>
+<td><code>/api-docs/</code>, <code>/api/docs/</code></td>
+<td>Swagger UI (:8888)</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-9-image-name-mapping">4.9 Image Name Mapping</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>CI Artifact</th>
+<th>Docker Image on Luckfox</th>
+<th>Compose Service</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pkd-management-arm64</code></td>
+<td><code>icao-pkd-management:arm64</code></td>
+<td>pkd-management</td>
+</tr>
+<tr>
+<td><code>pa-service-arm64</code></td>
+<td><code>icao-pkd-pa-service:arm64</code></td>
+<td>pa-service</td>
+</tr>
+<tr>
+<td><code>pkd-relay-arm64</code></td>
+<td><code>icao-pkd-relay:arm64</code></td>
+<td>pkd-relay</td>
+</tr>
+<tr>
+<td><code>monitoring-service-arm64</code></td>
+<td><code>icao-pkd-monitoring:arm64</code></td>
+<td>monitoring</td>
+</tr>
+<tr>
+<td><code>pkd-frontend-arm64</code></td>
+<td><code>icao-pkd-frontend:arm64</code></td>
+<td>frontend</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-10-luckfox-verification">4.10 Luckfox Verification</h3>
+<pre><code class="language-bash">LUCKFOX_IP=192.168.100.10
+
+# Check container status
+ssh luckfox@$LUCKFOX_IP "cd ~/icao-local-pkd-cpp-v2 &amp;&amp; docker compose ps"
+
+# Check service health
+curl http://$LUCKFOX_IP:8080/api/health
+curl http://$LUCKFOX_IP:8080/api/pa/health
+curl http://$LUCKFOX_IP:8080/api/sync/health
+
+# Check logs
+ssh luckfox@$LUCKFOX_IP "docker logs icao-pkd-management --tail 20"</code></pre>
+<h3 id="4-11-build-deployment-times">4.11 Build &amp; Deployment Times</h3>
+<h4 id="build-times">Build Times</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Time</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>First build (cold cache)</td>
+<td>60-80 min</td>
+<td>One-time vcpkg compilation</td>
+</tr>
+<tr>
+<td>vcpkg dependency change</td>
+<td>30-40 min</td>
+<td>Rebuild dependencies</td>
+</tr>
+<tr>
+<td>Source code change only</td>
+<td>10-15 min</td>
+<td>vcpkg-base from GHCR</td>
+</tr>
+<tr>
+<td>No changes (cache hit)</td>
+<td>~5 min</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h4 id="deployment-times">Deployment Times</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Operation</th>
+<th>Time</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Artifact download</td>
+<td>1-2 min</td>
+</tr>
+<tr>
+<td>OCI -&gt; Docker conversion</td>
+<td>10-20 sec</td>
+</tr>
+<tr>
+<td>Transfer to luckfox</td>
+<td>30-60 sec</td>
+</tr>
+<tr>
+<td>Docker load + start</td>
+<td>10-20 sec</td>
+</tr>
+<tr>
+<td><strong>Total per service</strong></td>
+<td><strong>~3 min</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="4-12-default-credentials">4.12 Default Credentials</h3>
+<ul>
+<li>Admin login: <code>admin</code> / <code>admin123</code></li>
+<li>PostgreSQL: <code>pkd</code> / <code>pkd</code></li>
+<li>SSH: <code>luckfox</code> / <code>luckfox</code></li>
+</ul>
+<h3 id="4-13-luckfox-change-log">4.13 Luckfox Change Log</h3>
+<h4 id="2026-02-23-v3-1-hardware-failure-status-update">2026-02-23: v3.1 - Hardware Failure Status Update</h4>
+<ul>
+<li><code>192.168.100.11</code> (Luckfox) hardware failure, operation stopped</li>
+<li>Only <code>192.168.100.10</code> single node available</li>
+<li>OpenLDAP MMR replication single node operation status reflected</li>
+<li>Deployment target node information updated</li>
+</ul>
+<h4 id="2026-02-13-v3-0-full-pipeline-monitoring-service">2026-02-13: v3.0 - Full Pipeline + Monitoring Service</h4>
+<ul>
+<li>GitHub Actions CI/CD with change detection (dorny/paths-filter)</li>
+<li>vcpkg-base image pushed to GHCR (shared by all C++ services)</li>
+<li>Monitoring service added to pipeline (DB-independent)</li>
+<li>All 8 services deployed and verified on luckfox</li>
+<li>Management scripts modernized (project root auto-detection)</li>
+<li>API gateway: added auth/audit/icao/monitoring routes</li>
+<li>Fixed PA health endpoint URL in monitoring config</li>
+</ul>
+<h4 id="2026-01-09-v2-0-automated-oci-deployment">2026-01-09: v2.0 - Automated OCI Deployment</h4>
+<ul>
+<li>OCI -&gt; Docker conversion via skopeo</li>
+<li>sshpass for automated SSH/SCP</li>
+<li>Automated artifact download via gh CLI</li>
+<li>Single-command deployment per service</li>
+</ul>
+<hr>
+<h2 id="5-build-procedures">5. Build Procedures</h2>
+<h3 id="5-1-build-verification-sop">5.1 Build Verification SOP</h3>
+<p><strong>Purpose</strong>: Prevent build verification mistakes and ensure accurate deployments.</p>
+<h4 id="critical-lessons-learned">Critical Lessons Learned</h4>
+<p><strong>Problem</strong>: Docker build caching can reuse old build layers even when source code changes, resulting in:</p>
+<ul>
+<li>Version string updated but binary containing old code</li>
+<li>Features not working despite &quot;successful&quot; build</li>
+<li>Wasted time rebuilding after failed deployments</li>
+</ul>
+<h4 id="step-1-code-modification">Step 1: Code Modification</h4>
+<ol>
+<li>Make source code changes</li>
+<li><strong>ALWAYS</strong> update the version string in <code>services/&lt;service&gt;/src/main.cpp</code></li>
+</ol>
+<h4 id="step-2-build">Step 2: Build</h4>
+<p><strong>Quick rebuild (development):</strong></p>
+<pre><code class="language-bash"># Using rebuild scripts
+./scripts/build/rebuild-pkd-relay.sh
+./scripts/build/rebuild-frontend.sh
+
+# Or via docker compose
+docker compose -f docker/docker-compose.yaml build &lt;service-name&gt;
+docker compose -f docker/docker-compose.yaml up -d &lt;service-name&gt;</code></pre>
+<p><strong>Force fresh build (when cache issues suspected):</strong></p>
+<pre><code class="language-bash">./scripts/build/rebuild-pkd-relay.sh --no-cache
+
+# Or directly
+docker compose -f docker/docker-compose.yaml build --no-cache &lt;service-name&gt;</code></pre>
+<h4 id="step-3-verify-build-before-deployment">Step 3: Verify Build BEFORE Deployment</h4>
+<pre><code class="language-bash"># Check container is running
+docker compose -f docker/docker-compose.yaml ps &lt;service-name&gt;
+
+# Check version in logs
+docker logs icao-local-pkd-&lt;service&gt; --tail 10 | grep -i version
+
+# Check image creation time (should be recent)
+docker inspect icao-local-pkd-&lt;service&gt; --format='{{.Created}}'</code></pre>
+<h4 id="step-4-test-functionality">Step 4: Test Functionality</h4>
+<p>After deployment, <strong>always</strong> test the specific feature you modified. Don&#39;t rely solely on version strings.</p>
+<h4 id="service-specific-build-commands">Service-Specific Build Commands</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Rebuild Script</th>
+<th>Container Name</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>PKD Management</td>
+<td><code>./scripts/build/rebuild-pkd-relay.sh</code> (generic)</td>
+<td><code>icao-local-pkd-management</code></td>
+</tr>
+<tr>
+<td>PA Service</td>
+<td><code>docker compose build pa-service</code></td>
+<td><code>icao-local-pkd-pa-service</code></td>
+</tr>
+<tr>
+<td>PKD Relay</td>
+<td><code>./scripts/build/rebuild-pkd-relay.sh</code></td>
+<td><code>icao-local-pkd-relay</code></td>
+</tr>
+<tr>
+<td>Monitoring</td>
+<td><code>docker compose build monitoring</code></td>
+<td><code>icao-local-pkd-monitoring</code></td>
+</tr>
+<tr>
+<td>Frontend</td>
+<td><code>./scripts/build/rebuild-frontend.sh</code></td>
+<td><code>icao-local-pkd-frontend</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="5-2-when-to-use-no-cache">5.2 When to Use --no-cache</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Scenario</th>
+<th>Cache OK?</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Minor code change</td>
+<td>Yes</td>
+<td>Docker cache usually works</td>
+</tr>
+<tr>
+<td>CMakeLists.txt change</td>
+<td><strong>No</strong></td>
+<td>Must rebuild</td>
+</tr>
+<tr>
+<td>vcpkg.json change</td>
+<td><strong>No</strong></td>
+<td>Must rebuild dependencies</td>
+</tr>
+<tr>
+<td>New shared library</td>
+<td><strong>No</strong></td>
+<td>Must rebuild</td>
+</tr>
+<tr>
+<td>Dockerfile change</td>
+<td><strong>No</strong></td>
+<td>Must rebuild</td>
+</tr>
+<tr>
+<td>Version mismatch</td>
+<td><strong>No</strong></td>
+<td>Force fresh build</td>
+</tr>
+<tr>
+<td>Config-only changes</td>
+<td>Yes</td>
+<td>nginx.conf, docker-compose</td>
+</tr>
+<tr>
+<td>Frontend changes</td>
+<td>Yes</td>
+<td>Vite build is fast</td>
+</tr>
+<tr>
+<td>Final pre-deployment verification</td>
+<td><strong>No</strong></td>
+<td>Always verify clean</td>
+</tr>
+</tbody></table></div>
+<h3 id="5-3-docker-build-cache-issues">5.3 Docker Build Cache Issues</h3>
+<p>For detailed information on build cache troubleshooting, see <a href="DOCKER_BUILD_CACHE.html">DOCKER_BUILD_CACHE.md</a>.</p>
+<p><strong>Key reminders</strong>:</p>
+<ol>
+<li><strong>Version changes alone don&#39;t guarantee new code is compiled</strong></li>
+<li><strong>Docker cache is aggressive</strong> — it will reuse layers when possible</li>
+<li><strong>Always verify builds</strong> before claiming they&#39;re complete</li>
+<li><strong>Test functionality</strong> after deployment, not just version strings</li>
+<li><strong>When in doubt, --no-cache</strong></li>
+</ol>
+<p>Update version string in <code>main.cpp</code> or use <code>CACHE_BUST</code> build arg to bust cache.</p>
+<hr>
+<h2 id="6-troubleshooting">6. Troubleshooting</h2>
+<h3 id="6-1-production-podman-issues">6.1 Production Podman Issues</h3>
+<h4 id="nginx-502-bad-gateway-service-unavailable">nginx 502 Bad Gateway / Service Unavailable</h4>
+<pre><code class="language-bash"># 1. Check DNS resolver
+grep resolver .docker-data/nginx/api-gateway.conf
+# -&gt; resolver 10.89.x.x valid=10s ipv6=off;
+
+# 2. Check DNS resolution within container
+podman exec icao-local-pkd-api-gateway getent hosts pkd-management
+# -&gt; 10.89.1.xxx  pkd-management.dns.podman
+
+# 3. If nginx upstream is using cached old IP, restart
+podman restart icao-local-pkd-api-gateway
+
+# 4. Full restart (DNS re-detection)
+./podman-stop.sh &amp;&amp; ./podman-start.sh</code></pre>
+<h4 id="dns-resolution-failure-tns-no-listener-host-is-unreachable">DNS Resolution Failure (TNS:no listener, Host is unreachable)</h4>
+<pre><code class="language-bash"># Check podman-plugins installed
+rpm -q podman-plugins
+# -&gt; If not installed: sudo dnf install -y podman-plugins
+
+# Check network DNS enabled
+podman network inspect docker_pkd-network | python3 -c \
+  "import sys,json; print('dns_enabled:', json.load(sys.stdin)[0]['dns_enabled'])"
+# -&gt; dns_enabled: True is normal
+
+# If DNS disabled: recreate network
+podman-compose -f docker/docker-compose.podman.yaml down
+podman network rm docker_pkd-network
+podman network create docker_pkd-network  # DNS auto-enabled after podman-plugins install</code></pre>
+<h4 id="oracle-startup-timeout-ora-01017">Oracle Startup Timeout / ORA-01017</h4>
+<pre><code class="language-bash"># Oracle takes 3-5 minutes on first run
+podman logs -f icao-local-pkd-oracle
+
+# Manual health check
+podman inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}'
+
+# ORA-01017 (invalid username/password) — init script not executed
+# SELinux MCS label issue may prevent reading /opt/oracle/scripts/startup/
+podman exec icao-local-pkd-oracle ls /opt/oracle/scripts/startup/
+# -&gt; Permission denied: fix MCS labels on host
+chcon -R -l s0 docker/db-oracle/init/
+
+# Manual init script execution
+podman exec icao-local-pkd-oracle bash -c \
+  'cd /opt/oracle/scripts/startup &amp;&amp; for f in *.sql; do echo "@$f" | sqlplus -s sys/"$ORACLE_PWD"@//localhost:1521/XEPDB1 as sysdba; done'</code></pre>
+<h4 id="selinux-permission-errors-rhel-9">SELinux Permission Errors (RHEL 9)</h4>
+<pre><code class="language-bash"># Symptoms: Permission denied, lsetxattr operation not permitted
+
+# Rootless Podman cannot use :Z/:z volume labels (no CAP_MAC_ADMIN)
+# Use pre-labeling instead:
+chcon -Rt container_file_t .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi
+chcon -R -l s0 .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi
+
+# Deleting OpenLDAP data (files created by rootless containers)
+podman unshare rm -rf .docker-data/openldap1 .docker-data/openldap2</code></pre>
+<h4 id="privileged-port-binding-80-443">Privileged Port Binding (80/443)</h4>
+<pre><code class="language-bash"># Symptom: rootlessport cannot expose privileged port 80
+# Fix:
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf</code></pre>
+<h4 id="container-name-conflicts">Container Name Conflicts</h4>
+<pre><code class="language-bash"># Clean up existing containers
+podman ps -a --filter "name=icao-local-pkd" --format "{{.Names}}" | xargs -r podman rm -f</code></pre>
+<h4 id="ldap-invalid-credentials-49">LDAP Invalid credentials (49)</h4>
+<ul>
+<li><strong>Cause</strong>: OpenLDAP data was initialized with a different password</li>
+<li><strong>Fix</strong>: Delete <code>.docker-data/openldap1</code>, <code>.docker-data/openldap2</code> and restart</li>
+</ul>
+<h4 id="unable-to-access-log-path-container-exits-immediately">Unable to access log path! -&gt; Container exits immediately</h4>
+<ul>
+<li><strong>Cause</strong>: <code>.docker-data/*-logs</code> directory owner is root (created by docker)</li>
+<li><strong>Fix</strong>: <code>chmod 777 .docker-data/*-logs</code></li>
+</ul>
+<h4 id="stoi-pydantic-int_parsing-error">stoi / Pydantic int_parsing error</h4>
+<ul>
+<li><strong>Cause</strong>: Empty environment variable like <code>ORACLE_PORT=</code> fails int conversion</li>
+<li><strong>Fix</strong>: Fixed in v2.23.1 (C++ empty string check + Python default value return)</li>
+</ul>
+<h3 id="6-2-luckfox-issues">6.2 Luckfox Issues</h3>
+<h4 id="oci-format-error-does-not-contain-a-manifest-json">OCI format error: &quot;does not contain a manifest.json&quot;</h4>
+<p>GitHub Actions outputs OCI format. Convert with skopeo before <code>docker load</code>:</p>
+<pre><code class="language-bash">skopeo copy --override-arch arm64 \
+    oci:/tmp/oci-dir \
+    docker-archive:/tmp/service-docker.tar:image-name:arm64</code></pre>
+<h4 id="service-shows-down-in-monitoring">Service shows DOWN in monitoring</h4>
+<p>Check the health endpoint URL in <code>docker-compose-luckfox.yaml</code>. PA Service health is <code>/api/health</code> (not <code>/api/pa/health</code>).</p>
+<h4 id="404-through-api-gateway">404 through API Gateway</h4>
+<p>Check <code>nginx/api-gateway-luckfox.conf</code> has the route. Reload nginx after config changes.</p>
+<h4 id="login-fails-with-404">Login fails with 404</h4>
+<p>Ensure <code>/api/auth</code> route exists in API gateway config.</p>
+<h4 id="cors-errors-on-luckfox">CORS errors on Luckfox</h4>
+<p>Frontend must use relative API URLs (<code>/api/...</code>) not hardcoded <code>http://localhost:8080/api/...</code>.
+The Luckfox nginx config proxies <code>/api</code> to <code>127.0.0.1:8080</code>.</p>
+<h4 id="old-version-deployed-despite-new-build">Old version deployed despite new build</h4>
+<ol>
+<li><strong>Delete old artifacts</strong>: <code>rm -rf github-artifacts/ pkd-*-arm64/</code></li>
+<li><strong>Download fresh</strong>: <code>gh run download &lt;latest-run-id&gt; --name &lt;service&gt;-arm64</code></li>
+<li><strong>Verify timestamp</strong>: <code>ls -lh pkd-frontend-arm64/</code></li>
+<li><strong>Redeploy</strong>: <code>scripts/deploy/from-github-artifacts.sh frontend</code></li>
+</ol>
+<h3 id="6-3-common-build-issues">6.3 Common Build Issues</h3>
+<h4 id="build-cache-prevents-code-changes">Build cache prevents code changes</h4>
+<p>Update version string in <code>main.cpp</code> or use <code>CACHE_BUST</code> build arg.
+See <a href="DOCKER_BUILD_CACHE.html">DOCKER_BUILD_CACHE.md</a> for details.</p>
+<h4 id="function-not-found-in-binary">Function not found in binary</h4>
+<p><strong>Cause</strong>: Docker used cached build layers
+<strong>Fix</strong>: Rebuild with <code>--no-cache</code>, verify again</p>
+<h4 id="image-is-old-despite-rebuild">Image is old despite rebuild</h4>
+<p><strong>Cause</strong>: Docker used cached final stage
+<strong>Fix</strong>: Check build output for &quot;Using cache&quot; messages, rebuild with <code>--no-cache</code></p>
+<h4 id="version-in-logs-doesn-t-match">Version in logs doesn&#39;t match</h4>
+<p><strong>Cause</strong>: Running old container, not the newly built image
+<strong>Fix</strong>: <code>docker compose up -d --force-recreate &lt;service-name&gt;</code></p>
+<hr>
+<h2 id="7-script-reference">7. Script Reference</h2>
+<h3 id="script-structure">Script Structure</h3>
+<pre><code>scripts/
++-- docker/          # Docker management (start, stop, restart, health, logs, backup)
++-- podman/          # Podman management for Production RHEL 9 (same structure)
++-- luckfox/         # ARM64 deployment (same structure)
++-- build/           # Build scripts (rebuild-*, check-freshness, verify-*)
++-- deploy/          # Deployment (from-github-artifacts.sh)
++-- ssl/             # SSL certificate management (init-cert, renew-cert)
++-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
++-- maintenance/     # Data management (reset-all-data, reset-ldap)
++-- lib/             # Shared shell library (common.sh)
++-- dev/             # Development scripts (dev environment)
++-- client/          # Client setup (setup-pkd-access.bat/.ps1)
+
+# Root convenience wrappers
+docker-start.sh, docker-stop.sh, docker-health.sh, docker-clean-and-init.sh
+podman-start.sh, podman-stop.sh, podman-health.sh, podman-clean-and-init.sh</code></pre>
+<h3 id="podman-scripts">Podman Scripts</h3>
+<pre><code>scripts/podman/
++-- start.sh          # Start containers (auto nginx DNS config, --profile auto)
++-- stop.sh           # Stop containers (--profile auto, fallback: podman rm -f)
++-- restart.sh        # Restart: full (stop+start) or single service (compose restart)
++-- health.sh         # Full health check (API Gateway port 80 first)
++-- logs.sh           # View logs [service] [lines]
++-- clean-and-init.sh # Complete init (data delete + LDAP DIT + start services)
++-- backup.sh         # Data backup (Oracle Data Pump + LDAP + SSL)
++-- restore.sh        # Data restore</code></pre>
+<h3 id="luckfox-scripts">Luckfox Scripts</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scripts/luckfox/start.sh</code></td>
+<td>Start all services, create data directories</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/stop.sh</code></td>
+<td>Stop all services</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/restart.sh</code></td>
+<td>Restart all or specific service</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/health.sh</code></td>
+<td>Health check all services, DB stats</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/logs.sh</code></td>
+<td>View service logs (supports -f follow)</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/clean.sh</code></td>
+<td>Full data reset (--force for non-interactive)</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/backup.sh</code></td>
+<td>Backup configs, logs, image info</td>
+</tr>
+<tr>
+<td><code>scripts/luckfox/restore.sh</code></td>
+<td>Restore from backup</td>
+</tr>
+</tbody></table></div>
+<h3 id="build-scripts">Build Scripts</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scripts/build/rebuild-pkd-relay.sh</code></td>
+<td>Rebuild PKD Relay service (supports --no-cache)</td>
+</tr>
+<tr>
+<td><code>scripts/build/rebuild-pkd-management.sh</code></td>
+<td>Rebuild PKD Management service</td>
+</tr>
+<tr>
+<td><code>scripts/build/rebuild-frontend.sh</code></td>
+<td>Rebuild Frontend</td>
+</tr>
+</tbody></table></div>
+<h3 id="deployment-scripts">Deployment Scripts</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scripts/deploy/from-github-artifacts.sh</code></td>
+<td>Deploy ARM64 artifacts to Luckfox</td>
+</tr>
+</tbody></table></div>
+<h3 id="ssl-scripts">SSL Scripts</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scripts/ssl/init-cert.sh</code></td>
+<td>Generate CA + server certificates (--ip flag for SAN)</td>
+</tr>
+<tr>
+<td><code>scripts/ssl/renew-cert.sh</code></td>
+<td>Renew server certificate using existing CA</td>
+</tr>
+</tbody></table></div>
+<h3 id="client-scripts">Client Scripts</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>scripts/client/setup-pkd-access.bat</code></td>
+<td>Windows client setup launcher</td>
+</tr>
+<tr>
+<td><code>scripts/client/setup-pkd-access.ps1</code></td>
+<td>Windows client HTTPS + hosts setup</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="references">References</h2>
+<ul>
+<li><a href="DOCKER_BUILD_CACHE.html">DOCKER_BUILD_CACHE.md</a> - Build cache troubleshooting</li>
+<li><a href="DEVELOPMENT_GUIDE.html">DEVELOPMENT_GUIDE.md</a> - Development guide (credentials, workflow)</li>
+</ul>
+<hr>
+<h2 id="version-history">Version History</h2>
+<ul>
+<li>v2.37.0 (2026-03-18): Merged 5 deployment documents into single comprehensive guide</li>
+<li>v1.2.0 (2026-02-27): Podman script stability improvements</li>
+<li>v1.1.0 (2026-02-27): Docker-&gt;Podman migration complete, SELinux MCS resolved</li>
+<li>v1.0.0 (2026-02-27): Initial Podman support</li>
+</ul>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#1-overview">1. Overview</a><a href="#environments" style="padding-left:1rem">Environments</a><a href="#services" style="padding-left:1rem">Services</a><a href="#supporting-infrastructure" style="padding-left:1rem">Supporting Infrastructure</a><a href="#source-code-locations" style="padding-left:1rem">Source Code Locations</a><a href="#2-local-development-wsl2-docker">2. Local Development (WSL2, Docker)</a><a href="#quick-start" style="padding-left:1rem">Quick Start</a><a href="#rebuilding-services" style="padding-left:1rem">Rebuilding Services</a><a href="#full-reset-clean-install" style="padding-left:1rem">Full Reset (Clean Install)</a><a href="#development-environment-isolated" style="padding-left:1rem">Development Environment (Isolated)</a><a href="#access-urls" style="padding-left:1rem">Access URLs</a><a href="#3-production-10-0-0-220-rhel-9-podman">3. Production (10.0.0.220, RHEL 9, Podman)</a><a href="#3-1-server-hardware-os" style="padding-left:1rem">3.1 Server Hardware &amp; OS</a><a href="#3-2-network-firewall" style="padding-left:1rem">3.2 Network &amp; Firewall</a><a href="#3-3-ssh-access" style="padding-left:1rem">3.3 SSH Access</a><a href="#3-4-podman-setup" style="padding-left:1rem">3.4 Podman Setup</a><a href="#3-5-docker-to-podman-migration" style="padding-left:1rem">3.5 Docker to Podman Migration</a><a href="#3-6-selinux-rootless-podman" style="padding-left:1rem">3.6 SELinux + Rootless Podman</a><a href="#3-7-env-configuration" style="padding-left:1rem">3.7 .env Configuration</a><a href="#3-8-ssl-certificates" style="padding-left:1rem">3.8 SSL Certificates</a><a href="#3-9-system-startup-podman" style="padding-left:1rem">3.9 System Startup (Podman)</a><a href="#3-10-deployment-procedure" style="padding-left:1rem">3.10 Deployment Procedure</a><a href="#3-11-ldap-initialization" style="padding-left:1rem">3.11 LDAP Initialization</a><a href="#3-12-client-pc-https-setup" style="padding-left:1rem">3.12 Client PC HTTPS Setup</a><a href="#3-13-production-environment-summary" style="padding-left:1rem">3.13 Production Environment Summary</a><a href="#3-14-service-names-compose" style="padding-left:1rem">3.14 Service Names (Compose)</a><a href="#3-15-profile-flag" style="padding-left:1rem">3.15 --profile Flag</a><a href="#3-16-access-urls-production" style="padding-left:1rem">3.16 Access URLs (Production)</a><a href="#3-17-production-setup-checklist" style="padding-left:1rem">3.17 Production Setup Checklist</a><a href="#4-luckfox-arm64">4. Luckfox (ARM64)</a><a href="#4-1-architecture" style="padding-left:1rem">4.1 Architecture</a><a href="#4-2-hardware-specs-services" style="padding-left:1rem">4.2 Hardware Specs &amp; Services</a><a href="#4-3-prerequisites" style="padding-left:1rem">4.3 Prerequisites</a><a href="#4-4-github-actions-ci-cd-pipeline" style="padding-left:1rem">4.4 GitHub Actions CI/CD Pipeline</a><a href="#4-5-artifact-download" style="padding-left:1rem">4.5 Artifact Download</a><a href="#4-6-deployment" style="padding-left:1rem">4.6 Deployment</a><a href="#4-7-luckfox-management-scripts" style="padding-left:1rem">4.7 Luckfox Management Scripts</a><a href="#4-8-key-configuration-files" style="padding-left:1rem">4.8 Key Configuration Files</a><a href="#4-9-image-name-mapping" style="padding-left:1rem">4.9 Image Name Mapping</a><a href="#4-10-luckfox-verification" style="padding-left:1rem">4.10 Luckfox Verification</a><a href="#4-11-build-deployment-times" style="padding-left:1rem">4.11 Build &amp; Deployment Times</a><a href="#4-12-default-credentials" style="padding-left:1rem">4.12 Default Credentials</a><a href="#4-13-luckfox-change-log" style="padding-left:1rem">4.13 Luckfox Change Log</a><a href="#5-build-procedures">5. Build Procedures</a><a href="#5-1-build-verification-sop" style="padding-left:1rem">5.1 Build Verification SOP</a><a href="#5-2-when-to-use-no-cache" style="padding-left:1rem">5.2 When to Use --no-cache</a><a href="#5-3-docker-build-cache-issues" style="padding-left:1rem">5.3 Docker Build Cache Issues</a><a href="#6-troubleshooting">6. Troubleshooting</a><a href="#6-1-production-podman-issues" style="padding-left:1rem">6.1 Production Podman Issues</a><a href="#6-2-luckfox-issues" style="padding-left:1rem">6.2 Luckfox Issues</a><a href="#6-3-common-build-issues" style="padding-left:1rem">6.3 Common Build Issues</a><a href="#7-script-reference">7. Script Reference</a><a href="#script-structure" style="padding-left:1rem">Script Structure</a><a href="#podman-scripts" style="padding-left:1rem">Podman Scripts</a><a href="#luckfox-scripts" style="padding-left:1rem">Luckfox Scripts</a><a href="#build-scripts" style="padding-left:1rem">Build Scripts</a><a href="#deployment-scripts" style="padding-left:1rem">Deployment Scripts</a><a href="#ssl-scripts" style="padding-left:1rem">SSL Scripts</a><a href="#client-scripts" style="padding-left:1rem">Client Scripts</a><a href="#references">References</a><a href="#version-history">Version History</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

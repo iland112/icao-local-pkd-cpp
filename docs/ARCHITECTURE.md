@@ -165,14 +165,14 @@ graph TB
     ICAOPortal -.->|Scraping| Relay
 
     %% Styling
-    classDef titleStyle fill:#37474F,stroke:#263238,stroke-width:2px,color:#fff,font-weight:bold
+    classDef titleStyle fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-weight:bold,font-size:14px
     class L1Title,L2Title,L3Title,L4Title,L5Title titleStyle
 
-    classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
-    classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000
-    classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#000
-    classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#000
-    classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#000
+    classDef external fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef dmz fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef app fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef data fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    classDef infra fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
 
     class User,ICAOPortal external
     class Frontend,APIGateway dmz
@@ -180,7 +180,7 @@ graph TB
     class DB,LDAPCluster data
     class Docker infra
 
-    classDef containerStyle fill:none,stroke:#546E7A,stroke-width:2px,stroke-dasharray:5 5
+    classDef containerStyle fill:none,stroke:#475569,stroke-width:1px,stroke-dasharray:5 5
     class L1,L2,L3,L4,L5 containerStyle
 
     classDef nodeContainer fill:none,stroke:none
@@ -347,21 +347,21 @@ flowchart LR
     CertRepo --> LDAPS
     IcaoRepo --> DB
 
-    style API fill:#1976D2,stroke:#0D47A1,stroke-width:2px,color:#fff
-    style Domain fill:#388E3C,stroke:#1B5E20,stroke-width:2px,color:#fff
-    style Service fill:#7B1FA2,stroke:#4A148C,stroke-width:2px,color:#fff
-    style Repo fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
-    style Infra fill:#0097A7,stroke:#006064,stroke-width:2px,color:#fff
-    style Strategy fill:#5D4037,stroke:#3E2723,stroke-width:2px,color:#fff
-    style Data fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#fff
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Strategy fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Data fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
 
-    style ICAO fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style IcaoDomain fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style IcaoService fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style IcaoRepo fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style HTTP fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style HTML fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style Email fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
+    style ICAO fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoRepo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style HTTP fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style HTML fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Email fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Key Features**:
@@ -434,14 +434,14 @@ flowchart LR
     PARepo --> DB
     LDAPRepo --> LDAPS
 
-    style API fill:#1976D2,stroke:#0D47A1,stroke-width:2px,color:#fff
-    style Logic fill:#388E3C,stroke:#1B5E20,stroke-width:2px,color:#fff
-    style DataAccess fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
-    style Crypto fill:#D32F2F,stroke:#B71C1C,stroke-width:2px,color:#fff
-    style DataStore fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#fff
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Logic fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataAccess fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Crypto fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataStore fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
 
-    style Verify fill:#66BB6A,stroke:#388E3C,stroke-width:2px,color:#000
-    style OpenSSL fill:#FF7043,stroke:#D84315,stroke-width:2px,color:#fff
+    style Verify fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style OpenSSL fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Key Features**:
@@ -511,17 +511,17 @@ flowchart LR
 
     CronJob --> IcaoCheck
 
-    style API fill:#1976D2,stroke:#0D47A1,stroke-width:2px,color:#fff
-    style Domain fill:#388E3C,stroke:#1B5E20,stroke-width:2px,color:#fff
-    style Service fill:#7B1FA2,stroke:#4A148C,stroke-width:2px,color:#fff
-    style Repo fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
-    style Infra fill:#0097A7,stroke:#006064,stroke-width:2px,color:#fff
-    style Scheduler fill:#00796B,stroke:#004D40,stroke-width:2px,color:#fff
-    style DataStore fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#fff
+    style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Scheduler fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DataStore fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
 
-    style IcaoCheck fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style IcaoDomain fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
-    style IcaoService fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
+    style IcaoCheck fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Key Features**:
@@ -549,186 +549,364 @@ flowchart LR
 
 ## Data Layer Architecture
 
-### PostgreSQL Database Schema
+### Database Schema
+
+> **Multi-DBMS**: PostgreSQL 15 / Oracle XE 21c 동시 지원. 아래 스키마는 DB-agnostic 표현이며, 런타임에 `DB_TYPE` 환경변수로 선택됩니다.
+
+#### Core — 인증서 & 검증
 
 ```mermaid
 erDiagram
-    UPLOADED_FILE ||--o{ CERTIFICATE : contains
-    UPLOADED_FILE ||--o{ CRL : contains
-    UPLOADED_FILE ||--o{ MASTER_LIST : contains
-    CERTIFICATE ||--o{ VALIDATION_RESULT : validates
-
     UPLOADED_FILE {
-        uuid id PK
-        varchar original_file_name
-        varchar file_type
-        bigint file_size
-        varchar file_hash
-        varchar processing_mode
-        varchar status
-        timestamp upload_timestamp
-        int csca_count
-        int dsc_count
-        int dsc_nc_count
-        int crl_count
-        int ml_count
+        UUID id PK
     }
-
     CERTIFICATE {
-        uuid id PK
-        uuid upload_id FK
-        varchar country_code
-        varchar cert_type
-        bytea certificate_der
-        varchar subject_dn
-        varchar issuer_dn
-        varchar serial_number
-        varchar fingerprint_sha256
-        varchar source_type
-        varchar validation_status
-        varchar signature_algorithm
-        varchar public_key_algorithm
-        int public_key_size
-        boolean is_self_signed
-        timestamp not_before
-        timestamp not_after
-        boolean stored_in_ldap
+        UUID id PK
+        UUID upload_id FK
     }
-
     CRL {
-        uuid id PK
-        uuid upload_id FK
-        varchar country_code
-        bytea crl_der
-        varchar issuer_dn
-        timestamp this_update
-        timestamp next_update
-        boolean stored_in_ldap
+        UUID id PK
+        UUID upload_id FK
     }
-
     MASTER_LIST {
-        uuid id PK
-        uuid upload_id FK
-        varchar country_code
-        bytea ml_der
-        varchar subject_dn
-        timestamp not_before
-        timestamp not_after
-        boolean stored_in_ldap
+        UUID id PK
+        UUID upload_id FK
     }
-
-    VALIDATION_RESULT {
-        uuid id PK
-        varchar certificate_id
-        varchar validation_status
-        varchar trust_chain_path
-        varchar crl_check_status
-        varchar csca_subject_dn
-        varchar csca_fingerprint
-        text message
-        timestamp validated_at
-    }
-
-    AUTH_AUDIT_LOG {
-        uuid id PK
-        varchar event_type
-        varchar username
-        varchar ip_address
-        varchar user_agent
-        boolean success
-        timestamp created_at
-    }
-
-    OPERATION_AUDIT_LOG {
-        uuid id PK
-        varchar operation_type
-        varchar entity_type
-        varchar entity_id
-        varchar username
-        varchar ip_address
-        jsonb details
-        timestamp created_at
-    }
-
     DEVIATION_LIST {
-        uuid id PK
-        uuid upload_id FK
-        varchar country_code
-        bytea dl_binary
-        varchar issuer_dn
-        timestamp created_at
+        UUID id PK
+        UUID upload_id FK
+    }
+    VALIDATION_RESULT {
+        UUID id PK
+        UUID certificate_id FK
+        UUID upload_id FK
+    }
+    LINK_CERTIFICATE {
+        UUID id PK
+        UUID upload_id FK
+    }
+    DUPLICATE_CERTIFICATE {
+        UUID id PK
+        UUID upload_id FK
+    }
+    REVOKED_CERTIFICATE {
+        UUID id PK
+        UUID crl_id FK
     }
 
-    RECONCILIATION_LOG {
-        uuid id PK
-        uuid summary_id FK
-        varchar entity_type
-        varchar fingerprint
-        varchar action
-        varchar status
-        text message
-        timestamp created_at
-    }
-
-    PA_VERIFICATION {
-        uuid id PK
-        varchar country_code
-        varchar sod_issuer
-        varchar verification_status
-        jsonb dg_hashes
-        jsonb validation_steps
-        timestamp verified_at
-    }
-
-    SYNC_STATUS {
-        uuid id PK
-        int db_csca_count
-        int db_dsc_count
-        int ldap_csca_count
-        int ldap_dsc_count
-        int total_discrepancy
-        jsonb db_country_stats
-        jsonb ldap_country_stats
-        varchar status
-        timestamp checked_at
-    }
-
-    RECONCILIATION_SUMMARY {
-        uuid id PK
-        varchar triggered_by
-        varchar status
-        int csca_added
-        int dsc_added
-        int failed_count
-        int check_duration_ms
-        timestamp started_at
-        timestamp completed_at
-    }
-
-    ICAO_PKD_VERSIONS {
-        uuid id PK
-        varchar collection_type
-        varchar file_name
-        int file_version
-        varchar status
-        timestamp detected_at
-        timestamp imported_at
-        text import_upload_id FK
-        boolean notification_sent
-    }
+    UPLOADED_FILE ||--o{ CERTIFICATE : "1:N"
+    UPLOADED_FILE ||--o{ CRL : "1:N"
+    UPLOADED_FILE ||--o{ MASTER_LIST : "1:N"
+    UPLOADED_FILE ||--o{ DEVIATION_LIST : "1:N"
+    UPLOADED_FILE ||--o{ LINK_CERTIFICATE : "1:N"
+    UPLOADED_FILE ||--o{ DUPLICATE_CERTIFICATE : "1:N"
+    CERTIFICATE ||--o{ VALIDATION_RESULT : "1:N"
+    UPLOADED_FILE ||--o{ VALIDATION_RESULT : "1:N"
+    CRL ||--o{ REVOKED_CERTIFICATE : "1:N"
 ```
 
-**Total Tables**: 20
-- **Upload & Certificate**: uploaded_file, certificate, crl, master_list, deviation_list, duplicate_certificate, link_certificate
-- **Validation**: validation_result
-- **PA**: pa_verification, pending_dsc_registration
-- **CSR**: csr_request (CSR + encrypted private key + issued certificate metadata)
-- **Audit**: auth_audit_log, operation_audit_log
-- **Sync**: sync_status, reconciliation_summary, reconciliation_log, revalidation_history
-- **Reference**: code_master, users
-- **API Client**: api_clients, api_client_usage_log, api_client_requests
-- **AI**: ai_analysis_result
-- **ICAO Sync**: icao_pkd_versions
+#### PA & Sync & API
+
+```mermaid
+erDiagram
+    PA_VERIFICATION {
+        UUID id PK
+    }
+    PA_DATA_GROUP {
+        UUID id PK
+        UUID verification_id FK
+    }
+    PENDING_DSC_REGISTRATION {
+        UUID id PK
+    }
+    SYNC_STATUS {
+        INTEGER id PK
+    }
+    RECONCILIATION_SUMMARY {
+        UUID id PK
+        INTEGER sync_status_id FK
+    }
+    RECONCILIATION_LOG {
+        INTEGER id PK
+        UUID summary_id FK
+    }
+    USERS {
+        UUID id PK
+    }
+    AUTH_AUDIT_LOG {
+        UUID id PK
+        UUID user_id FK
+    }
+    OPERATION_AUDIT_LOG {
+        UUID id PK
+        UUID user_id FK
+    }
+    API_CLIENTS {
+        UUID id PK
+        UUID created_by FK
+    }
+    API_CLIENT_USAGE_LOG {
+        UUID id PK
+        UUID client_id FK
+    }
+    API_CLIENT_REQUESTS {
+        UUID id PK
+        UUID reviewed_by FK
+    }
+    CSR_REQUEST {
+        UUID id PK
+    }
+    AI_ANALYSIS_RESULT {
+        UUID id PK
+    }
+    CVC_CERTIFICATE {
+        UUID id PK
+    }
+    EAC_TRUST_CHAIN {
+        UUID id PK
+        UUID is_certificate_id FK
+    }
+
+    PA_VERIFICATION ||--o{ PA_DATA_GROUP : "1:N"
+    SYNC_STATUS ||--o{ RECONCILIATION_SUMMARY : "1:N"
+    RECONCILIATION_SUMMARY ||--o{ RECONCILIATION_LOG : "1:N"
+    USERS ||--o{ AUTH_AUDIT_LOG : "1:N"
+    USERS ||--o{ OPERATION_AUDIT_LOG : "1:N"
+    USERS ||--o{ API_CLIENTS : "created_by"
+    USERS ||--o{ API_CLIENT_REQUESTS : "reviewed_by"
+    API_CLIENTS ||--o{ API_CLIENT_USAGE_LOG : "1:N"
+    CVC_CERTIFICATE ||--o{ EAC_TRUST_CHAIN : "1:N"
+```
+
+**총 37개 테이블** — 15개 카테고리:
+
+| 카테고리 | 테이블 | 설명 |
+|---------|--------|------|
+| **인증서 관리** | uploaded_file, certificate, crl, master_list, deviation_list, deviation_entry | 업로드, X.509 인증서, CRL, Master List, Deviation List |
+| **인증서 검증** | validation_result, revoked_certificate | 신뢰 체인 검증, CRL 폐지 확인 |
+| **중복 추적** | duplicate_certificate, certificate_duplicates | 업로드별 중복 인증서 추적 |
+| **Link Certificate** | link_certificate, link_certificate_issuers | CSCA 키 전환 Link 인증서 |
+| **PA 검증** | pa_verification, pa_data_group | Passive Authentication 요청/결과, DG 해시 |
+| **DSC 등록** | pending_dsc_registration | PA 자동 등록 → 관리자 승인 워크플로 |
+| **동기화** | sync_status, sync_config, reconciliation_summary, reconciliation_log, revalidation_history, crl_revocation_log | DB↔LDAP 동기화, 재검증, CRL 체크 |
+| **LDAP 마이그레이션** | ldap_dn_migration_status | V2 DN 마이그레이션 진행 추적 |
+| **감사** | audit_log, auth_audit_log, operation_audit_log | 인증, 업무 운영 감사 로그 |
+| **사용자** | users | RBAC 사용자 계정 |
+| **API 클라이언트** | api_clients, api_client_usage_log, api_client_requests | 외부 API 키 관리, 사용량 추적, 접근 신청 |
+| **코드 관리** | code_master | 중앙 코드/상태/열거형 관리 (21개 카테고리) |
+| **ICAO 버전** | icao_pkd_versions | ICAO PKD 자동 동기화 버전 추적 |
+| **CSR** | csr_request | CSR 생성 + 암호화된 개인키 + 발급 인증서 |
+| **AI 분석** | ai_analysis_result | ML 이상 탐지, 포렌식 위험도 |
+| **EAC/CVC** | cvc_certificate, eac_trust_chain | BSI TR-03110 CVC 인증서 (실험적) |
+| **모니터링** | system_metrics, service_health | 시스템 성능, 서비스 상태 |
+
+---
+
+#### 테이블 상세 명세
+
+##### 1. Core — 인증서 관리
+
+**uploaded_file** — 업로드 파일 추적
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| file_name | VARCHAR(255) | 저장 파일명 |
+| original_file_name | VARCHAR(255) | 원본 파일명 |
+| file_size | BIGINT | 바이트 |
+| file_hash | VARCHAR(64) | SHA-256 해시 (중복 감지) |
+| file_format | VARCHAR(20) | LDIF, ML, PEM, DER, CER, P7B, DL, CRL |
+| status | VARCHAR(30) | PENDING → PROCESSING → COMPLETED/FAILED |
+| processing_mode | VARCHAR(10) | AUTO |
+| upload_timestamp | TIMESTAMP | |
+| csca_count / dsc_count / dsc_nc_count / crl_count / ml_count | INTEGER | 처리 통계 |
+| validation_valid_count / invalid_count / pending_count / error_count | INTEGER | 검증 통계 |
+| trust_chain_valid_count / invalid_count | INTEGER | 신뢰 체인 통계 |
+| icao_compliant_count / non_compliant_count / warning_count | INTEGER | ICAO 준수 통계 |
+
+**certificate** — X.509 인증서 (CSCA, DSC, DSC_NC, MLSC)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| upload_id | UUID FK | → uploaded_file |
+| certificate_type | VARCHAR(20) | CSCA, DSC, DSC_NC, MLSC |
+| country_code | VARCHAR(3) | ISO 3166-1 alpha-2/3 |
+| fingerprint_sha256 | VARCHAR(64) UK | 고유 식별자 (type + fingerprint) |
+| subject_dn / issuer_dn | TEXT | X.500 Distinguished Name |
+| serial_number | VARCHAR(100) | |
+| certificate_data | BLOB | DER 인코딩 바이너리 |
+| not_before / not_after | TIMESTAMP | 유효 기간 |
+| signature_algorithm | VARCHAR(50) | SHA256withRSA, SHA256withECDSA 등 |
+| public_key_algorithm | VARCHAR(30) | RSA, EC |
+| public_key_size | INTEGER | 2048, 4096, 256, 384 |
+| public_key_curve | VARCHAR(50) | P-256, brainpoolP256r1 등 |
+| is_self_signed / is_ca | BOOLEAN | 자체 서명 / CA 여부 |
+| validation_status | VARCHAR(20) | VALID, INVALID, PENDING, EXPIRED, REVOKED |
+| source_type | VARCHAR(50) | FILE_UPLOAD, PA_EXTRACTED, LDIF_PARSED, ML_PARSED, DL_PARSED |
+| stored_in_ldap | BOOLEAN | LDAP 저장 여부 |
+| ldap_dn_v2 | VARCHAR(512) | LDAP DN (V2 정규화) |
+
+**crl** — 인증서 폐지 목록
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| upload_id | UUID FK | → uploaded_file |
+| country_code | VARCHAR(3) | |
+| issuer_dn | TEXT | CRL 발행자 |
+| fingerprint_sha256 | VARCHAR(64) UK | |
+| this_update / next_update | TIMESTAMP | CRL 유효 기간 |
+| crl_binary | BLOB | DER 인코딩 |
+| stored_in_ldap | BOOLEAN | |
+
+**master_list** — ICAO Master List (CMS SignedData)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| upload_id | UUID FK | → uploaded_file |
+| signer_country | VARCHAR(3) | Master List 서명 국가 |
+| fingerprint_sha256 | VARCHAR(64) | |
+| csca_certificate_count | INTEGER | 포함 CSCA 수 |
+| signer_certificate_id | UUID FK | → certificate (MLSC) |
+| stored_in_ldap | BOOLEAN | |
+
+**deviation_list / deviation_entry** — ICAO Deviation List
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| deviation_list.id | UUID PK | |
+| issuer_country | VARCHAR(3) | |
+| deviation_count | INTEGER | 포함 결함 수 |
+| deviation_entry.defect_type_oid | VARCHAR(50) | OID |
+| deviation_entry.defect_category | VARCHAR(20) | |
+
+##### 2. 검증 & 신뢰 체인
+
+**validation_result** — 인증서 신뢰 체인 검증 결과
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| certificate_id | UUID FK | → certificate |
+| upload_id | UUID FK | → uploaded_file |
+| validation_status | VARCHAR(20) | VALID, INVALID, PENDING 등 |
+| trust_chain_valid | BOOLEAN | CSCA → DSC 체인 |
+| csca_found / signature_valid / validity_period_valid | BOOLEAN | 개별 검증 결과 |
+| revocation_status | VARCHAR(20) | OK, REVOKED, UNKNOWN |
+| icao_compliant | BOOLEAN | Doc 9303 준수 여부 |
+| icao_violations | TEXT | 미준수 항목 |
+| trust_chain_path | JSON | 체인 경로 |
+
+**link_certificate** — CSCA 키 전환 Link Certificate
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| country_code | VARCHAR(3) | |
+| fingerprint_sha256 | VARCHAR(64) UK | |
+| subject_dn / issuer_dn | TEXT | 신/구 CSCA DN |
+| certificate_data | BLOB | |
+| stored_in_ldap | BOOLEAN | |
+
+##### 3. PA 검증
+
+**pa_verification** — Passive Authentication 검증
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | UUID PK | |
+| issuing_country | VARCHAR(3) | |
+| document_number | VARCHAR(1024) | **PII 암호화** (AES-256-GCM) |
+| verification_status | VARCHAR(30) | VALID, INVALID, ERROR, EXPIRED_VALID |
+| trust_chain_valid / sod_signature_valid / dg_hashes_valid | BOOLEAN | 8단계 검증 결과 |
+| crl_status | VARCHAR(20) | |
+| dsc_fingerprint / csca_fingerprint | VARCHAR(64) | 사용된 인증서 |
+| client_ip / user_agent | VARCHAR(1024) | **PII 암호화** |
+| processing_time_ms | INTEGER | 처리 시간 |
+
+**pa_data_group** — SOD Data Group 해시
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| verification_id | UUID FK | → pa_verification |
+| dg_number | INTEGER | 1~16 |
+| expected_hash / actual_hash | VARCHAR(128) | 기대값 vs 실제값 |
+| hash_valid | BOOLEAN | |
+
+##### 4. 동기화 & 감사
+
+**sync_status** — DB↔LDAP 동기화 상태
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| db_csca_count / db_dsc_count / db_crl_count | INTEGER | DB 측 수량 |
+| ldap_csca_count / ldap_dsc_count / ldap_crl_count | INTEGER | LDAP 측 수량 |
+| total_discrepancy | INTEGER | 불일치 합계 |
+| db_country_stats / ldap_country_stats | JSON | 국가별 통계 |
+
+**auth_audit_log** — 인증 감사 로그
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| event_type | VARCHAR(50) | LOGIN, LOGOUT, TOKEN_REFRESH 등 |
+| username | VARCHAR(255) | |
+| ip_address | VARCHAR(45) | |
+| success | BOOLEAN | |
+
+**operation_audit_log** — 업무 운영 감사 로그
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| operation_type | VARCHAR(50) | UPLOAD, EXPORT, SYNC, CSR_CREATE 등 |
+| resource_type / resource_id | VARCHAR | 대상 엔티티 |
+| username | VARCHAR(255) | |
+| metadata | JSON | 추가 상세 |
+
+##### 5. API & 사용자
+
+**api_clients** — 외부 API 클라이언트
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| api_key_hash | VARCHAR(64) UK | SHA-256 해시 (원본 키 미저장) |
+| api_key_prefix | VARCHAR(16) | 식별용 접두사 |
+| permissions | JSON | 12개 권한 배열 |
+| rate_limit_per_minute / hour / day | INTEGER | Rate Limit 설정 |
+| allowed_ips | JSON | IP 화이트리스트 |
+
+**csr_request** — ICAO PKD CSR 관리
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| subject_dn | VARCHAR(1024) | CSR Subject |
+| key_algorithm | VARCHAR(20) | RSA-2048, RSA-4096, EC-P256 등 |
+| csr_pem / csr_der | TEXT / BLOB | CSR 데이터 |
+| private_key_encrypted | TEXT | **AES-256-GCM 암호화** |
+| issued_certificate_pem | TEXT | 발급된 인증서 (선택) |
+| status | VARCHAR(20) | CREATED → SUBMITTED → ISSUED |
+
+##### 6. AI & EAC
+
+**ai_analysis_result** — ML 이상 탐지
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| certificate_fingerprint | VARCHAR(128) UK | |
+| anomaly_score | FLOAT | Isolation Forest 점수 |
+| risk_score / risk_level | FLOAT / VARCHAR | 포렌식 위험도 |
+| forensic_findings | JSON | 위험 요인 상세 |
+
+**cvc_certificate** — BSI TR-03110 CVC (실험적)
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| cvc_type | VARCHAR(20) | CVCA, DV, IS |
+| car / chr | VARCHAR(255) | Certificate Authority/Holder Reference |
+| chat_oid / chat_role | VARCHAR | 인증서 권한 |
+| fingerprint_sha256 | VARCHAR(128) UK | |
+| validation_status | VARCHAR(20) | |
 
 ---
 
@@ -767,13 +945,13 @@ graph TD
         NC1 --> DSCNC[o=dsc<br/>Non-Conformant DSC]
     end
 
-    style Root fill:#1976D2,stroke:#0D47A1,stroke-width:2px,color:#fff
-    style Data fill:#43A047,stroke:#2E7D32,stroke-width:2px,color:#fff
-    style NCData fill:#E53935,stroke:#C62828,stroke-width:2px,color:#fff
-    style CSCA1 fill:#FFB74D,stroke:#F57C00,stroke-width:2px
-    style DSC1 fill:#4DD0E1,stroke:#0097A7,stroke-width:2px
-    style CRL1 fill:#BA68C8,stroke:#8E24AA,stroke-width:2px
-    style ML1 fill:#81C784,stroke:#388E3C,stroke-width:2px
+    style Root fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Data fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style NCData fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style CSCA1 fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style DSC1 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style CRL1 fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style ML1 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **LDAP Schema**:
@@ -880,8 +1058,8 @@ graph TD
     App --> TailwindCSS
     App --> DarkMode
 
-    style IcaoStatus fill:#FFD54F,stroke:#F57C00,stroke-width:3px
-    style FlagUtils fill:#FFD54F,stroke:#F57C00,stroke-width:2px
+    style IcaoStatus fill:#78350f,stroke:#fbbf24,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style FlagUtils fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Build Stack**:
@@ -944,9 +1122,9 @@ graph TB
     SSE -.-> PKD
     Upload -.-> PKD
 
-    style Route1 fill:#42A5F5,stroke:#1976D2,stroke-width:2px,color:#000
-    style RateLimit fill:#FF5722,stroke:#D84315,stroke-width:2px,color:#fff
-    style SSE fill:#9C27B0,stroke:#7B1FA2,stroke-width:2px,color:#fff
+    style Route1 fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style RateLimit fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style SSE fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Security Features**:
@@ -992,9 +1170,9 @@ graph LR
     AutoProc --> Output
     ManualProc --> Output
 
-    style Input fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
-    style Detect fill:#FFE0B2,stroke:#F57C00,stroke-width:2px
-    style Output fill:#C8E6C9,stroke:#388E3C,stroke-width:2px
+    style Input fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Detect fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Output fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 ---
@@ -1226,32 +1404,32 @@ graph TB
     PKD -->|bind mount| LogData
 
     %% Styling - External
-    style User fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
-    style APIClient fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    style User fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style APIClient fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
 
     %% Styling - Presentation
-    style Frontend fill:#81C784,stroke:#388E3C,stroke-width:3px
+    style Frontend fill:#14532d,stroke:#4ade80,stroke-width:3px,color:#f1f5f9,font-size:13px
 
     %% Styling - Gateway
-    style APIGateway fill:#FF9800,stroke:#F57C00,stroke-width:3px
+    style APIGateway fill:#78350f,stroke:#fbbf24,stroke-width:3px,color:#f1f5f9,font-size:13px
 
     %% Styling - Application
-    style PKD fill:#42A5F5,stroke:#1976D2,stroke-width:3px
-    style PA fill:#42A5F5,stroke:#1976D2,stroke-width:3px
-    style Relay fill:#42A5F5,stroke:#1976D2,stroke-width:3px
-    style Mon fill:#42A5F5,stroke:#1976D2,stroke-width:3px
+    style PKD fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style PA fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Relay fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Mon fill:#164e63,stroke:#22d3ee,stroke-width:3px,color:#f1f5f9,font-size:13px
 
     %% Styling - Data Layer
-    style PG fill:#7E57C2,stroke:#5E35B1,stroke-width:3px
-    style LDAP1 fill:#26A69A,stroke:#00796B,stroke-width:3px
-    style LDAP2 fill:#26A69A,stroke:#00796B,stroke-width:3px
+    style PG fill:#312e81,stroke:#818cf8,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style LDAP1 fill:#0f4c75,stroke:#0ea5e9,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style LDAP2 fill:#0f4c75,stroke:#0ea5e9,stroke-width:3px,color:#f1f5f9,font-size:13px
 
     %% Styling - Storage
-    style PGData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style LDAP1Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style LDAP2Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style UploadData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style LogData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style PGData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP1Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP2Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style UploadData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LogData fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Architecture Highlights**:
@@ -1339,30 +1517,30 @@ graph TB
     PKD3 -->|bind mount| ProjectDir
 
     %% Styling - CI/CD
-    style GHA fill:#4CAF50,stroke:#388E3C,stroke-width:3px
-    style Artifacts fill:#2196F3,stroke:#1976D2,stroke-width:2px
-    style Convert fill:#FF9800,stroke:#F57C00,stroke-width:2px
+    style GHA fill:#14532d,stroke:#4ade80,stroke-width:3px,color:#f1f5f9,font-size:13px
+    style Artifacts fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Convert fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 
     %% Styling - Deploy
-    style Transfer fill:#9C27B0,stroke:#7B1FA2,stroke-width:2px
-    style Load fill:#F44336,stroke:#D32F2F,stroke-width:2px
+    style Transfer fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Load fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
 
     %% Styling - Services
-    style Frontend3 fill:#81C784,stroke:#388E3C,stroke-width:2px
-    style APIGateway3 fill:#FF9800,stroke:#F57C00,stroke-width:2px
-    style PKD3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style PA3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style Relay3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style Mon3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style PG3 fill:#7E57C2,stroke:#5E35B1,stroke-width:2px
-    style LDAP5 fill:#26A69A,stroke:#00796B,stroke-width:2px
-    style LDAP6 fill:#26A69A,stroke:#00796B,stroke-width:2px
+    style Frontend3 fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style APIGateway3 fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PKD3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PA3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Relay3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Mon3 fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PG3 fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP5 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP6 fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
 
     %% Styling - Storage
-    style ProjectDir fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style PGData3 fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style LDAP5Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
-    style LDAP6Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style ProjectDir fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PGData3 fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP5Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style LDAP6Data fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Deployment Workflow**:
@@ -1464,11 +1642,11 @@ graph TB
     Base64Validation --> NullChecks
     NullChecks --> BufferOverread
 
-    style JWT fill:#F44336,stroke:#C62828,stroke-width:2px,color:#fff
-    style PII fill:#FF9800,stroke:#F57C00,stroke-width:2px,color:#fff
-    style Encryption fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
-    style Parameterized fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
-    style NoSystemCall fill:#FF5722,stroke:#E64A19,stroke-width:2px,color:#fff
+    style JWT fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style PII fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Encryption fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Parameterized fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style NoSystemCall fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Security Checklist (v2.37.0)**:
@@ -1597,9 +1775,9 @@ graph LR
     LDAP_H --> Script
     MonDash --> Mon_H
 
-    style GW fill:#4CAF50,stroke:#388E3C,stroke-width:2px
-    style Script fill:#FF9800,stroke:#F57C00,stroke-width:2px
-    style MonDash fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style GW fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style Script fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
+    style MonDash fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 ### Logging Strategy

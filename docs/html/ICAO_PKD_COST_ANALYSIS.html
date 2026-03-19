@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICAO PKD Cost Analysis — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html" class="active">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>ICAO PKD Cost Analysis</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="icao-local-pkd-비용-분석-보고서">ICAO Local PKD - 비용 분석 보고서</h1>
+<p><strong>Version</strong>: 2.37.0
+<strong>Date</strong>: 2026-03-18
+<strong>Status</strong>: Planning</p>
+<blockquote>
+<p><strong>Note (v2.37.0)</strong>: 초기 비용 분석 이후 다음 기능이 추가되었으나, 비용 수치는 당초 추정치를 그대로 유지합니다:</p>
+<ul>
+<li>CSR Management (ICAO PKD Certificate Signing Request 생성/관리)</li>
+<li>API Client Management (외부 클라이언트 API Key 인증/권한/Rate Limiting)</li>
+<li>Pending DSC Approval (PA 검증 자동 등록 → 관리자 승인 워크플로우)</li>
+<li>EAC 인증서 실험적 지원 (BSI TR-03110 CVC 파서/검증)</li>
+<li>AI Certificate Forensic Analysis Engine (ML 기반 이상 탐지/포렌식 분석)</li>
+</ul>
+</blockquote>
+<hr>
+<h2 id="목차">목차</h2>
+<ol>
+<li><a href="#개요">개요</a></li>
+<li><a href="#데이터-소스별-비용">데이터 소스별 비용</a></li>
+<li><a href="#구축-비용-분석">구축 비용 분석</a></li>
+<li><a href="#운영-비용-분석">운영 비용 분석</a></li>
+<li><a href="#roi-분석">ROI 분석</a></li>
+<li><a href="#시나리오별-비용-비교">시나리오별 비용 비교</a></li>
+<li><a href="#권장-사항">권장 사항</a></li>
+</ol>
+<hr>
+<h2 id="개요">개요</h2>
+<p>본 문서는 ICAO Local PKD 시스템 구축 및 운영에 필요한 비용을 단계별로 분석합니다. 데이터 소스 선택, 자동화 수준, 시스템 규모에 따라 비용이 크게 달라지므로, 여러 시나리오를 비교하여 최적의 투자 전략을 제시합니다.</p>
+<hr>
+<h2 id="데이터-소스별-비용">데이터 소스별 비용</h2>
+<h3 id="icao-공식-pkd">ICAO 공식 PKD</h3>
+<h4 id="1-공개-다운로드-무료">1. 공개 다운로드 (무료)</h4>
+<p><strong>비용</strong>: $0</p>
+<p><strong>제약사항</strong>:</p>
+<ul>
+<li>수동 다운로드만 가능</li>
+<li>운영 시스템 용도 부적합 (ToS 위반)</li>
+<li>자동화 불가</li>
+<li>ICAO 기술 지원 없음</li>
+</ul>
+<p><strong>적합 용도</strong>:</p>
+<ul>
+<li>개발 및 테스트</li>
+<li>파일럿 프로젝트</li>
+<li>학술 연구</li>
+</ul>
+<h4 id="2-icao-pkd-회원-participant-membership">2. ICAO PKD 회원 (Participant Membership)</h4>
+<p><strong>비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액 (USD)</th>
+<th>빈도</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>등록비</td>
+<td>$15,900</td>
+<td>1회</td>
+<td>초기 가입 시</td>
+</tr>
+<tr>
+<td>연회비</td>
+<td>$25,096</td>
+<td>연간</td>
+<td>매년 반복</td>
+</tr>
+<tr>
+<td><strong>초년도 총액</strong></td>
+<td><strong>$41,000</strong></td>
+<td>-</td>
+<td>등록비 + 연회비</td>
+</tr>
+<tr>
+<td><strong>2년차 이후</strong></td>
+<td><strong>$25,096</strong></td>
+<td>연간</td>
+<td>연회비만</td>
+</tr>
+</tbody></table></div>
+<p><strong>포함 사항</strong>:</p>
+<ul>
+<li>✅ LDAP 자동 동기화 권한</li>
+<li>✅ Delta 파일 접근</li>
+<li>✅ Pre-Production 환경</li>
+<li>✅ 자국 인증서 업로드 권한</li>
+<li>✅ ICAO 기술 지원</li>
+<li>✅ 운영 시스템 공식 승인</li>
+</ul>
+<p><strong>제외 사항</strong>:</p>
+<ul>
+<li>❌ LDAP 동기화 개발 비용 (별도)</li>
+<li>❌ 인프라 비용 (별도)</li>
+<li>❌ 운영 인력 (별도)</li>
+</ul>
+<hr>
+<h3 id="양자-협정-bilateral-exchange">양자 협정 (Bilateral Exchange)</h3>
+<p><strong>직접 비용</strong>: 협상에 따라 다름 (일반적으로 무료)</p>
+<p><strong>간접 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>비용 추정</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>협정 체결 (국가당)</td>
+<td>$500 - $2,000</td>
+<td>외교 채널, 법무 검토</td>
+</tr>
+<tr>
+<td>기술 통합 (국가당)</td>
+<td>$2,000 - $5,000</td>
+<td>SFTP/API 개발</td>
+</tr>
+<tr>
+<td>운영 유지 (국가당/년)</td>
+<td>$200 - $500</td>
+<td>모니터링, 갱신</td>
+</tr>
+</tbody></table></div>
+<p><strong>5개국 협정 예상 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>비용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>초기 체결</td>
+<td>$2,500 - $10,000</td>
+</tr>
+<tr>
+<td>기술 통합</td>
+<td>$10,000 - $25,000</td>
+</tr>
+<tr>
+<td>연간 운영</td>
+<td>$1,000 - $2,500</td>
+</tr>
+</tbody></table></div>
+<p><strong>권장 우선 대상 국가</strong> (현재 DB 기준):</p>
+<ol>
+<li>🇰🇷 한국 (219 DSC)</li>
+<li>🇯🇵 일본 (150+ DSC)</li>
+<li>🇺🇸 미국 (200+ DSC)</li>
+<li>🇩🇪 독일 (100+ DSC)</li>
+<li>🇫🇷 프랑스 (80+ DSC)</li>
+</ol>
+<hr>
+<h3 id="지역-pkd-시스템">지역 PKD 시스템</h3>
+<p><strong>회원비</strong>: 지역 조직에 따라 다름</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>지역</th>
+<th>예상 비용</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>EU PKD</td>
+<td>€5,000 - €15,000/년</td>
+<td>EU 회원국만</td>
+</tr>
+<tr>
+<td>ASEAN PKD</td>
+<td>협상</td>
+<td>동남아 국가</td>
+</tr>
+<tr>
+<td>OSCE PKD</td>
+<td>협상</td>
+<td>유럽 안보 협력</td>
+</tr>
+</tbody></table></div>
+<p><strong>기술 통합 비용</strong>: $5,000 - $15,000 (1회)</p>
+<hr>
+<h2 id="구축-비용-분석">구축 비용 분석</h2>
+<h3 id="phase-1-기본-구축-1-3개월">Phase 1: 기본 구축 (1-3개월)</h3>
+<p><strong>개발 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>인력</th>
+<th>기간</th>
+<th>단가</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Backend 개발</td>
+<td>1명</td>
+<td>3개월</td>
+<td>$10,000/월</td>
+<td>$30,000</td>
+</tr>
+<tr>
+<td>Frontend 개발</td>
+<td>1명</td>
+<td>2개월</td>
+<td>$8,000/월</td>
+<td>$16,000</td>
+</tr>
+<tr>
+<td>DevOps</td>
+<td>0.5명</td>
+<td>2개월</td>
+<td>$8,000/월</td>
+<td>$8,000</td>
+</tr>
+<tr>
+<td><strong>개발 소계</strong></td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td><strong>$54,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>인프라 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>수량</th>
+<th>단가</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>서버 (개발)</td>
+<td>2대</td>
+<td>$1,000</td>
+<td>$2,000</td>
+</tr>
+<tr>
+<td>서버 (운영)</td>
+<td>4대</td>
+<td>$2,000</td>
+<td>$8,000</td>
+</tr>
+<tr>
+<td>네트워크 장비</td>
+<td>1식</td>
+<td>$3,000</td>
+<td>$3,000</td>
+</tr>
+<tr>
+<td>스토리지</td>
+<td>1식</td>
+<td>$2,000</td>
+<td>$2,000</td>
+</tr>
+<tr>
+<td><strong>인프라 소계</strong></td>
+<td>-</td>
+<td>-</td>
+<td><strong>$15,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>데이터 소스 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ICAO 공개 다운로드</td>
+<td>$0</td>
+</tr>
+</tbody></table></div>
+<p><strong>기타 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>교육 및 문서화</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>테스트 및 QA</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>예비비 (10%)</td>
+<td>$7,900</td>
+</tr>
+</tbody></table></div>
+<p><strong>Phase 1 총액</strong>: <strong>$86,900</strong> (약 $87,000)</p>
+<hr>
+<h3 id="phase-2-자동화-강화-3-6개월">Phase 2: 자동화 강화 (3-6개월)</h3>
+<p><strong>개발 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>인력</th>
+<th>기간</th>
+<th>단가</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ICAO 버전 체크 개발</td>
+<td>1명</td>
+<td>0.5개월</td>
+<td>$10,000/월</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>알림 시스템 개발</td>
+<td>1명</td>
+<td>0.5개월</td>
+<td>$10,000/월</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>양자 협정 통합</td>
+<td>1명</td>
+<td>2개월</td>
+<td>$10,000/월</td>
+<td>$20,000</td>
+</tr>
+<tr>
+<td>Delta 업데이트 로직</td>
+<td>1명</td>
+<td>1개월</td>
+<td>$10,000/월</td>
+<td>$10,000</td>
+</tr>
+<tr>
+<td><strong>개발 소계</strong></td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td><strong>$40,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>데이터 소스 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>양자 협정 체결 (5개국)</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>기술 통합 (5개국)</td>
+<td>$15,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>기타 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>테스트 및 QA</td>
+<td>$3,000</td>
+</tr>
+<tr>
+<td>문서화</td>
+<td>$2,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>Phase 2 총액</strong>: <strong>$65,000</strong></p>
+<p><strong>Phase 1+2 누적</strong>: <strong>$152,000</strong></p>
+<hr>
+<h3 id="phase-3-완전-자동화-6-12개월">Phase 3: 완전 자동화 (6-12개월)</h3>
+<p><strong>개발 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>인력</th>
+<th>기간</th>
+<th>단가</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LDAP 동기화 모듈</td>
+<td>1명</td>
+<td>2개월</td>
+<td>$10,000/월</td>
+<td>$20,000</td>
+</tr>
+<tr>
+<td>Version 기반 증분 다운로드</td>
+<td>1명</td>
+<td>1개월</td>
+<td>$10,000/월</td>
+<td>$10,000</td>
+</tr>
+<tr>
+<td>지역 PKD 통합</td>
+<td>1명</td>
+<td>1개월</td>
+<td>$10,000/월</td>
+<td>$10,000</td>
+</tr>
+<tr>
+<td>고가용성 구성</td>
+<td>0.5명</td>
+<td>1개월</td>
+<td>$8,000/월</td>
+<td>$4,000</td>
+</tr>
+<tr>
+<td><strong>개발 소계</strong></td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td><strong>$44,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>데이터 소스 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ICAO PKD 등록비</td>
+<td>$15,900</td>
+</tr>
+<tr>
+<td>ICAO PKD 연회비 (초년도)</td>
+<td>$25,096</td>
+</tr>
+<tr>
+<td>지역 PKD 가입 (선택)</td>
+<td>$10,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>인프라 확장</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>서버 추가 (HA)</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>백업 스토리지</td>
+<td>$3,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>기타 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>테스트 및 QA</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>운영 문서화</td>
+<td>$3,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>Phase 3 총액</strong>: <strong>$121,000</strong></p>
+<p><strong>Phase 1+2+3 누적</strong>: <strong>$273,000</strong></p>
+<hr>
+<h2 id="운영-비용-분석">운영 비용 분석</h2>
+<h3 id="option-a-icao-회원-미가입-phase-1-2-유지">Option A: ICAO 회원 미가입 (Phase 1-2 유지)</h3>
+<p><strong>연간 운영 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>시간/년</th>
+<th>시급</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>수동 다운로드</td>
+<td>50시간</td>
+<td>$50</td>
+<td>$2,500</td>
+</tr>
+<tr>
+<td>수동 업로드</td>
+<td>50시간</td>
+<td>$50</td>
+<td>$2,500</td>
+</tr>
+<tr>
+<td>버전 체크</td>
+<td>50시간</td>
+<td>$50</td>
+<td>$2,500</td>
+</tr>
+<tr>
+<td>양자 협정 모니터링</td>
+<td>100시간</td>
+<td>$50</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>시스템 유지보수</td>
+<td>100시간</td>
+<td>$50</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td><strong>인건비 소계</strong></td>
+<td>350시간</td>
+<td>-</td>
+<td><strong>$17,500</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>인프라 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>서버 호스팅</td>
+<td>$3,000</td>
+</tr>
+<tr>
+<td>네트워크 대역폭</td>
+<td>$1,000</td>
+</tr>
+<tr>
+<td>백업 스토리지</td>
+<td>$500</td>
+</tr>
+<tr>
+<td><strong>인프라 소계</strong></td>
+<td><strong>$4,500</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>데이터 소스 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ICAO 공개 다운로드</td>
+<td>$0</td>
+</tr>
+<tr>
+<td>양자 협정 갱신</td>
+<td>$2,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>Option A 연간 총액</strong>: <strong>$24,000</strong></p>
+<hr>
+<h3 id="option-b-icao-회원-가입-phase-3">Option B: ICAO 회원 가입 (Phase 3)</h3>
+<p><strong>연간 운영 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>시간/년</th>
+<th>시급</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>LDAP 동기화 모니터링</td>
+<td>50시간</td>
+<td>$50</td>
+<td>$2,500</td>
+</tr>
+<tr>
+<td>시스템 유지보수</td>
+<td>50시간</td>
+<td>$50</td>
+<td>$2,500</td>
+</tr>
+<tr>
+<td><strong>인건비 소계</strong></td>
+<td>100시간</td>
+<td>-</td>
+<td><strong>$5,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>인프라 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>서버 호스팅 (HA)</td>
+<td>$5,000</td>
+</tr>
+<tr>
+<td>네트워크 대역폭</td>
+<td>$2,000</td>
+</tr>
+<tr>
+<td>백업 스토리지</td>
+<td>$1,000</td>
+</tr>
+<tr>
+<td><strong>인프라 소계</strong></td>
+<td><strong>$8,000</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>데이터 소스 비용</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>금액/년</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>ICAO PKD 연회비</td>
+<td>$25,096</td>
+</tr>
+<tr>
+<td>양자 협정 갱신</td>
+<td>$2,000</td>
+</tr>
+<tr>
+<td>지역 PKD 연회비 (선택)</td>
+<td>$10,000</td>
+</tr>
+</tbody></table></div>
+<p><strong>Option B 연간 총액</strong>:</p>
+<ul>
+<li><strong>기본</strong>: $40,096 (지역 PKD 제외)</li>
+<li><strong>Full</strong>: $50,096 (지역 PKD 포함)</li>
+</ul>
+<hr>
+<h2 id="roi-분석">ROI 분석</h2>
+<h3 id="5년-총-소유-비용-tco">5년 총 소유 비용 (TCO)</h3>
+<p><strong>Option A (ICAO 회원 미가입)</strong>:</p>
+<pre><code>초기 투자: $152,000 (Phase 1+2)
+연간 운영: $24,000 × 5년 = $120,000
+5년 TCO: $272,000</code></pre>
+<p><strong>Option B (ICAO 회원 가입)</strong>:</p>
+<pre><code>초기 투자: $273,000 (Phase 1+2+3)
+연간 운영: $40,096 × 4년 = $160,384 (2년차부터)
+5년 TCO: $433,384</code></pre>
+<p><strong>차이</strong>: $161,384 (5년 기준)</p>
+<hr>
+<h3 id="break-even-분석">Break-even 분석</h3>
+<p><strong>자동화로 인한 연간 절감액</strong>:</p>
+<pre><code>Option A 인건비: $17,500/년
+Option B 인건비: $5,000/년
+절감액: $12,500/년</code></pre>
+<p><strong>추가 투자 회수 기간</strong>:</p>
+<pre><code>추가 투자: $121,000 (Phase 3)
+추가 연회비: $16,096/년 (ICAO PKD)
+순 추가 비용: $121,000 + $16,096 = $137,096
+
+연간 절감: $12,500
+Break-even: $137,096 ÷ $12,500 = 11년</code></pre>
+<p><strong>결론</strong>: 소규모 시스템에서는 <strong>ICAO 회원 가입이 비용 효율적이지 않음</strong></p>
+<hr>
+<h3 id="대규모-시스템-시나리오">대규모 시스템 시나리오</h3>
+<p><strong>가정</strong>:</p>
+<ul>
+<li>연간 수동 작업: 500시간 (주당 10시간)</li>
+<li>시급: $50</li>
+</ul>
+<p><strong>Option A (수동)</strong>:</p>
+<pre><code>인건비: 500h × $50 = $25,000/년
+5년 TCO: $152,000 + ($25,000 + $6,500) × 5 = $309,500</code></pre>
+<p><strong>Option B (자동)</strong>:</p>
+<pre><code>인건비: 100h × $50 = $5,000/년
+5년 TCO: $273,000 + ($5,000 + $35,096) × 4 = $433,384</code></pre>
+<p><strong>대규모 시스템에서도 Option A가 여전히 유리</strong></p>
+<hr>
+<h3 id="매우-대규모-시스템-국가-국경-관리">매우 대규모 시스템 (국가 국경 관리)</h3>
+<p><strong>가정</strong>:</p>
+<ul>
+<li>연간 수동 작업: 2,000시간 (전담 인력 1명)</li>
+<li>시급: $50</li>
+</ul>
+<p><strong>Option A (수동)</strong>:</p>
+<pre><code>인건비: 2,000h × $50 = $100,000/년
+5년 TCO: $152,000 + ($100,000 + $6,500) × 5 = $684,500</code></pre>
+<p><strong>Option B (자동)</strong>:</p>
+<pre><code>인건비: 100h × $50 = $5,000/년
+5년 TCO: $273,000 + ($5,000 + $35,096) × 4 = $433,384</code></pre>
+<p><strong>차이</strong>: $251,116 절감 (5년 기준)</p>
+<p><strong>Break-even</strong>: 약 <strong>1.5년</strong></p>
+<p><strong>결론</strong>: 대규모 시스템 (연 2,000시간 이상)에서만 <strong>ICAO 회원 가입이 정당화됨</strong></p>
+<hr>
+<h2 id="시나리오별-비용-비교">시나리오별 비용 비교</h2>
+<h3 id="시나리오-1-개발-테스트-환경">시나리오 1: 개발/테스트 환경</h3>
+<p><strong>용도</strong>: 시스템 개발, 기능 검증, 파일럿</p>
+<p><strong>권장 구성</strong>:</p>
+<ul>
+<li>Phase 1만 구축</li>
+<li>ICAO 공개 다운로드</li>
+<li>수동 업로드</li>
+</ul>
+<p><strong>비용</strong>:</p>
+<ul>
+<li>초기: $87,000</li>
+<li>연간: $10,000 (최소 유지보수)</li>
+<li>5년 TCO: <strong>$137,000</strong></li>
+</ul>
+<hr>
+<h3 id="시나리오-2-중소-공항-연간-100만-승객">시나리오 2: 중소 공항 (연간 100만 승객)</h3>
+<p><strong>특징</strong>:</p>
+<ul>
+<li>일일 100-500건 PA 검증</li>
+<li>주간 ICAO 업데이트 충분</li>
+</ul>
+<p><strong>권장 구성</strong>:</p>
+<ul>
+<li>Phase 1+2 구축</li>
+<li>ICAO 공개 다운로드 + 양자 협정 (2-3개국)</li>
+<li>반자동 운영</li>
+</ul>
+<p><strong>비용</strong>:</p>
+<ul>
+<li>초기: $152,000</li>
+<li>연간: $20,000</li>
+<li>5년 TCO: <strong>$252,000</strong></li>
+</ul>
+<hr>
+<h3 id="시나리오-3-중대형-공항-연간-500만-승객">시나리오 3: 중대형 공항 (연간 500만 승객)</h3>
+<p><strong>특징</strong>:</p>
+<ul>
+<li>일일 2,000-5,000건 PA 검증</li>
+<li>일간 ICAO 업데이트 필요</li>
+</ul>
+<p><strong>권장 구성</strong>:</p>
+<ul>
+<li>Phase 1+2 구축</li>
+<li>ICAO 공개 다운로드 + 양자 협정 (5개국)</li>
+<li>자동 버전 체크 + 알림</li>
+</ul>
+<p><strong>비용</strong>:</p>
+<ul>
+<li>초기: $152,000</li>
+<li>연간: $24,000</li>
+<li>5년 TCO: <strong>$272,000</strong></li>
+</ul>
+<hr>
+<h3 id="시나리오-4-대형-허브-공항-연간-2-000만-승객">시나리오 4: 대형 허브 공항 (연간 2,000만 승객)</h3>
+<p><strong>특징</strong>:</p>
+<ul>
+<li>일일 10,000+ PA 검증</li>
+<li>실시간 ICAO 동기화 필요</li>
+<li>고가용성 필수</li>
+</ul>
+<p><strong>권장 구성</strong>:</p>
+<ul>
+<li>Phase 1+2+3 전체 구축</li>
+<li>ICAO PKD 회원 + 양자 협정 + 지역 PKD</li>
+<li>완전 자동화</li>
+</ul>
+<p><strong>비용</strong>:</p>
+<ul>
+<li>초기: $273,000</li>
+<li>연간: $50,000 (Full 구성)</li>
+<li>5년 TCO: <strong>$473,000</strong></li>
+</ul>
+<p><strong>정당화 근거</strong>:</p>
+<ul>
+<li>전담 인력 2명 = $100,000/년 절감</li>
+<li>5년 절감액: $500,000</li>
+<li>순 이익: $27,000 (5년)</li>
+</ul>
+<hr>
+<h3 id="시나리오-5-국가-국경-관리-시스템">시나리오 5: 국가 국경 관리 시스템</h3>
+<p><strong>특징</strong>:</p>
+<ul>
+<li>다수 공항/항만 통합</li>
+<li>일일 50,000+ PA 검증</li>
+<li>국가 안보 필수 인프라</li>
+</ul>
+<p><strong>권장 구성</strong>:</p>
+<ul>
+<li>Phase 1+2+3 + 추가 HA 구성</li>
+<li>ICAO PKD 회원 + 양자 협정 + 지역 PKD</li>
+<li>Multi-site 배포</li>
+</ul>
+<p><strong>비용</strong>:</p>
+<ul>
+<li>초기: $500,000 (Multi-site 포함)</li>
+<li>연간: $80,000</li>
+<li>5년 TCO: <strong>$820,000</strong></li>
+</ul>
+<p><strong>정당화 근거</strong>:</p>
+<ul>
+<li>전담 팀 5명 = $250,000/년 절감</li>
+<li>5년 절감액: $1,250,000</li>
+<li>순 이익: $430,000 (5년)</li>
+<li><strong>ROI: 52%</strong></li>
+</ul>
+<hr>
+<h2 id="권장-사항">권장 사항</h2>
+<h3 id="시스템-규모별-권장-구성">시스템 규모별 권장 구성</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>규모</th>
+<th>Phase</th>
+<th>ICAO 회원</th>
+<th>양자 협정</th>
+<th>5년 TCO</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>개발/테스트</strong></td>
+<td>1</td>
+<td>❌</td>
+<td>❌</td>
+<td>$137k</td>
+</tr>
+<tr>
+<td><strong>소형</strong> (&lt; 100만)</td>
+<td>1-2</td>
+<td>❌</td>
+<td>2-3개국</td>
+<td>$240k</td>
+</tr>
+<tr>
+<td><strong>중형</strong> (100-500만)</td>
+<td>1-2</td>
+<td>❌</td>
+<td>5개국</td>
+<td>$272k</td>
+</tr>
+<tr>
+<td><strong>대형</strong> (500-2000만)</td>
+<td>1-2</td>
+<td>⚠️ 검토</td>
+<td>5개국</td>
+<td>$272-473k</td>
+</tr>
+<tr>
+<td><strong>매우 대형</strong> (2000만+)</td>
+<td>1-2-3</td>
+<td>✅ 필수</td>
+<td>전체</td>
+<td>$473k</td>
+</tr>
+<tr>
+<td><strong>국가급</strong></td>
+<td>1-2-3 + HA</td>
+<td>✅ 필수</td>
+<td>전체 + 지역</td>
+<td>$820k</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="의사결정-트리">의사결정 트리</h3>
+<pre><code>1. 연간 수동 작업 시간 추정
+   ├─ &lt; 500시간 → Phase 1-2 (ICAO 공개)
+   ├─ 500-1,000시간 → Phase 1-2 + 양자 협정
+   ├─ 1,000-2,000시간 → Phase 1-2-3 검토 (ROI 계산 필요)
+   └─ &gt; 2,000시간 → Phase 1-2-3 (ICAO 회원 필수)
+
+2. 법적/규제 요구사항
+   ├─ 개발/파일럿 → ICAO 공개 OK
+   ├─ 상용 서비스 → ICAO 공개 + 양자 협정
+   └─ 국경 관리 → ICAO 회원 필수
+
+3. 가용 예산
+   ├─ &lt; $200k → Phase 1-2
+   ├─ $200-300k → Phase 1-2 + 양자 협정 강화
+   └─ &gt; $300k → Phase 1-2-3 검토</code></pre>
+<hr>
+<h3 id="단계적-접근-전략-권장">단계적 접근 전략 (권장)</h3>
+<p><strong>Year 1: Phase 1 구축</strong></p>
+<ul>
+<li>초기 투자: $87k</li>
+<li>ICAO 공개 다운로드</li>
+<li>파일럿 운영 및 검증</li>
+</ul>
+<p><strong>Year 2: Phase 2 확장</strong></p>
+<ul>
+<li>추가 투자: $65k</li>
+<li>양자 협정 체결 (우선순위 국가)</li>
+<li>자동화 강화</li>
+</ul>
+<p><strong>Year 3-5: Phase 3 검토</strong></p>
+<ul>
+<li>ROI 재평가</li>
+<li>수동 작업 시간 &gt; 1,000h/년이면 Phase 3 추진</li>
+<li>ICAO PKD 회원 가입</li>
+</ul>
+<p><strong>장점</strong>:</p>
+<ul>
+<li>초기 리스크 최소화</li>
+<li>실제 사용량 기반 의사결정</li>
+<li>단계적 예산 분산</li>
+</ul>
+<hr>
+<h3 id="비용-최적화-팁">비용 최적화 팁</h3>
+<p><strong>1. 오픈소스 활용</strong>:</p>
+<ul>
+<li>PostgreSQL (무료)</li>
+<li>OpenLDAP (무료)</li>
+<li>React.js (무료)</li>
+<li>라이선스 비용 $0</li>
+</ul>
+<p><strong>2. 클라우드 vs 온프레미스</strong>:</p>
+<ul>
+<li>소규모: 클라우드 (초기 투자 낮음)</li>
+<li>대규모: 온프레미스 (장기 운영비 낮음)</li>
+</ul>
+<p><strong>3. 양자 협정 우선순위</strong>:</p>
+<ul>
+<li>트래픽 상위 5개국만 협정 체결</li>
+<li>90% 커버리지, 50% 협상 비용</li>
+</ul>
+<p><strong>4. 단계적 HA 구성</strong>:</p>
+<ul>
+<li>Phase 1-2: 단일 서버</li>
+<li>Phase 3: Active-Standby</li>
+<li>필요시: Active-Active</li>
+</ul>
+<p><strong>5. 교육 내재화</strong>:</p>
+<ul>
+<li>외부 교육 대신 내부 문서화</li>
+<li>운영 경험 축적</li>
+</ul>
+<hr>
+<h2 id="결론">결론</h2>
+<p><strong>핵심 메시지</strong>:</p>
+<ol>
+<li>✅ <strong>대부분의 시스템</strong>: Phase 1-2 + 양자 협정으로 충분</li>
+<li>⚠️ <strong>ICAO 회원</strong>: 연 2,000시간+ 수작업 시스템만 정당화</li>
+<li>💰 <strong>5년 TCO</strong>: $137k (개발) ~ $820k (국가급)</li>
+<li>📈 <strong>ROI</strong>: 대규모 시스템에서만 양수 (52%)</li>
+<li>🎯 <strong>권장</strong>: 단계적 접근, 실사용 기반 의사결정</li>
+</ol>
+<p><strong>최종 권장안</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>권장 사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>초기 구축</strong></td>
+<td>Phase 1 ($87k)</td>
+</tr>
+<tr>
+<td><strong>파일럿 운영</strong></td>
+<td>6개월 검증</td>
+</tr>
+<tr>
+<td><strong>확장 결정</strong></td>
+<td>수작업 시간 &gt; 500h/년이면 Phase 2</td>
+</tr>
+<tr>
+<td><strong>ICAO 회원</strong></td>
+<td>수작업 시간 &gt; 2,000h/년이면 Phase 3</td>
+</tr>
+<tr>
+<td><strong>예산 범위</strong></td>
+<td>$87k (최소) ~ $273k (최대)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><strong>문서 작성</strong>: 2026-01-19
+<strong>다음 검토</strong>: 분기별 (실제 비용 vs 예상 비교)</p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#목차">목차</a><a href="#개요">개요</a><a href="#데이터-소스별-비용">데이터 소스별 비용</a><a href="#icao-공식-pkd" style="padding-left:1rem">ICAO 공식 PKD</a><a href="#양자-협정-bilateral-exchange" style="padding-left:1rem">양자 협정 (Bilateral Exchange)</a><a href="#지역-pkd-시스템" style="padding-left:1rem">지역 PKD 시스템</a><a href="#구축-비용-분석">구축 비용 분석</a><a href="#phase-1-기본-구축-1-3개월" style="padding-left:1rem">Phase 1: 기본 구축 (1-3개월)</a><a href="#phase-2-자동화-강화-3-6개월" style="padding-left:1rem">Phase 2: 자동화 강화 (3-6개월)</a><a href="#phase-3-완전-자동화-6-12개월" style="padding-left:1rem">Phase 3: 완전 자동화 (6-12개월)</a><a href="#운영-비용-분석">운영 비용 분석</a><a href="#option-a-icao-회원-미가입-phase-1-2-유지" style="padding-left:1rem">Option A: ICAO 회원 미가입 (Phase 1-2 유지)</a><a href="#option-b-icao-회원-가입-phase-3" style="padding-left:1rem">Option B: ICAO 회원 가입 (Phase 3)</a><a href="#roi-분석">ROI 분석</a><a href="#5년-총-소유-비용-tco" style="padding-left:1rem">5년 총 소유 비용 (TCO)</a><a href="#break-even-분석" style="padding-left:1rem">Break-even 분석</a><a href="#대규모-시스템-시나리오" style="padding-left:1rem">대규모 시스템 시나리오</a><a href="#매우-대규모-시스템-국가-국경-관리" style="padding-left:1rem">매우 대규모 시스템 (국가 국경 관리)</a><a href="#시나리오별-비용-비교">시나리오별 비용 비교</a><a href="#시나리오-1-개발-테스트-환경" style="padding-left:1rem">시나리오 1: 개발/테스트 환경</a><a href="#시나리오-2-중소-공항-연간-100만-승객" style="padding-left:1rem">시나리오 2: 중소 공항 (연간 100만 승객)</a><a href="#시나리오-3-중대형-공항-연간-500만-승객" style="padding-left:1rem">시나리오 3: 중대형 공항 (연간 500만 승객)</a><a href="#시나리오-4-대형-허브-공항-연간-2-000만-승객" style="padding-left:1rem">시나리오 4: 대형 허브 공항 (연간 2,000만 승객)</a><a href="#시나리오-5-국가-국경-관리-시스템" style="padding-left:1rem">시나리오 5: 국가 국경 관리 시스템</a><a href="#권장-사항">권장 사항</a><a href="#시스템-규모별-권장-구성" style="padding-left:1rem">시스템 규모별 권장 구성</a><a href="#의사결정-트리" style="padding-left:1rem">의사결정 트리</a><a href="#단계적-접근-전략-권장" style="padding-left:1rem">단계적 접근 전략 (권장)</a><a href="#비용-최적화-팁" style="padding-left:1rem">비용 최적화 팁</a><a href="#결론">결론</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,4663 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ICAO Compliance Manual — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html" class="active">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>ICAO Compliance Manual</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-spkd-icao-compliance-manual">FASTpass® SPKD — ICAO Compliance Manual</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="목차">목차</h2>
+<ul>
+<li><a href="#part-1-epassport-pki-trust-chain">Part 1: ePassport PKI Trust Chain</a></li>
+<li><a href="#part-2-doc-9303-compliance-checks">Part 2: Doc 9303 Compliance Checks</a></li>
+<li><a href="#part-3-cryptographic-algorithm-support">Part 3: Cryptographic Algorithm Support</a></li>
+<li><a href="#part-4-pkd-certificate-compliance-analysis">Part 4: PKD Certificate Compliance Analysis</a></li>
+<li><a href="#part-5-non-conformant-dsc-handling">Part 5: Non-Conformant DSC Handling</a></li>
+<li><a href="#part-6-data-protection--pii-encryption">Part 6: Data Protection &amp; PII Encryption</a></li>
+</ul>
+<hr>
+<h1 id="part-1-epassport-pki-trust-chain">Part 1: ePassport PKI Trust Chain</h1>
+<p><strong>ICAO Doc 9303 기반 전자여권 PKI 신뢰 체인 분석</strong></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>기준 문서</td>
+<td>ICAO Doc 9303, Eighth Edition (2021)</td>
+</tr>
+<tr>
+<td>관련 파트</td>
+<td>Part 10 (LDS), Part 11 (보안 메커니즘), Part 12 (PKI)</td>
+</tr>
+<tr>
+<td>보조 표준</td>
+<td>RFC 5280 (X.509 PKI), RFC 5652 (CMS), BSI TR-03105/03110</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-1-pki-계층-구조-개요">1.1 PKI 계층 구조 개요</h2>
+<h3 id="1-1-1-전자여권-pki-4계층-구조">1.1.1 전자여권 PKI 4계층 구조</h3>
+<p>ICAO Doc 9303 Part 12에서 정의하는 전자여권 PKI는 <strong>국가별 독립 신뢰 루트</strong> 모델을 사용한다.</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    ICAO PKD (글로벌)                      │
+│  Master List (MLSC 서명) → CSCA 인증서 배포               │
+└───────────────────────┬─────────────────────────────────┘
+                        │ 배포
+┌───────────────────────▼─────────────────────────────────┐
+│              CSCA (Country Signing CA)                   │
+│  각 국가의 신뢰 루트 (Self-signed Root CA)                │
+│  유효기간: 15~20년 | Key: RSA 3072+ / ECDSA P-384+       │
+└───────────────────────┬─────────────────────────────────┘
+                        │ 서명 발급
+┌───────────────────────▼─────────────────────────────────┐
+│              DSC (Document Signer Certificate)           │
+│  여권 서명용 인증서 (End-entity)                          │
+│  유효기간: 3~5년 | Key: RSA 2048+ / ECDSA P-256+         │
+└───────────────────────┬─────────────────────────────────┘
+                        │ SOD 서명
+┌───────────────────────▼─────────────────────────────────┐
+│              SOD (Security Object Document)              │
+│  여권 칩 내 저장된 CMS SignedData                         │
+│  DataGroup 해시값 + DSC 전자서명                          │
+└───────────────────────┬─────────────────────────────────┘
+                        │ 해시 검증
+┌───────────────────────▼─────────────────────────────────┐
+│              Data Groups (DG1~DG16)                      │
+│  DG1: MRZ | DG2: 얼굴 이미지 | DG3: 지문 | ...          │
+└─────────────────────────────────────────────────────────┘</code></pre>
+<h3 id="1-1-2-핵심-설계-원칙">1.1.2 핵심 설계 원칙</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>원칙</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>국가별 독립 신뢰 루트</strong></td>
+<td>각 국가가 자체 CSCA 운영, 중앙 CA 없음</td>
+</tr>
+<tr>
+<td><strong>글로벌 상호 운용성</strong></td>
+<td>ICAO PKD를 통한 CSCA 인증서 교환</td>
+</tr>
+<tr>
+<td><strong>오프라인 검증</strong></td>
+<td>Local PKD 캐시로 네트워크 없이 검증 가능</td>
+</tr>
+<tr>
+<td><strong>키 전환 지원</strong></td>
+<td>Link Certificate로 CSCA 키 교체 시 연속성 보장</td>
+</tr>
+<tr>
+<td><strong>계층적 보안</strong></td>
+<td>PA + AA/CA + TA로 다층 방어 구현</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-2-인증서-유형별-상세">1.2 인증서 유형별 상세</h2>
+<h3 id="1-2-1-csca-country-signing-certificate-authority">1.2.1 CSCA (Country Signing Certificate Authority)</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Section 7.1</p>
+<p>CSCA는 각 국가의 **신뢰 루트(Root CA)**로, 모든 전자여권 보안의 기반이 된다.</p>
+<p><strong>인증서 프로파일 요구사항</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>요구사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Version</td>
+<td>v3 (value 2)</td>
+</tr>
+<tr>
+<td>Serial Number</td>
+<td>발급 CA 내 고유값</td>
+</tr>
+<tr>
+<td>Issuer</td>
+<td><code>C=</code> (국가 코드) 포함, Self-signed: Issuer == Subject</td>
+</tr>
+<tr>
+<td>Validity</td>
+<td><strong>15~20년</strong> (DSC 유효기간 + 여권 유효기간 이상)</td>
+</tr>
+<tr>
+<td>Basic Constraints</td>
+<td><strong>CRITICAL</strong>, <code>CA=TRUE</code>, pathLenConstraint 권장 (통상 0)</td>
+</tr>
+<tr>
+<td>Key Usage</td>
+<td><strong>CRITICAL</strong>, <code>keyCertSign</code> (bit 5) + <code>cRLSign</code> (bit 6) 필수</td>
+</tr>
+<tr>
+<td>Subject Key Identifier</td>
+<td>필수</td>
+</tr>
+<tr>
+<td>Authority Key Identifier</td>
+<td>권장 (Self-signed의 경우 자기 참조)</td>
+</tr>
+<tr>
+<td>CRL Distribution Points</td>
+<td>권장</td>
+</tr>
+</tbody></table></div>
+<p><strong>분류 알고리즘</strong> (cert_type_detector.cpp):</p>
+<pre><code>IF BasicConstraints.CA == TRUE
+   AND KeyUsage.keyCertSign == TRUE
+   AND Issuer DN == Subject DN (Self-signed):
+   → Type = CSCA</code></pre>
+<h3 id="1-2-2-dsc-document-signer-certificate">1.2.2 DSC (Document Signer Certificate)</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Section 7.2</p>
+<p>DSC는 여권 칩의 SOD에 서명하는 <strong>End-entity 인증서</strong>이다.</p>
+<p><strong>인증서 프로파일 요구사항</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>요구사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Version</td>
+<td>v3 (value 2)</td>
+</tr>
+<tr>
+<td>Issuer</td>
+<td>CSCA의 Subject DN과 일치해야 함</td>
+</tr>
+<tr>
+<td>Validity</td>
+<td><strong>3~5년</strong> (CSCA 유효기간 내, 여권 유효기간 이상)</td>
+</tr>
+<tr>
+<td>Basic Constraints</td>
+<td>없거나 <code>CA=FALSE</code> (CA여서는 안 됨)</td>
+</tr>
+<tr>
+<td>Key Usage</td>
+<td><strong>CRITICAL</strong>, <code>digitalSignature</code> (bit 0) 필수, <code>keyCertSign</code> 불가</td>
+</tr>
+<tr>
+<td>Extended Key Usage</td>
+<td>선택. OID <code>2.23.136.1.1.1</code> (documentSigning) 가능</td>
+</tr>
+<tr>
+<td>Authority Key Identifier</td>
+<td>필수 (CSCA 참조)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Conformant vs Non-Conformant</strong>:</p>
+<ul>
+<li><strong>DSC (적합)</strong>: LDAP <code>dc=data</code> 브랜치 저장, ICAO 9303 완전 준수</li>
+<li><strong>DSC_NC (비적합)</strong>: LDAP <code>dc=nc-data</code> 브랜치 저장. ICAO 요구사항 일부 미충족이나 운용 중. ICAO는 2021년 nc-data 브랜치 폐지(deprecated)</li>
+</ul>
+<h3 id="1-2-3-mlsc-master-list-signer-certificate">1.2.3 MLSC (Master List Signer Certificate)</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Annex G</p>
+<p>MLSC는 ICAO Master List에 서명하는 인증서이다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>요구사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Extended Key Usage</td>
+<td>OID <code>2.23.136.1.1.9</code> (<code>id-icao-mrtd-security-masterListSigner</code>)</td>
+</tr>
+<tr>
+<td>Key Usage</td>
+<td><code>digitalSignature</code></td>
+</tr>
+<tr>
+<td>Subject</td>
+<td>통상 <code>/C=UN/O=United Nations/OU=Master List Signers</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>분류 알고리즘</strong>:</p>
+<pre><code>IF hasExtendedKeyUsage("2.23.136.1.1.9"):
+   → Type = MLSC</code></pre>
+<h3 id="1-2-4-link-certificate-csca-키-전환용">1.2.4 Link Certificate (CSCA 키 전환용)</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Section 7.1.2</p>
+<p>Link Certificate는 <strong>CSCA 키 전환(rollover)</strong> 시 신뢰 연속성을 보장하는 중간 CA 인증서이다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>요구사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Issuer</td>
+<td><strong>이전 CSCA</strong>의 Subject DN</td>
+</tr>
+<tr>
+<td>Subject</td>
+<td><strong>새 CSCA</strong>의 Subject DN</td>
+</tr>
+<tr>
+<td>Self-Signed</td>
+<td><strong>아니오</strong> (Issuer != Subject)</td>
+</tr>
+<tr>
+<td>Basic Constraints</td>
+<td><strong>CRITICAL</strong>, <code>CA=TRUE</code></td>
+</tr>
+<tr>
+<td>Key Usage</td>
+<td><strong>CRITICAL</strong>, <code>keyCertSign</code> + <code>cRLSign</code></td>
+</tr>
+</tbody></table></div>
+<p><strong>분류 알고리즘</strong>:</p>
+<pre><code>IF BasicConstraints.CA == TRUE
+   AND KeyUsage.keyCertSign == TRUE
+   AND Issuer DN != Subject DN (Non-self-signed):
+   → Type = LINK_CERT</code></pre>
+<h3 id="1-2-5-deviation-list-signer-certificate">1.2.5 Deviation List Signer Certificate</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12</p>
+<p>Deviation List(편차 목록)에 서명하는 인증서.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>요구사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Extended Key Usage</td>
+<td>OID <code>2.23.136.1.1.10</code> (<code>id-icao-mrtd-security-deviationListSigner</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-2-6-icao-전용-oid-체계">1.2.6 ICAO 전용 OID 체계</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>OID</th>
+<th>이름</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>2.23.136.1.1.1</code></td>
+<td><code>id-icao-mrtd-security-documentSigning</code></td>
+<td>DSC 서명</td>
+</tr>
+<tr>
+<td><code>2.23.136.1.1.6</code></td>
+<td><code>id-icao-mrtd-security-aaProtocol</code></td>
+<td>Active Authentication</td>
+</tr>
+<tr>
+<td><code>2.23.136.1.1.9</code></td>
+<td><code>id-icao-mrtd-security-masterListSigner</code></td>
+<td>Master List 서명</td>
+</tr>
+<tr>
+<td><code>2.23.136.1.1.10</code></td>
+<td><code>id-icao-mrtd-security-deviationListSigner</code></td>
+<td>Deviation List 서명</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-3-trust-chain-아키텍처">1.3 Trust Chain 아키텍처</h2>
+<h3 id="1-3-1-기본-trust-chain-2단계">1.3.1 기본 Trust Chain (2단계)</h3>
+<p>가장 일반적인 형태: 여권 칩 → DSC → CSCA</p>
+<pre><code>여권 칩 (eMRTD)
+    │
+    ├── Data Group 1 (MRZ)         ─┐
+    ├── Data Group 2 (얼굴 이미지)   ├─ 해시값이 SOD에 저장
+    ├── Data Group 14 (보안 옵션)    │
+    └── Data Group N               ─┘
+    │
+    └── SOD (Security Object Document)
+         │
+         ├── LDSSecurityObject
+         │    ├── Hash Algorithm (SHA-256)
+         │    └── DataGroup Hashes (DG1..DG16)
+         │
+         └── CMS SignedData
+              │
+              ├── SignerInfo
+              │    ├── DSC Certificate (내장)
+              │    └── 전자서명 (DG 해시에 대한)
+              │
+              └── Signature Algorithm (SHA256withRSA)
+                   │
+                   ▼
+              DSC (Document Signer Certificate)
+                   │
+                   └── CSCA 공개키로 서명 검증
+                   │
+                   ▼
+              CSCA (Country Signing CA)
+                   │
+                   └── Self-signed (신뢰 루트)
+                   │
+                   ▼
+              [Master List 또는 양자 교환으로 획득]</code></pre>
+<h3 id="1-3-2-link-certificate-포함-trust-chain-3단계">1.3.2 Link Certificate 포함 Trust Chain (3단계)</h3>
+<p>CSCA 키 전환 시 확장된 체인:</p>
+<pre><code>DSC (새 CSCA가 서명)
+    │
+    ▼
+CSCA_new (새 Country Signing CA)
+    │
+    └── Link Certificate에 의해 서명
+    │
+    ▼
+Link Certificate (LC)
+    │
+    └── CSCA_old에 의해 서명
+    │
+    ▼
+CSCA_old (기존 Country Signing CA, 기존 시스템에서 신뢰)</code></pre>
+<h3 id="1-3-3-검증-알고리즘">1.3.3 검증 알고리즘</h3>
+<p>구현체의 검증 흐름 (certificate_validation_service.cpp):</p>
+<pre><code>1. DSC에서 Subject DN, Issuer DN 추출
+2. DSC 유효기간 확인 (X509_cmp_time)
+3. DSC Issuer DN에서 국가 코드 추출 (C= 컴포넌트)
+4. LDAP에서 DSC Issuer DN과 매칭되는 CSCA 조회
+   (RFC 5280 기준 대소문자 무시 DN 비교)
+5. CSCA 발견 시:
+   a. CSCA 공개키 추출 (X509_get_pubkey)
+   b. DSC 서명 검증: X509_verify(dsc, csca_pubkey)
+   c. CSCA 유효기간 확인
+   d. CRL 상태 확인
+   e. 종합 판정: signatureVerified AND NOT revoked
+6. CSCA 미발견 시:
+   → INVALID ("CSCA not found for issuer: {dn}")</code></pre>
+<hr>
+<h2 id="1-4-passive-authentication-pa-절차">1.4 Passive Authentication (PA) 절차</h2>
+<h3 id="1-4-1-개요">1.4.1 개요</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 11, Section 5</p>
+<p>Passive Authentication은 전자여권의 <strong>필수(MANDATORY)</strong> 보안 메커니즘이다. 여권 칩의 데이터가 발급 이후 변조되지 않았음을 검증한다. &quot;수동(Passive)&quot;인 이유는 칩이 별도의 암호 연산을 수행하지 않기 때문이다 -- 검사 시스템이 칩에서 데이터를 읽어 PKI를 사용해 검증한다.</p>
+<h3 id="1-4-2-8단계-검증-프로세스">1.4.2 8단계 검증 프로세스</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>단계</th>
+<th>명칭</th>
+<th>작업</th>
+<th>ICAO 참조</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>SOD 파싱</strong></td>
+<td>CMS SignedData 파싱, 해시 알고리즘 및 DG 해시 추출</td>
+<td>Part 10, Sec 4</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>DSC 추출</strong></td>
+<td>SOD SignerInfo에서 DSC 인증서 추출</td>
+<td>Part 11, Sec 5</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Trust Chain 검증</strong></td>
+<td>DSC 서명을 CSCA 공개키로 검증</td>
+<td>Part 12, Sec 7-8</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>CSCA 조회</strong></td>
+<td>Local PKD (LDAP/DB)에서 CSCA 검색 (Link Certificate 포함)</td>
+<td>Part 12, Sec 7</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>SOD 서명 검증</strong></td>
+<td>CMS 서명 무결성 검증 (<code>CMS_verify()</code>)</td>
+<td>Part 10, Sec 4</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>DG 해시 검증</strong></td>
+<td>제공된 DG들의 해시 계산 후 SOD 값과 비교</td>
+<td>Part 10, Sec 4</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>CRL 확인</strong></td>
+<td>CRL 만료 확인 후 DSC 폐지 상태 확인</td>
+<td>Part 11, Sec 5; RFC 5280</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>DSC 자동 등록</strong></td>
+<td>신규 발견된 DSC를 Local PKD에 자동 등록</td>
+<td>구현 특화</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-4-3-단계별-상세">1.4.3 단계별 상세</h3>
+<h4 id="step-1-sod-파싱">Step 1: SOD 파싱</h4>
+<pre><code>입력: SOD 바이너리 데이터
+
+처리:
+  1. ICAO SOD 태그(0x77) 래퍼 감지 및 제거
+  2. CMS ContentInfo 파싱: d2i_CMS_bio()
+  3. digestAlgorithms 추출 (SHA-256, SHA-384 등)
+  4. encapContentInfo에서 LDSSecurityObject 추출
+  5. DataGroupHash 시퀀스 파싱
+
+성공 기준: CMS 유효, LDSSecurityObject 파싱 가능, DG 해시 1개 이상
+실패: "INVALID_SOD" - CMS 구조 오류 또는 ASN.1 손상</code></pre>
+<h4 id="step-2-dsc-추출">Step 2: DSC 추출</h4>
+<pre><code>입력: 파싱된 CMS 구조
+
+처리:
+  1. CMS에서 인증서 셋 추출: CMS_get1_certs(cms)
+  2. 첫 번째 인증서를 DSC로 사용
+  3. 독립 사용을 위해 복제: X509_dup()
+
+성공 기준: CMS 내 인증서 1개 이상 존재
+실패: "DSC_EXTRACTION_FAILED" - 일부 국가는 SOD에 DSC를 포함하지 않음
+       이 경우 PKD에서 일련번호/발급자 매칭으로 DSC 획득 필요</code></pre>
+<h4 id="step-3-trust-chain-검증">Step 3: Trust Chain 검증</h4>
+<pre><code>입력: DSC 인증서, 국가 코드
+
+처리:
+  1. DSC의 Issuer DN 추출
+  2. Issuer DN에서 국가 코드 추출 (/C=XX)
+  3. LDAP에서 Issuer DN ↔ CSCA Subject DN 매칭으로 CSCA 검색
+  4. DSC 서명 검증: X509_verify(dsc, csca_pubkey)
+  5. DSC 유효기간 확인: notAfter와 현재 시각 비교
+  6. CSCA 유효기간 확인
+
+성공 기준: X509_verify() 반환값 1, CSCA가 신뢰 저장소에 존재
+실패 사유:
+  - CSCA_NOT_FOUND: PKD에 매칭 CSCA 없음
+  - TRUST_CHAIN_INVALID: 서명 검증 실패 (DSC가 이 CSCA로 서명되지 않음)
+  - CERTIFICATE_EXPIRED: DSC 또는 CSCA 유효기간 초과</code></pre>
+<h4 id="step-4-csca-조회">Step 4: CSCA 조회</h4>
+<pre><code>신뢰 소스 (우선순위 순):
+  1. ICAO PKD: 공식 LDAP 기반 디렉토리
+  2. 양자 교환: 정부 간 직접 CSCA 교환
+  3. Master List: ICAO/참가국이 배포하는 CMS 서명 CSCA 모음
+
+LDAP 검색 경로:
+  o=csca, c={COUNTRY}, dc=data, dc=download, dc=pkd, ...
+  필터: (objectClass=pkdDownload)
+  Fallback: o=lc (Link Certificate 검색)</code></pre>
+<h4 id="step-5-sod-서명-검증">Step 5: SOD 서명 검증</h4>
+<pre><code>입력: SOD 바이너리, DSC 인증서
+
+처리:
+  1. SOD에서 CMS 파싱 (ICAO 래퍼 제거 후)
+  2. DSC 인증서로 X509_STORE 생성
+  3. CMS_verify() 호출
+     - CMS_NO_SIGNER_CERT_VERIFY: CMS 내 체인 검증 생략 (Step 3에서 별도 수행)
+     - CMS_NO_ATTR_VERIFY: 서명 속성 검증 생략
+
+성공 기준: CMS_verify() 반환값 1
+실패: "SOD_SIGNATURE_INVALID" - 서명 불일치, 데이터 변조 의심</code></pre>
+<h4 id="step-6-dg-해시-검증">Step 6: DG 해시 검증</h4>
+<pre><code>입력: 여권 리더에서 읽은 Data Group들, SOD의 해시값
+
+처리:
+  각 Data Group에 대해:
+    expected_hash = SOD.LDSSecurityObject.dataGroupHashes[dgNumber]
+    actual_hash   = HashAlgorithm(DG_raw_bytes)
+
+    IF expected_hash == actual_hash:
+      → DG 인증됨 (발급 이후 변조 없음)
+    ELSE:
+      → DG 변조됨
+
+성공 기준: 제공된 모든 DG 해시가 SOD 값과 일치
+실패: "DG_HASH_MISMATCH" - 데이터 변조 또는 NFC 읽기 오류</code></pre>
+<h4 id="step-7-crl-확인">Step 7: CRL 확인</h4>
+<pre><code>입력: DSC 인증서, 국가 코드
+
+처리:
+  1. LDAP/DB에서 해당 국가 CRL 조회
+  2. CRL 미발견 시: CRL_UNAVAILABLE (Fail-open 정책)
+  3. CRL 날짜 추출:
+     - thisUpdate: X509_CRL_get0_lastUpdate()
+     - nextUpdate: X509_CRL_get0_nextUpdate()
+  4. CRL 만료 확인 (nextUpdate &lt; 현재시각)
+     - 만료 시: CRL_EXPIRED (경고)
+  5. DSC 일련번호가 폐지 목록에 있는지 확인
+     - 있으면: REVOKED (치명적 실패)
+  6. 없으면: VALID</code></pre>
+<h3 id="1-4-4-최종-판정-로직">1.4.4 최종 판정 로직</h3>
+<pre><code>PA 결과 = certificateChainValid AND sodSignatureValid AND dataGroupsValid
+
+상세 판정:
+  VALID         = 서명 검증 OK + 미폐지 + 미만료 + DG 해시 일치
+  EXPIRED_VALID = 서명 검증 OK + 미폐지 + 만료됨 (Point-in-Time Validation)
+  INVALID       = 서명 실패 또는 폐지됨 또는 DG 해시 불일치
+  PENDING       = CSCA 미발견 (검증 보류)</code></pre>
+<h3 id="1-4-5-point-in-time-validation">1.4.5 Point-in-Time Validation</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 11 (권고사항)</p>
+<p>ICAO는 DSC/CSCA가 <strong>현재 시점에서 만료</strong>되었더라도, <strong>여권 발급 시점에 유효</strong>했다면 여전히 유효한 것으로 간주할 수 있도록 권고한다. 이를 <strong>Point-in-Time Validation</strong>이라 한다.</p>
+<p>이는 여권의 물리적 유효기간(통상 10년)이 DSC 유효기간(3~5년)보다 길기 때문에 발생하는 현실적 문제를 해결한다.</p>
+<p>구현체에서는 <code>EXPIRED_VALID</code> 상태로 이를 구분한다.</p>
+<hr>
+<h2 id="1-5-active-authentication-vs-passive-authentication">1.5 Active Authentication vs Passive Authentication</h2>
+<h3 id="1-5-1-비교">1.5.1 비교</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 11, Section 5-6</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구분</th>
+<th>Passive Authentication (PA)</th>
+<th>Active Authentication (AA)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>목적</strong></td>
+<td>데이터 무결성 검증 (변조 여부)</td>
+<td>칩 진품 검증 (복제 여부)</td>
+</tr>
+<tr>
+<td><strong>ICAO 상태</strong></td>
+<td><strong>필수(MANDATORY)</strong></td>
+<td><strong>선택(OPTIONAL)</strong></td>
+</tr>
+<tr>
+<td><strong>칩 연산</strong></td>
+<td>없음 (칩은 읽기 전용)</td>
+<td>칩이 RSA/ECDSA 서명 수행</td>
+</tr>
+<tr>
+<td><strong>필요 데이터</strong></td>
+<td>SOD + Data Groups</td>
+<td>DG15 (AA 공개키) + Challenge</td>
+</tr>
+<tr>
+<td><strong>검증 대상</strong></td>
+<td>발급 이후 데이터 변조 여부</td>
+<td>물리적 칩의 진품 여부</td>
+</tr>
+<tr>
+<td><strong>PKI 사용</strong></td>
+<td>CSCA → DSC → SOD → DG 해시</td>
+<td>DG15에 내장된 공개키</td>
+</tr>
+<tr>
+<td><strong>온라인 필요</strong></td>
+<td>불필요 (Local CSCA 캐시)</td>
+<td>불필요</td>
+</tr>
+<tr>
+<td><strong>취약점</strong></td>
+<td>칩 복제 감지 불가</td>
+<td>데이터 변조 감지 불가</td>
+</tr>
+<tr>
+<td><strong>조합 효과</strong></td>
+<td>PA + AA로 완전한 보안 제공</td>
+<td>--</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-5-2-active-authentication-프로토콜">1.5.2 Active Authentication 프로토콜</h3>
+<pre><code>검사 시스템                              여권 칩
+    │                                       │
+    │   1. DG15 읽기 (AA 공개키)              │
+    │◄──────────────────────────────────────│
+    │                                       │
+    │   2. 랜덤 Challenge 생성 (8 bytes)      │
+    │──────────────────────────────────────►│
+    │   INTERNAL AUTHENTICATE 명령           │
+    │                                       │
+    │   3. 칩이 AA 개인키로 Challenge 서명     │
+    │                                       │
+    │   4. 서명 반환                          │
+    │◄──────────────────────────────────────│
+    │                                       │
+    │   5. DG15 공개키로 서명 검증             │
+    │                                       │</code></pre>
+<h3 id="1-5-3-chip-authentication-ca-vs-active-authentication">1.5.3 Chip Authentication (CA) vs Active Authentication</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>특성</th>
+<th>Active Authentication (AA)</th>
+<th>Chip Authentication (CA)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>프로토콜</strong></td>
+<td>Challenge-response</td>
+<td>Diffie-Hellman 키 합의</td>
+</tr>
+<tr>
+<td><strong>키 저장소</strong></td>
+<td>DG15</td>
+<td>DG14</td>
+</tr>
+<tr>
+<td><strong>보안 채널</strong></td>
+<td>미생성 (진품 증명만)</td>
+<td>생성 (암호화 채널 수립)</td>
+</tr>
+<tr>
+<td><strong>복제 보호</strong></td>
+<td>기본 (이론적 재생 공격 가능)</td>
+<td>강력 (세션 키 수립)</td>
+</tr>
+<tr>
+<td><strong>폐지 상태</strong></td>
+<td>CA에 의해 대체 중</td>
+<td><strong>신규 구현 권장</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="1-5-4-보안-메커니즘-조합표">1.5.4 보안 메커니즘 조합표</h3>
+<pre><code>                    데이터 무결성    칩 진품성    생체정보 접근
+PA (필수)                O             X             X
+AA (선택)                X             O             X
+CA (선택)                O             O             X
+TA (선택)                X             X             O
+PACE (선택)              X             X          보안 채널</code></pre>
+<h3 id="1-5-5-접근-제어-메커니즘">1.5.5 접근 제어 메커니즘</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>메커니즘</th>
+<th>참조</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>BAC</strong> (Basic Access Control)</td>
+<td>Part 11, Sec 4.3</td>
+<td>NFC 통신 보호 (MRZ 기반 3DES), 레거시</td>
+</tr>
+<tr>
+<td><strong>PACE</strong> (Password Authenticated Connection Establishment)</td>
+<td>Part 11, SAC</td>
+<td>BAC의 강화 대체 (DH 기반), 신규 권장</td>
+</tr>
+<tr>
+<td><strong>EAC</strong> (Extended Access Control)</td>
+<td>Part 11, Sec 7</td>
+<td>민감 생체정보(DG3/DG4) 접근, TA+CA 조합</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-6-link-certificate와-csca-키-전환">1.6 Link Certificate와 CSCA 키 전환</h2>
+<h3 id="1-6-1-키-전환의-필요성">1.6.1 키 전환의 필요성</h3>
+<p>CSCA 인증서는 장기간(15~20년) 유효하지만, 다음 상황에서 키 교체가 필요하다:</p>
+<ul>
+<li>키 유효기간 만료</li>
+<li>암호 알고리즘 마이그레이션 (SHA-1→SHA-256, RSA-1024→RSA-2048 등)</li>
+<li>보안 사고 (키 유출 의심)</li>
+<li>정책 변경</li>
+</ul>
+<h3 id="1-6-2-link-certificate의-역할">1.6.2 Link Certificate의 역할</h3>
+<p>Link Certificate 없이는 새 CSCA 발급 시 전 세계 모든 출입국 시스템이 즉시 새 CSCA를 신뢰해야 한다 -- 물리적으로 불가능한 작업이다. Link Certificate는 기존 CSCA를 신뢰하는 시스템이 <strong>추이적으로(transitively)</strong> 새 CSCA를 신뢰할 수 있게 한다.</p>
+<h3 id="1-6-3-link-certificate의-두-가지-유형">1.6.3 Link Certificate의 두 가지 유형</h3>
+<p><strong>Forward Link Certificate (순방향)</strong>:</p>
+<pre><code>발급자(Issuer) = 이전 CSCA
+주체(Subject)  = 새 CSCA
+→ 이전 CSCA 개인키로 새 CSCA 공개키를 서명
+→ 이전 CSCA를 신뢰하는 시스템이 새 CSCA도 신뢰 가능</code></pre>
+<p><strong>Backward/Reverse Link Certificate (역방향)</strong>:</p>
+<pre><code>발급자(Issuer) = 새 CSCA
+주체(Subject)  = 이전 CSCA
+→ 새 CSCA 개인키로 이전 CSCA 공개키를 서명
+→ 새 CSCA를 신뢰 루트로 사용해도 이전 DSC 검증 가능</code></pre>
+<h3 id="1-6-4-link-certificate-검증-절차">1.6.4 Link Certificate 검증 절차</h3>
+<p>구현체의 LC 검증 (lc_validator.cpp):</p>
+<pre><code>Step 1:  LC 바이너리 파싱 (DER 형식)
+Step 2:  메타데이터 추출 (Subject DN, Issuer DN, Serial)
+Step 3:  이전 CSCA 찾기 (LC의 Issuer DN 매칭)
+Step 4:  LC 서명 검증 (이전 CSCA 공개키 사용)
+         X509_verify(linkCert, oldCscaPubKey)
+Step 5:  새 CSCA 찾기 (LC의 Subject DN 매칭, forward lookup)
+Step 6:  새 CSCA 서명 검증 (LC 공개키 사용)
+         X509_verify(newCsca, linkCertPubKey)
+Step 7:  LC 유효기간 확인 (notBefore &lt;= NOW &lt;= notAfter)
+Step 8:  인증서 확장 검증:
+         - BasicConstraints: CA:TRUE 필수
+         - KeyUsage: keyCertSign 필수
+         - pathlen: 0이 일반적 (end-entity만 서명 가능)
+Step 9:  CRL 폐지 상태 확인
+Step 10: 종합 결과:
+         trustChainValid = oldCscaSigValid AND newCscaSigValid
+                          AND validityOK AND extensionsOK
+                          AND NOT revoked</code></pre>
+<h3 id="1-6-5-실제-데이터">1.6.5 실제 데이터</h3>
+<p>ICAO Master List (2025년 12월) 분석 결과:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>지표</th>
+<th>수량</th>
+<th>비율</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Master List 전체 인증서</td>
+<td>537</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>Self-signed CSCA</td>
+<td>476</td>
+<td>88.6%</td>
+</tr>
+<tr>
+<td>Link Certificate</td>
+<td>60</td>
+<td>11.2%</td>
+</tr>
+<tr>
+<td>MLSC (UN 서명자)</td>
+<td>1</td>
+<td>0.2%</td>
+</tr>
+<tr>
+<td>LC 보유 국가</td>
+<td>25+</td>
+<td>--</td>
+</tr>
+</tbody></table></div>
+<p><strong>LC 다수 보유 국가</strong>: 라트비아(7), 필리핀(6), 에스토니아(4)</p>
+<hr>
+<h2 id="1-7-master-list-구조와-처리">1.7 Master List 구조와 처리</h2>
+<h3 id="1-7-1-master-list-개요">1.7.1 Master List 개요</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Annex G</p>
+<p>ICAO Master List는 <strong>CMS SignedData</strong> (PKCS#7) 형식으로, 참가 회원국의 CSCA 인증서를 포함한다.</p>
+<h3 id="1-7-2-asn-1-구조">1.7.2 ASN.1 구조</h3>
+<pre><code>MasterList CMS SignedData
+├── version: INTEGER (3)
+├── digestAlgorithms: SET OF AlgorithmIdentifier
+│   └── algorithm: sha256 (2.16.840.1.101.3.4.2.1)
+├── encapContentInfo: ContentInfo
+│   ├── contentType: id-data (1.2.840.113549.1.7.1)
+│   └── content: OCTET STRING
+│       └── MasterList ::= SEQUENCE {
+│               version    INTEGER OPTIONAL (v0=0),
+│               certList   SET OF Certificate  (536개 인증서)
+│           }
+├── certificates: [0] IMPLICIT CertificateSet (ICAO ML에서는 비어 있음!)
+└── signerInfos: SET OF SignerInfo
+    └── SignerInfo (1개)
+        ├── sid: issuer=/C=UN/O=United Nations/OU=Master List Signers
+        ├── digestAlgorithm: sha256
+        ├── signatureAlgorithm: rsaEncryption
+        └── signature: 256 bytes</code></pre>
+<h3 id="1-7-3-핵심-구현-사항-2단계-인증서-추출">1.7.3 핵심 구현 사항: 2단계 인증서 추출</h3>
+<p><strong>중요</strong>: ICAO Master List는 인증서를 <strong>두 개의 서로 다른 위치</strong>에 저장한다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>위치</th>
+<th>내용</th>
+<th>접근 방법</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>SignerInfo</strong> (외부 CMS)</td>
+<td>MLSC 인증서 (1개)</td>
+<td><code>CMS_get0_SignerInfos()</code></td>
+</tr>
+<tr>
+<td><strong>encapContentInfo</strong> (내부 콘텐츠)</td>
+<td>CSCA + LC 인증서 (536개)</td>
+<td><code>CMS_get0_content()</code> + ASN.1 파싱</td>
+</tr>
+</tbody></table></div>
+<p><strong>주의</strong>: 외부 CMS의 <code>certificates</code> 필드는 <strong>비어 있다</strong>! <code>CMS_get1_certs()</code>를 사용하면 NULL이 반환된다. 이것은 가장 흔한 구현 실수 중 하나이다.</p>
+<h3 id="1-7-4-master-list-사양">1.7.4 Master List 사양</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>속성</th>
+<th>값</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>파일 확장자</td>
+<td><code>.ml</code> (바이너리 CMS)</td>
+</tr>
+<tr>
+<td>일반적 크기</td>
+<td>~800 KB</td>
+</tr>
+<tr>
+<td>Content Type</td>
+<td><code>application/pkcs7-mime</code></td>
+</tr>
+<tr>
+<td>서명 알고리즘</td>
+<td>RSA with SHA-256</td>
+</tr>
+<tr>
+<td>인증서 수</td>
+<td>500~600 (발행 시점에 따라 변동)</td>
+</tr>
+<tr>
+<td>표현 국가</td>
+<td>95+</td>
+</tr>
+<tr>
+<td>발행 주기</td>
+<td>주기적 (ICAO가 새 버전 발행)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-8-crl-인증서-폐지-목록">1.8 CRL (인증서 폐지 목록)</h2>
+<h3 id="1-8-1-역할">1.8.1 역할</h3>
+<p><strong>참조</strong>: RFC 5280, Section 5; ICAO Doc 9303 Part 11</p>
+<p>CRL은 각 국가의 CSCA가 발급하는 <strong>DSC 폐지 목록</strong>이다. 유출되었거나 더 이상 신뢰하면 안 되는 DSC를 폐지한다.</p>
+<h3 id="1-8-2-crl-필드">1.8.2 CRL 필드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>issuer</code></td>
+<td>발급 CSCA의 DN</td>
+</tr>
+<tr>
+<td><code>thisUpdate</code></td>
+<td>CRL 발행 시각</td>
+</tr>
+<tr>
+<td><code>nextUpdate</code></td>
+<td>다음 CRL 예상 발행 시각</td>
+</tr>
+<tr>
+<td><code>revokedCertificates</code></td>
+<td>폐지된 인증서 일련번호 목록</td>
+</tr>
+<tr>
+<td><code>signature</code></td>
+<td>CSCA의 CRL 서명</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-8-3-crl-검증-프로세스">1.8.3 CRL 검증 프로세스</h3>
+<pre><code>1. 해당 국가의 CRL을 LDAP/DB에서 조회
+2. CRL 미발견 시: CRL_UNAVAILABLE 반환 (Fail-open)
+3. CRL 날짜 추출:
+   - thisUpdate: X509_CRL_get0_lastUpdate(crl)
+   - nextUpdate: X509_CRL_get0_nextUpdate(crl)
+4. CRL 만료 확인 (nextUpdate &lt; 현재시각)
+   - 만료 시: CRL_EXPIRED 반환 (경고)
+5. DSC 일련번호가 폐지 목록에 있는지 확인
+   - 있으면: REVOKED 반환 (치명적 실패)
+6. 없으면: VALID 반환</code></pre>
+<h3 id="1-8-4-crl-상태-유형">1.8.4 CRL 상태 유형</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상태</th>
+<th>설명</th>
+<th>심각도</th>
+<th>PA 결과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>VALID</code></td>
+<td>인증서 미폐지, CRL 유효</td>
+<td>INFO</td>
+<td>통과</td>
+</tr>
+<tr>
+<td><code>REVOKED</code></td>
+<td>인증서가 CRL에 존재</td>
+<td>CRITICAL</td>
+<td><strong>실패</strong></td>
+</tr>
+<tr>
+<td><code>CRL_UNAVAILABLE</code></td>
+<td>해당 국가 CRL 없음</td>
+<td>WARNING</td>
+<td>통과 (Fail-open)</td>
+</tr>
+<tr>
+<td><code>CRL_EXPIRED</code></td>
+<td>CRL <code>nextUpdate</code> 경과</td>
+<td>WARNING</td>
+<td>통과 (경고 포함)</td>
+</tr>
+<tr>
+<td><code>CRL_INVALID</code></td>
+<td>CRL 서명 검증 실패</td>
+<td>CRITICAL</td>
+<td>통과 (경고 포함)</td>
+</tr>
+<tr>
+<td><code>NOT_CHECKED</code></td>
+<td>CRL 확인 생략</td>
+<td>INFO</td>
+<td>통과</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-8-5-fail-open-정책">1.8.5 Fail-Open 정책</h3>
+<p>ICAO Doc 9303 Part 11에 따르면 CRL 확인은 **SHOULD (권고)**이지 **MUST (필수)**가 아니다:</p>
+<ul>
+<li>CRL이 없으면 검증은 경고와 함께 통과</li>
+<li>CRL이 만료되었으면 검증은 경고와 함께 통과</li>
+<li>실제 폐지 항목만 PA 실패를 유발</li>
+</ul>
+<p>이는 모든 국가가 CRL을 일관성 있게 발행하지 않는 현실을 반영한다.</p>
+<h3 id="1-8-6-폐지-사유-코드-rfc-5280">1.8.6 폐지 사유 코드 (RFC 5280)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>사유</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>0</td>
+<td><code>UNSPECIFIED</code></td>
+<td>사유 미지정</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>KEY_COMPROMISE</code></td>
+<td>개인키 유출</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>CA_COMPROMISE</code></td>
+<td>CA 키 유출</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>AFFILIATION_CHANGED</code></td>
+<td>소속 변경</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>SUPERSEDED</code></td>
+<td>새 인증서로 대체</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>CESSATION_OF_OPERATION</code></td>
+<td>운영 중단</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>CERTIFICATE_HOLD</code></td>
+<td>임시 보류</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-9-sod-security-object-document-구조">1.9 SOD (Security Object Document) 구조</h2>
+<h3 id="1-9-1-개요">1.9.1 개요</h3>
+<p>SOD는 전자여권 칩(EF.SOD)에 저장되는 <strong>CMS SignedData</strong> 구조로, Data Group 해시값에 대한 DSC 전자서명을 포함한다.</p>
+<h3 id="1-9-2-asn-1-구조-상세">1.9.2 ASN.1 구조 상세</h3>
+<pre><code class="language-asn1">-- 여권 칩에 저장된 SOD (Tag 0x77 래퍼)
+EF.SOD ::= [APPLICATION 23] IMPLICIT SignedData
+
+-- RFC 5652 CMS SignedData
+SignedData ::= SEQUENCE {
+    version           CMSVersion,              -- v3 권장
+    digestAlgorithms  DigestAlgorithmIdentifiers,
+    encapContentInfo  EncapsulatedContentInfo,  -- LDSSecurityObject 포함
+    certificates      [0] IMPLICIT CertificateSet OPTIONAL,  -- DSC 인증서
+    crls              [1] IMPLICIT RevocationInfoChoices OPTIONAL,
+    signerInfos       SignerInfos              -- DSC 서명
+}
+
+-- ICAO 전용 콘텐츠
+EncapsulatedContentInfo ::= SEQUENCE {
+    eContentType  ContentType,    -- 2.23.136.1.1.1 (id-icao-ldsSecurityObject)
+    eContent      [0] EXPLICIT OCTET STRING  -- DER 인코딩된 LDSSecurityObject
+}</code></pre>
+<h3 id="1-9-3-lds-security-object-형식">1.9.3 LDS Security Object 형식</h3>
+<pre><code class="language-asn1">-- Doc 9303 Part 10, Section 4.6.2.2
+LDSSecurityObject ::= SEQUENCE {
+    version                LDSSecurityObjectVersion,  -- v0(0) 또는 v1(1)
+    hashAlgorithm          DigestAlgorithmIdentifier,  -- SHA-256 등
+    dataGroupHashValues    SEQUENCE OF DataGroupHash,
+    ldsVersionInfo         LDSVersionInfo OPTIONAL     -- LDS 1.8+
+}
+
+DataGroupHash ::= SEQUENCE {
+    dataGroupNumber  DataGroupNumber,   -- INTEGER (1..16)
+    dataGroupHashValue  OCTET STRING    -- Data Group의 해시값
+}</code></pre>
+<h3 id="1-9-4-data-group-참조표">1.9.4 Data Group 참조표</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>DG</th>
+<th>ASN.1 Tag</th>
+<th>내용</th>
+<th>필수 여부</th>
+<th>PA 시 필요</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DG1</td>
+<td>0x61</td>
+<td>MRZ (Machine Readable Zone)</td>
+<td>필수</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG2</td>
+<td>0x75</td>
+<td>얼굴 이미지</td>
+<td>필수</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>DG3</td>
+<td>0x63</td>
+<td>지문</td>
+<td>EAC 전용</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG4</td>
+<td>0x76</td>
+<td>홍채</td>
+<td>EAC 전용</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG5</td>
+<td>0x65</td>
+<td>표시된 초상화</td>
+<td>선택</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG7</td>
+<td>0x67</td>
+<td>표시된 서명</td>
+<td>선택</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG11</td>
+<td>0x6B</td>
+<td>추가 개인 정보</td>
+<td>선택</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG12</td>
+<td>0x6C</td>
+<td>추가 문서 정보</td>
+<td>선택</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG14</td>
+<td>0x6E</td>
+<td>보안 옵션 (CA/PACE)</td>
+<td>CA/PACE 사용 시</td>
+<td>선택</td>
+</tr>
+<tr>
+<td>DG15</td>
+<td>0x6F</td>
+<td>AA 공개키</td>
+<td>AA 사용 시</td>
+<td>선택</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>PA 검증에 필요한 최소 데이터는 <strong>SOD + 1개 이상의 DG</strong>이다. DG1(MRZ)과 DG2(얼굴)를 포함하면 여권 정보와 생체 이미지를 함께 확인할 수 있다.</p>
+</blockquote>
+<h3 id="1-9-5-lds-버전-차이">1.9.5 LDS 버전 차이</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>특성</th>
+<th>LDS 1.7 (v0)</th>
+<th>LDS 1.8 (v1)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LDSSecurityObject</code> version</td>
+<td>v0 (0)</td>
+<td>v1 (1)</td>
+</tr>
+<tr>
+<td><code>ldsVersionInfo</code> 필드</td>
+<td>없음</td>
+<td>있음 (선택적)</td>
+</tr>
+<tr>
+<td>Unicode 버전</td>
+<td>미지정</td>
+<td>지정</td>
+</tr>
+<tr>
+<td>하위 호환성</td>
+<td>--</td>
+<td>v0 지원 필수</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="1-10-icao-pkd-public-key-directory">1.10 ICAO PKD (Public Key Directory)</h2>
+<h3 id="1-10-1-목적">1.10.1 목적</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Section 10</p>
+<p>ICAO PKD는 전자여권 PKI 자료를 배포하는 <strong>글로벌 인프라</strong>이다. ICAO가 운영하며, 회원국들이 인증서와 CRL을 공유할 수 있게 한다.</p>
+<h3 id="1-10-2-pkd-collection">1.10.2 PKD Collection</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Collection</th>
+<th>내용</th>
+<th>LDIF 경로</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Collection 001</strong></td>
+<td>DSC 인증서 (적합)</td>
+<td><code>o=dsc,c={country},dc=data,...</code></td>
+</tr>
+<tr>
+<td><strong>Collection 002</strong></td>
+<td>CSCA 인증서 + Master List</td>
+<td><code>o=csca,c={country},...</code> + <code>o=ml,...</code></td>
+</tr>
+<tr>
+<td><strong>Collection 003</strong></td>
+<td>CRL (인증서 폐지 목록)</td>
+<td><code>o=crl,c={country},...</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="1-10-3-pkd-ldap-dit-directory-information-tree">1.10.3 PKD LDAP DIT (Directory Information Tree)</h3>
+<pre><code>dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+├── dc=data                          (적합 인증서)
+│   ├── c=KR (대한민국)
+│   │   ├── o=csca                   (CSCA 인증서)
+│   │   │   └── cn={SHA256_fingerprint}
+│   │   ├── o=mlsc                   (Master List Signer 인증서)
+│   │   ├── o=dsc                    (DSC 인증서)
+│   │   │   └── cn={SHA256_fingerprint}
+│   │   ├── o=crl                    (CRL)
+│   │   │   └── cn={SHA256_fingerprint}
+│   │   └── o=ml                     (Master List)
+│   ├── c=US (미국)
+│   │   └── ...
+│   └── c={...} (95+ 국가)
+└── dc=nc-data                       (비적합, 2021년 폐지)
+    └── c={country}
+        └── o=dsc                    (비적합 DSC)</code></pre>
+<h3 id="1-10-4-ldap-objectclass">1.10.4 LDAP ObjectClass</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ObjectClass</th>
+<th>용도</th>
+<th>주요 속성</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pkdDownload</code></td>
+<td>인증서 (CSCA, DSC, MLSC)</td>
+<td><code>userCertificate;binary</code>, <code>cACertificate;binary</code></td>
+</tr>
+<tr>
+<td><code>cRLDistributionPoint</code></td>
+<td>CRL</td>
+<td><code>certificateRevocationList;binary</code></td>
+</tr>
+</tbody></table></div>
+<h3 id="1-10-5-local-pkd-아키텍처">1.10.5 Local PKD 아키텍처</h3>
+<p>Local PKD(본 프로젝트)는 ICAO PKD 데이터를 로컬에 캐싱하여:</p>
+<ol>
+<li>오프라인 운영 가능</li>
+<li>저지연 검증</li>
+<li>ICAO 인프라 의존도 감소</li>
+<li>맞춤 검증 정책 적용</li>
+</ol>
+<pre><code>ICAO PKD (글로벌)
+    │ LDIF/Master List 다운로드
+    ▼
+Local PKD
+    ├── PostgreSQL (메타데이터, 검색, 통계)
+    ├── OpenLDAP (DIT 구조, 바이너리 인증서)
+    └── PA Service (실시간 검증)</code></pre>
+<hr>
+<h2 id="1-11-암호화-요구사항">1.11 암호화 요구사항</h2>
+<h3 id="1-11-1-승인된-서명-알고리즘">1.11.1 승인된 서명 알고리즘</h3>
+<p><strong>참조</strong>: ICAO Doc 9303 Part 12, Section 6</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>알고리즘</th>
+<th>OID</th>
+<th>키 유형</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SHA256withRSA</td>
+<td><code>1.2.840.113549.1.1.11</code></td>
+<td>RSA</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>SHA384withRSA</td>
+<td><code>1.2.840.113549.1.1.12</code></td>
+<td>RSA</td>
+<td>승인</td>
+</tr>
+<tr>
+<td>SHA512withRSA</td>
+<td><code>1.2.840.113549.1.1.13</code></td>
+<td>RSA</td>
+<td>승인</td>
+</tr>
+<tr>
+<td>SHA256withECDSA</td>
+<td><code>1.2.840.10045.4.3.2</code></td>
+<td>ECDSA</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>SHA384withECDSA</td>
+<td><code>1.2.840.10045.4.3.3</code></td>
+<td>ECDSA</td>
+<td>승인</td>
+</tr>
+<tr>
+<td>SHA512withECDSA</td>
+<td><code>1.2.840.10045.4.3.4</code></td>
+<td>ECDSA</td>
+<td>승인</td>
+</tr>
+<tr>
+<td>SHA1withRSA</td>
+<td><code>1.2.840.113549.1.1.5</code></td>
+<td>RSA</td>
+<td><strong>폐지</strong></td>
+</tr>
+<tr>
+<td>SHA224withRSA</td>
+<td><code>1.2.840.113549.1.1.14</code></td>
+<td>RSA</td>
+<td><strong>폐지</strong></td>
+</tr>
+<tr>
+<td>SHA224withECDSA</td>
+<td><code>1.2.840.10045.4.3.1</code></td>
+<td>ECDSA</td>
+<td><strong>폐지</strong></td>
+</tr>
+</tbody></table></div>
+<h3 id="1-11-2-해시-알고리즘">1.11.2 해시 알고리즘</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>해시 알고리즘</th>
+<th>OID</th>
+<th>출력 크기</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SHA-1</td>
+<td><code>1.3.14.3.2.26</code></td>
+<td>160 bits</td>
+<td><strong>폐지</strong> (하위 호환 검증만)</td>
+</tr>
+<tr>
+<td>SHA-256</td>
+<td><code>2.16.840.1.101.3.4.2.1</code></td>
+<td>256 bits</td>
+<td><strong>권장</strong></td>
+</tr>
+<tr>
+<td>SHA-384</td>
+<td><code>2.16.840.1.101.3.4.2.2</code></td>
+<td>384 bits</td>
+<td>승인</td>
+</tr>
+<tr>
+<td>SHA-512</td>
+<td><code>2.16.840.1.101.3.4.2.3</code></td>
+<td>512 bits</td>
+<td>승인</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-11-3-키-크기-요구사항">1.11.3 키 크기 요구사항</h3>
+<p><strong>RSA</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서 유형</th>
+<th>최소</th>
+<th>권장</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA (15~20년)</td>
+<td>2048 bits</td>
+<td><strong>3072+ bits</strong> (4096 권장)</td>
+</tr>
+<tr>
+<td>DSC (3~5년)</td>
+<td>2048 bits</td>
+<td>3072 bits</td>
+</tr>
+</tbody></table></div>
+<p><strong>ECDSA</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서 유형</th>
+<th>최소 곡선</th>
+<th>권장 곡선</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA</td>
+<td>P-256 (secp256r1)</td>
+<td><strong>P-384</strong> (secp384r1) 또는 P-521</td>
+</tr>
+<tr>
+<td>DSC</td>
+<td>P-256 (secp256r1)</td>
+<td>P-256 이상</td>
+</tr>
+</tbody></table></div>
+<p>승인 곡선: P-256, P-384, P-521, brainpoolP256r1, brainpoolP384r1, brainpoolP512r1</p>
+<h3 id="1-11-4-알고리즘-전환-이력">1.11.4 알고리즘 전환 이력</h3>
+<ol>
+<li><strong>SHA-1 폐지</strong>: 7판에서 폐지. 신규 eMRTD는 SHA-1 사용 금지. 단, 검사국은 유통 중인 이전 문서를 위해 SHA-1 검증을 지원해야 함.</li>
+<li><strong>RSA-1024 폐지</strong>: 최소 2048 bits로 상향.</li>
+<li><strong>SHA-224 폐지</strong>: 보안 마진 부족으로 비권장.</li>
+<li><strong>마이그레이션</strong>: ECDSA P-256+ 또는 RSA-3072+로의 전환 권장.</li>
+</ol>
+<hr>
+<h2 id="1-12-실제-use-case-시나리오">1.12 실제 Use Case 시나리오</h2>
+<h3 id="1-12-1-시나리오-1-정상적인-pa-검증">1.12.1 시나리오 1: 정상적인 PA 검증</h3>
+<pre><code>상황: 대한민국 여권, 유효기간 내, 최신 CSCA 등록됨
+
+처리 흐름:
+  1. SOD 파싱 → SHA-256 해시 알고리즘, DG1/DG2 해시 추출
+  2. DSC 추출 → /C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01
+  3. CSCA 조회 → LDAP에서 /C=KR/.../CN=CSCA KR 발견
+  4. Trust Chain 검증 → X509_verify(DSC, CSCA_pubkey) = SUCCESS
+  5. SOD 서명 검증 → CMS_verify() = SUCCESS
+  6. DG 해시 검증 → DG1, DG2 해시 모두 일치
+  7. CRL 확인 → DSC 일련번호 미폐지
+
+결과: VALID
+신뢰 체인 경로: DSC → CSCA KR (깊이: 2)</code></pre>
+<h3 id="1-12-2-시나리오-2-csca-키-전환-link-certificate">1.12.2 시나리오 2: CSCA 키 전환 (Link Certificate)</h3>
+<pre><code>상황: 독일이 CSCA 키를 교체, Link Certificate 발급
+
+처리 흐름:
+  1. DSC가 새 CSCA(CSCA_DE_2025)로 서명됨
+  2. LDAP에서 CSCA_DE_2025 검색 → 직접 신뢰되지 않음
+  3. Link Certificate 검색 → LC 발견
+     - LC.Issuer = CSCA_DE_2020 (이전 CSCA, 신뢰됨)
+     - LC.Subject = CSCA_DE_2025 (새 CSCA)
+  4. LC 검증: X509_verify(LC, CSCA_DE_2020_pubkey) = SUCCESS
+  5. 새 CSCA 검증: X509_verify(CSCA_DE_2025, LC_pubkey) = SUCCESS
+  6. DSC 검증: X509_verify(DSC, CSCA_DE_2025_pubkey) = SUCCESS
+
+결과: VALID
+신뢰 체인 경로: DSC → CSCA_DE_2025 → LC → CSCA_DE_2020 (깊이: 4)</code></pre>
+<h3 id="1-12-3-시나리오-3-만료된-인증서-point-in-time-validation">1.12.3 시나리오 3: 만료된 인증서 (Point-in-Time Validation)</h3>
+<pre><code>상황: DSC 유효기간 2023년 만료, 여권 유효기간 2028년까지
+
+처리 흐름:
+  1. SOD 파싱 → 정상
+  2. DSC 추출 → notAfter: 2023-12-31 (만료됨)
+  3. Trust Chain 검증 → 서명은 유효
+  4. 유효기간 확인 → DSC 만료 감지
+  5. Point-in-Time 검증 → 발급 시점에는 유효했음
+
+결과: EXPIRED_VALID
+사유: "서명 유효, DSC 만료 (발급 시점 유효)"
+정책: 국가별 정책에 따라 VALID로 취급 가능</code></pre>
+<h3 id="1-12-4-시나리오-4-csca-미등록-국가">1.12.4 시나리오 4: CSCA 미등록 국가</h3>
+<pre><code>상황: 투발루(TV) 여권, CSCA가 Local PKD에 등록되지 않음
+
+처리 흐름:
+  1. SOD 파싱 → 정상
+  2. DSC 추출 → /C=TV/CN=DSC TV 01
+  3. CSCA 조회 → LDAP에서 c=TV 검색
+     - o=csca 검색: 없음
+     - o=lc 검색: 없음
+  4. 결과: CSCA_NOT_FOUND
+
+결과: PENDING (검증 보류)
+사유: "CSCA not found for issuer: /C=TV/..."
+조치: 해당 국가의 Master List 또는 CSCA 인증서 수동 등록 필요</code></pre>
+<h3 id="1-12-5-시나리오-5-dsc-폐지-crl-revocation">1.12.5 시나리오 5: DSC 폐지 (CRL Revocation)</h3>
+<pre><code>상황: 프랑스 DSC가 개인키 유출로 폐지됨
+
+처리 흐름:
+  1. SOD 파싱 → 정상
+  2. DSC 추출 → /C=FR/CN=DSC FR 03, Serial: 1A2B3C
+  3. Trust Chain 검증 → 서명 유효
+  4. CRL 조회 → 프랑스 CRL 발견
+  5. CRL 만료 확인 → nextUpdate 미경과 (유효)
+  6. 폐지 확인 → Serial 1A2B3C가 CRL에 존재
+     - 폐지 사유: KEY_COMPROMISE (코드 1)
+
+결과: INVALID
+사유: "인증서 폐지됨 (사유: KEY_COMPROMISE)"</code></pre>
+<h3 id="1-12-6-시나리오-6-데이터-변조-감지">1.12.6 시나리오 6: 데이터 변조 감지</h3>
+<pre><code>상황: 여권 칩의 DG1(MRZ) 데이터가 변조됨
+
+처리 흐름:
+  1. SOD 파싱 → DG1 해시: abc123... (원본)
+  2. DSC/CSCA 검증 → 모두 유효
+  3. SOD 서명 검증 → 유효 (SOD 자체는 변조되지 않음)
+  4. DG 해시 검증:
+     - SOD의 DG1 해시: abc123...
+     - 실제 DG1 해시: def456... (변조됨!)
+     - 불일치!
+
+결과: INVALID
+사유: "DG_HASH_MISMATCH - DG1 해시 불일치"
+의미: DG1 데이터가 발급 이후 변조됨</code></pre>
+<h3 id="1-12-7-시나리오-7-pa-검증을-통한-dsc-자동-등록">1.12.7 시나리오 7: PA 검증을 통한 DSC 자동 등록</h3>
+<pre><code>상황: Local PKD에 없는 DSC가 PA 검증 과정에서 발견됨
+
+처리 흐름:
+  1. SOD에서 DSC 추출
+  2. SHA-256 fingerprint 계산: abcdef...
+  3. 기존 certificate 테이블에서 fingerprint 검색 → 미등록
+  4. Trust Chain 검증 → VALID
+  5. DSC 자동 등록:
+     - source_type: 'PA_EXTRACTED'
+     - stored_in_ldap: false
+     - X.509 메타데이터 전체 추출 (22 필드)
+  6. PKD Relay reconciliation으로 LDAP 동기화 예정
+
+결과: VALID + DSC 자동 등록 완료
+응답: dscAutoRegistration.newlyRegistered = true</code></pre>
+<hr>
+<h2 id="1-13-예외-처리-및-edge-case">1.13 예외 처리 및 Edge Case</h2>
+<h3 id="1-13-1-인증서-만료-관련">1.13.1 인증서 만료 관련</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상황</th>
+<th>처리 방법</th>
+<th>ICAO 지침</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DSC 만료</td>
+<td><code>EXPIRED_VALID</code> 상태 부여</td>
+<td>Point-in-Time Validation 적용 권고</td>
+</tr>
+<tr>
+<td>CSCA 만료</td>
+<td>경고 포함 보고</td>
+<td>여권 발급 시점 유효 여부 확인</td>
+</tr>
+<tr>
+<td>DSC + CSCA 모두 만료</td>
+<td>여전히 서명 검증 수행</td>
+<td>서명 유효 시 EXPIRED_VALID</td>
+</tr>
+<tr>
+<td>DSC 미래 유효기간 (notBefore &gt; now)</td>
+<td><code>NOT_YET_VALID</code> 상태</td>
+<td>시스템 시계 오차 가능성 확인</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-13-2-crl-관련-edge-case">1.13.2 CRL 관련 Edge Case</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상황</th>
+<th>처리</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CRL 미존재</td>
+<td>Fail-open (경고와 함께 통과)</td>
+<td>ICAO: CRL 확인은 SHOULD</td>
+</tr>
+<tr>
+<td>CRL 만료 (nextUpdate 경과)</td>
+<td><code>CRL_EXPIRED</code> (경고와 함께 통과)</td>
+<td>만료 CRL로 폐지 상태 확인 불가</td>
+</tr>
+<tr>
+<td>Delta CRL</td>
+<td>미지원 (Full CRL만)</td>
+<td>대부분의 국가가 Full CRL 사용</td>
+</tr>
+<tr>
+<td>DSC 폐지 후 여권 계속 유통</td>
+<td><code>REVOKED</code> → INVALID</td>
+<td>물리 여권 회수는 별도 프로세스</td>
+</tr>
+<tr>
+<td>CRL 서명 검증 실패</td>
+<td><code>CRL_INVALID</code> (경고)</td>
+<td>CRL 자체의 무결성 의심</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-13-3-trust-chain-실패-사례">1.13.3 Trust Chain 실패 사례</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상황</th>
+<th>원인</th>
+<th>해결</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>CSCA 미발견</strong></td>
+<td>해당 국가 미등록 또는 PKD 미참가</td>
+<td>Master List 업로드, 양자 교환</td>
+</tr>
+<tr>
+<td><strong>서명 검증 실패</strong></td>
+<td>DSC가 해당 CSCA로 서명되지 않음</td>
+<td>DN 매칭 로직 확인, LC 검색</td>
+</tr>
+<tr>
+<td><strong>다중 CSCA</strong></td>
+<td>한 국가에 여러 CSCA 활성</td>
+<td>모든 CSCA 대상 매칭 시도</td>
+</tr>
+<tr>
+<td><strong>DN 형식 불일치</strong></td>
+<td>OpenSSL <code>/C=X</code> vs LDAP <code>C=X,O=Y</code></td>
+<td>형식 독립적 DN 비교 사용</td>
+</tr>
+<tr>
+<td><strong>중간 인증서 누락</strong></td>
+<td>LC 없이 새 CSCA만 등록</td>
+<td>LC 포함 Master List 재업로드</td>
+</tr>
+<tr>
+<td><strong>알고리즘 미지원</strong></td>
+<td>시스템이 서명 알고리즘 미지원</td>
+<td>OpenSSL 업데이트, 알고리즘 추가</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-13-4-self-signed-인증서-처리">1.13.4 Self-signed 인증서 처리</h3>
+<ul>
+<li><strong>정상</strong>: CSCA는 반드시 self-signed (Issuer == Subject)</li>
+<li><strong>비정상</strong>: DSC가 self-signed → CSCA로 잘못 분류될 수 있음</li>
+<li><strong>검증 방법</strong>: BasicConstraints(CA:TRUE) + KeyUsage(keyCertSign) + Self-signed 조합으로 정확한 분류</li>
+</ul>
+<h3 id="1-13-5-시간대-및-유효기간-edge-case">1.13.5 시간대 및 유효기간 Edge Case</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>상황</th>
+<th>주의사항</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>UTC vs 로컬 시간</td>
+<td>모든 인증서 시각은 UTC 기준</td>
+</tr>
+<tr>
+<td>GeneralizedTime vs UTCTime</td>
+<td>2050년 이후는 GeneralizedTime 사용</td>
+</tr>
+<tr>
+<td>윤초</td>
+<td>OpenSSL이 내부적으로 처리</td>
+</tr>
+<tr>
+<td>유효기간 경계 (정확히 만료 시각)</td>
+<td><code>notAfter</code>는 포함(inclusive)</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-13-6-deviation-list-편차-목록">1.13.6 Deviation List (편차 목록)</h3>
+<p><strong>목적</strong>: ICAO 9303 규격을 완전히 준수하지 않지만 운용 중인 eMRTD의 알려진 편차를 기록</p>
+<p><strong>주요 편차 유형</strong>:</p>
+<ul>
+<li>DG 인코딩 오류 (BER vs DER)</li>
+<li>잘못된 ASN.1 태그 사용</li>
+<li>비표준 서명 알고리즘</li>
+<li>누락된 필수 확장</li>
+</ul>
+<p><strong>처리 방법</strong>: 편차 목록과 대조하여 알려진 편차인 경우 허용 처리</p>
+<hr>
+<h2 id="1-14-구현-시-주의사항-pitfalls">1.14 구현 시 주의사항 (Pitfalls)</h2>
+<p>본 프로젝트 구현 경험에서 도출된 주요 함정들:</p>
+<h3 id="1-14-1-master-list-파싱">1.14.1 Master List 파싱</h3>
+<p><strong>함정 1: <code>CMS_get1_certs()</code>로 Master List 인증서 추출</strong></p>
+<p><code>CMS_get1_certs()</code>는 CMS의 <code>SignedData.certificates</code> 필드만 반환한다. ICAO Master List에서 이 필드는 <strong>비어 있다</strong>! CSCA 인증서들은 <code>encapContentInfo</code>(pkiData)에 저장되어 있다.</p>
+<p><strong>해결</strong>: <code>CMS_get0_SignerInfos()</code>(MLSC) + <code>CMS_get0_content()</code>(CSCA) 2단계 추출</p>
+<p><strong>함정 2: MLSC 누락</strong></p>
+<p>MLSC는 SignerInfo에<strong>만</strong> 존재한다. pkiData에서만 추출하면 MLSC를 놓친다.</p>
+<h3 id="1-14-2-dn-처리">1.14.2 DN 처리</h3>
+<p><strong>함정 3: DN 형식 불일치</strong></p>
+<pre><code>OpenSSL oneline: /C=LV/O=Ministry/CN=CSCA LV
+LDAP 형식:       C=LV, O=Ministry, CN=CSCA LV
+RFC 2253 형식:   CN=CSCA LV,O=Ministry,C=LV</code></pre>
+<p><strong>해결</strong>: 모든 형식을 지원하는 DN 파싱 및 정규화 함수 사용</p>
+<p><strong>함정 4: 대소문자 비교</strong></p>
+<p>RFC 5280은 DN 비교 시 <strong>대소문자 무시</strong>를 요구한다. <code>LOWER(subject_dn) = LOWER(issuer_dn)</code> 사용.</p>
+<h3 id="1-14-3-인증서-유형-분류">1.14.3 인증서 유형 분류</h3>
+<p><strong>함정 5: Link Certificate 오분류</strong></p>
+<p>LC와 CSCA 모두 <code>CA:TRUE</code> + <code>keyCertSign</code>을 가진다. <strong>Self-signed 여부</strong>가 유일한 차별점이다.</p>
+<pre><code>CA:TRUE + keyCertSign + Self-signed     → CSCA
+CA:TRUE + keyCertSign + Non-self-signed → Link Certificate</code></pre>
+<h3 id="1-14-4-국가-코드-추출">1.14.4 국가 코드 추출</h3>
+<p><strong>함정 6: 잘못된 Fallback</strong></p>
+<p>Master List에서 모든 인증서에 &quot;UN&quot;을 fallback 국가 코드로 사용하면, 모든 CSCA가 <code>c=UN</code> 아래 저장된다.</p>
+<p><strong>해결</strong>: Subject DN → Issuer DN → Entry DN → &quot;XX&quot; fallback 체인 사용</p>
+<h3 id="1-14-5-바이너리-데이터-처리">1.14.5 바이너리 데이터 처리</h3>
+<p><strong>함정 7: PostgreSQL BYTEA 인코딩</strong></p>
+<p><code>E&#39;&#39;</code> (escape string literal)에 <code>\x</code> 접두사를 사용하면 PostgreSQL이 <code>\x</code>를 이스케이프 시퀀스로 해석하여 인증서 바이너리 데이터가 손상된다. 모든 Trust Chain 검증이 실패하게 된다.</p>
+<p><strong>해결</strong>: 표준 따옴표 사용 (<code>E&#39;&#39;</code> 대신 <code>&#39;&#39;</code>로 bytea hex 값 저장)</p>
+<h3 id="1-14-6-openssl-메모리-관리">1.14.6 OpenSSL 메모리 관리</h3>
+<p><strong>함정 8: 메모리 누수</strong></p>
+<p>OpenSSL 구조체(X509, CMS_ContentInfo, EVP_PKEY 등)는 명시적으로 해제해야 한다.</p>
+<p><strong>해결</strong>: RAII 패턴 적용, 모든 코드 경로에서 일관된 정리</p>
+<h3 id="1-14-7-sod-래핑">1.14.7 SOD 래핑</h3>
+<p><strong>함정 9: ICAO 외부 태그</strong></p>
+<p>일부 SOD에는 CMS 콘텐츠를 래핑하는 ICAO 전용 외부 태그(0x77)가 있다. CMS 파싱 전에 이 태그를 감지하고 제거해야 한다.</p>
+<h3 id="1-14-8-oracle-호환성">1.14.8 Oracle 호환성</h3>
+<p><strong>함정 10: Multi-DBMS 인증서 저장</strong></p>
+<ul>
+<li>Oracle은 빈 문자열을 NULL로 처리 (PostgreSQL과 다름)</li>
+<li>Oracle은 컬럼명을 UPPERCASE로 반환</li>
+<li>Oracle은 <code>NUMBER(1)</code>로 BOOLEAN 표현</li>
+<li>Oracle은 <code>OFFSET/FETCH</code>로 페이지네이션</li>
+</ul>
+<p><strong>해결</strong>: Query Executor 추상화 계층으로 데이터베이스별 처리</p>
+<h3 id="1-14-9-trust-chain-깊이">1.14.9 Trust Chain 깊이</h3>
+<p><strong>함정 11: 다중 레벨 Trust Chain</strong></p>
+<pre><code>일반적: DSC → CSCA (깊이 2)
+키 전환: DSC → LC → CSCA (깊이 3)
+다중 LC: DSC → LC_n → LC_n-1 → ... → CSCA_old (깊이 N)</code></pre>
+<p><strong>해결</strong>: 깊이 제한이 있는 반복적 체인 빌딩으로 무한 루프 방지</p>
+<h3 id="1-14-10-crl-처리-순서">1.14.10 CRL 처리 순서</h3>
+<p><strong>함정 12: CRL 만료 확인 순서</strong></p>
+<p>CRL 만료 확인(<code>nextUpdate</code>)을 인증서 폐지 확인 <strong>전에</strong> 수행해야 한다. 만료된 CRL로는 폐지 상태를 신뢰할 수 없다.</p>
+<hr>
+<h2 id="1-15-참조-표준-및-문서">1.15 참조 표준 및 문서</h2>
+<h3 id="1-15-1-icao-문서">1.15.1 ICAO 문서</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>문서</th>
+<th>제목</th>
+<th>주요 내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Doc 9303 Part 10</strong></td>
+<td>LDS for Storage of Biometrics and Other Data in the Contactless IC</td>
+<td>SOD 구조, DG 형식, LDS 버전</td>
+</tr>
+<tr>
+<td><strong>Doc 9303 Part 11</strong></td>
+<td>Security Mechanisms for MRTDs</td>
+<td>PA, AA, CA, TA, PACE</td>
+</tr>
+<tr>
+<td><strong>Doc 9303 Part 12</strong></td>
+<td>Public Key Infrastructure for MRTDs</td>
+<td>CSCA, DSC, LC, Master List, PKD 운영, CRL 관리</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-15-2-rfc-표준">1.15.2 RFC 표준</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>RFC</th>
+<th>제목</th>
+<th>관련성</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>RFC 5280</strong></td>
+<td>Internet X.509 PKI Certificate and CRL Profile</td>
+<td>인증서 구조, 검증 규칙, CRL 처리</td>
+</tr>
+<tr>
+<td><strong>RFC 5652</strong></td>
+<td>Cryptographic Message Syntax (CMS)</td>
+<td>SOD 및 Master List SignedData 형식</td>
+</tr>
+<tr>
+<td><strong>RFC 4511</strong></td>
+<td>LDAP Protocol</td>
+<td>PKD LDAP 운영</td>
+</tr>
+<tr>
+<td><strong>RFC 4515</strong></td>
+<td>LDAP String Representation of Search Filters</td>
+<td>LDAP 필터 이스케이프</td>
+</tr>
+<tr>
+<td><strong>RFC 3279</strong></td>
+<td>Algorithms and Identifiers for PKIX</td>
+<td>알고리즘 OID 참조</td>
+</tr>
+<tr>
+<td><strong>RFC 4055</strong></td>
+<td>Additional Algorithms for RSA Cryptography in PKIX</td>
+<td>RSA-PSS 등</td>
+</tr>
+<tr>
+<td><strong>RFC 5480</strong></td>
+<td>ECC Subject Public Key Information</td>
+<td>ECDSA 곡선 정의</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-15-3-bsi-기술-지침">1.15.3 BSI 기술 지침</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>문서</th>
+<th>제목</th>
+<th>관련성</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>BSI TR-03105 Part 5</strong></td>
+<td>Test Plan for eMRTD Application Protocol and LDS</td>
+<td>SOD/DG/PA 적합성 테스트</td>
+</tr>
+<tr>
+<td><strong>BSI TR-03110</strong></td>
+<td>Advanced Security Mechanisms for Machine Readable Travel Documents</td>
+<td>EAC, PACE 프로토콜 상세</td>
+</tr>
+<tr>
+<td><strong>BSI TR-03111</strong></td>
+<td>Elliptic Curve Cryptography</td>
+<td>전자여권 ECC 사양</td>
+</tr>
+</tbody></table></div>
+<h3 id="1-15-4-구현-파일-매핑">1.15.4 구현 파일 매핑</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>ICAO 표준 섹션</th>
+<th>구현 파일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Part 12 Sec 7 (인증서 프로파일)</td>
+<td><code>shared/lib/certificate-parser/src/cert_type_detector.cpp</code></td>
+</tr>
+<tr>
+<td>Part 12 Sec 6 (알고리즘)</td>
+<td><code>shared/lib/icao9303/sod_parser.cpp</code> (OID 매핑)</td>
+</tr>
+<tr>
+<td>Part 10 Sec 4.6 (SOD/LDS)</td>
+<td><code>shared/lib/icao9303/sod_parser.cpp</code></td>
+</tr>
+<tr>
+<td>Part 11 Sec 5 (Passive Auth)</td>
+<td><code>services/pa-service/src/services/pa_verification_service.cpp</code></td>
+</tr>
+<tr>
+<td>Part 11 Sec 5 (Trust Chain)</td>
+<td><code>services/pa-service/src/services/certificate_validation_service.cpp</code></td>
+</tr>
+<tr>
+<td>Part 11 Sec 5.4 (CRL Check)</td>
+<td><code>services/pa-service/src/services/certificate_validation_service.cpp</code></td>
+</tr>
+<tr>
+<td>Part 12 (Master List)</td>
+<td><code>services/pkd-management/src/common/masterlist_processor.cpp</code></td>
+</tr>
+<tr>
+<td>Part 12 Sec 7.1.2 (Link Cert)</td>
+<td><code>services/pkd-management/src/common/lc_validator.cpp</code></td>
+</tr>
+<tr>
+<td>Part 11 (CRL Validation)</td>
+<td><code>services/pkd-management/src/common/crl_validator.cpp</code></td>
+</tr>
+<tr>
+<td>Part 11 (PA Domain Model)</td>
+<td><code>services/pa-service/src/domain/models/certificate_chain_validation.h</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h1 id="part-2-doc-9303-compliance-checks">Part 2: Doc 9303 Compliance Checks</h1>
+<p><strong>원본</strong>: <code>docs/Checks_Against_Doc9303_Applied_to_PKD_uploads.pdf</code>
+<strong>참조 표준</strong>: ICAO Doc 9303, RFC 3280 (X.509), RFC 3852 (CMS), BSI TR-03110 (Brainpool/SHA-224)</p>
+<hr>
+<h2 id="2-1-개요">2.1 개요</h2>
+<p>ICAO PKD에 업로드되는 <strong>인증서(CSCA/DSC)</strong>, <strong>CRL</strong>, <strong>마스터리스트</strong>가 Doc 9303 및 관련 RFC 표준을 준수하는지 검증하는 항목을 정의한다. 검증 대상은 3가지 범주로 나뉜다:</p>
+<ol>
+<li><strong>인증서 속성</strong> -- CSCA, DSC, 마스터리스트 서명자 인증서</li>
+<li><strong>CRL 속성</strong> -- 인증서 폐지 목록</li>
+<li><strong>CSCA 마스터리스트 속성</strong> -- CMS Signed Data 구조</li>
+</ol>
+<hr>
+<h2 id="2-2-인증서-속성-검증-csca-dsc-마스터리스트-서명자">2.2 인증서 속성 검증 (CSCA / DSC / 마스터리스트 서명자)</h2>
+<h3 id="2-2-1-기본-필드">2.2.1 기본 필드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>RFC 3280</th>
+<th>Doc 9303 / Operator Terminal</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.1</td>
+<td><strong>버전 (Version)</strong></td>
+<td>V3 필수</td>
+<td>V3 필수</td>
+<td></td>
+</tr>
+<tr>
+<td>1.2</td>
+<td><strong>시리얼 번호 (Serial Number)</strong></td>
+<td>양수, 2의 보수 인코딩, 최소 옥텟 수, 최대 20옥텟</td>
+<td>동일</td>
+<td></td>
+</tr>
+<tr>
+<td>1.3</td>
+<td><strong>서명 알고리즘 (Signature)</strong></td>
+<td>OID가 signatureAlgorithm 필드(항목 2)와 일치</td>
+<td>동일</td>
+<td></td>
+</tr>
+<tr>
+<td>1.4</td>
+<td><strong>발행자 (Issuer)</strong></td>
+<td>UTF8String 권장 (country, serialNumber은 PrintableString)</td>
+<td>국가코드 필수. DSC/ML서명자: subject country = issuer country</td>
+<td>실제로는 PrintableString도 허용. 국가코드 대문자 검증 미적용</td>
+</tr>
+<tr>
+<td>1.5-1.7</td>
+<td><strong>유효기간 (Validity)</strong></td>
+<td>UTCTime: 2050년 미만, 13바이트, &quot;Z&quot; 종료. GeneralizedTime: 2050년 이상, 15바이트, &quot;Z&quot; 종료</td>
+<td>동일</td>
+<td></td>
+</tr>
+<tr>
+<td>1.8</td>
+<td><strong>주체 (Subject)</strong></td>
+<td>자체서명이면 Issuer=Subject. CA+Issuer!=Subject이면 링크 인증서 추정</td>
+<td>국가코드 필수. 링크 인증서: DN 마지막 2개 요소 동일</td>
+<td>DN 비교로 교차인증서와 구분</td>
+</tr>
+<tr>
+<td>1.9</td>
+<td><strong>공개키 정보 (Subject Public Key Info)</strong></td>
+<td>--</td>
+<td>존재 확인</td>
+<td></td>
+</tr>
+<tr>
+<td>1.10</td>
+<td><strong>고유 식별자 (Unique Identifiers)</strong></td>
+<td>사용 비권장</td>
+<td><strong>사용 금지</strong> (반드시 없어야 함)</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-2-2-확장-extensions">2.2.2 확장 (Extensions)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>확장 항목</th>
+<th>CSCA (자체서명/링크)</th>
+<th>DSC</th>
+<th>ML 서명자</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.11.1</td>
+<td><strong>Authority Key Identifier</strong></td>
+<td>Issuer!=Subject이면 필수, KeyIdentifier 최소 포함, <strong>Non-critical</strong></td>
+<td>동일</td>
+<td>동일</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.2</td>
+<td><strong>Subject Key Identifier</strong></td>
+<td>자체서명/링크이면 필수, <strong>Non-critical</strong></td>
+<td>무관</td>
+<td>무관</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.3</td>
+<td><strong>Key Usage</strong></td>
+<td><strong>필수, Critical</strong>. <code>keyCertSign</code> + <code>cRLSign</code>만 허용</td>
+<td><strong>필수, Critical</strong>. <code>digitalSignature</code>만 허용</td>
+<td><code>digitalSignature</code>만, <strong>Critical</strong></td>
+<td>가장 엄격한 검증 항목</td>
+</tr>
+<tr>
+<td>1.11.4</td>
+<td><strong>Private Key Usage Period</strong></td>
+<td><strong>Non-critical</strong>. CSCA에 존재 시 DSC 검증에 사용</td>
+<td>--</td>
+<td>--</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.5</td>
+<td><strong>Certificate Policies</strong></td>
+<td>있으면 policy ID 필수, <strong>Non-critical</strong></td>
+<td>동일</td>
+<td>동일</td>
+<td>전자여권 간 해석 불일치로 critical 불가</td>
+</tr>
+<tr>
+<td>1.11.6</td>
+<td><strong>Policy Mappings</strong></td>
+<td><strong>Non-critical</strong>, 없어야 함</td>
+<td>있으면 Non-critical</td>
+<td>있으면 Non-critical</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.7</td>
+<td><strong>Subject Alternative Name</strong></td>
+<td>없어야 함</td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>Doc9303상 Subject 필수이므로</td>
+</tr>
+<tr>
+<td>1.11.8</td>
+<td><strong>Issuer Alternative Name</strong></td>
+<td>없어야 함</td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.9</td>
+<td><strong>Subject Directory Attributes</strong></td>
+<td>없어야 함</td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.10</td>
+<td><strong>Basic Constraints</strong></td>
+<td><strong>필수, Critical</strong>. CA=true, <strong>pathLength=0</strong></td>
+<td>CA 미설정 확인</td>
+<td>CA 미설정 확인</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.11</td>
+<td><strong>Name Constraints</strong></td>
+<td>사용 금지</td>
+<td>무관</td>
+<td>무관</td>
+<td>pathLength=0이므로 무의미</td>
+</tr>
+<tr>
+<td>1.11.12</td>
+<td><strong>Policy Constraints</strong></td>
+<td>사용 금지</td>
+<td>무관</td>
+<td>무관</td>
+<td>pathLength=0이므로 무의미</td>
+</tr>
+<tr>
+<td>1.11.13</td>
+<td><strong>Extended Key Usage</strong></td>
+<td><strong>사용 금지</strong></td>
+<td><strong>사용 금지</strong></td>
+<td><strong>필수, Critical</strong></td>
+<td>ML 서명자만 EKU 필수</td>
+</tr>
+<tr>
+<td>1.11.14</td>
+<td><strong>CRL Distribution Points</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>PKD 배포점 정의 미비로 검증 생략</td>
+</tr>
+<tr>
+<td>1.11.15</td>
+<td><strong>Inhibit Any-Policy</strong></td>
+<td>없어야 함</td>
+<td>무관</td>
+<td>무관</td>
+<td>pathLength=0이므로 무의미</td>
+</tr>
+<tr>
+<td>1.11.16</td>
+<td><strong>Freshest CRL</strong></td>
+<td>없어야 함</td>
+<td>무관</td>
+<td>무관</td>
+<td></td>
+</tr>
+<tr>
+<td>1.11.17</td>
+<td><strong>Netscape Extensions</strong></td>
+<td><strong>사용 금지</strong></td>
+<td><strong>사용 금지</strong></td>
+<td><strong>사용 금지</strong></td>
+<td>EKU와 동일 효과이므로 완전 금지</td>
+</tr>
+<tr>
+<td>--</td>
+<td><strong>Internet Certificate Extensions</strong></td>
+<td>사용 금지</td>
+<td>무관</td>
+<td>무관</td>
+<td></td>
+</tr>
+<tr>
+<td>--</td>
+<td><strong>기타 사설 확장 (Other Private)</strong></td>
+<td><strong>Non-critical</strong></td>
+<td>무관</td>
+<td>무관</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-2-3-서명-알고리즘-항목-2">2.2.3 서명 알고리즘 (항목 2)</h3>
+<ul>
+<li><code>signatureAlgorithm</code> 필드는 TBSCertificate의 <code>signature</code> 필드(항목 1.3)와 반드시 일치해야 한다.</li>
+</ul>
+<hr>
+<h2 id="2-3-crl-인증서-폐지-목록-속성-검증">2.3 CRL (인증서 폐지 목록) 속성 검증</h2>
+<h3 id="2-3-1-기본-필드">2.3.1 기본 필드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>RFC 3280</th>
+<th>Operator Terminal</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.1</td>
+<td><strong>버전 (Version)</strong></td>
+<td>v2 필수</td>
+<td>v2 필수</td>
+<td></td>
+</tr>
+<tr>
+<td>1.2</td>
+<td><strong>서명 알고리즘 (Signature)</strong></td>
+<td>signatureAlgorithm(항목 2)과 일치</td>
+<td>필수</td>
+<td></td>
+</tr>
+<tr>
+<td>1.3</td>
+<td><strong>발행자 (Issuer)</strong></td>
+<td>UTF8String, 국가코드 ISO 3166 대문자</td>
+<td>국가코드 필수</td>
+<td>UTF8 미강제 (PrintableString 허용)</td>
+</tr>
+<tr>
+<td>1.4</td>
+<td><strong>This Update</strong></td>
+<td>--</td>
+<td>필수</td>
+<td>UTCTime/GeneralizedTime 규칙 동일</td>
+</tr>
+<tr>
+<td>1.5</td>
+<td><strong>Next Update</strong></td>
+<td>--</td>
+<td>필수</td>
+<td></td>
+</tr>
+<tr>
+<td>1.6</td>
+<td><strong>폐지 인증서 목록 (Revoked Certificates)</strong></td>
+<td>폐지 인증서 없으면 목록 자체가 없어야 함</td>
+<td>있으면 비어있으면 안 됨</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-3-2-crl-확장-extensions">2.3.2 CRL 확장 (Extensions)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>확장 항목</th>
+<th>검증 내용</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.7.1</td>
+<td><strong>Authority Key Identifier</strong></td>
+<td><strong>필수</strong>, KeyIdentifier 최소 포함</td>
+<td></td>
+</tr>
+<tr>
+<td>1.7.2</td>
+<td><strong>Issuer Alternative Name</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.7.3</td>
+<td><strong>CRL Number</strong></td>
+<td><strong>필수</strong>, 최대 20옥텟, 2의 보수 인코딩</td>
+<td></td>
+</tr>
+<tr>
+<td>1.7.4</td>
+<td><strong>Delta CRL Indicator</strong></td>
+<td><strong>사용 금지</strong></td>
+<td>전자여권 PKD는 전체 CRL만 사용</td>
+</tr>
+<tr>
+<td>1.7.5</td>
+<td><strong>Issuing Distribution Point</strong></td>
+<td><strong>사용 금지</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.7.6</td>
+<td><strong>Freshest CRL</strong></td>
+<td><strong>사용 금지</strong></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-3-3-crl-엔트리-확장-crl-entry-extensions">2.3.3 CRL 엔트리 확장 (CRL Entry Extensions)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>검증 내용</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.8.1</td>
+<td><strong>Reason Code</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td>Doc9303은 금지하지만 실무에서 허용</td>
+</tr>
+<tr>
+<td>1.8.2</td>
+<td><strong>Hold Instruction Code</strong></td>
+<td>있으면 <strong>Non-critical</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.8.3</td>
+<td><strong>Invalidity Date</strong></td>
+<td>있으면 <strong>Non-critical</strong>, &quot;Z&quot; 종료</td>
+<td></td>
+</tr>
+<tr>
+<td>1.8.4</td>
+<td><strong>Certificate Issuer</strong></td>
+<td><strong>사용 금지</strong></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-3-4-서명">2.3.4 서명</h3>
+<ul>
+<li><code>signatureAlgorithm</code> (항목 2)은 TBS CertList의 <code>signature</code> (항목 1.2)와 반드시 일치해야 한다.</li>
+</ul>
+<hr>
+<h2 id="2-4-csca-마스터리스트-cms-signed-data-속성-검증">2.4 CSCA 마스터리스트 (CMS Signed Data) 속성 검증</h2>
+<h3 id="2-4-1-signed-data-구조">2.4.1 Signed Data 구조</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>RFC 3852</th>
+<th>Operator Terminal</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.1</td>
+<td><strong>버전 (Version)</strong></td>
+<td>콘텐츠에 따라 결정</td>
+<td><strong>v3 필수</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.2</td>
+<td><strong>Digest Algorithm</strong></td>
+<td>digest algorithm 컬렉션</td>
+<td>필수</td>
+<td></td>
+</tr>
+<tr>
+<td>1.3.1</td>
+<td><strong>eContent Type</strong></td>
+<td>--</td>
+<td><code>id-icao-cscaMasterList</code> OID</td>
+<td>ICAO 전용 OID</td>
+</tr>
+<tr>
+<td>1.3.2</td>
+<td><strong>eContent</strong></td>
+<td>--</td>
+<td>ML 서명자에 대응하는 CSCA 포함</td>
+<td></td>
+</tr>
+<tr>
+<td>1.4</td>
+<td><strong>인증서 (Certificates)</strong></td>
+<td>루트→서명자 경로에 충분한 인증서 포함</td>
+<td>ML 서명자 인증서 포함 필수. EKU 존재 시 <strong>Critical</strong> + OID <code>2.23.136.1.1.3</code></td>
+<td></td>
+</tr>
+<tr>
+<td>1.5</td>
+<td><strong>CRL</strong></td>
+<td>--</td>
+<td><strong>포함 금지</strong></td>
+<td></td>
+</tr>
+<tr>
+<td>1.6</td>
+<td><strong>Signer Infos</strong></td>
+<td>--</td>
+<td>필수</td>
+<td></td>
+</tr>
+</tbody></table></div>
+<h3 id="2-4-2-signer-info-구조">2.4.2 Signer Info 구조</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>항목</th>
+<th>검증 내용</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1.7.1</td>
+<td><strong>버전 (Version)</strong></td>
+<td>issuer&amp;serialNumber 사용 시 v1, subjectKeyIdentifier 사용 시 v3</td>
+</tr>
+<tr>
+<td>1.7.2</td>
+<td><strong>SID</strong></td>
+<td>버전에 따라 issuer&amp;serialNumber 또는 subjectKeyIdentifier 참조</td>
+</tr>
+<tr>
+<td>1.7.3</td>
+<td><strong>Digest Algorithm</strong></td>
+<td>Signed Data의 digest algorithm 목록에 포함되어야 함</td>
+</tr>
+<tr>
+<td>1.7.4</td>
+<td><strong>Signed Attributes</strong></td>
+<td><strong>필수</strong>, signing time 포함</td>
+</tr>
+<tr>
+<td>1.7.5</td>
+<td><strong>Signature Algorithm</strong></td>
+<td>필수</td>
+</tr>
+<tr>
+<td>1.7.6</td>
+<td><strong>Signature</strong></td>
+<td>필수</td>
+</tr>
+<tr>
+<td>1.7.7</td>
+<td><strong>Unsigned Attributes</strong></td>
+<td>무시</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="2-5-핵심-설계-원칙-요약">2.5 핵심 설계 원칙 요약</h2>
+<h3 id="pathlength-0-의-의미">pathLength=0 의 의미</h3>
+<p>CSCA의 Basic Constraints에서 <code>pathLength=0</code>으로 설정되므로, 다음 확장들은 실질적 의미가 없다:</p>
+<ul>
+<li>Name Constraints (1.11.11)</li>
+<li>Policy Constraints (1.11.12)</li>
+<li>Inhibit Any-Policy (1.11.15)</li>
+</ul>
+<p>이는 CSCA가 직접 DSC만 서명할 수 있고, 중간 CA를 허용하지 않음을 의미한다.</p>
+<h3 id="링크-인증서-link-certificate-식별">링크 인증서 (Link Certificate) 식별</h3>
+<ul>
+<li>CA 비트가 설정되고 Issuer!=Subject인 인증서는 링크 인증서 또는 교차 인증서일 수 있다.</li>
+<li><strong>구분 방법</strong>: DN의 마지막 2개 요소가 동일하면 링크 인증서, 다르면 교차 인증서.</li>
+<li>링크 인증서는 CSCA 키 갱신(key rollover) 시 사용된다.</li>
+</ul>
+<h3 id="key-usage-엄격-적용">Key Usage 엄격 적용</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서 유형</th>
+<th>허용되는 Key Usage</th>
+<th>Critical</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA (자체서명/링크)</td>
+<td><code>keyCertSign</code> + <code>cRLSign</code></td>
+<td>필수</td>
+</tr>
+<tr>
+<td>DSC</td>
+<td><code>digitalSignature</code></td>
+<td>필수</td>
+</tr>
+</tbody></table></div>
+<h3 id="extended-key-usage-eku-규칙">Extended Key Usage (EKU) 규칙</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서 유형</th>
+<th>EKU 규칙</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA</td>
+<td><strong>사용 금지</strong></td>
+</tr>
+<tr>
+<td>DSC</td>
+<td><strong>사용 금지</strong></td>
+</tr>
+<tr>
+<td>마스터리스트 서명자</td>
+<td><strong>필수, Critical</strong>, OID: <code>2.23.136.1.1.3</code> (<code>id-icao-mrtd-security-masterListSigningKey</code>)</td>
+</tr>
+</tbody></table></div>
+<h3 id="delta-crl-금지">Delta CRL 금지</h3>
+<p>전자여권 PKD에서는 <strong>전체 CRL만 사용</strong>한다. Delta CRL Indicator, Issuing Distribution Point, Freshest CRL은 모두 금지된다.</p>
+<h3 id="netscape-extensions-완전-금지">Netscape Extensions 완전 금지</h3>
+<p>Netscape Extensions는 Extended Key Usage와 동일한 효과를 가지므로, 전자여권 인증서에서 <strong>완전히 금지</strong>된다.</p>
+<hr>
+<h2 id="2-6-프로젝트-내-구현-매핑">2.6 프로젝트 내 구현 매핑</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>검증 범주</th>
+<th>구현 위치</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>인증서 버전/필드 검증</td>
+<td><code>shared/lib/icao-validation/extension_validator</code></td>
+</tr>
+<tr>
+<td>Key Usage 검증</td>
+<td><code>shared/lib/icao-validation/extension_validator</code></td>
+</tr>
+<tr>
+<td>알고리즘 적합성</td>
+<td><code>shared/lib/icao-validation/algorithm_compliance</code></td>
+</tr>
+<tr>
+<td>Trust Chain (링크 인증서 포함)</td>
+<td><code>shared/lib/icao-validation/trust_chain_builder</code></td>
+</tr>
+<tr>
+<td>CRL 검증</td>
+<td><code>shared/lib/icao-validation/crl_checker</code></td>
+</tr>
+<tr>
+<td>인증서 파싱/메타데이터 추출</td>
+<td><code>shared/lib/certificate-parser/</code></td>
+</tr>
+<tr>
+<td>마스터리스트 파싱</td>
+<td><code>shared/lib/icao9303/</code></td>
+</tr>
+<tr>
+<td>ICAO 적합성 수준 판정</td>
+<td><code>icao_compliance_level</code> (COMPLIANT / WARNING / NON_COMPLIANT)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h1 id="part-3-cryptographic-algorithm-support">Part 3: Cryptographic Algorithm Support</h1>
+<p><strong>참조 표준</strong>: BSI TR-03110 v2.20/2.21, ICAO Doc 9303 Part 11/12, RFC 5639 (Brainpool), RFC 4055/8017 (RSA-PSS)</p>
+<hr>
+<h2 id="3-1-개요">3.1 개요</h2>
+<p>본 장은 ICAO Doc 9303과 BSI TR-03110의 암호 알고리즘 관계를 정리하고, ICAO Local PKD 시스템에서의 적용 방침을 기술한다.</p>
+<p>ePassport에는 <strong>두 개의 독립된 PKI 체계</strong>가 존재한다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>PKI</th>
+<th>인증서 형식</th>
+<th>용도</th>
+<th>배포 방식</th>
+<th>본 시스템 관련</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>ICAO PKI</strong></td>
+<td>X.509 v3</td>
+<td>Passive Authentication (SOD 서명 검증)</td>
+<td>ICAO PKD (Master List, LDAP)</td>
+<td><strong>직접 관리</strong></td>
+</tr>
+<tr>
+<td><strong>EAC-PKI</strong></td>
+<td>CVC (Card Verifiable Certificate)</td>
+<td>Extended Access Control (지문/홍채)</td>
+<td>국가 간 양자 교환</td>
+<td>관련 없음</td>
+</tr>
+</tbody></table></div>
+<p>본 시스템은 <strong>ICAO PKI (X.509 CSCA/DSC)</strong> 를 관리하므로, X.509 인증서에 등장하는 알고리즘만 검증 대상이다.</p>
+<hr>
+<h2 id="3-2-bsi-tr-03110-구조">3.2 BSI TR-03110 구조</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Part</th>
+<th>내용</th>
+<th>X.509 CSCA/DSC 관련</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Part 1</strong> (v2.20)</td>
+<td>PA, AA, TA v1, CA v1</td>
+<td>관련 -- Doc 9303과 동일 범위</td>
+</tr>
+<tr>
+<td><strong>Part 2</strong> (v2.21)</td>
+<td>PACE, CA v2/v3, TA v2, RI</td>
+<td>관련 없음 -- 칩 프로토콜</td>
+</tr>
+<tr>
+<td><strong>Part 3</strong> (v2.21)</td>
+<td>ASN.1/APDU 명세, OID 정의, 표준 곡선 테이블</td>
+<td>참조용</td>
+</tr>
+<tr>
+<td><strong>Part 4</strong> (v2.21)</td>
+<td>적합성 테스트</td>
+<td>관련 없음</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-3-알고리즘-분류-체계">3.3 알고리즘 분류 체계</h2>
+<p>본 시스템은 X.509 CSCA/DSC 인증서에 사용된 알고리즘을 다음 3단계로 분류한다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>분류</th>
+<th>수준</th>
+<th>의미</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>PASS</strong></td>
+<td>Doc 9303 Part 12 충족</td>
+<td>완전 적합</td>
+<td>SHA-256, P-256, RSA 2048+</td>
+</tr>
+<tr>
+<td><strong>WARNING</strong></td>
+<td>BSI TR-03110 지원 또는 deprecated</td>
+<td>기능적으로 유효하나 Doc 9303 Part 12 외</td>
+<td>Brainpool, SHA-224, SHA-1</td>
+</tr>
+<tr>
+<td><strong>FAIL</strong></td>
+<td>미인식 알고리즘</td>
+<td>표준 목록에 없음</td>
+<td>MD5, 커스텀 곡선</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-4-pkd-관련-알고리즘-상세">3.4 PKD 관련 알고리즘 상세</h2>
+<h3 id="3-4-1-서명-알고리즘-x-509-인증서에-등장">3.4.1 서명 알고리즘 (X.509 인증서에 등장)</h3>
+<p>표준 X.509/PKCS OID를 사용하며, BSI OID(<code>0.4.0.127.0.7.*</code>)는 CVC 전용이므로 대상 아님.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>알고리즘</th>
+<th>OID</th>
+<th>분류</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>sha256WithRSAEncryption</td>
+<td>1.2.840.113549.1.1.11</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>sha384WithRSAEncryption</td>
+<td>1.2.840.113549.1.1.12</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>sha512WithRSAEncryption</td>
+<td>1.2.840.113549.1.1.13</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>RSASSA-PSS (rsassaPss)</td>
+<td>1.2.840.113549.1.1.10</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A, 해시는 PSS 파라미터에서 추출</td>
+</tr>
+<tr>
+<td>ecdsa-with-SHA256</td>
+<td>1.2.840.10045.4.3.2</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>ecdsa-with-SHA384</td>
+<td>1.2.840.10045.4.3.3</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>ecdsa-with-SHA512</td>
+<td>1.2.840.10045.4.3.4</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 Appendix A</td>
+</tr>
+<tr>
+<td>sha224WithRSAEncryption</td>
+<td>1.2.840.113549.1.1.14</td>
+<td>WARNING</td>
+<td>BSI TR-03110 지원, Doc 9303 Part 12 외</td>
+</tr>
+<tr>
+<td>ecdsa-with-SHA224</td>
+<td>1.2.840.10045.4.3.1</td>
+<td>WARNING</td>
+<td>BSI TR-03110 지원, Doc 9303 Part 12 외</td>
+</tr>
+<tr>
+<td>sha1WithRSAEncryption</td>
+<td>1.2.840.113549.1.1.5</td>
+<td>WARNING</td>
+<td>ICAO NTWG deprecated, SHA-256+ 전환 권고</td>
+</tr>
+<tr>
+<td>ecdsa-with-SHA1</td>
+<td>1.2.840.10045.4.1</td>
+<td>WARNING</td>
+<td>ICAO NTWG deprecated, SHA-256+ 전환 권고</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-4-2-ecdsa-곡선">3.4.2 ECDSA 곡선</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>곡선</th>
+<th>OID</th>
+<th>키 크기</th>
+<th>분류</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>P-256 (prime256v1/secp256r1)</td>
+<td>1.2.840.10045.3.1.7</td>
+<td>256bit</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12</td>
+</tr>
+<tr>
+<td>P-384 (secp384r1)</td>
+<td>1.3.132.0.34</td>
+<td>384bit</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12</td>
+</tr>
+<tr>
+<td>P-521 (secp521r1)</td>
+<td>1.3.132.0.35</td>
+<td>521bit</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12</td>
+</tr>
+<tr>
+<td>brainpoolP256r1</td>
+<td>1.3.36.3.3.2.8.1.1.7</td>
+<td>256bit</td>
+<td>WARNING</td>
+<td>BSI TR-03110, RFC 5639</td>
+</tr>
+<tr>
+<td>brainpoolP384r1</td>
+<td>1.3.36.3.3.2.8.1.1.11</td>
+<td>384bit</td>
+<td>WARNING</td>
+<td>BSI TR-03110, RFC 5639</td>
+</tr>
+<tr>
+<td>brainpoolP512r1</td>
+<td>1.3.36.3.3.2.8.1.1.13</td>
+<td>512bit</td>
+<td>WARNING</td>
+<td>BSI TR-03110, RFC 5639</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>참고</strong>: ICAO Doc 9303 Part 12는 CSCA/DSC에 <strong>explicit EC parameters</strong> (named curve OID 대신 p, a, b, G, n, h 전체)를 의무화한다. Brainpool 사용 국가(독일 등)의 인증서는 explicit parameters로 인코딩되며, OpenSSL <code>EC_GROUP_get_curve_name()</code>이 named curve로 매핑하지 못할 수 있다.</p>
+</blockquote>
+<h3 id="3-4-3-rsa-pss-해시-알고리즘-추출">3.4.3 RSA-PSS 해시 알고리즘 추출</h3>
+<p>RSA-PSS(<code>1.2.840.113549.1.1.10</code> / <code>NID_rsassaPss</code>)는 기존 RSA/ECDSA와 달리 해시 알고리즘이 <strong>서명 알고리즘 OID에 내장되지 않고</strong>, PSS 파라미터(ASN.1 SEQUENCE) 안에 별도 지정된다:</p>
+<pre><code>RSASSA-PSS-params ::= SEQUENCE {
+    hashAlgorithm      [0] HashAlgorithm    DEFAULT sha1,
+    maskGenAlgorithm   [1] MaskGenAlgorithm DEFAULT mgf1SHA1,
+    saltLength         [2] INTEGER          DEFAULT 20,
+    trailerField       [3] INTEGER          DEFAULT 1
+}</code></pre>
+<p><strong>ePassport에서 사용되는 RSA-PSS 해시:</strong></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>PSS 파라미터 내 해시</th>
+<th>Hash OID</th>
+<th>OpenSSL NID</th>
+<th>Doc 9303 분류</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SHA-256</td>
+<td>2.16.840.1.101.3.4.2.1</td>
+<td><code>NID_sha256</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SHA-384</td>
+<td>2.16.840.1.101.3.4.2.2</td>
+<td><code>NID_sha384</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SHA-512</td>
+<td>2.16.840.1.101.3.4.2.3</td>
+<td><code>NID_sha512</code></td>
+<td>PASS</td>
+</tr>
+<tr>
+<td>SHA-224</td>
+<td>2.16.840.1.101.3.4.2.4</td>
+<td><code>NID_sha224</code></td>
+<td>WARNING (BSI TR-03110)</td>
+</tr>
+<tr>
+<td>SHA-1</td>
+<td>1.3.14.3.2.26</td>
+<td><code>NID_sha1</code></td>
+<td>WARNING (deprecated, RFC 8017 기본값)</td>
+</tr>
+</tbody></table></div>
+<p><strong>OpenSSL C/C++ 추출 방법:</strong></p>
+<ol>
+<li><code>X509_get0_tbs_sigalg(cert)</code> → <code>X509_ALGOR*</code></li>
+<li><code>X509_ALGOR_get0()</code> → <code>V_ASN1_SEQUENCE</code> 파라미터 획득</li>
+<li><code>d2i_RSA_PSS_PARAMS()</code> → <code>RSA_PSS_PARAMS*</code> 디코딩</li>
+<li><code>pss-&gt;hashAlgorithm-&gt;algorithm</code> → <code>OBJ_obj2nid()</code> → 해시 NID 확인</li>
+<li><code>hashAlgorithm</code> 필드가 없으면 기본값 SHA-1 (RFC 8017)</li>
+<li><code>RSA_PSS_PARAMS_free()</code> 해제 필수</li>
+</ol>
+<blockquote>
+<p><strong>참고</strong>: 본 시스템의 SE/PH/CN 등 국가 CSCA 인증서 3,019개가 RSA-PSS를 사용하며, 대부분 SHA-256 또는 SHA-512를 PSS 해시로 지정한다.</p>
+</blockquote>
+<h3 id="3-4-4-rsa-키-크기">3.4.4 RSA 키 크기</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>키 크기</th>
+<th>분류</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2048bit 이상</td>
+<td>PASS</td>
+<td>Doc 9303 Part 12 최소 요구사항</td>
+</tr>
+<tr>
+<td>3072bit 이상</td>
+<td>PASS (권고 충족)</td>
+<td>Doc 9303 Part 12 권장</td>
+</tr>
+<tr>
+<td>2048bit 미만</td>
+<td>FAIL</td>
+<td>Doc 9303 Part 12 최소 미달</td>
+</tr>
+<tr>
+<td>4096bit 초과</td>
+<td>WARNING</td>
+<td>권장 최대 초과 (실무 제한 아님)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-5-pkd와-무관한-알고리즘-cvc-칩-프로토콜-전용">3.5 PKD와 무관한 알고리즘 (CVC/칩 프로토콜 전용)</h2>
+<p>BSI OID(<code>0.4.0.127.0.7.*</code>)를 사용하는 다음 항목들은 X.509 CSCA/DSC에 <strong>등장하지 않으므로</strong> 본 시스템에서 처리하지 않는다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>프로토콜</th>
+<th>BSI OID</th>
+<th>용도</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>id-PACE-*</td>
+<td>0.4.0.127.0.7.2.2.4.*</td>
+<td>PACE 세션 키 설정 (BAC 대체)</td>
+</tr>
+<tr>
+<td>id-CA-*</td>
+<td>0.4.0.127.0.7.2.2.3.*</td>
+<td>Chip Authentication 키 합의</td>
+</tr>
+<tr>
+<td>id-TA-*</td>
+<td>0.4.0.127.0.7.2.2.2.*</td>
+<td>Terminal Authentication CVC 서명</td>
+</tr>
+<tr>
+<td>id-RI-*</td>
+<td>0.4.0.127.0.7.2.2.5.*</td>
+<td>Restricted Identification</td>
+</tr>
+</tbody></table></div>
+<p>이들은 EAC-PKI(CVC 기반)에서 사용되며, ICAO PKD와는 별도의 인프라이다.</p>
+<hr>
+<h2 id="3-6-brainpool-곡선-상세">3.6 Brainpool 곡선 상세</h2>
+<h3 id="3-6-1-배경">3.6.1 배경</h3>
+<ul>
+<li><strong>정의</strong>: RFC 5639 (Elliptic Curve Cryptography Brainpool Standard Curves and Curve Generation)</li>
+<li><strong>개발</strong>: 독일 BSI 주도, ECC Brainpool 워킹그룹</li>
+<li><strong>특징</strong>: NIST 곡선과 달리 곡선 파라미터 생성 과정이 완전 공개 (verifiably random)</li>
+</ul>
+<h3 id="3-6-2-실제-사용-국가">3.6.2 실제 사용 국가</h3>
+<p>독일(DE)을 포함한 유럽 국가들이 CSCA/DSC 인증서에 Brainpool 곡선을 사용한다. 이들은 ICAO PKD에 정상 등록되어 있으며, Passive Authentication에서 유효하게 검증된다.</p>
+<ul>
+<li><strong>독일 CSCA</strong>: <code>C=DE, O=bund, OU=bsi, CN=csca-germany</code> -- BSI 운영, Brainpool 곡선 사용</li>
+<li>BSI TR-03116 Part 3 Chapter 4.1에 따라 Brainpool 권장</li>
+</ul>
+<h3 id="3-6-3-nist-vs-brainpool-비교">3.6.3 NIST vs Brainpool 비교</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>속성</th>
+<th>NIST (P-256/384/521)</th>
+<th>Brainpool (P256r1/P384r1/P512r1)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>표준</td>
+<td>FIPS 186-4, SEC 2</td>
+<td>RFC 5639</td>
+</tr>
+<tr>
+<td>파라미터 생성</td>
+<td>비공개 seed</td>
+<td>Verifiably random (공개)</td>
+</tr>
+<tr>
+<td>Doc 9303 Part 12</td>
+<td>명시적 포함</td>
+<td>미포함 (BSI TR-03110 참조)</td>
+</tr>
+<tr>
+<td>ICAO PKD 등록</td>
+<td>지원</td>
+<td>지원 (실제 등록 인증서 존재)</td>
+</tr>
+<tr>
+<td>보안 수준 비교</td>
+<td>P-256 ~ 128bit</td>
+<td>brainpoolP256r1 ~ 128bit</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-6-4-본-시스템-적용-방침">3.6.4 본 시스템 적용 방침</h3>
+<p>Brainpool 곡선은 <code>keySizeCompliant = false</code>(FAIL)가 아닌 <strong>WARNING</strong> 수준으로 분류한다:</p>
+<ol>
+<li>ICAO PKD에 실제 등록된 유효 인증서들이 사용</li>
+<li>BSI TR-03110 Part 1에서 Passive Authentication에 사용 가능</li>
+<li>Doc 9303 Part 11이 BSI TR-03110을 참조</li>
+<li>보안 수준이 NIST 곡선과 동등</li>
+</ol>
+<hr>
+<h2 id="3-7-sha-1-deprecated-처리">3.7 SHA-1 Deprecated 처리</h2>
+<h3 id="3-7-1-icao-ntwg-권고">3.7.1 ICAO NTWG 권고</h3>
+<ul>
+<li>SHA-1은 ICAO NTWG(New Technologies Working Group)에 의해 단계적 폐지 권고</li>
+<li>2017년 SHA-1 충돌 공격(SHAttered) 이후 마이그레이션 가속</li>
+<li>기존 SHA-1 인증서는 여전히 ICAO PKD에 존재 (레거시)</li>
+</ul>
+<h3 id="3-7-2-본-시스템-적용-방침">3.7.2 본 시스템 적용 방침</h3>
+<ul>
+<li><strong>SHA-1 서명 인증서</strong>: WARNING (FAIL이 아님)<ul>
+<li>이유: 기존 발급 인증서 유효기간 내 폐기 불가, 기능적으로 서명 검증 가능</li>
+<li>메시지: &quot;SHA-1 지원 중단 예정 (ICAO NTWG 권고, SHA-256+ 전환 필요)&quot;</li>
+</ul>
+</li>
+<li><strong>SHA-224</strong>: WARNING<ul>
+<li>BSI TR-03110에서 지원하나 Doc 9303 Part 12 기본 목록에 미포함</li>
+<li>메시지: &quot;SHA-224 BSI TR-03110 지원 (Doc 9303 Part 12 외)&quot;</li>
+</ul>
+</li>
+</ul>
+<hr>
+<h2 id="3-8-구현-파일-매핑">3.8 구현 파일 매핑</h2>
+<h3 id="3-8-1-해시-알고리즘-추출-서명-알고리즘-해시">3.8.1 해시 알고리즘 추출 (서명 알고리즘 → 해시)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파일</th>
+<th>방식</th>
+<th>RSA-PSS</th>
+<th>SHA-224</th>
+<th>SHA-1 (old OID)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>services/common-lib/src/x509/metadata_extractor.cpp</code></td>
+<td>NID switch/case</td>
+<td>PSS 파라미터 파싱</td>
+<td>지원</td>
+<td><code>NID_sha1WithRSA</code> 지원</td>
+</tr>
+<tr>
+<td><code>services/pkd-management/src/common/x509_metadata_extractor.cpp</code></td>
+<td>문자열 매칭 + PSS 폴백</td>
+<td>PSS 파라미터 파싱</td>
+<td>지원</td>
+<td>문자열 &quot;sha1&quot; 지원</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-8-2-icao-준수-검사">3.8.2 ICAO 준수 검사</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파일</th>
+<th>역할</th>
+<th>RSA-PSS 처리</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>shared/lib/icao-validation/src/algorithm_compliance.cpp</code></td>
+<td>PA 검증 시 서명 알고리즘 + 곡선 검사</td>
+<td>NID 레벨 승인 (PSS 내 해시 미확인)</td>
+</tr>
+<tr>
+<td><code>services/pkd-management/src/common/progress_manager.cpp</code></td>
+<td>업로드 시 ICAO 적합성 검사 (6개 카테고리)</td>
+<td>해시 문자열 레벨 검사 (PSS 해시 정확 판정)</td>
+</tr>
+<tr>
+<td><code>services/pkd-management/src/common/doc9303_checklist.cpp</code></td>
+<td>Doc 9303 체크리스트 (~28개 항목)</td>
+<td>해시 문자열 레벨 검사 (PSS 해시 정확 판정)</td>
+</tr>
+</tbody></table></div>
+<h3 id="3-8-3-프론트엔드">3.8.3 프론트엔드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파일</th>
+<th>역할</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>frontend/src/i18n/locales/ko/certificate.json</code></td>
+<td>위반 메시지 한국어 번역</td>
+</tr>
+<tr>
+<td><code>frontend/src/i18n/locales/en/certificate.json</code></td>
+<td>위반 메시지 영어 번역</td>
+</tr>
+<tr>
+<td><code>frontend/src/components/IcaoViolationDetailDialog.tsx</code></td>
+<td>위반 상세 다이얼로그 번역 패턴</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="3-9-참고-문헌">3.9 참고 문헌</h2>
+<ol>
+<li><strong>ICAO Doc 9303 Part 12</strong> -- PKI for Machine Readable Travel Documents</li>
+<li><strong>ICAO Doc 9303 Part 11</strong> -- Security Mechanisms for MRTDs</li>
+<li><strong>BSI TR-03110 Part 1</strong> (v2.20) -- eMRTDs and Similar Applications</li>
+<li><strong>BSI TR-03110 Part 3</strong> (v2.21) -- Common Specifications (OID, ASN.1, domain parameters)</li>
+<li><strong>RFC 5639</strong> -- Elliptic Curve Cryptography (ECC) Brainpool Standard Curves and Curve Generation</li>
+<li><strong>BSI TR-03116 Part 3</strong> -- ePassport Cryptographic Mechanisms (독일 CSCA 운영 기준)</li>
+<li><strong>RFC 3279</strong> -- Algorithms and Identifiers for X.509 PKI</li>
+<li><strong>RFC 4055</strong> -- Additional Algorithms for RSA-PSS and RSA-OAEP</li>
+</ol>
+<hr>
+<h1 id="part-4-pkd-certificate-compliance-analysis">Part 4: PKD Certificate Compliance Analysis</h1>
+<p><strong>분석 대상</strong>: ICAO PKD Download collection-003 (31,212 인증서)</p>
+<hr>
+<h2 id="4-1-개요">4.1 개요</h2>
+<p>ICAO PKD에서 공식 배포하는 인증서들을 업로드 후 Doc 9303 Part 12 기술 규격 준수 여부를 검사한 결과, 상당수 인증서에서 미준수 항목이 발견되었다. 이 장은 그 원인을 분석하고 운영 시 고려사항을 정리한다.</p>
+<h2 id="4-2-분석-결과-요약">4.2 분석 결과 요약</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>검증 카테고리</th>
+<th>위반 유형</th>
+<th>심각도</th>
+<th>주요 원인</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>알고리즘</td>
+<td>SHA-1 해시 알고리즘 사용</td>
+<td>HIGH</td>
+<td>2010년 이전 발급 인증서</td>
+</tr>
+<tr>
+<td>키 크기</td>
+<td>RSA 1024/1536비트</td>
+<td>HIGH</td>
+<td>초기 ePassport 시기 인증서</td>
+</tr>
+<tr>
+<td>Key Usage</td>
+<td>digitalSignature 누락(CSCA)</td>
+<td>MEDIUM</td>
+<td>Doc 9303 해석 차이</td>
+</tr>
+<tr>
+<td>Basic Constraints</td>
+<td>확장 필드 누락</td>
+<td>MEDIUM</td>
+<td>일부 국가 PKI 구현 차이</td>
+</tr>
+<tr>
+<td>유효기간</td>
+<td>CSCA 15년/DSC 3년 초과</td>
+<td>LOW</td>
+<td>SHOULD 권고 미준수</td>
+</tr>
+<tr>
+<td>DN 형식</td>
+<td>Country(C) 속성 누락</td>
+<td>LOW</td>
+<td>초기 인증서 형식</td>
+</tr>
+</tbody></table></div>
+<h2 id="4-3-shall-vs-should-구분">4.3 SHALL vs SHOULD 구분</h2>
+<p>Doc 9303 Part 12는 RFC 2119 용어를 사용하여 요구사항 수준을 구분한다:</p>
+<h3 id="4-3-1-shall-필수-위반-보안-위험">4.3.1 SHALL (필수) 위반 -- 보안 위험</h3>
+<ul>
+<li><strong>SHA-1 해시 알고리즘</strong>: Doc 9303은 SHA-224 이상을 <strong>SHALL</strong> 로 요구. SHA-1은 충돌 공격 가능성이 입증되어 보안 위험 존재</li>
+<li><strong>RSA 1024비트 키</strong>: 최소 2048비트 <strong>SHALL</strong> 요구. 1024비트는 현재 기술로 인수분해 가능</li>
+<li><strong>Key Usage 확장</strong>: CSCA는 <code>keyCertSign</code> + <code>cRLSign</code>, DSC는 <code>digitalSignature</code> <strong>SHALL</strong> 포함</li>
+</ul>
+<h3 id="4-3-2-should-권고-미준수-운영-참고">4.3.2 SHOULD (권고) 미준수 -- 운영 참고</h3>
+<ul>
+<li><strong>CSCA 유효기간 15년 초과</strong>: Doc 9303 Section 7.1.1에서 SHOULD로 권고. 일부 국가는 20~30년 유효기간 사용</li>
+<li><strong>DSC 유효기간 3년 초과</strong>: Section 7.1.2에서 SHOULD로 권고. 실제 5~10년 사용 사례 존재</li>
+<li><strong>Basic Constraints 확장</strong>: CSCA에서 CA=TRUE, pathLenConstraint=0이 SHOULD. 일부 초기 인증서에서 누락</li>
+</ul>
+<h2 id="4-4-icao-pkd의-역할과-한계">4.4 ICAO PKD의 역할과 한계</h2>
+<h3 id="4-4-1-pkd는-배포-플랫폼">4.4.1 PKD는 배포 플랫폼</h3>
+<p>ICAO PKD는 각국이 제출한 인증서를 <strong>있는 그대로 배포</strong>하는 플랫폼이다. PKD가 인증서의 기술 준수 여부를 검증하여 거부하지 않는다.</p>
+<blockquote>
+<p>&quot;The PKD is a distribution mechanism, not a regulatory enforcement tool.&quot;</p>
+</blockquote>
+<h3 id="4-4-2-dc-data-vs-dc-nc-data">4.4.2 dc=data vs dc=nc-data</h3>
+<ul>
+<li><strong>dc=data</strong>: 정규 인증서 저장소. 기본적으로 적합한 인증서로 분류되나, 기술 세부사항에서 Doc 9303 권고와 차이가 있을 수 있음</li>
+<li><strong>dc=nc-data</strong>: ICAO가 <strong>명시적으로</strong> 표준 미준수로 분류한 DSC 인증서 (502건). <code>pkdConformanceCode</code>로 사유 기록</li>
+</ul>
+<h3 id="4-4-3-2021년-정책-변경">4.4.3 2021년 정책 변경</h3>
+<p>ICAO는 2021년부터 nc-data 분류를 폐기하는 방향으로 정책 변경:</p>
+<ul>
+<li>PKD를 규제 도구가 아닌 배포 플랫폼으로 재정의</li>
+<li>인증서 적합성 판단은 **검증 시스템(Inspection System)**의 책임으로 이관</li>
+<li>실제로 nc-data에 새로운 인증서가 추가되지 않고 있음</li>
+</ul>
+<h2 id="4-5-미준수-발생-원인">4.5 미준수 발생 원인</h2>
+<h3 id="4-5-1-레거시-인증서">4.5.1 레거시 인증서</h3>
+<p>ePassport 시스템은 2004년부터 운영되었으나, Doc 9303 Part 12의 기술 프로파일은 이후 여러 차례 개정되었다. 초기 발급 인증서는 당시 기준에는 적합했으나 현재 기준에서는 미준수로 판정될 수 있다.</p>
+<ul>
+<li><strong>SHA-1 인증서</strong>: 2015년 이전 발급된 CSCA/DSC에서 주로 발견</li>
+<li><strong>RSA 1024비트</strong>: 2010년 이전 발급 인증서</li>
+<li><strong>RSA 1536비트</strong>: 과도기(2008-2012) 인증서</li>
+</ul>
+<h3 id="4-5-2-국가별-pki-구현-차이">4.5.2 국가별 PKI 구현 차이</h3>
+<p>195+ 국가가 독립적으로 PKI를 운영하며, Doc 9303 해석과 구현에 차이가 존재한다:</p>
+<ul>
+<li><strong>Key Usage 해석</strong>: 일부 국가는 CSCA에 <code>keyCertSign</code>만 설정하고 <code>cRLSign</code> 누락</li>
+<li><strong>Basic Constraints</strong>: DSC에 확장 자체를 포함하지 않는 국가 존재 (Doc 9303은 CA=FALSE 권고)</li>
+<li><strong>유효기간</strong>: 국가 보안 정책에 따라 ICAO 권고보다 긴 유효기간 채택</li>
+</ul>
+<h3 id="4-5-3-should-해석의-유연성">4.5.3 SHOULD 해석의 유연성</h3>
+<p>Doc 9303의 SHOULD 항목은 강제가 아닌 권고이므로, 미준수가 곧 &quot;잘못된 인증서&quot;를 의미하지 않는다. 각국의 보안 정책과 운영 환경에 따라 합리적인 편차가 존재한다.</p>
+<h2 id="4-6-운영-시-권장사항">4.6 운영 시 권장사항</h2>
+<h3 id="4-6-1-검증-시스템에서의-처리">4.6.1 검증 시스템에서의 처리</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>위반 유형</th>
+<th>권장 처리</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SHA-1 알고리즘</td>
+<td>WARNING -- 보안 위험 경고, 거부하지는 않음</td>
+</tr>
+<tr>
+<td>RSA &lt; 2048비트</td>
+<td>WARNING -- 키 강도 부족 경고</td>
+</tr>
+<tr>
+<td>Key Usage 누락</td>
+<td>WARNING -- 확장 필드 미비</td>
+</tr>
+<tr>
+<td>유효기간 초과</td>
+<td>INFO -- 참고 정보 (SHOULD 항목)</td>
+</tr>
+<tr>
+<td>Basic Constraints 누락</td>
+<td>INFO -- 참고 정보</td>
+</tr>
+</tbody></table></div>
+<h3 id="4-6-2-passive-authentication에서의-영향">4.6.2 Passive Authentication에서의 영향</h3>
+<ul>
+<li>SHA-1/RSA-1024 인증서라도 PA 검증 자체는 가능 (서명 알고리즘만 지원하면 됨)</li>
+<li>PA 검증 결과에 알고리즘 강도 경고를 추가 정보로 포함</li>
+<li>최종 판단은 검증 시스템 운영 정책에 따름</li>
+</ul>
+<h2 id="4-7-검증-카테고리별-세부-체크-항목">4.7 검증 카테고리별 세부 체크 항목</h2>
+<h3 id="a-알고리즘-검증">A. 알고리즘 검증</h3>
+<ul>
+<li>서명 해시 알고리즘: SHA-224, SHA-256, SHA-384, SHA-512 (ICAO 승인)</li>
+<li>공개키 알고리즘: RSA, ECDSA, RSA-PSS (ICAO 승인)</li>
+</ul>
+<h3 id="b-키-크기-검증">B. 키 크기 검증</h3>
+<ul>
+<li>RSA: 최소 2048비트 (SHALL), 최대 4096비트 (권고)</li>
+<li>ECDSA: 최소 224비트, 승인 곡선 (P-256, P-384, P-521, brainpool)</li>
+</ul>
+<h3 id="c-key-usage-검증">C. Key Usage 검증</h3>
+<ul>
+<li>CSCA: keyCertSign + cRLSign (SHALL)</li>
+<li>DSC: digitalSignature (SHALL)</li>
+<li>MLSC: digitalSignature (SHALL)</li>
+</ul>
+<h3 id="d-확장-필드-검증">D. 확장 필드 검증</h3>
+<ul>
+<li>Basic Constraints 존재 여부</li>
+<li>Key Usage 확장 존재 여부</li>
+<li>CSCA: CA=TRUE (SHOULD)</li>
+<li>DSC: CA=FALSE (SHOULD)</li>
+</ul>
+<h3 id="e-유효기간-검증">E. 유효기간 검증</h3>
+<ul>
+<li>CSCA: 15년 이하 (SHOULD)</li>
+<li>DSC: 3년 이하 (SHOULD)</li>
+</ul>
+<h3 id="f-dn-형식-검증">F. DN 형식 검증</h3>
+<ul>
+<li>Subject DN 존재 여부</li>
+<li>Country(C) 속성 포함 여부</li>
+</ul>
+<hr>
+<h1 id="part-5-non-conformant-dsc-handling">Part 5: Non-Conformant DSC Handling</h1>
+<hr>
+<h2 id="5-1-개요">5.1 개요</h2>
+<p>ICAO PKD는 Document Signer Certificate(DSC)를 **준수(Conformant)**와 **비준수(Non-Conformant)**로 분류한다. 비준수 DSC(DSC_NC)는 ICAO Doc 9303 기술 사양을 완전히 충족하지 않지만, 실제 여권 서명에 사용된 유효한 인증서이다.</p>
+<h3 id="핵심-사실">핵심 사실</h3>
+<ul>
+<li>DSC_NC는 기술적 비준수이지, 보안적으로 무효한 것이 아니다</li>
+<li>ICAO는 2021년에 nc-data 브랜치를 deprecated (신규 업로드 중단)</li>
+<li>기존 ~502개 DSC_NC는 여전히 유효하며, 실제 유통 중인 여권에 사용됨</li>
+<li>Receiving State(수신국)가 nc-data 임포트 여부를 결정</li>
+</ul>
+<hr>
+<h2 id="5-2-icao-pkd-컬렉션-구조">5.2 ICAO PKD 컬렉션 구조</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬렉션</th>
+<th>내용</th>
+<th>LDAP 경로</th>
+<th>상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>icaopkd-001</td>
+<td>CSCA, DSC, CRL (준수)</td>
+<td><code>dc=data</code></td>
+<td>Active</td>
+</tr>
+<tr>
+<td>icaopkd-002</td>
+<td>Master Lists</td>
+<td><code>dc=data</code></td>
+<td>Active</td>
+</tr>
+<tr>
+<td>icaopkd-003</td>
+<td>DSC_NC (비준수)</td>
+<td><code>dc=nc-data</code></td>
+<td>Deprecated (2021)</td>
+</tr>
+</tbody></table></div>
+<h3 id="ldap-dit-구조">LDAP DIT 구조</h3>
+<pre><code>dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+├── dc=data                          &lt;- icaopkd-001, 002
+│   └── c={COUNTRY}
+│       ├── o=csca   (CSCA 인증서)
+│       ├── o=dsc    (준수 DSC)
+│       ├── o=crl    (CRL)
+│       ├── o=mlsc   (Master List Signer)
+│       └── o=ml     (Master Lists)
+└── dc=nc-data                       &lt;- icaopkd-003 (deprecated)
+    └── c={COUNTRY}
+        └── o=dsc    (비준수 DSC_NC)</code></pre>
+<h3 id="dsc_nc-ldap-속성">DSC_NC LDAP 속성</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>속성</th>
+<th>설명</th>
+<th>예시</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pkdConformanceCode</code></td>
+<td>비준수 사유 코드</td>
+<td><code>ERR:CSCA.CDP.14</code></td>
+</tr>
+<tr>
+<td><code>pkdConformanceText</code></td>
+<td>비준수 사유 설명</td>
+<td><code>The Subject Public Key Info field does not contain an rsaEncryption OID</code></td>
+</tr>
+<tr>
+<td><code>pkdVersion</code></td>
+<td>PKD 버전</td>
+<td><code>90</code></td>
+</tr>
+<tr>
+<td><code>userCertificate;binary</code></td>
+<td>인증서 바이너리 (DER)</td>
+<td>-</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-3-비준수-사유-분류">5.3 비준수 사유 분류</h2>
+<p>ICAO PKD가 정의하는 주요 비준수 사유:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드 패턴</th>
+<th>분류</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ERR:CSCA.*</code></td>
+<td>CSCA 관련</td>
+<td>CSCA 인증서 형식/알고리즘 비준수</td>
+</tr>
+<tr>
+<td><code>ERR:DSC.*</code></td>
+<td>DSC 자체</td>
+<td>DSC 인증서 형식/알고리즘 비준수</td>
+</tr>
+<tr>
+<td><code>ERR:*.CDP.*</code></td>
+<td>CRL 배포점</td>
+<td>CRL Distribution Point 관련 이슈</td>
+</tr>
+<tr>
+<td><code>ERR:*.SIG.*</code></td>
+<td>서명 알고리즘</td>
+<td>서명 알고리즘이 ICAO 권장 목록에 없음</td>
+</tr>
+<tr>
+<td><code>ERR:*.KEY.*</code></td>
+<td>공개키</td>
+<td>공개키 형식/크기 비준수</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-4-다른-npkd-구현체의-처리-방식">5.4 다른 NPKD 구현체의 처리 방식</h2>
+<h3 id="keyfactor-npkd-상용-솔루션">Keyfactor NPKD (상용 솔루션)</h3>
+<ul>
+<li><strong>conformant + non-conformant 모두 다운로드</strong></li>
+<li>Receiving State가 nc-data 임포트 여부를 결정하도록 설계</li>
+<li>인증서 분류 표시: &quot;Conformance&quot; 상태 필드 제공</li>
+</ul>
+<h3 id="german-bsi-연방정보보안청">German BSI (연방정보보안청)</h3>
+<ul>
+<li>CSCA/DSC/CRL만 필수 다운로드</li>
+<li>nc-data는 선택적 임포트</li>
+<li>PA 검증 시 nc-data 포함 여부는 정책 기반</li>
+</ul>
+<h3 id="일반-권장-사항-icao-커뮤니티">일반 권장 사항 (ICAO 커뮤니티)</h3>
+<ul>
+<li>DSC_NC는 실제 여권에 사용된 인증서이므로 <strong>수집은 권장</strong></li>
+<li>PA 검증 시 DSC_NC도 신뢰 체인 검증 대상에 포함해야 함</li>
+<li>비준수 상태는 정보성으로 표시 (검증 통과/실패와 별개)</li>
+</ul>
+<hr>
+<h2 id="5-5-현-시스템의-dsc_nc-처리-아키텍처">5.5 현 시스템의 DSC_NC 처리 아키텍처</h2>
+<h3 id="5-5-1-데이터-저장">5.5.1 데이터 저장</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>저장소</th>
+<th>준수 DSC</th>
+<th>비준수 DSC_NC</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>DB <code>certificate</code> 테이블</td>
+<td><code>certificate_type = &#39;DSC&#39;</code></td>
+<td><code>certificate_type = &#39;DSC_NC&#39;</code></td>
+</tr>
+<tr>
+<td>LDAP <code>dc=data</code></td>
+<td><code>o=dsc,c={country},dc=data,...</code></td>
+<td>-</td>
+</tr>
+<tr>
+<td>LDAP <code>dc=nc-data</code></td>
+<td>-</td>
+<td><code>o=dsc,c={country},dc=nc-data,...</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>DB 복합 유니크 인덱스: <code>(certificate_type, fingerprint_sha256)</code> → 동일 fingerprint로 DSC와 DSC_NC 별도 저장 가능</li>
+<li>LDAP은 DIT 경로로 자연스럽게 분리</li>
+</ul>
+<h3 id="5-5-2-pa-lookup-pkd-management-db-기반">5.5.2 PA Lookup (PKD Management - DB 기반)</h3>
+<pre><code>POST /api/certificates/pa-lookup
+-&gt; ValidationRepository.findBySubjectDn() / findByFingerprint()
+  -&gt; DB 조회 (DSC, DSC_NC 모두 포함)
+  -&gt; certificateType이 "DSC_NC"이면 enrichWithConformanceData() 호출
+    -&gt; LDAP nc-data에서 pkdConformanceCode/Text/Version 조회
+  -&gt; 응답에 conformance 정보 포함</code></pre>
+<h3 id="5-5-3-pa-verify-pa-service-ldap-기반">5.5.3 PA Verify (PA Service - LDAP 기반)</h3>
+<pre><code>POST /api/pa/verify
+-&gt; SOD에서 DSC 추출 (LDAP 조회 아님)
+-&gt; CSCA 조회: dc=data (o=csca + o=lc) &lt;- CSCAs는 항상 dc=data에만 존재
+-&gt; Trust Chain 검증 (DSC 서명 -&gt; CSCA 공개키)
+-&gt; CRL 검사: dc=data (o=crl)
+-&gt; DSC Conformance 체크: checkDscConformance()
+  -&gt; DSC fingerprint 계산 (SHA-256)
+  -&gt; LDAP nc-data에서 해당 fingerprint 검색
+  -&gt; 존재하면 dscNonConformant=true + conformance 데이터
+-&gt; 응답에 conformance 정보 포함 (certificateChainValidation 내)</code></pre>
+<h3 id="5-5-4-dsc-ldap-검색-fallback">5.5.4 DSC LDAP 검색 (fallback)</h3>
+<pre><code>LdapCertificateRepository.findDscBySubjectDn()
+-&gt; dc=data 검색 (conformant DSC)
+-&gt; 없으면 dc=nc-data 검색 (non-conformant DSC_NC)
+-&gt; isNonConformant 출력 파라미터로 구분</code></pre>
+<hr>
+<h2 id="5-6-중요-설계-결정">5.6 중요 설계 결정</h2>
+<h3 id="q-pa-verify에서-dsc_nc가-검증에-실패하면">Q: PA Verify에서 DSC_NC가 검증에 실패하면?</h3>
+<p><strong>A</strong>: DSC가 non-conformant라는 것은 ICAO 기술 사양 비준수를 의미하지, 인증서 자체가 무효함을 의미하지 않는다. PA 검증 결과(VALID/INVALID)는 trust chain, 서명 검증, CRL 상태에 따라 결정되며, conformance 상태와 독립적이다.</p>
+<h3 id="q-dc-data와-dc-nc-data에-같은-dsc가-존재할-수-있는가">Q: dc=data와 dc=nc-data에 같은 DSC가 존재할 수 있는가?</h3>
+<p><strong>A</strong>: ICAO PKD 운영상 동일 인증서가 001(conformant)과 003(non-conformant)에 동시 등록되지 않는다. 단, PA auto-registration(<code>PA_EXTRACTED</code> source)으로 SOD에서 추출한 DSC가 DB에 별도 등록될 수 있으며, 이 경우 DB에는 같은 fingerprint로 DSC(PA_EXTRACTED)와 DSC_NC(LDIF_PARSED)가 공존한다.</p>
+<h3 id="q-reconciliation-db-ldap-동기화-에서-dsc_nc는">Q: Reconciliation(DB-LDAP 동기화)에서 DSC_NC는?</h3>
+<p><strong>A</strong>: ICAO가 2021년에 nc-data를 deprecated했으므로, Reconciliation 범위에서 DSC_NC는 제외한다. DSC_NC의 LDAP 동기화 상태(<code>stored_in_ldap</code>)는 업로드 시 설정되며, 이후 변경하지 않는다.</p>
+<hr>
+<h2 id="5-7-운영-데이터-현황">5.7 운영 데이터 현황</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>수량</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>전체 DSC_NC</td>
+<td>502</td>
+</tr>
+<tr>
+<td>DSC_NC 국가 수</td>
+<td>~30개국</td>
+</tr>
+<tr>
+<td>LDAP nc-data 저장</td>
+<td>502 (100%)</td>
+</tr>
+<tr>
+<td>DB certificate 저장</td>
+<td>502 (certificate_type=&#39;DSC_NC&#39;)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="5-8-관련-파일">5.8 관련 파일</h2>
+<h3 id="backend-pa-service">Backend (PA Service)</h3>
+<ul>
+<li><code>services/pa-service/src/repositories/ldap_certificate_repository.h</code> - <code>checkDscConformance()</code>, <code>DscConformanceInfo</code></li>
+<li><code>services/pa-service/src/repositories/ldap_certificate_repository.cpp</code> - nc-data LDAP 조회 구현</li>
+<li><code>services/pa-service/src/domain/models/certificate_chain_validation.h</code> - <code>dscNonConformant</code>, <code>pkdConformanceCode/Text</code></li>
+<li><code>services/pa-service/src/services/certificate_validation_service.cpp</code> - conformance 체크 호출</li>
+</ul>
+<h3 id="backend-pkd-management">Backend (PKD Management)</h3>
+<ul>
+<li><code>services/pkd-management/src/repositories/validation_repository.h</code> - <code>enrichWithConformanceData()</code></li>
+<li><code>services/pkd-management/src/repositories/validation_repository.cpp</code> - PA Lookup conformance LDAP 보조 조회</li>
+</ul>
+<h3 id="frontend">Frontend</h3>
+<ul>
+<li><code>frontend/src/pages/PAVerify.tsx</code> - PA Verify/Lookup 결과에 Non-Conformant 경고 표시</li>
+</ul>
+<hr>
+<h1 id="part-6-data-protection-pii-encryption">Part 6: Data Protection &amp; PII Encryption</h1>
+<hr>
+<h2 id="6-1-법적-근거">6.1 법적 근거</h2>
+<h3 id="6-1-1-개인정보-보호법-법률-제19234호">6.1.1 개인정보 보호법 (법률 제19234호)</h3>
+<h4 id="제24조-고유식별정보의-처리-제한">제24조 (고유식별정보의 처리 제한)</h4>
+<blockquote>
+<p>개인정보처리자가 고유식별정보를 처리하는 경우에는 그 고유식별정보가 분실 도난 유출 위조 변조 또는 훼손되지 아니하도록 대통령령으로 정하는 바에 따라 <strong>암호화 등 안전성 확보에 필요한 조치</strong>를 하여야 한다. (제3항)</p>
+</blockquote>
+<p><strong>고유식별정보의 범위</strong> (시행령 제19조):</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>정보 유형</th>
+<th align="center">고유식별정보 여부</th>
+<th>근거</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>주민등록번호</td>
+<td align="center"><strong>O</strong></td>
+<td>시행령 제19조 제1호</td>
+</tr>
+<tr>
+<td><strong>여권번호</strong></td>
+<td align="center"><strong>O</strong></td>
+<td><strong>시행령 제19조 제2호</strong></td>
+</tr>
+<tr>
+<td>운전면허번호</td>
+<td align="center"><strong>O</strong></td>
+<td>시행령 제19조 제3호</td>
+</tr>
+<tr>
+<td>외국인등록번호</td>
+<td align="center"><strong>O</strong></td>
+<td>시행령 제19조 제4호</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>핵심</strong>: 본 프로젝트에서 PA 검증 시 처리되는 **여권번호(document_number)**는 고유식별정보에 해당하며, <strong>저장 및 전송 시 암호화가 법적 의무</strong>임.</p>
+</blockquote>
+<h4 id="제29조-안전조치의무">제29조 (안전조치의무)</h4>
+<blockquote>
+<p>개인정보처리자는 개인정보가 분실 도난 유출 위조 변조 또는 훼손되지 아니하도록 내부 관리계획 수립, 접근 통제 및 접근권한 제한 조치, <strong>개인정보의 암호화</strong>, 접속기록의 보관 및 위조 변조 방지 조치, 보안프로그램의 설치 및 갱신 등 대통령령으로 정하는 바에 따라 안전성 확보에 필요한 조치를 하여야 한다.</p>
+</blockquote>
+<h3 id="6-1-2-개인정보-보호법-시행령">6.1.2 개인정보 보호법 시행령</h3>
+<h4 id="시행령-제21조-고유식별정보의-안전성-확보-조치">시행령 제21조 (고유식별정보의 안전성 확보 조치)</h4>
+<p>고유식별정보(여권번호 포함)를 처리하는 경우:</p>
+<ul>
+<li><strong>정보통신망을 통하여 송수신할 때</strong>: 암호화 필수</li>
+<li><strong>저장할 때</strong>: 암호화 필수 (encryption at rest)</li>
+</ul>
+<h4 id="시행령-제30조-개인정보의-안전성-확보-조치">시행령 제30조 (개인정보의 안전성 확보 조치)</h4>
+<p>개인정보처리자가 제29조에 따라 취해야 할 안전성 확보 조치의 세부 기준:</p>
+<ol>
+<li>내부 관리계획의 수립 시행</li>
+<li><strong>접근 통제 및 접근권한 제한 조치</strong></li>
+<li><strong>개인정보의 암호화</strong></li>
+<li>접속기록의 보관 및 점검</li>
+<li>보안프로그램의 설치 갱신</li>
+</ol>
+<h3 id="6-1-3-개인정보의-안전성-확보조치-기준-고시-제2021-2호">6.1.3 개인정보의 안전성 확보조치 기준 (고시 제2021-2호)</h3>
+<h4 id="고시-제7조-개인정보의-암호화">고시 제7조 (개인정보의 암호화)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>대상</th>
+<th align="center">저장 시 (at rest)</th>
+<th align="center">전송 시 (in transit)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>비밀번호</td>
+<td align="center">일방향 해시 (SHA-256+)</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td><strong>여권번호</strong> (고유식별정보)</td>
+<td align="center"><strong>암호화 필수</strong></td>
+<td align="center"><strong>암호화 필수</strong> (TLS)</td>
+</tr>
+<tr>
+<td>생체인식정보 (민감정보)</td>
+<td align="center"><strong>암호화 필수</strong></td>
+<td align="center"><strong>암호화 필수</strong></td>
+</tr>
+<tr>
+<td>일반 개인정보 (성명, IP 등)</td>
+<td align="center">권고</td>
+<td align="center"><strong>TLS 권고</strong></td>
+</tr>
+</tbody></table></div>
+<h4 id="허용-암호-알고리즘-kisa-기준">허용 암호 알고리즘 (KISA 기준)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>용도</th>
+<th>알고리즘</th>
+<th align="center">최소 키 길이</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>대칭키 암호화</td>
+<td><strong>AES</strong>, ARIA, SEED, LEA</td>
+<td align="center">128비트</td>
+</tr>
+<tr>
+<td>해시 (비밀번호)</td>
+<td><strong>SHA-256</strong>, SHA-384, SHA-512</td>
+<td align="center">-</td>
+</tr>
+<tr>
+<td>공개키 암호화</td>
+<td>RSA</td>
+<td align="center">2048비트</td>
+</tr>
+<tr>
+<td>전송 구간 보호</td>
+<td><strong>TLS 1.2</strong> 이상</td>
+<td align="center">-</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>사용 금지</strong>: DES, 3DES, RC4, MD5, SHA-1 (취약 알고리즘)</p>
+</blockquote>
+<hr>
+<h2 id="6-2-프로젝트-내-개인정보-현황">6.2 프로젝트 내 개인정보 현황</h2>
+<h3 id="6-2-1-개인정보-분류">6.2.1 개인정보 분류</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>데이터</th>
+<th>위치</th>
+<th>분류</th>
+<th align="center">암호화 의무</th>
+<th align="center">적용 상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>여권번호</strong> (<code>document_number</code>)</td>
+<td><code>pa_verification</code></td>
+<td><strong>고유식별정보</strong></td>
+<td align="center"><strong>필수</strong></td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>요청자 성명 (<code>requester_name</code>)</td>
+<td><code>api_client_requests</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>요청자 소속 (<code>requester_org</code>)</td>
+<td><code>api_client_requests</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>요청자 이메일 (<code>requester_contact_email</code>)</td>
+<td><code>api_client_requests</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>요청자 전화번호 (<code>requester_contact_phone</code>)</td>
+<td><code>api_client_requests</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>클라이언트 IP (<code>client_ip</code>)</td>
+<td><code>pa_verification</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>User-Agent (<code>user_agent</code>)</td>
+<td><code>pa_verification</code></td>
+<td>일반 개인정보</td>
+<td align="center">권고</td>
+<td align="center"><strong>적용 완료</strong></td>
+</tr>
+<tr>
+<td>비밀번호 (<code>password_hash</code>)</td>
+<td><code>users</code></td>
+<td>-</td>
+<td align="center">일방향 해시</td>
+<td align="center"><strong>적용 완료</strong> (bcrypt)</td>
+</tr>
+<tr>
+<td>API Key (<code>api_key_hash</code>)</td>
+<td><code>api_clients</code></td>
+<td>-</td>
+<td align="center">일방향 해시</td>
+<td align="center"><strong>적용 완료</strong> (SHA-256)</td>
+</tr>
+</tbody></table></div>
+<h3 id="6-2-2-암호화-미적용-의무-아님">6.2.2 암호화 미적용 (의무 아님)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>데이터</th>
+<th>위치</th>
+<th>사유</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>인증서 데이터 (CSCA/DSC/CRL)</td>
+<td><code>certificate</code>, LDAP</td>
+<td>공개키 기반 <strong>공개 데이터</strong> -- 개인정보 비해당</td>
+</tr>
+<tr>
+<td>인증서 Subject DN</td>
+<td><code>certificate</code></td>
+<td>기관/국가 DN -- 일반적으로 개인 식별 불가</td>
+</tr>
+<tr>
+<td>감사 로그 IP/User-Agent</td>
+<td><code>auth_audit_log</code>, <code>operation_audit_log</code></td>
+<td><strong>접속기록</strong> -- 고시 제8조에 따라 보관 의무 (암호화 의무 아님)</td>
+</tr>
+<tr>
+<td>국가 코드</td>
+<td><code>pa_verification</code></td>
+<td>단독으로 개인 식별 불가</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="6-3-기술-구현">6.3 기술 구현</h2>
+<h3 id="6-3-1-암호화-방식">6.3.1 암호화 방식</h3>
+<p><strong>AES-256-GCM</strong> (Authenticated Encryption with Associated Data)</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>값</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>알고리즘</td>
+<td>AES-256 (KISA 승인, 고시 제7조 충족)</td>
+</tr>
+<tr>
+<td>모드</td>
+<td>GCM (Galois/Counter Mode)</td>
+</tr>
+<tr>
+<td>키 길이</td>
+<td>256비트 (32바이트)</td>
+</tr>
+<tr>
+<td>IV (초기화 벡터)</td>
+<td>96비트 (12바이트) -- NIST SP 800-38D 권고</td>
+</tr>
+<tr>
+<td>인증 태그</td>
+<td>128비트 (16바이트)</td>
+</tr>
+<tr>
+<td>IV 생성</td>
+<td><code>RAND_bytes()</code> -- 매 암호화마다 랜덤 생성</td>
+</tr>
+</tbody></table></div>
+<p><strong>AES-256-GCM을 선택한 이유</strong>:</p>
+<ul>
+<li><strong>기밀성 + 무결성 동시 보장</strong>: GCM 모드는 암호화와 동시에 인증 태그를 생성하여 데이터 변조 감지 가능</li>
+<li><strong>KISA 승인 알고리즘</strong>: 암호 알고리즘 및 키 길이 이용 안내서에서 AES-256 권장</li>
+<li><strong>NIST 표준</strong>: SP 800-38D에서 GCM 모드 표준화</li>
+<li><strong>성능</strong>: CTR 기반으로 병렬 처리 가능, CBC 대비 우수한 성능</li>
+</ul>
+<h3 id="6-3-2-저장-형식">6.3.2 저장 형식</h3>
+<pre><code>ENC:&lt;hex(IV[12bytes] + ciphertext[N bytes] + tag[16bytes])&gt;</code></pre>
+<ul>
+<li><strong>접두사</strong> <code>ENC:</code> -- 암호화된 값과 평문을 구분 (하위 호환성)</li>
+<li><strong>IV</strong>: 12바이트 랜덤 값 (hex 24자)</li>
+<li><strong>Ciphertext</strong>: 평문과 동일 길이</li>
+<li><strong>Tag</strong>: GCM 인증 태그 16바이트 (hex 32자)</li>
+<li><strong>총 오버헤드</strong>: <code>4 + (12 + N + 16) * 2</code> = <code>60 + 2N</code> 문자</li>
+</ul>
+<p><strong>예시</strong>: &quot;홍길동&quot; (9바이트 UTF-8) → <code>ENC:</code> + 74자 hex = 총 78자</p>
+<h3 id="6-3-3-키-관리">6.3.3 키 관리</h3>
+<pre><code class="language-bash"># 키 생성 (32바이트 = 64 hex 문자)
+openssl rand -hex 32
+
+# .env 파일에 설정
+PII_ENCRYPTION_KEY=9ac3dec3d78b290bd9074ad7b908325087c953057ebeaf10db39193b2989a9d8</code></pre>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>키 형식</td>
+<td>64자 hex 문자열 (= 32바이트 = 256비트)</td>
+</tr>
+<tr>
+<td>환경변수</td>
+<td><code>PII_ENCRYPTION_KEY</code></td>
+</tr>
+<tr>
+<td>키 미설정 시</td>
+<td>암호화 비활성화 -- 평문 저장 (개발/테스트용)</td>
+</tr>
+<tr>
+<td>키 로딩</td>
+<td><code>std::call_once</code> -- 프로세스 시작 시 1회 로드</td>
+</tr>
+<tr>
+<td>키 저장 위치</td>
+<td><code>.env</code> 파일 (<code>.gitignore</code> 포함, 버전 관리 제외)</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>운영 환경 권장사항</strong>: 키를 <code>.env</code> 파일 대신 환경 비밀 관리 시스템(Vault, AWS KMS 등)에서 주입할 것을 권장.</p>
+</blockquote>
+<h3 id="6-3-4-pii-마스킹-public-api-응답">6.3.4 PII 마스킹 (Public API 응답)</h3>
+<p>관리자가 아닌 사용자에게 제공하는 API 응답에서는 개인정보를 마스킹하여 표시:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>유형</th>
+<th>원본</th>
+<th>마스킹 결과</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>이름 (<code>name</code>)</td>
+<td>홍길동</td>
+<td>홍*동</td>
+</tr>
+<tr>
+<td>이메일 (<code>email</code>)</td>
+<td><a href="mailto:hong@example.com">hong@example.com</a></td>
+<td>h***@example.com</td>
+</tr>
+<tr>
+<td>전화번호 (<code>phone</code>)</td>
+<td>010-1234-5678</td>
+<td>010-****-5678</td>
+</tr>
+<tr>
+<td>소속 (<code>org</code>)</td>
+<td>스마트코어</td>
+<td>스마***</td>
+</tr>
+</tbody></table></div>
+<ul>
+<li>UTF-8 인코딩 인식 (한글/영어 모두 올바르게 처리)</li>
+<li>관리자(JWT admin) 요청 시에만 복호화된 전체 데이터 제공</li>
+</ul>
+<h3 id="6-3-5-fail-open-설계">6.3.5 Fail-Open 설계</h3>
+<p>암호화/복호화 실패 시 서비스 가용성을 유지하기 위한 안전 장치:</p>
+<ul>
+<li><strong>암호화 실패</strong>: 평문 반환 (데이터 손실 방지) + 에러 로그</li>
+<li><strong>복호화 실패</strong>: 암호화된 원본 반환 + 에러 로그</li>
+<li><strong>키 미설정</strong>: 암호화 비활성화 -- 평문 통과 (개발 환경 호환)</li>
+<li><strong><code>ENC:</code> 접두사 감지</strong>: 암호화된 데이터와 기존 평문 데이터 혼재 시에도 올바르게 처리</li>
+</ul>
+<hr>
+<h2 id="6-4-적용-서비스">6.4 적용 서비스</h2>
+<h3 id="6-4-1-pkd-management-service">6.4.1 PKD Management Service</h3>
+<p><strong>대상 테이블</strong>: <code>api_client_requests</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>데이터 유형</th>
+<th>컬럼 크기</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>requester_name</code></td>
+<td>요청자 성명</td>
+<td>VARCHAR(1024)</td>
+</tr>
+<tr>
+<td><code>requester_org</code></td>
+<td>요청자 소속</td>
+<td>VARCHAR(1024)</td>
+</tr>
+<tr>
+<td><code>requester_contact_phone</code></td>
+<td>요청자 전화번호</td>
+<td>VARCHAR(1024)</td>
+</tr>
+<tr>
+<td><code>requester_contact_email</code></td>
+<td>요청자 이메일</td>
+<td>VARCHAR(1024)</td>
+</tr>
+</tbody></table></div>
+<p><strong>소스 파일</strong>:</p>
+<ul>
+<li><code>services/pkd-management/src/auth/personal_info_crypto.h</code> -- 암호화 유틸리티 헤더</li>
+<li><code>services/pkd-management/src/auth/personal_info_crypto.cpp</code> -- AES-256-GCM 구현</li>
+<li><code>services/pkd-management/src/repositories/api_client_request_repository.cpp</code> -- INSERT 시 암호화, SELECT 시 복호화</li>
+<li><code>services/pkd-management/src/handlers/api_client_request_handler.cpp</code> -- Public API 응답 시 PII 마스킹</li>
+<li><code>services/pkd-management/src/infrastructure/service_container.cpp</code> -- Phase 0 초기화</li>
+</ul>
+<h3 id="6-4-2-pa-service">6.4.2 PA Service</h3>
+<p><strong>대상 테이블</strong>: <code>pa_verification</code></p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>컬럼</th>
+<th>데이터 유형</th>
+<th>컬럼 크기</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>document_number</code></td>
+<td><strong>여권번호</strong> (고유식별정보)</td>
+<td>VARCHAR(1024)</td>
+</tr>
+<tr>
+<td><code>client_ip</code></td>
+<td>클라이언트 IP</td>
+<td>VARCHAR(1024)</td>
+</tr>
+<tr>
+<td><code>user_agent</code></td>
+<td>User-Agent 문자열</td>
+<td>TEXT / VARCHAR2(4000)</td>
+</tr>
+</tbody></table></div>
+<p><strong>소스 파일</strong>:</p>
+<ul>
+<li><code>services/pa-service/src/auth/personal_info_crypto.h</code> -- 암호화 유틸리티 헤더 (PKD Management와 동일)</li>
+<li><code>services/pa-service/src/auth/personal_info_crypto.cpp</code> -- AES-256-GCM 구현</li>
+<li><code>services/pa-service/src/repositories/pa_verification_repository.cpp</code> -- INSERT 시 암호화, SELECT 시 복호화</li>
+<li><code>services/pa-service/src/infrastructure/service_container.cpp</code> -- Step 0 초기화</li>
+</ul>
+<h3 id="6-4-3-전송-구간-암호화">6.4.3 전송 구간 암호화</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>구간</th>
+<th>방식</th>
+<th>설정 파일</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>외부 → API Gateway</td>
+<td><strong>TLS 1.2/1.3</strong> (HTTPS :443)</td>
+<td><code>nginx/api-gateway-ssl.conf</code></td>
+</tr>
+<tr>
+<td>API Gateway → Backend</td>
+<td>HTTP (내부 Docker 네트워크)</td>
+<td>-</td>
+</tr>
+<tr>
+<td>인증서</td>
+<td>Private CA (RSA 4096) + 서버 인증서 (RSA 2048)</td>
+<td><code>scripts/ssl/init-cert.sh</code></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="6-5-db-스키마-변경-사항">6.5 DB 스키마 변경 사항</h2>
+<h3 id="6-5-1-postgresql">6.5.1 PostgreSQL</h3>
+<pre><code class="language-sql">-- api_client_requests (PKD Management)
+-- 기존: VARCHAR(255) -&gt; 변경: VARCHAR(1024)
+requester_name VARCHAR(1024) NOT NULL,
+requester_org VARCHAR(1024) NOT NULL,
+requester_contact_phone VARCHAR(1024),
+requester_contact_email VARCHAR(1024) NOT NULL,
+
+-- pa_verification (PA Service)
+-- 기존: VARCHAR(50) -&gt; 변경: VARCHAR(1024)
+document_number VARCHAR(1024),
+-- 기존: VARCHAR(45) -&gt; 변경: VARCHAR(1024)
+client_ip VARCHAR(1024),
+-- user_agent: TEXT (변경 없음)</code></pre>
+<h3 id="6-5-2-oracle">6.5.2 Oracle</h3>
+<pre><code class="language-sql">-- api_client_requests (PKD Management)
+-- 기존: VARCHAR2(255) -&gt; 변경: VARCHAR2(1024)
+requester_name VARCHAR2(1024) NOT NULL,
+requester_org VARCHAR2(1024) NOT NULL,
+requester_contact_phone VARCHAR2(1024),
+requester_contact_email VARCHAR2(1024) NOT NULL,
+
+-- pa_verification (PA Service)
+-- 기존: VARCHAR2(50) -&gt; 변경: VARCHAR2(1024)
+document_number VARCHAR2(1024),
+-- 기존: VARCHAR2(45) -&gt; 변경: VARCHAR2(1024)
+client_ip VARCHAR2(1024),
+-- user_agent: VARCHAR2(4000) (변경 없음)</code></pre>
+<h3 id="6-5-3-기존-데이터-마이그레이션">6.5.3 기존 데이터 마이그레이션</h3>
+<p>기존 평문 데이터는 마이그레이션 없이 그대로 사용 가능:</p>
+<ul>
+<li><code>decrypt()</code> 함수는 <code>ENC:</code> 접두사가 없는 값을 평문으로 인식하여 그대로 반환</li>
+<li>신규 INSERT부터 암호화 적용, 기존 데이터는 조회 시 평문 그대로 반환</li>
+</ul>
+<p>별도 마이그레이션 스크립트가 필요한 경우 (기존 데이터 일괄 암호화):</p>
+<pre><code class="language-sql">-- 주의: 애플리케이션 레벨에서 처리해야 함 (DB 함수로는 AES-256-GCM 구현 불가)
+-- 별도 마이그레이션 도구 개발 필요</code></pre>
+<hr>
+<h2 id="6-6-설정-및-운영">6.6 설정 및 운영</h2>
+<h3 id="6-6-1-암호화-활성화">6.6.1 암호화 활성화</h3>
+<pre><code class="language-bash"># 1. 키 생성
+openssl rand -hex 32
+
+# 2. .env 파일에 추가
+echo "PII_ENCRYPTION_KEY=&lt;생성된_64자_hex&gt;" &gt;&gt; .env
+
+# 3. 서비스 재시작
+docker compose -f docker/docker-compose.yaml restart pkd-management pa-service</code></pre>
+<h3 id="6-6-2-암호화-비활성화-개발-테스트용">6.6.2 암호화 비활성화 (개발/테스트용)</h3>
+<pre><code class="language-bash"># .env에서 키를 제거하거나 빈 값 설정
+PII_ENCRYPTION_KEY=
+
+# 서비스 재시작
+docker compose restart pkd-management pa-service</code></pre>
+<h3 id="6-6-3-키-로테이션">6.6.3 키 로테이션</h3>
+<p>현재 버전에서는 키 로테이션 자동화가 구현되어 있지 않음. 키 변경 시:</p>
+<ol>
+<li>기존 데이터를 구 키로 복호화</li>
+<li>신규 키로 재암호화</li>
+<li><code>.env</code> 파일의 <code>PII_ENCRYPTION_KEY</code> 교체</li>
+<li>서비스 재시작</li>
+</ol>
+<blockquote>
+<p><strong>향후 개선</strong>: 키 버전 관리 + 자동 마이그레이션 도구 개발 권장</p>
+</blockquote>
+<h3 id="6-6-4-로그-확인">6.6.4 로그 확인</h3>
+<pre><code class="language-bash"># 암호화 활성화 확인
+docker logs icao-local-pkd-pkd-management 2&gt;&amp;1 | grep "PII Crypto"
+# 출력: [PII Crypto] AES-256-GCM encryption ENABLED for personal information fields
+
+docker logs icao-local-pkd-pa-service 2&gt;&amp;1 | grep "PII Crypto"
+# 출력: [PII Crypto] AES-256-GCM encryption ENABLED for personal information fields
+
+# 키 미설정 시
+# 출력: [PII Crypto] PII_ENCRYPTION_KEY not set - personal info encryption DISABLED</code></pre>
+<hr>
+<h2 id="6-7-법적-준수-체크리스트">6.7 법적 준수 체크리스트</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>법적 근거</th>
+<th align="center">적용 상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>고유식별정보(여권번호) 저장 시 암호화</td>
+<td>법 제24조, 시행령 제21조, 고시 제7조</td>
+<td align="center"><strong>충족</strong></td>
+</tr>
+<tr>
+<td>고유식별정보 전송 시 암호화 (TLS)</td>
+<td>법 제24조, 시행령 제21조, 고시 제7조</td>
+<td align="center"><strong>충족</strong></td>
+</tr>
+<tr>
+<td>비밀번호 일방향 해시 저장</td>
+<td>고시 제7조 제1항</td>
+<td align="center"><strong>충족</strong> (bcrypt)</td>
+</tr>
+<tr>
+<td>KISA 승인 암호 알고리즘 사용</td>
+<td>고시 제7조, KISA 안내서</td>
+<td align="center"><strong>충족</strong> (AES-256)</td>
+</tr>
+<tr>
+<td>접근 통제 및 권한 제한</td>
+<td>법 제29조, 고시 제5조</td>
+<td align="center"><strong>충족</strong> (JWT + RBAC)</td>
+</tr>
+<tr>
+<td>접속기록 보관</td>
+<td>법 제29조, 고시 제8조</td>
+<td align="center"><strong>충족</strong> (auth_audit_log, operation_audit_log)</td>
+</tr>
+<tr>
+<td>개인정보 최소 수집</td>
+<td>법 제16조</td>
+<td align="center"><strong>충족</strong> (PA 검증 필수 정보만 수집)</td>
+</tr>
+<tr>
+<td>일반 개인정보 암호화 (권고)</td>
+<td>법 제29조</td>
+<td align="center"><strong>충족</strong> (요청자 정보 전체 암호화)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="참고-법령">참고 법령</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>법령</th>
+<th>번호</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>개인정보 보호법</td>
+<td>법률 제19234호 (2023.3.14. 일부개정)</td>
+</tr>
+<tr>
+<td>개인정보 보호법 시행령</td>
+<td>대통령령 제34211호</td>
+</tr>
+<tr>
+<td>개인정보의 안전성 확보조치 기준</td>
+<td>개인정보보호위원회 고시 제2021-2호</td>
+</tr>
+<tr>
+<td>개인정보의 기술적 관리적 보호조치 기준</td>
+<td>방송통신위원회 고시 제2020-9호</td>
+</tr>
+<tr>
+<td>KISA 암호 알고리즘 및 키 길이 이용 안내서</td>
+<td>한국인터넷진흥원 (2024)</td>
+</tr>
+<tr>
+<td>NIST SP 800-38D</td>
+<td>GCM Mode Specification</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="부록-a-운영-데이터">부록 A: 운영 데이터</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>인증서 유형</th>
+<th>수량</th>
+<th>LDAP</th>
+<th>적용률</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CSCA</td>
+<td>845</td>
+<td>845</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>MLSC</td>
+<td>27</td>
+<td>27</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>DSC</td>
+<td>29,838</td>
+<td>29,838</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>DSC_NC</td>
+<td>502</td>
+<td>502</td>
+<td>100%</td>
+</tr>
+<tr>
+<td>CRL</td>
+<td>69</td>
+<td>69</td>
+<td>100%</td>
+</tr>
+<tr>
+<td><strong>합계</strong></td>
+<td><strong>31,212</strong></td>
+<td><strong>31,212</strong></td>
+<td><strong>100%</strong></td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="부록-b-에러-코드-참조">부록 B: 에러 코드 참조</h2>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>코드</th>
+<th>심각도</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>INVALID_REQUEST</code></td>
+<td>CRITICAL</td>
+<td>잘못된 요청 형식</td>
+</tr>
+<tr>
+<td><code>MISSING_SOD</code></td>
+<td>CRITICAL</td>
+<td>SOD 데이터 누락</td>
+</tr>
+<tr>
+<td><code>INVALID_SOD</code></td>
+<td>CRITICAL</td>
+<td>SOD 파싱 실패 (CMS 구조 오류)</td>
+</tr>
+<tr>
+<td><code>DSC_EXTRACTION_FAILED</code></td>
+<td>CRITICAL</td>
+<td>SOD에서 DSC 인증서 추출 실패</td>
+</tr>
+<tr>
+<td><code>CSCA_NOT_FOUND</code></td>
+<td>CRITICAL</td>
+<td>LDAP에서 CSCA 인증서를 찾을 수 없음</td>
+</tr>
+<tr>
+<td><code>TRUST_CHAIN_INVALID</code></td>
+<td>HIGH</td>
+<td>DSC → CSCA 신뢰 체인 검증 실패</td>
+</tr>
+<tr>
+<td><code>SOD_SIGNATURE_INVALID</code></td>
+<td>HIGH</td>
+<td>SOD 서명 검증 실패</td>
+</tr>
+<tr>
+<td><code>DG_HASH_MISMATCH</code></td>
+<td>HIGH</td>
+<td>Data Group 해시 불일치</td>
+</tr>
+<tr>
+<td><code>CERTIFICATE_EXPIRED</code></td>
+<td>MEDIUM</td>
+<td>인증서 유효기간 만료</td>
+</tr>
+<tr>
+<td><code>CRL_EXPIRED</code></td>
+<td>MEDIUM</td>
+<td>CRL 유효기간 만료 (nextUpdate 경과)</td>
+</tr>
+<tr>
+<td><code>CERTIFICATE_REVOKED</code></td>
+<td>HIGH</td>
+<td>인증서 CRL에 의해 폐지됨</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#목차">목차</a><a href="#1-1-pki-계층-구조-개요">1.1 PKI 계층 구조 개요</a><a href="#1-1-1-전자여권-pki-4계층-구조" style="padding-left:1rem">1.1.1 전자여권 PKI 4계층 구조</a><a href="#1-1-2-핵심-설계-원칙" style="padding-left:1rem">1.1.2 핵심 설계 원칙</a><a href="#1-2-인증서-유형별-상세">1.2 인증서 유형별 상세</a><a href="#1-2-1-csca-country-signing-certificate-authority" style="padding-left:1rem">1.2.1 CSCA (Country Signing Certificate Authority)</a><a href="#1-2-2-dsc-document-signer-certificate" style="padding-left:1rem">1.2.2 DSC (Document Signer Certificate)</a><a href="#1-2-3-mlsc-master-list-signer-certificate" style="padding-left:1rem">1.2.3 MLSC (Master List Signer Certificate)</a><a href="#1-2-4-link-certificate-csca-키-전환용" style="padding-left:1rem">1.2.4 Link Certificate (CSCA 키 전환용)</a><a href="#1-2-5-deviation-list-signer-certificate" style="padding-left:1rem">1.2.5 Deviation List Signer Certificate</a><a href="#1-2-6-icao-전용-oid-체계" style="padding-left:1rem">1.2.6 ICAO 전용 OID 체계</a><a href="#1-3-trust-chain-아키텍처">1.3 Trust Chain 아키텍처</a><a href="#1-3-1-기본-trust-chain-2단계" style="padding-left:1rem">1.3.1 기본 Trust Chain (2단계)</a><a href="#1-3-2-link-certificate-포함-trust-chain-3단계" style="padding-left:1rem">1.3.2 Link Certificate 포함 Trust Chain (3단계)</a><a href="#1-3-3-검증-알고리즘" style="padding-left:1rem">1.3.3 검증 알고리즘</a><a href="#1-4-passive-authentication-pa-절차">1.4 Passive Authentication (PA) 절차</a><a href="#1-4-1-개요" style="padding-left:1rem">1.4.1 개요</a><a href="#1-4-2-8단계-검증-프로세스" style="padding-left:1rem">1.4.2 8단계 검증 프로세스</a><a href="#1-4-3-단계별-상세" style="padding-left:1rem">1.4.3 단계별 상세</a><a href="#1-4-4-최종-판정-로직" style="padding-left:1rem">1.4.4 최종 판정 로직</a><a href="#1-4-5-point-in-time-validation" style="padding-left:1rem">1.4.5 Point-in-Time Validation</a><a href="#1-5-active-authentication-vs-passive-authentication">1.5 Active Authentication vs Passive Authentication</a><a href="#1-5-1-비교" style="padding-left:1rem">1.5.1 비교</a><a href="#1-5-2-active-authentication-프로토콜" style="padding-left:1rem">1.5.2 Active Authentication 프로토콜</a><a href="#1-5-3-chip-authentication-ca-vs-active-authentication" style="padding-left:1rem">1.5.3 Chip Authentication (CA) vs Active Authentication</a><a href="#1-5-4-보안-메커니즘-조합표" style="padding-left:1rem">1.5.4 보안 메커니즘 조합표</a><a href="#1-5-5-접근-제어-메커니즘" style="padding-left:1rem">1.5.5 접근 제어 메커니즘</a><a href="#1-6-link-certificate와-csca-키-전환">1.6 Link Certificate와 CSCA 키 전환</a><a href="#1-6-1-키-전환의-필요성" style="padding-left:1rem">1.6.1 키 전환의 필요성</a><a href="#1-6-2-link-certificate의-역할" style="padding-left:1rem">1.6.2 Link Certificate의 역할</a><a href="#1-6-3-link-certificate의-두-가지-유형" style="padding-left:1rem">1.6.3 Link Certificate의 두 가지 유형</a><a href="#1-6-4-link-certificate-검증-절차" style="padding-left:1rem">1.6.4 Link Certificate 검증 절차</a><a href="#1-6-5-실제-데이터" style="padding-left:1rem">1.6.5 실제 데이터</a><a href="#1-7-master-list-구조와-처리">1.7 Master List 구조와 처리</a><a href="#1-7-1-master-list-개요" style="padding-left:1rem">1.7.1 Master List 개요</a><a href="#1-7-2-asn-1-구조" style="padding-left:1rem">1.7.2 ASN.1 구조</a><a href="#1-7-3-핵심-구현-사항-2단계-인증서-추출" style="padding-left:1rem">1.7.3 핵심 구현 사항: 2단계 인증서 추출</a><a href="#1-7-4-master-list-사양" style="padding-left:1rem">1.7.4 Master List 사양</a><a href="#1-8-crl-인증서-폐지-목록">1.8 CRL (인증서 폐지 목록)</a><a href="#1-8-1-역할" style="padding-left:1rem">1.8.1 역할</a><a href="#1-8-2-crl-필드" style="padding-left:1rem">1.8.2 CRL 필드</a><a href="#1-8-3-crl-검증-프로세스" style="padding-left:1rem">1.8.3 CRL 검증 프로세스</a><a href="#1-8-4-crl-상태-유형" style="padding-left:1rem">1.8.4 CRL 상태 유형</a><a href="#1-8-5-fail-open-정책" style="padding-left:1rem">1.8.5 Fail-Open 정책</a><a href="#1-8-6-폐지-사유-코드-rfc-5280" style="padding-left:1rem">1.8.6 폐지 사유 코드 (RFC 5280)</a><a href="#1-9-sod-security-object-document-구조">1.9 SOD (Security Object Document) 구조</a><a href="#1-9-1-개요" style="padding-left:1rem">1.9.1 개요</a><a href="#1-9-2-asn-1-구조-상세" style="padding-left:1rem">1.9.2 ASN.1 구조 상세</a><a href="#1-9-3-lds-security-object-형식" style="padding-left:1rem">1.9.3 LDS Security Object 형식</a><a href="#1-9-4-data-group-참조표" style="padding-left:1rem">1.9.4 Data Group 참조표</a><a href="#1-9-5-lds-버전-차이" style="padding-left:1rem">1.9.5 LDS 버전 차이</a><a href="#1-10-icao-pkd-public-key-directory">1.10 ICAO PKD (Public Key Directory)</a><a href="#1-10-1-목적" style="padding-left:1rem">1.10.1 목적</a><a href="#1-10-2-pkd-collection" style="padding-left:1rem">1.10.2 PKD Collection</a><a href="#1-10-3-pkd-ldap-dit-directory-information-tree" style="padding-left:1rem">1.10.3 PKD LDAP DIT (Directory Information Tree)</a><a href="#1-10-4-ldap-objectclass" style="padding-left:1rem">1.10.4 LDAP ObjectClass</a><a href="#1-10-5-local-pkd-아키텍처" style="padding-left:1rem">1.10.5 Local PKD 아키텍처</a><a href="#1-11-암호화-요구사항">1.11 암호화 요구사항</a><a href="#1-11-1-승인된-서명-알고리즘" style="padding-left:1rem">1.11.1 승인된 서명 알고리즘</a><a href="#1-11-2-해시-알고리즘" style="padding-left:1rem">1.11.2 해시 알고리즘</a><a href="#1-11-3-키-크기-요구사항" style="padding-left:1rem">1.11.3 키 크기 요구사항</a><a href="#1-11-4-알고리즘-전환-이력" style="padding-left:1rem">1.11.4 알고리즘 전환 이력</a><a href="#1-12-실제-use-case-시나리오">1.12 실제 Use Case 시나리오</a><a href="#1-12-1-시나리오-1-정상적인-pa-검증" style="padding-left:1rem">1.12.1 시나리오 1: 정상적인 PA 검증</a><a href="#1-12-2-시나리오-2-csca-키-전환-link-certificate" style="padding-left:1rem">1.12.2 시나리오 2: CSCA 키 전환 (Link Certificate)</a><a href="#1-12-3-시나리오-3-만료된-인증서-point-in-time-validation" style="padding-left:1rem">1.12.3 시나리오 3: 만료된 인증서 (Point-in-Time Validation)</a><a href="#1-12-4-시나리오-4-csca-미등록-국가" style="padding-left:1rem">1.12.4 시나리오 4: CSCA 미등록 국가</a><a href="#1-12-5-시나리오-5-dsc-폐지-crl-revocation" style="padding-left:1rem">1.12.5 시나리오 5: DSC 폐지 (CRL Revocation)</a><a href="#1-12-6-시나리오-6-데이터-변조-감지" style="padding-left:1rem">1.12.6 시나리오 6: 데이터 변조 감지</a><a href="#1-12-7-시나리오-7-pa-검증을-통한-dsc-자동-등록" style="padding-left:1rem">1.12.7 시나리오 7: PA 검증을 통한 DSC 자동 등록</a><a href="#1-13-예외-처리-및-edge-case">1.13 예외 처리 및 Edge Case</a><a href="#1-13-1-인증서-만료-관련" style="padding-left:1rem">1.13.1 인증서 만료 관련</a><a href="#1-13-2-crl-관련-edge-case" style="padding-left:1rem">1.13.2 CRL 관련 Edge Case</a><a href="#1-13-3-trust-chain-실패-사례" style="padding-left:1rem">1.13.3 Trust Chain 실패 사례</a><a href="#1-13-4-self-signed-인증서-처리" style="padding-left:1rem">1.13.4 Self-signed 인증서 처리</a><a href="#1-13-5-시간대-및-유효기간-edge-case" style="padding-left:1rem">1.13.5 시간대 및 유효기간 Edge Case</a><a href="#1-13-6-deviation-list-편차-목록" style="padding-left:1rem">1.13.6 Deviation List (편차 목록)</a><a href="#1-14-구현-시-주의사항-pitfalls">1.14 구현 시 주의사항 (Pitfalls)</a><a href="#1-14-1-master-list-파싱" style="padding-left:1rem">1.14.1 Master List 파싱</a><a href="#1-14-2-dn-처리" style="padding-left:1rem">1.14.2 DN 처리</a><a href="#1-14-3-인증서-유형-분류" style="padding-left:1rem">1.14.3 인증서 유형 분류</a><a href="#1-14-4-국가-코드-추출" style="padding-left:1rem">1.14.4 국가 코드 추출</a><a href="#1-14-5-바이너리-데이터-처리" style="padding-left:1rem">1.14.5 바이너리 데이터 처리</a><a href="#1-14-6-openssl-메모리-관리" style="padding-left:1rem">1.14.6 OpenSSL 메모리 관리</a><a href="#1-14-7-sod-래핑" style="padding-left:1rem">1.14.7 SOD 래핑</a><a href="#1-14-8-oracle-호환성" style="padding-left:1rem">1.14.8 Oracle 호환성</a><a href="#1-14-9-trust-chain-깊이" style="padding-left:1rem">1.14.9 Trust Chain 깊이</a><a href="#1-14-10-crl-처리-순서" style="padding-left:1rem">1.14.10 CRL 처리 순서</a><a href="#1-15-참조-표준-및-문서">1.15 참조 표준 및 문서</a><a href="#1-15-1-icao-문서" style="padding-left:1rem">1.15.1 ICAO 문서</a><a href="#1-15-2-rfc-표준" style="padding-left:1rem">1.15.2 RFC 표준</a><a href="#1-15-3-bsi-기술-지침" style="padding-left:1rem">1.15.3 BSI 기술 지침</a><a href="#1-15-4-구현-파일-매핑" style="padding-left:1rem">1.15.4 구현 파일 매핑</a><a href="#2-1-개요">2.1 개요</a><a href="#2-2-인증서-속성-검증-csca-dsc-마스터리스트-서명자">2.2 인증서 속성 검증 (CSCA / DSC / 마스터리스트 서명자)</a><a href="#2-2-1-기본-필드" style="padding-left:1rem">2.2.1 기본 필드</a><a href="#2-2-2-확장-extensions" style="padding-left:1rem">2.2.2 확장 (Extensions)</a><a href="#2-2-3-서명-알고리즘-항목-2" style="padding-left:1rem">2.2.3 서명 알고리즘 (항목 2)</a><a href="#2-3-crl-인증서-폐지-목록-속성-검증">2.3 CRL (인증서 폐지 목록) 속성 검증</a><a href="#2-3-1-기본-필드" style="padding-left:1rem">2.3.1 기본 필드</a><a href="#2-3-2-crl-확장-extensions" style="padding-left:1rem">2.3.2 CRL 확장 (Extensions)</a><a href="#2-3-3-crl-엔트리-확장-crl-entry-extensions" style="padding-left:1rem">2.3.3 CRL 엔트리 확장 (CRL Entry Extensions)</a><a href="#2-3-4-서명" style="padding-left:1rem">2.3.4 서명</a><a href="#2-4-csca-마스터리스트-cms-signed-data-속성-검증">2.4 CSCA 마스터리스트 (CMS Signed Data) 속성 검증</a><a href="#2-4-1-signed-data-구조" style="padding-left:1rem">2.4.1 Signed Data 구조</a><a href="#2-4-2-signer-info-구조" style="padding-left:1rem">2.4.2 Signer Info 구조</a><a href="#2-5-핵심-설계-원칙-요약">2.5 핵심 설계 원칙 요약</a><a href="#pathlength-0-의-의미" style="padding-left:1rem">pathLength=0 의 의미</a><a href="#링크-인증서-link-certificate-식별" style="padding-left:1rem">링크 인증서 (Link Certificate) 식별</a><a href="#key-usage-엄격-적용" style="padding-left:1rem">Key Usage 엄격 적용</a><a href="#extended-key-usage-eku-규칙" style="padding-left:1rem">Extended Key Usage (EKU) 규칙</a><a href="#delta-crl-금지" style="padding-left:1rem">Delta CRL 금지</a><a href="#netscape-extensions-완전-금지" style="padding-left:1rem">Netscape Extensions 완전 금지</a><a href="#2-6-프로젝트-내-구현-매핑">2.6 프로젝트 내 구현 매핑</a><a href="#3-1-개요">3.1 개요</a><a href="#3-2-bsi-tr-03110-구조">3.2 BSI TR-03110 구조</a><a href="#3-3-알고리즘-분류-체계">3.3 알고리즘 분류 체계</a><a href="#3-4-pkd-관련-알고리즘-상세">3.4 PKD 관련 알고리즘 상세</a><a href="#3-4-1-서명-알고리즘-x-509-인증서에-등장" style="padding-left:1rem">3.4.1 서명 알고리즘 (X.509 인증서에 등장)</a><a href="#3-4-2-ecdsa-곡선" style="padding-left:1rem">3.4.2 ECDSA 곡선</a><a href="#3-4-3-rsa-pss-해시-알고리즘-추출" style="padding-left:1rem">3.4.3 RSA-PSS 해시 알고리즘 추출</a><a href="#3-4-4-rsa-키-크기" style="padding-left:1rem">3.4.4 RSA 키 크기</a><a href="#3-5-pkd와-무관한-알고리즘-cvc-칩-프로토콜-전용">3.5 PKD와 무관한 알고리즘 (CVC/칩 프로토콜 전용)</a><a href="#3-6-brainpool-곡선-상세">3.6 Brainpool 곡선 상세</a><a href="#3-6-1-배경" style="padding-left:1rem">3.6.1 배경</a><a href="#3-6-2-실제-사용-국가" style="padding-left:1rem">3.6.2 실제 사용 국가</a><a href="#3-6-3-nist-vs-brainpool-비교" style="padding-left:1rem">3.6.3 NIST vs Brainpool 비교</a><a href="#3-6-4-본-시스템-적용-방침" style="padding-left:1rem">3.6.4 본 시스템 적용 방침</a><a href="#3-7-sha-1-deprecated-처리">3.7 SHA-1 Deprecated 처리</a><a href="#3-7-1-icao-ntwg-권고" style="padding-left:1rem">3.7.1 ICAO NTWG 권고</a><a href="#3-7-2-본-시스템-적용-방침" style="padding-left:1rem">3.7.2 본 시스템 적용 방침</a><a href="#3-8-구현-파일-매핑">3.8 구현 파일 매핑</a><a href="#3-8-1-해시-알고리즘-추출-서명-알고리즘-해시" style="padding-left:1rem">3.8.1 해시 알고리즘 추출 (서명 알고리즘 → 해시)</a><a href="#3-8-2-icao-준수-검사" style="padding-left:1rem">3.8.2 ICAO 준수 검사</a><a href="#3-8-3-프론트엔드" style="padding-left:1rem">3.8.3 프론트엔드</a><a href="#3-9-참고-문헌">3.9 참고 문헌</a><a href="#4-1-개요">4.1 개요</a><a href="#4-2-분석-결과-요약">4.2 분석 결과 요약</a><a href="#4-3-shall-vs-should-구분">4.3 SHALL vs SHOULD 구분</a><a href="#4-3-1-shall-필수-위반-보안-위험" style="padding-left:1rem">4.3.1 SHALL (필수) 위반 -- 보안 위험</a><a href="#4-3-2-should-권고-미준수-운영-참고" style="padding-left:1rem">4.3.2 SHOULD (권고) 미준수 -- 운영 참고</a><a href="#4-4-icao-pkd의-역할과-한계">4.4 ICAO PKD의 역할과 한계</a><a href="#4-4-1-pkd는-배포-플랫폼" style="padding-left:1rem">4.4.1 PKD는 배포 플랫폼</a><a href="#4-4-2-dc-data-vs-dc-nc-data" style="padding-left:1rem">4.4.2 dc=data vs dc=nc-data</a><a href="#4-4-3-2021년-정책-변경" style="padding-left:1rem">4.4.3 2021년 정책 변경</a><a href="#4-5-미준수-발생-원인">4.5 미준수 발생 원인</a><a href="#4-5-1-레거시-인증서" style="padding-left:1rem">4.5.1 레거시 인증서</a><a href="#4-5-2-국가별-pki-구현-차이" style="padding-left:1rem">4.5.2 국가별 PKI 구현 차이</a><a href="#4-5-3-should-해석의-유연성" style="padding-left:1rem">4.5.3 SHOULD 해석의 유연성</a><a href="#4-6-운영-시-권장사항">4.6 운영 시 권장사항</a><a href="#4-6-1-검증-시스템에서의-처리" style="padding-left:1rem">4.6.1 검증 시스템에서의 처리</a><a href="#4-6-2-passive-authentication에서의-영향" style="padding-left:1rem">4.6.2 Passive Authentication에서의 영향</a><a href="#4-7-검증-카테고리별-세부-체크-항목">4.7 검증 카테고리별 세부 체크 항목</a><a href="#a-알고리즘-검증" style="padding-left:1rem">A. 알고리즘 검증</a><a href="#b-키-크기-검증" style="padding-left:1rem">B. 키 크기 검증</a><a href="#c-key-usage-검증" style="padding-left:1rem">C. Key Usage 검증</a><a href="#d-확장-필드-검증" style="padding-left:1rem">D. 확장 필드 검증</a><a href="#e-유효기간-검증" style="padding-left:1rem">E. 유효기간 검증</a><a href="#f-dn-형식-검증" style="padding-left:1rem">F. DN 형식 검증</a><a href="#5-1-개요">5.1 개요</a><a href="#핵심-사실" style="padding-left:1rem">핵심 사실</a><a href="#5-2-icao-pkd-컬렉션-구조">5.2 ICAO PKD 컬렉션 구조</a><a href="#ldap-dit-구조" style="padding-left:1rem">LDAP DIT 구조</a><a href="#dsc_nc-ldap-속성" style="padding-left:1rem">DSC_NC LDAP 속성</a><a href="#5-3-비준수-사유-분류">5.3 비준수 사유 분류</a><a href="#5-4-다른-npkd-구현체의-처리-방식">5.4 다른 NPKD 구현체의 처리 방식</a><a href="#keyfactor-npkd-상용-솔루션" style="padding-left:1rem">Keyfactor NPKD (상용 솔루션)</a><a href="#german-bsi-연방정보보안청" style="padding-left:1rem">German BSI (연방정보보안청)</a><a href="#일반-권장-사항-icao-커뮤니티" style="padding-left:1rem">일반 권장 사항 (ICAO 커뮤니티)</a><a href="#5-5-현-시스템의-dsc_nc-처리-아키텍처">5.5 현 시스템의 DSC_NC 처리 아키텍처</a><a href="#5-5-1-데이터-저장" style="padding-left:1rem">5.5.1 데이터 저장</a><a href="#5-5-2-pa-lookup-pkd-management-db-기반" style="padding-left:1rem">5.5.2 PA Lookup (PKD Management - DB 기반)</a><a href="#5-5-3-pa-verify-pa-service-ldap-기반" style="padding-left:1rem">5.5.3 PA Verify (PA Service - LDAP 기반)</a><a href="#5-5-4-dsc-ldap-검색-fallback" style="padding-left:1rem">5.5.4 DSC LDAP 검색 (fallback)</a><a href="#5-6-중요-설계-결정">5.6 중요 설계 결정</a><a href="#q-pa-verify에서-dsc_nc가-검증에-실패하면" style="padding-left:1rem">Q: PA Verify에서 DSC_NC가 검증에 실패하면?</a><a href="#q-dc-data와-dc-nc-data에-같은-dsc가-존재할-수-있는가" style="padding-left:1rem">Q: dc=data와 dc=nc-data에 같은 DSC가 존재할 수 있는가?</a><a href="#q-reconciliation-db-ldap-동기화-에서-dsc_nc는" style="padding-left:1rem">Q: Reconciliation(DB-LDAP 동기화)에서 DSC_NC는?</a><a href="#5-7-운영-데이터-현황">5.7 운영 데이터 현황</a><a href="#5-8-관련-파일">5.8 관련 파일</a><a href="#backend-pa-service" style="padding-left:1rem">Backend (PA Service)</a><a href="#backend-pkd-management" style="padding-left:1rem">Backend (PKD Management)</a><a href="#frontend" style="padding-left:1rem">Frontend</a><a href="#6-1-법적-근거">6.1 법적 근거</a><a href="#6-1-1-개인정보-보호법-법률-제19234호" style="padding-left:1rem">6.1.1 개인정보 보호법 (법률 제19234호)</a><a href="#6-1-2-개인정보-보호법-시행령" style="padding-left:1rem">6.1.2 개인정보 보호법 시행령</a><a href="#6-1-3-개인정보의-안전성-확보조치-기준-고시-제2021-2호" style="padding-left:1rem">6.1.3 개인정보의 안전성 확보조치 기준 (고시 제2021-2호)</a><a href="#6-2-프로젝트-내-개인정보-현황">6.2 프로젝트 내 개인정보 현황</a><a href="#6-2-1-개인정보-분류" style="padding-left:1rem">6.2.1 개인정보 분류</a><a href="#6-2-2-암호화-미적용-의무-아님" style="padding-left:1rem">6.2.2 암호화 미적용 (의무 아님)</a><a href="#6-3-기술-구현">6.3 기술 구현</a><a href="#6-3-1-암호화-방식" style="padding-left:1rem">6.3.1 암호화 방식</a><a href="#6-3-2-저장-형식" style="padding-left:1rem">6.3.2 저장 형식</a><a href="#6-3-3-키-관리" style="padding-left:1rem">6.3.3 키 관리</a><a href="#6-3-4-pii-마스킹-public-api-응답" style="padding-left:1rem">6.3.4 PII 마스킹 (Public API 응답)</a><a href="#6-3-5-fail-open-설계" style="padding-left:1rem">6.3.5 Fail-Open 설계</a><a href="#6-4-적용-서비스">6.4 적용 서비스</a><a href="#6-4-1-pkd-management-service" style="padding-left:1rem">6.4.1 PKD Management Service</a><a href="#6-4-2-pa-service" style="padding-left:1rem">6.4.2 PA Service</a><a href="#6-4-3-전송-구간-암호화" style="padding-left:1rem">6.4.3 전송 구간 암호화</a><a href="#6-5-db-스키마-변경-사항">6.5 DB 스키마 변경 사항</a><a href="#6-5-1-postgresql" style="padding-left:1rem">6.5.1 PostgreSQL</a><a href="#6-5-2-oracle" style="padding-left:1rem">6.5.2 Oracle</a><a href="#6-5-3-기존-데이터-마이그레이션" style="padding-left:1rem">6.5.3 기존 데이터 마이그레이션</a><a href="#6-6-설정-및-운영">6.6 설정 및 운영</a><a href="#6-6-1-암호화-활성화" style="padding-left:1rem">6.6.1 암호화 활성화</a><a href="#6-6-2-암호화-비활성화-개발-테스트용" style="padding-left:1rem">6.6.2 암호화 비활성화 (개발/테스트용)</a><a href="#6-6-3-키-로테이션" style="padding-left:1rem">6.6.3 키 로테이션</a><a href="#6-6-4-로그-확인" style="padding-left:1rem">6.6.4 로그 확인</a><a href="#6-7-법적-준수-체크리스트">6.7 법적 준수 체크리스트</a><a href="#참고-법령">참고 법령</a><a href="#부록-a-운영-데이터">부록 A: 운영 데이터</a><a href="#부록-b-에러-코드-참조">부록 B: 에러 코드 참조</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>

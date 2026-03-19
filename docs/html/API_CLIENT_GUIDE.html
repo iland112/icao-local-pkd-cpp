@@ -1,0 +1,2210 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Client Guide — FASTpass® SPKD</title>
+<style>
+:root {
+  --primary: #02385e;
+  --primary-light: #034b7d;
+  --accent: #0ea5e9;
+  --bg: #f8fafc;
+  --sidebar-bg: #0f172a;
+  --sidebar-text: #cbd5e1;
+  --sidebar-active: #0ea5e9;
+  --card-bg: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #1e293b;
+  --code-text: #e2e8f0;
+  --table-stripe: #f1f5f9;
+  --sidebar-w: 280px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  padding: 1.5rem 0;
+  position: fixed;
+  top: 0; left: 0;
+  overflow-y: auto;
+  z-index: 100;
+}
+.sidebar-brand {
+  padding: 0 1.25rem 1.25rem;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  margin-bottom: 1rem;
+}
+.sidebar-brand h1 {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+.sidebar-brand .version {
+  font-size: 0.75rem;
+  color: var(--sidebar-text);
+  margin-top: 0.25rem;
+}
+.nav-category {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  padding: 1rem 1.25rem 0.4rem;
+}
+.sidebar a {
+  display: block;
+  padding: 0.35rem 1.25rem 0.35rem 1.5rem;
+  color: var(--sidebar-text);
+  text-decoration: none;
+  font-size: 0.82rem;
+  border-left: 3px solid transparent;
+  transition: all 0.15s;
+}
+.sidebar a:hover {
+  color: #fff;
+  background: rgba(255,255,255,0.05);
+}
+.sidebar a.active {
+  color: var(--sidebar-active);
+  border-left-color: var(--sidebar-active);
+  background: rgba(14,165,233,0.08);
+  font-weight: 600;
+}
+
+/* Main */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 100%;
+}
+.topbar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.topbar .breadcrumb {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.topbar .breadcrumb strong {
+  color: var(--text);
+}
+
+.content-wrapper {
+  display: flex;
+}
+.content {
+  flex: 1;
+  min-width: 0;
+  padding: 2rem 2.5rem 4rem;
+}
+
+/* TOC */
+.toc {
+  width: 220px;
+  position: sticky;
+  top: 56px;
+  align-self: flex-start;
+  padding: 1.5rem 1rem;
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.toc-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+}
+.toc a {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 0.2rem 0;
+  border-left: 2px solid var(--border);
+  padding-left: 0.75rem;
+  transition: all 0.15s;
+}
+.toc a:hover {
+  color: var(--primary);
+  border-left-color: var(--primary);
+}
+
+/* Typography */
+.content h1 {
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--primary);
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+.content h2 {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 2px solid var(--border);
+}
+.content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+  margin: 1.8rem 0 0.6rem;
+}
+.content h4 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 1.2rem 0 0.4rem;
+}
+.content p { margin: 0.6rem 0; }
+.content ul, .content ol {
+  margin: 0.6rem 0;
+  padding-left: 1.5rem;
+}
+.content li { margin: 0.25rem 0; }
+.content li > ul, .content li > ol { margin: 0.15rem 0; }
+.content strong { font-weight: 600; }
+.content a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+.content a:hover { border-bottom-color: var(--accent); }
+.content hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2rem 0;
+}
+.content blockquote {
+  border-left: 4px solid var(--accent);
+  background: rgba(14,165,233,0.05);
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  color: var(--text-secondary);
+}
+
+/* Code */
+.content code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.85em;
+  background: var(--table-stripe);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+.content pre {
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.content pre code {
+  background: none;
+  padding: 0;
+  color: var(--code-text);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Tables */
+.table-wrapper {
+  overflow-x: auto;
+  margin: 1rem 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.content thead {
+  background: var(--primary);
+  color: #fff;
+}
+.content th {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.content td {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.content tbody tr:nth-child(even) { background: var(--table-stripe); }
+.content tbody tr:hover { background: rgba(14,165,233,0.04); }
+
+/* Mobile menu button */
+.menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+.menu-toggle:hover { background: var(--table-stripe); }
+.menu-toggle svg { width: 22px; height: 22px; }
+
+/* Sidebar overlay (mobile) */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 90;
+  backdrop-filter: blur(2px);
+}
+
+/* Sidebar close button */
+.sidebar-close {
+  display: none;
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: var(--sidebar-text);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+}
+.sidebar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.sidebar-close svg { width: 20px; height: 20px; }
+
+/* ===== Responsive: XL (>1400px) — full layout ===== */
+@media (min-width: 1401px) {
+  .toc { width: 240px; flex-shrink: 0; }
+}
+
+/* ===== Responsive: LG (1024-1400px) — hide TOC ===== */
+@media (max-width: 1400px) {
+  .toc { display: none; }
+  .content { max-width: 100%; }
+}
+
+/* ===== Responsive: MD (768-1023px) — collapsible sidebar ===== */
+@media (max-width: 1023px) {
+  :root { --sidebar-w: 260px; }
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+  }
+  .sidebar.open { transform: translateX(0); }
+  .sidebar-overlay.open { display: block; }
+  .sidebar-close { display: block; }
+  .menu-toggle { display: block; }
+  .main { margin-left: 0; }
+  .content { padding: 2rem 2rem 4rem; }
+  .topbar { padding: 0.75rem 1.5rem; }
+}
+
+/* ===== Responsive: SM (480-767px) — mobile ===== */
+@media (max-width: 767px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.15rem; margin-top: 2rem; }
+  .content h3 { font-size: 1rem; }
+  .content pre {
+    padding: 0.75rem;
+    font-size: 0.78rem;
+    border-radius: 6px;
+  }
+  .topbar { padding: 0.6rem 1rem; }
+  .topbar .breadcrumb { font-size: 0.8rem; }
+  .table-wrapper { margin: 0.75rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+  .content th, .content td { padding: 0.4rem 0.5rem; font-size: 0.78rem; }
+  pre.mermaid { padding: 1rem 0.5rem; margin: 1rem -1rem; border-radius: 0; border-left: none; border-right: none; }
+}
+
+/* ===== Responsive: XS (<480px) — small phone ===== */
+@media (max-width: 479px) {
+  .content { padding: 1rem 0.75rem 2rem; }
+  .content h1 { font-size: 1.3rem; }
+  .content h2 { font-size: 1.05rem; }
+  .content code { font-size: 0.78em; }
+  .sidebar-brand h1 { font-size: 0.9rem; }
+}
+
+/* Print */
+@media print {
+  .sidebar, .sidebar-overlay, .toc, .topbar, .menu-toggle { display: none !important; }
+  .main { margin-left: 0; }
+  .content { max-width: 100%; padding: 0; }
+  .content h1 { font-size: 1.5rem; }
+  .content h2 { font-size: 1.2rem; break-after: avoid; }
+  .content pre { white-space: pre-wrap; border: 1px solid #ccc; }
+  pre.mermaid { break-inside: avoid; }
+}
+/* Mermaid diagrams */
+pre.mermaid {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(14,165,233,0.2);
+  border-radius: 12px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow-x: auto;
+  margin: 1.5rem 0;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+pre.mermaid svg {
+  max-width: 100%;
+  height: auto;
+}
+/* Mermaid node overrides */
+pre.mermaid .node rect,
+pre.mermaid .node polygon,
+pre.mermaid .node circle {
+  rx: 8px;
+  ry: 8px;
+}
+pre.mermaid .edgeLabel {
+  font-size: 13px !important;
+}
+</style>
+</head>
+<body>
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+<nav class="sidebar" id="sidebar">
+  <button class="sidebar-close" id="sidebarClose" aria-label="Close menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+  </button>
+  <div class="sidebar-brand">
+    <h1>FASTpass® SPKD</h1>
+    <div class="version">Documentation v2.37.0</div>
+  </div>
+  <div class="nav-category">Getting Started</div>
+<a href="README.html">Documentation Index</a>
+<a href="DEVELOPMENT_GUIDE.html">Development Guide</a>
+<a href="DEPLOYMENT_GUIDE.html">Deployment Guide</a>
+<div class="nav-category">API & Integration</div>
+<a href="API_DEVELOPER_MANUAL.html">API Developer Manual</a>
+<a href="PA_API_GUIDE.html">PA API Guide</a>
+<a href="API_CLIENT_GUIDE.html" class="active">API Client Guide</a>
+<div class="nav-category">Architecture & Design</div>
+<a href="ARCHITECTURE.html">System Architecture & Design Principles</a>
+<a href="FRONTEND_GUIDE.html">Frontend Guide</a>
+<div class="nav-category">Compliance & Security</div>
+<a href="ICAO_COMPLIANCE_MANUAL.html">ICAO Compliance Manual</a>
+<a href="CERTIFICATE_PROCESSING_GUIDE.html">Certificate Processing Guide</a>
+<div class="nav-category">AI & Analysis</div>
+<a href="AI_ANALYSIS_DASHBOARD_GUIDE.html">AI Analysis Dashboard Guide</a>
+<a href="COMPETITIVE_ANALYSIS.html">Competitive Analysis</a>
+<div class="nav-category">Reference</div>
+<a href="ICAO_PKD_COST_ANALYSIS.html">ICAO PKD Cost Analysis</a>
+<a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC Service Implementation Plan</a>
+<a href="DOCKER_BUILD_CACHE.html">Docker Build Cache Troubleshooting</a>
+<a href="LDAP_QUERY_GUIDE.html">LDAP Query Guide</a>
+<a href="VERSION_HISTORY.html">Version History</a>
+<div class="nav-category">Legal</div>
+<a href="EULA.html">End User License Agreement</a>
+<a href="LICENSE_COMPLIANCE.html">License Compliance</a>
+
+</nav>
+<div class="main">
+  <div class="topbar">
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+    <div class="breadcrumb">Docs / <strong>API Client Guide</strong></div>
+  </div>
+  <div class="content-wrapper">
+    <article class="content">
+      <h1 id="fastpass-spkd-api-client-guide">FASTpass® SPKD — API Client Guide</h1>
+<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<hr>
+<h2 id="part-1-api-client-administration">Part 1: API Client Administration</h2>
+<hr>
+<h3 id="개요">개요</h3>
+<p>ICAO Local PKD 시스템은 외부 Client Agent(출입국관리시스템, 외교부 연동 Agent 등)가 REST API를 안전하게 사용할 수 있도록 <strong>API Key 기반 인증</strong>을 지원합니다.</p>
+<h4 id="jwt-vs-api-key-비교">JWT vs API Key 비교</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>항목</th>
+<th>JWT (웹 UI)</th>
+<th>API Key (외부 Agent)</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>인증 방식</strong></td>
+<td>ID/PW 로그인 -&gt; 토큰 발급</td>
+<td><code>X-API-Key</code> 헤더</td>
+</tr>
+<tr>
+<td><strong>만료</strong></td>
+<td>1시간 (갱신 가능)</td>
+<td>관리자 설정 (무기한 가능)</td>
+</tr>
+<tr>
+<td><strong>대상</strong></td>
+<td>웹 브라우저 사용자</td>
+<td>서버 간 M2M 통신</td>
+</tr>
+<tr>
+<td><strong>Rate Limit</strong></td>
+<td>사용자별 공통</td>
+<td>클라이언트별 개별 설정</td>
+</tr>
+<tr>
+<td><strong>권한 제어</strong></td>
+<td>admin/user 역할</td>
+<td>12개 세부 Permission</td>
+</tr>
+<tr>
+<td><strong>IP 제한</strong></td>
+<td>없음</td>
+<td>클라이언트별 IP 화이트리스트</td>
+</tr>
+<tr>
+<td><strong>관리</strong></td>
+<td>사용자 관리 페이지</td>
+<td>API Client 관리 페이지</td>
+</tr>
+</tbody></table></div>
+<h4 id="base-url">Base URL</h4>
+<pre><code># HTTPS (운영 환경, Private CA 인증서 필요)
+https://pkd.smartcoreinc.com/api/auth/api-clients
+
+# HTTP (내부 네트워크)
+http://pkd.smartcoreinc.com/api/auth/api-clients
+
+# API Gateway (직접)
+http://localhost:8080/api/auth/api-clients</code></pre>
+<h4 id="사전-조건">사전 조건</h4>
+<ul>
+<li><strong>관리자 계정</strong>: 모든 API Client 관리 API는 admin 역할의 JWT 토큰이 필요합니다</li>
+<li>JWT 토큰 발급: <code>POST /api/auth/login</code> -&gt; <code>token</code> 필드 사용</li>
+</ul>
+<pre><code class="language-bash"># JWT 토큰 발급
+TOKEN=$(curl -s -X POST https://pkd.smartcoreinc.com/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "admin123"}' | jq -r '.token')</code></pre>
+<hr>
+<h3 id="api-client-관리-api">API Client 관리 API</h3>
+<h4 id="api-endpoints-summary">API Endpoints Summary</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><code>POST</code></td>
+<td><code>/api/auth/api-clients</code></td>
+<td>새 클라이언트 생성 + API Key 발급</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>GET</code></td>
+<td><code>/api/auth/api-clients</code></td>
+<td>클라이언트 목록 조회</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>GET</code></td>
+<td><code>/api/auth/api-clients/{id}</code></td>
+<td>클라이언트 상세 조회</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>PUT</code></td>
+<td><code>/api/auth/api-clients/{id}</code></td>
+<td>클라이언트 수정</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>DELETE</code></td>
+<td><code>/api/auth/api-clients/{id}</code></td>
+<td>클라이언트 비활성화</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>POST</code></td>
+<td><code>/api/auth/api-clients/{id}/regenerate</code></td>
+<td>API Key 재발급</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>GET</code></td>
+<td><code>/api/auth/api-clients/{id}/usage</code></td>
+<td>사용 통계 조회</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h4 id="1-클라이언트-생성-post-api-auth-api-clients">1. 클라이언트 생성 (<code>POST /api/auth/api-clients</code>)</h4>
+<p>새 외부 클라이언트를 등록하고 API Key를 발급합니다.</p>
+<blockquote>
+<p><strong>주의</strong>: API Key는 이 응답에서 <strong>단 한 번만</strong> 표시됩니다. 반드시 안전하게 저장하세요.</p>
+</blockquote>
+<p><strong>Request</strong>:</p>
+<pre><code class="language-bash">curl -X POST https://pkd.smartcoreinc.com/api/auth/api-clients \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "client_name": "Immigration Agent",
+    "description": "출입국관리시스템 연동 Agent",
+    "permissions": ["pa:verify", "cert:read", "ai:read"],
+    "allowed_ips": ["192.168.1.0/24"],
+    "rate_limit_per_minute": 120,
+    "rate_limit_per_hour": 2000,
+    "rate_limit_per_day": 20000
+  }'</code></pre>
+<p><strong>Request 필드</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>필드</th>
+<th>타입</th>
+<th>필수</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>client_name</code></td>
+<td>string</td>
+<td><strong>필수</strong></td>
+<td>-</td>
+<td>클라이언트 식별 이름</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>string</td>
+<td>선택</td>
+<td>-</td>
+<td>클라이언트 설명</td>
+</tr>
+<tr>
+<td><code>permissions</code></td>
+<td>string[]</td>
+<td>선택</td>
+<td><code>[]</code></td>
+<td>부여할 Permission 목록</td>
+</tr>
+<tr>
+<td><code>allowed_endpoints</code></td>
+<td>string[]</td>
+<td>선택</td>
+<td><code>[]</code></td>
+<td>허용 엔드포인트 패턴 (비어있으면 전체 허용)</td>
+</tr>
+<tr>
+<td><code>allowed_ips</code></td>
+<td>string[]</td>
+<td>선택</td>
+<td><code>[]</code></td>
+<td>허용 IP/CIDR (비어있으면 전체 허용)</td>
+</tr>
+<tr>
+<td><code>rate_limit_per_minute</code></td>
+<td>integer</td>
+<td>선택</td>
+<td><code>60</code></td>
+<td>분당 요청 제한</td>
+</tr>
+<tr>
+<td><code>rate_limit_per_hour</code></td>
+<td>integer</td>
+<td>선택</td>
+<td><code>1000</code></td>
+<td>시간당 요청 제한</td>
+</tr>
+<tr>
+<td><code>rate_limit_per_day</code></td>
+<td>integer</td>
+<td>선택</td>
+<td><code>10000</code></td>
+<td>일일 요청 제한</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td>string</td>
+<td>선택</td>
+<td><code>null</code></td>
+<td>만료 시간 (ISO 8601, null이면 무기한)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "warning": "API Key is only shown in this response. Store it securely.",
+  "client": {
+    "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "client_name": "Immigration Agent",
+    "api_key_prefix": "NggoCnqh",
+    "api_key": "icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+    "description": "출입국관리시스템 연동 Agent",
+    "permissions": ["pa:verify", "cert:read", "ai:read"],
+    "allowed_endpoints": [],
+    "allowed_ips": ["192.168.1.0/24"],
+    "rate_limit_per_minute": 120,
+    "rate_limit_per_hour": 2000,
+    "rate_limit_per_day": 20000,
+    "is_active": true,
+    "expires_at": "",
+    "last_used_at": "",
+    "total_requests": 0,
+    "created_by": "admin-uuid",
+    "created_at": "2026-02-24T12:00:00.000000",
+    "updated_at": "2026-02-24T12:00:00.000000"
+  }
+}</code></pre>
+<hr>
+<h4 id="2-클라이언트-목록-조회-get-api-auth-api-clients">2. 클라이언트 목록 조회 (<code>GET /api/auth/api-clients</code>)</h4>
+<p>등록된 모든 클라이언트를 페이지네이션으로 조회합니다.</p>
+<pre><code class="language-bash"># 활성 클라이언트만 조회
+curl -X GET "https://pkd.smartcoreinc.com/api/auth/api-clients?active_only=true&amp;limit=20&amp;offset=0" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+<p><strong>Query Parameters</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>active_only</code></td>
+<td>string</td>
+<td>-</td>
+<td><code>&quot;true&quot;</code> 시 활성 클라이언트만</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>integer</td>
+<td><code>100</code></td>
+<td>페이지 크기</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>integer</td>
+<td><code>0</code></td>
+<td>건너뛸 항목 수</td>
+</tr>
+</tbody></table></div>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "total": 3,
+  "clients": [
+    {
+      "id": "a1b2c3d4-...",
+      "client_name": "Immigration Agent",
+      "api_key_prefix": "NggoCnqh",
+      "is_active": true,
+      "total_requests": 1542,
+      "last_used_at": "2026-02-24T15:30:00.000000",
+      ...
+    }
+  ]
+}</code></pre>
+<blockquote>
+<p><strong>참고</strong>: 목록 조회에서는 <code>api_key</code> 필드가 포함되지 않습니다. API Key는 생성/재발급 시에만 표시됩니다.</p>
+</blockquote>
+<hr>
+<h4 id="3-클라이언트-상세-조회-get-api-auth-api-clients-id">3. 클라이언트 상세 조회 (<code>GET /api/auth/api-clients/{id}</code>)</h4>
+<pre><code class="language-bash">curl -X GET https://pkd.smartcoreinc.com/api/auth/api-clients/{id} \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "client": {
+    "id": "a1b2c3d4-...",
+    "client_name": "Immigration Agent",
+    "api_key_prefix": "NggoCnqh",
+    "permissions": ["pa:verify", "cert:read", "ai:read"],
+    "rate_limit_per_minute": 120,
+    "total_requests": 1542,
+    ...
+  }
+}</code></pre>
+<hr>
+<h4 id="4-클라이언트-수정-put-api-auth-api-clients-id">4. 클라이언트 수정 (<code>PUT /api/auth/api-clients/{id}</code>)</h4>
+<p>제공된 필드만 업데이트됩니다. 생략된 필드는 변경되지 않습니다.</p>
+<pre><code class="language-bash"># Permission 변경 + Rate Limit 상향
+curl -X PUT https://pkd.smartcoreinc.com/api/auth/api-clients/{id} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "permissions": ["pa:verify", "cert:read", "cert:export", "ai:read"],
+    "rate_limit_per_minute": 200
+  }'</code></pre>
+<pre><code class="language-bash"># 클라이언트 비활성화
+curl -X PUT https://pkd.smartcoreinc.com/api/auth/api-clients/{id} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"is_active": false}'</code></pre>
+<hr>
+<h4 id="5-클라이언트-비활성화-delete-api-auth-api-clients-id">5. 클라이언트 비활성화 (<code>DELETE /api/auth/api-clients/{id}</code>)</h4>
+<p>클라이언트를 비활성화합니다 (Soft Delete). 레코드는 유지되지만 API Key로 인증할 수 없습니다.</p>
+<pre><code class="language-bash">curl -X DELETE https://pkd.smartcoreinc.com/api/auth/api-clients/{id} \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "message": "Client deactivated"
+}</code></pre>
+<hr>
+<h4 id="6-api-key-재발급-post-api-auth-api-clients-id-regenerate">6. API Key 재발급 (<code>POST /api/auth/api-clients/{id}/regenerate</code>)</h4>
+<p>기존 API Key를 무효화하고 새 키를 발급합니다.</p>
+<blockquote>
+<p><strong>주의</strong>: 기존 키는 즉시 사용 불가합니다. 새 키는 이 응답에서 <strong>단 한 번만</strong> 표시됩니다.</p>
+</blockquote>
+<pre><code class="language-bash">curl -X POST https://pkd.smartcoreinc.com/api/auth/api-clients/{id}/regenerate \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "warning": "New API Key is only shown in this response. Store it securely.",
+  "client": {
+    "id": "a1b2c3d4-...",
+    "client_name": "Immigration Agent",
+    "api_key_prefix": "XyZ9AbCd",
+    "api_key": "icao_XyZ9AbCd_new_random_key_value_here_32chars",
+    ...
+  }
+}</code></pre>
+<hr>
+<h4 id="7-사용-통계-조회-get-api-auth-api-clients-id-usage">7. 사용 통계 조회 (<code>GET /api/auth/api-clients/{id}/usage</code>)</h4>
+<p>지정된 기간 동안의 클라이언트 API 사용 통계를 조회합니다.</p>
+<pre><code class="language-bash"># 최근 30일 통계
+curl -X GET "https://pkd.smartcoreinc.com/api/auth/api-clients/{id}/usage?days=30" \
+  -H "Authorization: Bearer $TOKEN"</code></pre>
+<p><strong>Query Parameters</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>파라미터</th>
+<th>타입</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>days</code></td>
+<td>integer</td>
+<td><code>7</code></td>
+<td>조회 기간 (일)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Response</strong> (200):</p>
+<pre><code class="language-json">{
+  "success": true,
+  "client_id": "a1b2c3d4-...",
+  "days": 30,
+  "usage": {
+    "total_requests": 15420,
+    "top_endpoints": [
+      {"endpoint": "/api/pa/verify", "count": 8500},
+      {"endpoint": "/api/certificates/search", "count": 3200},
+      {"endpoint": "/api/certificates/pa-lookup", "count": 2100}
+    ]
+  }
+}</code></pre>
+<hr>
+<h3 id="pa-service-연동-nginx-auth_request">PA Service 연동 (nginx auth_request)</h3>
+<p>PA Service(<code>/api/pa/*</code>) 요청의 API Key 추적은 <strong>nginx auth_request</strong> 메커니즘으로 구현됩니다.</p>
+<h4 id="동작-방식">동작 방식</h4>
+<pre><code>Client ──X-API-Key──→ nginx (/api/pa/verify)
+                        ├── auth_request → PKD Management /api/auth/internal/check
+                        │     ↓ API Key 검증 + Rate Limit + Usage Log
+                        │     ↓ 200 OK (허용) / 401 (거부) / 403 (Rate Limit)
+                        └── proxy_pass → PA Service (8082)</code></pre>
+<ol>
+<li>클라이언트가 <code>X-API-Key</code> 헤더와 함께 PA 요청 전송</li>
+<li>nginx가 내부 subrequest로 PKD Management에 인증 확인 (<code>/api/auth/internal/check</code>)</li>
+<li>PKD Management가 API Key 검증 -&gt; Rate Limit 체크 -&gt; 사용 로그 기록</li>
+<li>인증 성공(200) 시 nginx가 PA Service로 요청 전달, 실패 시 JSON 에러 반환</li>
+</ol>
+<h4 id="관리자-참고사항">관리자 참고사항</h4>
+<ul>
+<li><strong>Permission</strong>: PA 통신용 클라이언트는 <code>pa:verify</code> 또는 <code>pa:read</code> 포함 필수</li>
+<li><strong>사용량 모니터링</strong>: <code>/api/auth/api-clients/{id}/usage</code> API에서 <code>/api/pa/verify</code> 등 PA 엔드포인트 사용량 확인</li>
+<li><strong>Rate Limit</strong>: 전체 엔드포인트(PKD Management + PA)에 대해 공유 Rate Limiter 적용</li>
+<li><strong>API Key 미제공 시</strong>: 기존과 동일하게 public 접근 허용 (하위 호환)</li>
+</ul>
+<hr>
+<h3 id="permission-모델">Permission 모델</h3>
+<p>12개의 세부 Permission으로 클라이언트별 접근 범위를 제어합니다.</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Permission</th>
+<th>설명</th>
+<th>관련 엔드포인트</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>cert:read</code></td>
+<td>인증서 검색/조회</td>
+<td><code>/api/certificates/search</code>, <code>/api/certificates/detail</code>, <code>/api/certificates/validation</code></td>
+</tr>
+<tr>
+<td><code>cert:export</code></td>
+<td>인증서 내보내기</td>
+<td><code>/api/certificates/export/*</code></td>
+</tr>
+<tr>
+<td><code>pa:verify</code></td>
+<td>PA 검증 수행</td>
+<td><code>/api/pa/verify</code>, <code>/api/pa/parse-*</code></td>
+</tr>
+<tr>
+<td><code>pa:read</code></td>
+<td>PA 이력 조회</td>
+<td><code>/api/pa/history</code>, <code>/api/pa/{id}</code>, <code>/api/pa/statistics</code></td>
+</tr>
+<tr>
+<td><code>pa:stats</code></td>
+<td>PA 통계 조회</td>
+<td><code>/api/pa/statistics</code></td>
+</tr>
+<tr>
+<td><code>upload:read</code></td>
+<td>업로드 이력 조회</td>
+<td><code>/api/upload/history</code>, <code>/api/upload/detail/*</code>, <code>/api/upload/statistics</code></td>
+</tr>
+<tr>
+<td><code>upload:write</code></td>
+<td>파일 업로드</td>
+<td><code>/api/upload/ldif</code>, <code>/api/upload/masterlist</code>, <code>/api/upload/certificate</code></td>
+</tr>
+<tr>
+<td><code>report:read</code></td>
+<td>보고서 조회</td>
+<td><code>/api/certificates/dsc-nc/report</code>, <code>/api/certificates/crl/report</code></td>
+</tr>
+<tr>
+<td><code>ai:read</code></td>
+<td>AI 분석 결과 조회</td>
+<td><code>/api/ai/certificate/*</code>, <code>/api/ai/anomalies</code>, <code>/api/ai/statistics</code></td>
+</tr>
+<tr>
+<td><code>sync:read</code></td>
+<td>동기화 상태 조회</td>
+<td><code>/api/sync/status</code>, <code>/api/sync/stats</code></td>
+</tr>
+<tr>
+<td><code>icao:read</code></td>
+<td>ICAO 버전 조회</td>
+<td><code>/api/icao/status</code>, <code>/api/icao/latest</code>, <code>/api/icao/history</code></td>
+</tr>
+<tr>
+<td><code>api-client:manage</code></td>
+<td>API 클라이언트 관리</td>
+<td>관리자 전용</td>
+</tr>
+</tbody></table></div>
+<h4 id="permission-설정-예시">Permission 설정 예시</h4>
+<pre><code class="language-json">// PA 검증 전용 Agent
+{"permissions": ["pa:verify"]}
+
+// 인증서 조회 + AI 분석 Agent
+{"permissions": ["cert:read", "cert:export", "ai:read"]}
+
+// 전체 읽기 Agent
+{"permissions": ["cert:read", "cert:export", "pa:verify", "pa:read", "pa:stats", "upload:read", "report:read", "ai:read", "sync:read", "icao:read"]}</code></pre>
+<blockquote>
+<p><strong>참고</strong>: <code>permissions</code>가 빈 배열(<code>[]</code>)이면 모든 Public 엔드포인트에 접근할 수 있지만, 특정 Permission이 필요한 Protected 엔드포인트는 접근이 거부됩니다.</p>
+</blockquote>
+<hr>
+<h3 id="rate-limiting">Rate Limiting</h3>
+<h4 id="3-tier-rate-limiting">3-Tier Rate Limiting</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>계층</th>
+<th>윈도우</th>
+<th>기본값</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>분당</strong></td>
+<td>60초 슬라이딩</td>
+<td>60 req/min</td>
+<td>순간 트래픽 제어</td>
+</tr>
+<tr>
+<td><strong>시간당</strong></td>
+<td>3600초 슬라이딩</td>
+<td>1,000 req/hr</td>
+<td>중간 범위 제어</td>
+</tr>
+<tr>
+<td><strong>일일</strong></td>
+<td>86400초 슬라이딩</td>
+<td>10,000 req/day</td>
+<td>일간 사용량 제어</td>
+</tr>
+</tbody></table></div>
+<h4 id="rate-limit-초과-시-응답">Rate Limit 초과 시 응답</h4>
+<p>Rate Limit 초과 시 <code>429 Too Many Requests</code> 응답이 반환됩니다:</p>
+<pre><code>HTTP/1.1 429 Too Many Requests
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1708776000
+Retry-After: 45
+
+{
+  "success": false,
+  "error": "Rate limit exceeded",
+  "limit": 60,
+  "remaining": 0,
+  "reset_at": 1708776000,
+  "window": "per_minute"
+}</code></pre>
+<p><strong>응답 헤더</strong>:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>헤더</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>X-RateLimit-Limit</code></td>
+<td>현재 윈도우의 최대 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Remaining</code></td>
+<td>남은 요청 수</td>
+</tr>
+<tr>
+<td><code>X-RateLimit-Reset</code></td>
+<td>윈도우 리셋 Unix timestamp</td>
+</tr>
+<tr>
+<td><code>Retry-After</code></td>
+<td>재시도까지 남은 초</td>
+</tr>
+</tbody></table></div>
+<h4 id="nginx-rate-limiting-l1">nginx Rate Limiting (L1)</h4>
+<p>API Key Rate Limiting(L2) 외에도 nginx에서 IP 기반 L1 Rate Limiting이 적용됩니다:</p>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Zone</th>
+<th>제한</th>
+<th>대상</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>api_limit</code></td>
+<td>100 req/s per IP</td>
+<td>전체 API</td>
+</tr>
+<tr>
+<td><code>upload_limit</code></td>
+<td>5 req/min per user</td>
+<td>업로드</td>
+</tr>
+<tr>
+<td><code>pa_verify_limit</code></td>
+<td>2 req/min per user</td>
+<td>PA 검증</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="ip-화이트리스트">IP 화이트리스트</h3>
+<p><code>allowed_ips</code>에 IP 주소 또는 CIDR 범위를 지정하여 접근을 제한할 수 있습니다.</p>
+<pre><code class="language-json">// 특정 IP만 허용
+{"allowed_ips": ["192.168.1.100"]}
+
+// 서브넷 허용
+{"allowed_ips": ["192.168.1.0/24", "10.0.0.0/8"]}
+
+// 전체 허용 (기본값)
+{"allowed_ips": []}</code></pre>
+<p>허용되지 않은 IP에서 요청 시:</p>
+<pre><code class="language-json">{
+  "success": false,
+  "error": "IP not allowed"
+}</code></pre>
+<hr>
+<h3 id="보안-권장사항">보안 권장사항</h3>
+<ol>
+<li><strong>HTTPS 필수</strong>: API Key가 네트워크에 평문으로 노출되지 않도록 반드시 HTTPS를 사용하세요.</li>
+<li><strong>API Key 안전 저장</strong>: API Key는 생성 시 한 번만 표시됩니다. 환경 변수 또는 시크릿 매니저에 저장하세요.</li>
+<li><strong>최소 권한 원칙</strong>: 클라이언트에 필요한 Permission만 부여하세요.</li>
+<li><strong>정기 키 교체</strong>: 보안을 위해 주기적으로 API Key를 재발급하세요 (<code>/regenerate</code>).</li>
+<li><strong>IP 제한 활용</strong>: 가능하면 <code>allowed_ips</code>를 설정하여 접근 IP를 제한하세요.</li>
+<li><strong>미사용 클라이언트 비활성화</strong>: 더 이상 사용하지 않는 클라이언트는 즉시 비활성화하세요.</li>
+<li><strong>만료 설정</strong>: 임시 연동의 경우 <code>expires_at</code>을 설정하여 자동 만료되도록 하세요.</li>
+<li><strong>사용량 모니터링</strong>: <code>/usage</code> API를 통해 비정상적인 사용 패턴을 주기적으로 확인하세요.</li>
+</ol>
+<hr>
+<h3 id="프론트엔드-관리-페이지">프론트엔드 관리 페이지</h3>
+<p>웹 UI에서도 API Client를 관리할 수 있습니다:</p>
+<ul>
+<li><strong>URL</strong>: <code>https://pkd.smartcoreinc.com/admin/api-clients</code></li>
+<li><strong>접근</strong>: 사이드바 -&gt; &quot;Admin &amp; Security&quot; -&gt; &quot;API 클라이언트&quot;</li>
+<li><strong>기능</strong>: 클라이언트 생성, 목록 조회, 상세 정보, 키 재발급, 비활성화</li>
+</ul>
+<hr>
+<h3 id="에러-코드">에러 코드</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>에러</th>
+<th>설명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>400</code></td>
+<td>Bad Request</td>
+<td>필수 필드 누락 또는 잘못된 JSON</td>
+</tr>
+<tr>
+<td><code>401</code></td>
+<td>Unauthorized</td>
+<td>API Key 없음 또는 잘못된 키</td>
+</tr>
+<tr>
+<td><code>403</code></td>
+<td>Forbidden</td>
+<td>비활성 클라이언트, 만료, IP 차단, 권한 부족</td>
+</tr>
+<tr>
+<td><code>404</code></td>
+<td>Not Found</td>
+<td>클라이언트 ID 없음</td>
+</tr>
+<tr>
+<td><code>429</code></td>
+<td>Too Many Requests</td>
+<td>Rate Limit 초과</td>
+</tr>
+<tr>
+<td><code>500</code></td>
+<td>Internal Server Error</td>
+<td>서버 오류</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="part-2-client-integration-guide">Part 2: Client Integration Guide</h2>
+<hr>
+<h3 id="개요">개요</h3>
+<p>이 문서는 ICAO Local PKD 시스템에 <strong>API Key로 연동하는 외부 클라이언트 애플리케이션</strong> 개발자를 위한 가이드입니다.</p>
+<p>API Key를 발급받으면 별도의 로그인 없이 <code>X-API-Key</code> HTTP 헤더 하나로 인증서 검색, PA 검증, AI 분석 등의 API를 사용할 수 있습니다.</p>
+<h4 id="api-key-인증-흐름">API Key 인증 흐름</h4>
+<pre><code>외부 Agent                           ICAO Local PKD
+   |                                      |
+   |  HTTP Request                        |
+   |  X-API-Key: icao_XXXXXXXX_...  ----&gt;  |
+   |                                      | → SHA-256 해시 비교
+   |                                      | → Permission 확인
+   |                                      | → IP 화이트리스트 확인
+   |                                      | → Rate Limit 확인
+   |  &lt;----  200 OK (JSON Response)       |
+   |                                      |</code></pre>
+<h4 id="base-url">Base URL</h4>
+<p><strong>HTTPS (운영 환경, 권장)</strong>:</p>
+<pre><code># Private CA 인증서(ca.crt) 설치 필요
+https://pkd.smartcoreinc.com/api</code></pre>
+<p><strong>HTTP (내부 네트워크)</strong>:</p>
+<pre><code>http://pkd.smartcoreinc.com/api</code></pre>
+<p><strong>WiFi 네트워크 (SC-WiFi)</strong>:</p>
+<pre><code>http://192.168.1.70:8080/api</code></pre>
+<p><strong>유선 LAN (내부 네트워크)</strong>:</p>
+<pre><code>http://192.168.100.10:8080/api</code></pre>
+<blockquote>
+<p><strong>Note</strong>: HTTPS 사용 시 Private CA 인증서(<code>ca.crt</code>)를 클라이언트에 설치해야 합니다. 관리자에게 인증서 파일을 요청하세요.</p>
+</blockquote>
+<hr>
+<h3 id="인증-방법">인증 방법</h3>
+<p>모든 API 요청에 <code>X-API-Key</code> 헤더를 포함하세요:</p>
+<pre><code>X-API-Key: icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6</code></pre>
+<h4 id="api-key-형식">API Key 형식</h4>
+<pre><code>icao_{prefix}_{random}
+ |      |        |
+ |      |        └── 32자 랜덤 문자열 (Base62)
+ |      └── 8자 키 접두사 (관리 UI에서 식별용)
+ └── 고정 접두사</code></pre>
+<ul>
+<li>총 길이: 46자</li>
+<li>대소문자 구분됨 (Case-Sensitive)</li>
+<li>API Key는 발급 시 <strong>한 번만 표시</strong>되며, 시스템에는 SHA-256 해시만 저장됩니다</li>
+</ul>
+<h4 id="api-key-발급">API Key 발급</h4>
+<p>API Key는 시스템 관리자가 발급합니다. 관리자에게 다음 정보를 전달하세요:</p>
+<ul>
+<li><strong>클라이언트 이름</strong>: 시스템/서비스 이름 (예: &quot;출입국관리 Agent&quot;)</li>
+<li><strong>필요한 기능</strong>: PA 검증, 인증서 검색 등</li>
+<li><strong>접속 IP</strong>: 클라이언트 서버의 IP 주소 또는 대역</li>
+<li><strong>예상 사용량</strong>: 분당/시간당/일일 예상 요청 수</li>
+</ul>
+<hr>
+<h3 id="사용-가능-엔드포인트">사용 가능 엔드포인트</h3>
+<p>API Key로 접근할 수 있는 주요 엔드포인트입니다. 관리자가 설정한 Permission에 따라 접근 가능 범위가 다를 수 있습니다.</p>
+<h4 id="pa-검증-permission-pa-verify">PA 검증 (Permission: <code>pa:verify</code>)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/verify</code></td>
+<td>PA 검증 (8단계 전체 프로세스)</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-sod</code></td>
+<td>SOD 메타데이터 파싱</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg1</code></td>
+<td>DG1 -&gt; MRZ 파싱</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-dg2</code></td>
+<td>DG2 -&gt; 얼굴 이미지 추출</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/pa/parse-mrz-text</code></td>
+<td>MRZ 텍스트 파싱</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Usage Tracking (v2.22.0+)</strong>: PA Service 요청도 <code>X-API-Key</code> 헤더로 추적됩니다. 요청 시마다 사용량이 자동 기록되며, 관리자가 사용 통계 API로 PA 엔드포인트별 호출 횟수를 확인할 수 있습니다.</p>
+</blockquote>
+<h4 id="인증서-검색-permission-cert-read">인증서 검색 (Permission: <code>cert:read</code>)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/search</code></td>
+<td>인증서 검색 (국가/유형/상태 필터)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/detail</code></td>
+<td>인증서 상세 조회</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/validation</code></td>
+<td>검증 결과 조회 (fingerprint)</td>
+</tr>
+<tr>
+<td><code>POST</code></td>
+<td><code>/api/certificates/pa-lookup</code></td>
+<td>간편 PA 조회 (Subject DN/Fingerprint)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/countries</code></td>
+<td>국가 목록 조회</td>
+</tr>
+</tbody></table></div>
+<h4 id="ai-분석-permission-ai-read">AI 분석 (Permission: <code>ai:read</code>)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/certificate/{fingerprint}</code></td>
+<td>인증서 AI 분석 결과</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/certificate/{fingerprint}/forensic</code></td>
+<td>포렌식 상세 (10개 카테고리)</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/anomalies</code></td>
+<td>이상 인증서 목록</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/ai/statistics</code></td>
+<td>AI 분석 전체 통계</td>
+</tr>
+</tbody></table></div>
+<h4 id="보고서-permission-report-read">보고서 (Permission: <code>report:read</code>)</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Method</th>
+<th>Path</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/dsc-nc/report</code></td>
+<td>표준 부적합 DSC 보고서</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/crl/report</code></td>
+<td>CRL 보고서</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/crl/{id}</code></td>
+<td>CRL 상세</td>
+</tr>
+<tr>
+<td><code>GET</code></td>
+<td><code>/api/certificates/doc9303-checklist</code></td>
+<td>Doc 9303 적합성 체크리스트</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h3 id="연동-예제">연동 예제</h3>
+<h4 id="curl">curl</h4>
+<pre><code class="language-bash"># API Key 변수 설정
+API_KEY="icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+BASE_URL="https://pkd.smartcoreinc.com"
+
+# 1. 인증서 검색 (한국, DSC)
+curl -s "$BASE_URL/api/certificates/search?country=KR&amp;certType=DSC&amp;limit=10" \
+  -H "X-API-Key: $API_KEY" | jq .
+
+# 2. PA 간편 조회 (Subject DN)
+curl -s -X POST "$BASE_URL/api/certificates/pa-lookup" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"}' | jq .
+
+# 3. PA 전체 검증 (SOD + DG)
+curl -s -X POST "$BASE_URL/api/pa/verify" \
+  -H "X-API-Key: $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sod": "'$(base64 -w0 sod.bin)'",
+    "dataGroups": {
+      "1": "'$(base64 -w0 dg1.bin)'",
+      "2": "'$(base64 -w0 dg2.bin)'"
+    }
+  }' | jq .
+
+# 4. AI 분석 결과 조회
+curl -s "$BASE_URL/api/ai/certificate/920693cd1283824ffdf48a3579fc35528122f3de46bab2ecdaef402db6d92e4e" \
+  -H "X-API-Key: $API_KEY" | jq .
+
+# 5. 헬스 체크 (인증 불필요)
+curl -s "$BASE_URL/api/health" | jq .</code></pre>
+<hr>
+<h4 id="python-requests">Python (requests)</h4>
+<pre><code class="language-python">"""
+ICAO Local PKD — 외부 Agent 연동 예제 (Python)
+pip install requests
+"""
+import requests
+import base64
+import json
+
+# 설정
+BASE_URL = "https://pkd.smartcoreinc.com"
+API_KEY = "icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+# HTTPS Private CA 인증서 (ca.crt 경로 지정)
+CA_CERT = "/path/to/ca.crt"  # 또는 verify=False (개발 환경)
+
+headers = {
+    "X-API-Key": API_KEY,
+    "Content-Type": "application/json"
+}
+
+
+def search_certificates(country: str, cert_type: str = "DSC", limit: int = 10):
+    """인증서 검색"""
+    resp = requests.get(
+        f"{BASE_URL}/api/certificates/search",
+        params={"country": country, "certType": cert_type, "limit": limit},
+        headers=headers,
+        verify=CA_CERT
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    print(f"[인증서 검색] {country} {cert_type}: {data.get('total', 0)}건")
+    return data
+
+
+def pa_lookup(subject_dn: str):
+    """PA 간편 조회 (Subject DN)"""
+    resp = requests.post(
+        f"{BASE_URL}/api/certificates/pa-lookup",
+        json={"subjectDn": subject_dn},
+        headers=headers,
+        verify=CA_CERT
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    validation = data.get("validation")
+    if validation:
+        print(f"[PA 조회] Status: {validation['validationStatus']}, "
+              f"Trust Chain: {validation['trustChainValid']}")
+    else:
+        print("[PA 조회] 검증 결과 없음")
+    return data
+
+
+def pa_verify(sod_path: str, dg1_path: str, dg2_path: str = None):
+    """PA 전체 검증 (SOD + Data Groups)"""
+    with open(sod_path, "rb") as f:
+        sod_b64 = base64.b64encode(f.read()).decode()
+    with open(dg1_path, "rb") as f:
+        dg1_b64 = base64.b64encode(f.read()).decode()
+
+    payload = {
+        "sod": sod_b64,
+        "dataGroups": {"1": dg1_b64}
+    }
+    if dg2_path:
+        with open(dg2_path, "rb") as f:
+            payload["dataGroups"]["2"] = base64.b64encode(f.read()).decode()
+
+    resp = requests.post(
+        f"{BASE_URL}/api/pa/verify",
+        json=payload,
+        headers=headers,
+        verify=CA_CERT
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    result = data.get("result", {})
+    print(f"[PA 검증] Overall: {result.get('overallResult')}, "
+          f"Country: {result.get('issuingCountry')}")
+    return data
+
+
+def get_ai_analysis(fingerprint: str):
+    """AI 인증서 분석 결과 조회"""
+    resp = requests.get(
+        f"{BASE_URL}/api/ai/certificate/{fingerprint}",
+        headers=headers,
+        verify=CA_CERT
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    result = data.get("result", {})
+    print(f"[AI 분석] Risk: {result.get('risk_level')}, "
+          f"Score: {result.get('risk_score')}")
+    return data
+
+
+# 사용 예시
+if __name__ == "__main__":
+    # 1. 한국 DSC 인증서 검색
+    certs = search_certificates("KR", "DSC", limit=5)
+
+    # 2. PA 간편 조회
+    pa_lookup("/C=KR/O=Government of Korea/CN=Document Signer 1234")
+
+    # 3. AI 분석 결과
+    get_ai_analysis("920693cd1283824ffdf48a3579fc35528122f3de46bab2ecdaef402db6d92e4e")</code></pre>
+<hr>
+<h4 id="java-httpurlconnection">Java (HttpURLConnection)</h4>
+<pre><code class="language-java">/**
+ * ICAO Local PKD — 외부 Agent 연동 예제 (Java)
+ * JDK 11+
+ */
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
+
+public class IcaoPkdClient {
+
+    private static final String BASE_URL = "https://pkd.smartcoreinc.com";
+    private static final String API_KEY = "icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
+
+    private final HttpClient client;
+
+    public IcaoPkdClient() {
+        // Private CA 사용 시 SSLContext 설정 필요
+        this.client = HttpClient.newBuilder()
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
+    }
+
+    /**
+     * 인증서 검색
+     */
+    public String searchCertificates(String country, String certType, int limit)
+            throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(String.format(
+                    "%s/api/certificates/search?country=%s&amp;certType=%s&amp;limit=%d",
+                    BASE_URL, country, certType, limit)))
+                .header("X-API-Key", API_KEY)
+                .GET()
+                .build();
+
+        HttpResponse&lt;String&gt; response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        System.out.printf("[인증서 검색] Status: %d%n", response.statusCode());
+        return response.body();
+    }
+
+    /**
+     * PA 간편 조회
+     */
+    public String paLookup(String subjectDn) throws Exception {
+        String body = String.format("{\"subjectDn\": \"%s\"}", subjectDn);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/certificates/pa-lookup"))
+                .header("X-API-Key", API_KEY)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse&lt;String&gt; response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        System.out.printf("[PA 조회] Status: %d%n", response.statusCode());
+        return response.body();
+    }
+
+    /**
+     * PA 전체 검증
+     */
+    public String paVerify(Path sodPath, Path dg1Path) throws Exception {
+        String sodB64 = Base64.getEncoder().encodeToString(Files.readAllBytes(sodPath));
+        String dg1B64 = Base64.getEncoder().encodeToString(Files.readAllBytes(dg1Path));
+
+        String body = String.format(
+            "{\"sod\": \"%s\", \"dataGroups\": {\"1\": \"%s\"}}",
+            sodB64, dg1B64);
+
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(BASE_URL + "/api/pa/verify"))
+                .header("X-API-Key", API_KEY)
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+
+        HttpResponse&lt;String&gt; response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        System.out.printf("[PA 검증] Status: %d%n", response.statusCode());
+        return response.body();
+    }
+
+    public static void main(String[] args) throws Exception {
+        IcaoPkdClient client = new IcaoPkdClient();
+
+        // 인증서 검색
+        String result = client.searchCertificates("KR", "DSC", 5);
+        System.out.println(result);
+
+        // PA 간편 조회
+        String lookup = client.paLookup(
+            "/C=KR/O=Government of Korea/CN=Document Signer 1234");
+        System.out.println(lookup);
+    }
+}</code></pre>
+<hr>
+<h4 id="c-httpclient">C# (HttpClient)</h4>
+<pre><code class="language-csharp">/**
+ * ICAO Local PKD — 외부 Agent 연동 예제 (C#)
+ * .NET 6+
+ */
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+
+public class IcaoPkdClient
+{
+    private const string BaseUrl = "https://pkd.smartcoreinc.com";
+    private const string ApiKey = "icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6";
+
+    private readonly HttpClient _client;
+
+    public IcaoPkdClient()
+    {
+        // Private CA 사용 시 HttpClientHandler에서 ServerCertificateCustomValidationCallback 설정
+        _client = new HttpClient();
+        _client.DefaultRequestHeaders.Add("X-API-Key", ApiKey);
+    }
+
+    /// &lt;summary&gt;인증서 검색&lt;/summary&gt;
+    public async Task&lt;string&gt; SearchCertificatesAsync(
+        string country, string certType = "DSC", int limit = 10)
+    {
+        var url = $"{BaseUrl}/api/certificates/search" +
+                  $"?country={country}&amp;certType={certType}&amp;limit={limit}";
+
+        var response = await _client.GetAsync(url);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[인증서 검색] {country} {certType}: Status {response.StatusCode}");
+        return result;
+    }
+
+    /// &lt;summary&gt;PA 간편 조회&lt;/summary&gt;
+    public async Task&lt;string&gt; PaLookupAsync(string subjectDn)
+    {
+        var payload = JsonSerializer.Serialize(new { subjectDn });
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        var response = await _client.PostAsync(
+            $"{BaseUrl}/api/certificates/pa-lookup", content);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[PA 조회] Status {response.StatusCode}");
+        return result;
+    }
+
+    /// &lt;summary&gt;PA 전체 검증&lt;/summary&gt;
+    public async Task&lt;string&gt; PaVerifyAsync(string sodPath, string dg1Path)
+    {
+        var sodB64 = Convert.ToBase64String(await File.ReadAllBytesAsync(sodPath));
+        var dg1B64 = Convert.ToBase64String(await File.ReadAllBytesAsync(dg1Path));
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            sod = sodB64,
+            dataGroups = new Dictionary&lt;string, string&gt; { { "1", dg1B64 } }
+        });
+
+        var content = new StringContent(payload, Encoding.UTF8, "application/json");
+        var response = await _client.PostAsync($"{BaseUrl}/api/pa/verify", content);
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[PA 검증] Status {response.StatusCode}");
+        return result;
+    }
+
+    /// &lt;summary&gt;AI 분석 결과 조회&lt;/summary&gt;
+    public async Task&lt;string&gt; GetAiAnalysisAsync(string fingerprint)
+    {
+        var response = await _client.GetAsync(
+            $"{BaseUrl}/api/ai/certificate/{fingerprint}");
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadAsStringAsync();
+        Console.WriteLine($"[AI 분석] Status {response.StatusCode}");
+        return result;
+    }
+}
+
+// 사용 예시
+var client = new IcaoPkdClient();
+var certs = await client.SearchCertificatesAsync("KR", "DSC", 5);
+var lookup = await client.PaLookupAsync(
+    "/C=KR/O=Government of Korea/CN=Document Signer 1234");</code></pre>
+<hr>
+<h3 id="rate-limiting-응답-처리">Rate Limiting 응답 처리</h3>
+<h4 id="python에서의-처리">Python에서의 처리</h4>
+<pre><code class="language-python">import time
+
+def call_api_with_retry(url, headers, max_retries=3):
+    """Rate Limit 대응 재시도 로직"""
+    for attempt in range(max_retries):
+        resp = requests.get(url, headers=headers, verify=CA_CERT)
+
+        if resp.status_code == 429:
+            retry_after = int(resp.headers.get("Retry-After", 60))
+            print(f"Rate limit 초과. {retry_after}초 후 재시도... (시도 {attempt + 1}/{max_retries})")
+            time.sleep(retry_after)
+            continue
+
+        resp.raise_for_status()
+        return resp.json()
+
+    raise Exception("최대 재시도 횟수 초과")</code></pre>
+<h4 id="java에서의-처리">Java에서의 처리</h4>
+<pre><code class="language-java">public String callWithRetry(HttpRequest request, int maxRetries) throws Exception {
+    for (int i = 0; i &lt; maxRetries; i++) {
+        HttpResponse&lt;String&gt; response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+
+        if (response.statusCode() == 429) {
+            String retryAfter = response.headers()
+                    .firstValue("Retry-After").orElse("60");
+            System.out.printf("Rate limit 초과. %s초 후 재시도...%n", retryAfter);
+            Thread.sleep(Long.parseLong(retryAfter) * 1000);
+            continue;
+        }
+
+        return response.body();
+    }
+    throw new RuntimeException("최대 재시도 횟수 초과");
+}</code></pre>
+<hr>
+<h3 id="에러-코드-및-대응">에러 코드 및 대응</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>HTTP Status</th>
+<th>원인</th>
+<th>대응</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>401 Unauthorized</code></td>
+<td>API Key가 없거나 잘못됨 (<strong>주의</strong>: PA 엔드포인트에서는 미등록 키도 허용)</td>
+<td><code>X-API-Key</code> 헤더 확인, 키 값 검증</td>
+</tr>
+<tr>
+<td><code>403 Forbidden</code></td>
+<td>비활성 클라이언트, 만료, IP 차단, 권한 부족</td>
+<td>관리자에게 클라이언트 상태 확인 요청</td>
+</tr>
+<tr>
+<td><code>429 Too Many Requests</code></td>
+<td>Rate Limit 초과</td>
+<td><code>Retry-After</code> 헤더 값만큼 대기 후 재시도</td>
+</tr>
+<tr>
+<td><code>500 Internal Server Error</code></td>
+<td>서버 오류</td>
+<td>관리자에게 보고</td>
+</tr>
+</tbody></table></div>
+<h4 id="에러-응답-형식">에러 응답 형식</h4>
+<pre><code class="language-json">{
+  "success": false,
+  "error": "에러 유형",
+  "message": "상세 설명"
+}</code></pre>
+<hr>
+<h3 id="faq-트러블슈팅">FAQ / 트러블슈팅</h3>
+<h4 id="q-api-key를-분실했습니다">Q. API Key를 분실했습니다.</h4>
+<p>API Key는 발급 시 한 번만 표시되며, 시스템에 저장되지 않습니다. 관리자에게 <strong>키 재발급</strong>을 요청하세요. 기존 키는 즉시 무효화됩니다.</p>
+<h4 id="q-403-forbidden-오류가-발생합니다">Q. 403 Forbidden 오류가 발생합니다.</h4>
+<p>가능한 원인:</p>
+<ol>
+<li><strong>클라이언트 비활성화</strong>: 관리자가 클라이언트를 비활성화했을 수 있습니다</li>
+<li><strong>키 만료</strong>: <code>expires_at</code>이 설정된 경우 만료되었을 수 있습니다</li>
+<li><strong>IP 제한</strong>: <code>allowed_ips</code>에 현재 IP가 포함되지 않을 수 있습니다</li>
+<li><strong>Permission 부족</strong>: 요청한 엔드포인트에 대한 Permission이 없습니다</li>
+</ol>
+<p>관리자에게 클라이언트 상태와 설정을 확인 요청하세요.</p>
+<h4 id="q-429-too-many-requests-오류가-자주-발생합니다">Q. 429 Too Many Requests 오류가 자주 발생합니다.</h4>
+<p>현재 Rate Limit 설정을 확인하세요 (관리자에게 문의). 필요한 경우 관리자가 Rate Limit을 상향할 수 있습니다.</p>
+<p>요청 빈도를 줄이는 방법:</p>
+<ul>
+<li>인증서 검색 시 <code>limit</code> 파라미터를 늘려 페이지 수를 줄이기</li>
+<li>PA 간편 조회(<code>/api/certificates/pa-lookup</code>)를 사용하여 전체 검증 호출 줄이기</li>
+<li>응답 결과를 로컬에 캐싱하기</li>
+</ul>
+<h4 id="q-https-연결-시-인증서-오류가-발생합니다">Q. HTTPS 연결 시 인증서 오류가 발생합니다.</h4>
+<p>ICAO Local PKD 시스템은 <strong>Private CA</strong> 기반 TLS를 사용합니다. 공인 CA가 아니므로 클라이언트에 CA 인증서를 설치해야 합니다.</p>
+<pre><code class="language-bash"># Python: verify 파라미터에 ca.crt 경로 지정
+requests.get(url, headers=headers, verify="/path/to/ca.crt")
+
+# curl: --cacert 옵션 사용
+curl --cacert /path/to/ca.crt -H "X-API-Key: $API_KEY" $URL
+
+# Java: KeyStore에 CA 인증서 등록
+keytool -import -alias pkd-ca -file ca.crt -keystore cacerts</code></pre>
+<p>관리자에게 <code>ca.crt</code> 파일을 요청하세요.</p>
+<h4 id="q-헬스-체크는-어떻게-하나요">Q. 헬스 체크는 어떻게 하나요?</h4>
+<p>인증 없이 호출 가능한 헬스 체크 엔드포인트:</p>
+<pre><code class="language-bash"># 서비스 상태
+curl https://pkd.smartcoreinc.com/api/health
+
+# 데이터베이스 연결 상태
+curl https://pkd.smartcoreinc.com/api/health/database
+
+# LDAP 연결 상태
+curl https://pkd.smartcoreinc.com/api/health/ldap</code></pre>
+<h4 id="q-미등록-api-key로-pa-요청을-보내면-어떻게-되나요">Q. 미등록 API Key로 PA 요청을 보내면 어떻게 되나요?</h4>
+<p><strong>PA 엔드포인트(<code>/api/pa/*</code>)에서는 미등록/유효하지 않은 API Key를 전송해도 요청이 정상 처리됩니다</strong> (v2.22.1+). PA Service는 Public API이므로 하위 호환성을 위해 미등록 키를 차단하지 않습니다. 등록된 유효한 API Key인 경우에만 사용량 추적이 적용됩니다.</p>
+<blockquote>
+<p>PKD Management 엔드포인트(<code>/api/certificates/*</code>, <code>/api/upload/*</code> 등)에서는 미등록 API Key가 <code>401 Unauthorized</code>를 반환합니다.</p>
+</blockquote>
+<h4 id="q-어떤-엔드포인트가-인증-없이-접근-가능한가요">Q. 어떤 엔드포인트가 인증 없이 접근 가능한가요?</h4>
+<p>대부분의 조회 엔드포인트는 Public입니다 (인증 없이 사용 가능). API Key는 사용량 추적과 Rate Limit 개별 관리를 위해 권장됩니다.</p>
+<p>인증이 <strong>필수</strong>인 엔드포인트:</p>
+<ul>
+<li>파일 업로드 (<code>/api/upload/ldif</code>, <code>/api/upload/masterlist</code>, <code>/api/upload/certificate</code>)</li>
+<li>사용자 관리 (<code>/api/auth/users</code>)</li>
+<li>감사 로그 (<code>/api/auth/audit-log</code>, <code>/api/audit/operations</code>)</li>
+<li>코드 관리 수정 (<code>POST/PUT/DELETE /api/code-master</code>)</li>
+</ul>
+<hr>
+<h3 id="openapi-스펙">OpenAPI 스펙</h3>
+<p>자세한 API 명세는 OpenAPI (Swagger) 문서를 참고하세요:</p>
+<ul>
+<li><strong>Swagger UI</strong>: <code>https://pkd.smartcoreinc.com/api-docs</code></li>
+<li><strong>OpenAPI YAML</strong>: <code>docs/openapi/pkd-management.yaml</code></li>
+<li><strong>PA Service YAML</strong>: <code>docs/openapi/pa-service.yaml</code></li>
+</ul>
+<hr>
+<h2 id="part-3-certificate-search-quick-start">Part 3: Certificate Search Quick Start</h2>
+<hr>
+<h3 id="quick-access">Quick Access</h3>
+<h4 id="frontend-ui">Frontend UI</h4>
+<p><strong>URL</strong>: <a href="http://localhost:13080/pkd/certificates">http://localhost:13080/pkd/certificates</a></p>
+<p><strong>Navigation</strong>: Sidebar &gt; Certificate Management &gt; &quot;인증서 조회&quot;</p>
+<h4 id="api-endpoint">API Endpoint</h4>
+<p><strong>Base URL</strong>: <a href="http://localhost:18080/api/certificates">http://localhost:18080/api/certificates</a></p>
+<hr>
+<h3 id="authentication">Authentication</h3>
+<h4 id="jwt-browser-internal">JWT (Browser / Internal)</h4>
+<p>Certificate search endpoints are <strong>public</strong> (no JWT required).</p>
+<h4 id="api-key-external-m2m">API Key (External / M2M)</h4>
+<p>External clients can authenticate using the <code>X-API-Key</code> header (added in v2.21.0). The API key requires the <strong><code>cert:read</code></strong> permission for search endpoints and <strong><code>cert:export</code></strong> for export endpoints.</p>
+<pre><code class="language-bash">curl -H "X-API-Key: icao_xxxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  "http://localhost:18080/api/certificates/search?limit=10"</code></pre>
+<hr>
+<h3 id="quick-examples">Quick Examples</h3>
+<h4 id="1-search-all-certificates">1. Search All Certificates</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/search?limit=10"</code></pre>
+<p><strong>Returns</strong>: First 10 certificates from 31,212 total</p>
+<h4 id="2-search-by-country">2. Search by Country</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/search?country=KR&amp;limit=10"</code></pre>
+<p><strong>Returns</strong>: First 10 certificates from Korea (227 total)</p>
+<h4 id="3-search-by-country-type">3. Search by Country + Type</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/search?country=KR&amp;certType=DSC&amp;limit=10"</code></pre>
+<p><strong>Returns</strong>: DSC certificates from Korea only</p>
+<h4 id="4-pagination">4. Pagination</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/search?country=KR&amp;limit=10&amp;offset=20"</code></pre>
+<p><strong>Returns</strong>: Certificates 21-30 from Korea</p>
+<h4 id="5-filter-by-source-type-v2-29-0">5. Filter by Source Type (v2.29.0+)</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/search?source=PA_EXTRACTED&amp;limit=10"</code></pre>
+<p><strong>Returns</strong>: Certificates auto-registered from PA verification</p>
+<h4 id="6-get-certificate-detail">6. Get Certificate Detail</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/detail?dn={FULL_DN}"</code></pre>
+<p><strong>Returns</strong>: Full certificate metadata</p>
+<h4 id="7-export-single-certificate-der">7. Export Single Certificate (DER)</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/export/file?dn={DN}&amp;format=der" -o cert.crt</code></pre>
+<p><strong>Downloads</strong>: Binary DER certificate file</p>
+<h4 id="8-export-single-certificate-pem">8. Export Single Certificate (PEM)</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/export/file?dn={DN}&amp;format=pem" -o cert.pem</code></pre>
+<p><strong>Downloads</strong>: Base64 PEM certificate file</p>
+<h4 id="9-export-country-certificates-zip">9. Export Country Certificates (ZIP)</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/export/country?country=KR&amp;format=pem" -o KR_certs.zip</code></pre>
+<p><strong>Downloads</strong>: ZIP archive with all Korea certificates</p>
+<h4 id="10-export-all-certificates-dit-structured-zip">10. Export All Certificates (DIT-structured ZIP)</h4>
+<pre><code class="language-bash">curl "http://localhost:18080/api/certificates/export/all?format=pem" -o all_certs.zip</code></pre>
+<p><strong>Downloads</strong>: Full LDAP DIT-structured ZIP archive with all certificates, CRLs, and Master Lists</p>
+<h4 id="11-using-x-api-key-v2-21-0">11. Using X-API-Key (v2.21.0+)</h4>
+<pre><code class="language-bash">curl -H "X-API-Key: icao_xxxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  "http://localhost:18080/api/certificates/search?country=KR&amp;certType=DSC&amp;limit=10"</code></pre>
+<p><strong>Returns</strong>: Same as example 3, authenticated via API key (requires <code>cert:read</code> permission)</p>
+<hr>
+<h3 id="search-parameters">Search Parameters</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Values</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>country</code></td>
+<td>string</td>
+<td>No</td>
+<td>ISO 3166-1 alpha-2</td>
+<td>Filter by country code (e.g., KR, US)</td>
+</tr>
+<tr>
+<td><code>certType</code></td>
+<td>string</td>
+<td>No</td>
+<td>CSCA, DSC, DSC_NC, CRL, ML</td>
+<td>Filter by certificate type</td>
+</tr>
+<tr>
+<td><code>validity</code></td>
+<td>string</td>
+<td>No</td>
+<td>VALID, EXPIRED, NOT_YET_VALID, all</td>
+<td>Filter by validity status (default: all)</td>
+</tr>
+<tr>
+<td><code>source</code></td>
+<td>string</td>
+<td>No</td>
+<td>LDIF_PARSED, ML_PARSED, FILE_UPLOAD, PA_EXTRACTED, DL_PARSED</td>
+<td>Filter by certificate source type (v2.29.0+)</td>
+</tr>
+<tr>
+<td><code>searchTerm</code></td>
+<td>string</td>
+<td>No</td>
+<td>any text</td>
+<td>Search in Common Name (CN)</td>
+</tr>
+<tr>
+<td><code>limit</code></td>
+<td>integer</td>
+<td>No</td>
+<td>1-200</td>
+<td>Results per page (default: 50)</td>
+</tr>
+<tr>
+<td><code>offset</code></td>
+<td>integer</td>
+<td>No</td>
+<td>0+</td>
+<td>Pagination offset (default: 0)</td>
+</tr>
+</tbody></table></div>
+<h4 id="source-type-values">Source Type Values</h4>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Value</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>LDIF_PARSED</code></td>
+<td>Extracted from LDIF file upload</td>
+</tr>
+<tr>
+<td><code>ML_PARSED</code></td>
+<td>Extracted from Master List file upload</td>
+</tr>
+<tr>
+<td><code>FILE_UPLOAD</code></td>
+<td>Individual certificate file upload (PEM, DER, P7B, DL, CRL)</td>
+</tr>
+<tr>
+<td><code>PA_EXTRACTED</code></td>
+<td>Auto-registered from PA (Passive Authentication) verification</td>
+</tr>
+<tr>
+<td><code>DL_PARSED</code></td>
+<td>Extracted from Deviation List file</td>
+</tr>
+</tbody></table></div>
+<p><strong>Note</strong>: When a <code>source</code> filter is applied, the search uses DB-based querying instead of LDAP search.</p>
+<hr>
+<h3 id="required-permissions-api-key">Required Permissions (API Key)</h3>
+<div class="table-wrapper"><table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Permission</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>GET /api/certificates/search</code></td>
+<td><code>cert:read</code></td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/countries</code></td>
+<td><code>cert:read</code></td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/validation</code></td>
+<td><code>cert:read</code></td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/doc9303-checklist</code></td>
+<td><code>cert:read</code></td>
+</tr>
+<tr>
+<td><code>GET /api/certificates/export/*</code></td>
+<td><code>cert:export</code></td>
+</tr>
+</tbody></table></div>
+<p>The 12 available API key permissions are: <code>cert:read</code>, <code>cert:export</code>, <code>pa:verify</code>, <code>pa:read</code>, <code>pa:stats</code>, <code>upload:read</code>, <code>upload:write</code>, <code>report:read</code>, <code>ai:read</code>, <code>sync:read</code>, <code>icao:read</code>, <code>api-client:manage</code>.</p>
+<hr>
+<h3 id="response-format">Response Format</h3>
+<h4 id="search-response">Search Response</h4>
+<pre><code class="language-json">{
+  "success": true,
+  "total": 227,
+  "limit": 10,
+  "offset": 0,
+  "certificates": [
+    {
+      "dn": "cn=...,o=dsc,c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com",
+      "cn": "DS0120080307 1",
+      "sn": "0D",
+      "country": "KR",
+      "certType": "DSC",
+      "subjectDn": "CN=DS0120080307 1,O=certificates,C=KR",
+      "issuerDn": "CN=CSCA,OU=MOFA,O=Government,C=KR",
+      "fingerprint": "a1b2c3d4...",
+      "validFrom": "2008-03-07T00:00:00Z",
+      "validTo": "2018-03-07T23:59:59Z",
+      "validity": "EXPIRED",
+      "isSelfSigned": false
+    }
+  ]
+}</code></pre>
+<h4 id="detail-response">Detail Response</h4>
+<pre><code class="language-json">{
+  "success": true,
+  "dn": "...",
+  "cn": "...",
+  "sn": "...",
+  "country": "KR",
+  "certType": "DSC",
+  "subjectDn": "...",
+  "issuerDn": "...",
+  "fingerprint": "...",
+  "validFrom": "2008-03-07T00:00:00Z",
+  "validTo": "2018-03-07T23:59:59Z",
+  "validity": "EXPIRED",
+  "isSelfSigned": false
+}</code></pre>
+<hr>
+<h3 id="important-notes">Important Notes</h3>
+<h4 id="certtype-filter-limitation">CertType Filter Limitation</h4>
+<p><strong>Issue</strong>: Filtering by <code>certType</code> alone (without <code>country</code>) does not effectively filter by type.</p>
+<p><strong>Reason</strong>: LDAP hierarchy requires country for type-based filtering (<code>o=csca,c=XX,...</code>).</p>
+<p><strong>Solution</strong>: Always specify country when filtering by type:</p>
+<pre><code class="language-bash"># This works correctly
+curl "http://localhost:18080/api/certificates/search?country=KR&amp;certType=CSCA&amp;limit=10"</code></pre>
+<h4 id="source-filter-uses-db-search">Source Filter Uses DB Search</h4>
+<p>When the <code>source</code> parameter is specified, the search bypasses LDAP and queries the database directly. This means DN format in results may differ (parsed from DB fields rather than LDAP DN).</p>
+<h4 id="export-format">Export Format</h4>
+<ul>
+<li><strong>DER</strong>: Binary format (<code>.crt</code> or <code>.der</code> extension)</li>
+<li><strong>PEM</strong>: Base64 encoded (<code>.pem</code> extension)</li>
+<li><strong>ZIP</strong>: Multiple certificates in archive (<code>.zip</code> extension)</li>
+</ul>
+<h4 id="performance">Performance</h4>
+<ul>
+<li><strong>Search</strong>: &lt; 500ms for filtered queries</li>
+<li><strong>Export (single)</strong>: &lt; 100ms</li>
+<li><strong>Export (country ZIP)</strong>: Varies by country size (1-5s)</li>
+</ul>
+<hr>
+<h3 id="frontend-testing-checklist">Frontend Testing Checklist</h3>
+<p>Visit: <a href="http://localhost:13080/pkd/certificates">http://localhost:13080/pkd/certificates</a></p>
+<ul>
+<li><input disabled="" type="checkbox"> <strong>Page loads</strong> without errors</li>
+<li><input disabled="" type="checkbox"> <strong>Search all</strong> - Click &quot;검색&quot; without filters</li>
+<li><input disabled="" type="checkbox"> <strong>Country filter</strong> - Select a country (e.g., Korea), click &quot;검색&quot;</li>
+<li><input disabled="" type="checkbox"> <strong>Type filter</strong> - Select country + type (e.g., Korea + DSC)</li>
+<li><input disabled="" type="checkbox"> <strong>Source filter</strong> - Select a source type (e.g., PA_EXTRACTED)</li>
+<li><input disabled="" type="checkbox"> <strong>Pagination</strong> - Navigate to next/previous page</li>
+<li><input disabled="" type="checkbox"> <strong>Page size</strong> - Change results per page (10, 25, 50, 100, 200)</li>
+<li><input disabled="" type="checkbox"> <strong>Certificate detail</strong> - Click file icon on any row</li>
+<li><input disabled="" type="checkbox"> <strong>Export single</strong> - Click download icon on any row</li>
+<li><input disabled="" type="checkbox"> <strong>Export country (DER)</strong> - Enter country code, click DER export</li>
+<li><input disabled="" type="checkbox"> <strong>Export country (PEM)</strong> - Enter country code, click PEM export</li>
+<li><input disabled="" type="checkbox"> <strong>Export all (PEM)</strong> - Click full export button</li>
+<li><input disabled="" type="checkbox"> <strong>Export all (DER)</strong> - Click full export button</li>
+</ul>
+<hr>
+<h3 id="troubleshooting">Troubleshooting</h3>
+<h4 id="backend-not-responding">Backend Not Responding</h4>
+<pre><code class="language-bash"># Check service status
+docker ps | grep pkd-management
+
+# Check logs
+docker logs icao-local-pkd-management --tail 50
+
+# Restart service
+docker compose -f docker/docker-compose.yaml restart pkd-management</code></pre>
+<h4 id="ldap-connection-issues">LDAP Connection Issues</h4>
+<pre><code class="language-bash"># Check LDAP status
+docker logs icao-local-pkd-haproxy --tail 20
+
+# Test LDAP directly
+docker exec icao-local-pkd-management ldapsearch -H ldap://haproxy:389 \
+  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin \
+  -b "dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
+  "(objectClass=*)" dn | head -20</code></pre>
+<h4 id="frontend-not-loading">Frontend Not Loading</h4>
+<pre><code class="language-bash"># Check frontend status
+docker logs icao-local-pkd-frontend --tail 20
+
+# Restart frontend
+docker compose -f docker/docker-compose.yaml restart frontend
+
+# Force browser refresh
+# Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)</code></pre>
+<hr>
+<h3 id="quick-stats">Quick Stats</h3>
+<ul>
+<li><strong>Total Certificates</strong>: 31,212</li>
+<li><strong>Countries</strong>: 150+</li>
+<li><strong>CSCA</strong>: ~845</li>
+<li><strong>DSC</strong>: ~29,838</li>
+<li><strong>DSC_NC</strong>: ~502</li>
+<li><strong>CRL</strong>: 69</li>
+<li><strong>Response Time</strong>: &lt; 500ms</li>
+<li><strong>Architecture</strong>: Clean Architecture (4 layers)</li>
+<li><strong>Build</strong>: v2.37.0</li>
+</ul>
+<hr>
+<h3 id="additional-documentation">Additional Documentation</h3>
+<ul>
+<li><strong>Implementation Guide</strong>: <a href="./CERTIFICATE_SEARCH_IMPLEMENTATION.md">CERTIFICATE_SEARCH_IMPLEMENTATION.md</a></li>
+<li><strong>Complete Status Report</strong>: <a href="./CERTIFICATE_SEARCH_STATUS.md">CERTIFICATE_SEARCH_STATUS.md</a></li>
+<li><strong>Design Document</strong>: <a href="./PKD_CERTIFICATE_SEARCH_DESIGN.md">PKD_CERTIFICATE_SEARCH_DESIGN.md</a></li>
+</ul>
+<hr>
+<p><strong>Copyright 2026 SMARTCORE Inc. All rights reserved.</strong></p>
+
+    </article>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#part-1-api-client-administration">Part 1: API Client Administration</a><a href="#개요" style="padding-left:1rem">개요</a><a href="#api-client-관리-api" style="padding-left:1rem">API Client 관리 API</a><a href="#pa-service-연동-nginx-auth_request" style="padding-left:1rem">PA Service 연동 (nginx auth_request)</a><a href="#permission-모델" style="padding-left:1rem">Permission 모델</a><a href="#rate-limiting" style="padding-left:1rem">Rate Limiting</a><a href="#ip-화이트리스트" style="padding-left:1rem">IP 화이트리스트</a><a href="#보안-권장사항" style="padding-left:1rem">보안 권장사항</a><a href="#프론트엔드-관리-페이지" style="padding-left:1rem">프론트엔드 관리 페이지</a><a href="#에러-코드" style="padding-left:1rem">에러 코드</a><a href="#part-2-client-integration-guide">Part 2: Client Integration Guide</a><a href="#개요" style="padding-left:1rem">개요</a><a href="#인증-방법" style="padding-left:1rem">인증 방법</a><a href="#사용-가능-엔드포인트" style="padding-left:1rem">사용 가능 엔드포인트</a><a href="#연동-예제" style="padding-left:1rem">연동 예제</a><a href="#rate-limiting-응답-처리" style="padding-left:1rem">Rate Limiting 응답 처리</a><a href="#에러-코드-및-대응" style="padding-left:1rem">에러 코드 및 대응</a><a href="#faq-트러블슈팅" style="padding-left:1rem">FAQ / 트러블슈팅</a><a href="#openapi-스펙" style="padding-left:1rem">OpenAPI 스펙</a><a href="#part-3-certificate-search-quick-start">Part 3: Certificate Search Quick Start</a><a href="#quick-access" style="padding-left:1rem">Quick Access</a><a href="#authentication" style="padding-left:1rem">Authentication</a><a href="#quick-examples" style="padding-left:1rem">Quick Examples</a><a href="#search-parameters" style="padding-left:1rem">Search Parameters</a><a href="#required-permissions-api-key" style="padding-left:1rem">Required Permissions (API Key)</a><a href="#response-format" style="padding-left:1rem">Response Format</a><a href="#important-notes" style="padding-left:1rem">Important Notes</a><a href="#frontend-testing-checklist" style="padding-left:1rem">Frontend Testing Checklist</a><a href="#troubleshooting" style="padding-left:1rem">Troubleshooting</a><a href="#quick-stats" style="padding-left:1rem">Quick Stats</a><a href="#additional-documentation" style="padding-left:1rem">Additional Documentation</a></div>
+  </div>
+</div>
+<script src="mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  themeVariables: {
+    // Background & text
+    background: 'transparent',
+    primaryColor: '#1e3a5f',
+    primaryTextColor: '#f1f5f9',
+    primaryBorderColor: '#38bdf8',
+    // Secondary nodes
+    secondaryColor: '#0f4c75',
+    secondaryTextColor: '#f1f5f9',
+    secondaryBorderColor: '#0ea5e9',
+    // Tertiary nodes
+    tertiaryColor: '#164e63',
+    tertiaryTextColor: '#f1f5f9',
+    tertiaryBorderColor: '#22d3ee',
+    // Lines & labels
+    lineColor: '#64748b',
+    textColor: '#e2e8f0',
+    // Fonts
+    fontFamily: '"Pretendard", -apple-system, "Segoe UI", sans-serif',
+    fontSize: '16px',
+    // Subgraph
+    clusterBkg: 'rgba(14,165,233,0.08)',
+    clusterBorder: 'rgba(56,189,248,0.3)',
+    // Notes
+    noteBkgColor: '#1e293b',
+    noteTextColor: '#e2e8f0',
+    noteBorderColor: '#475569',
+    // Sequence diagram
+    actorBkg: '#1e3a5f',
+    actorBorder: '#38bdf8',
+    actorTextColor: '#f1f5f9',
+    actorLineColor: '#475569',
+    signalColor: '#e2e8f0',
+    signalTextColor: '#e2e8f0',
+    labelBoxBkgColor: '#1e3a5f',
+    labelBoxBorderColor: '#38bdf8',
+    labelTextColor: '#f1f5f9',
+    loopTextColor: '#94a3b8',
+    activationBorderColor: '#38bdf8',
+    activationBkgColor: '#0f4c75',
+    sequenceNumberColor: '#0f172a',
+    // ER diagram
+    entityBkg: '#1e3a5f',
+    entityBorder: '#38bdf8',
+    entityTextColor: '#f1f5f9',
+    relationColor: '#64748b',
+    relationLabelColor: '#cbd5e1',
+    attributeBackgroundColorOdd: '#1e293b',
+    attributeBackgroundColorEven: '#0f172a',
+    // Edge labels
+    edgeLabelBackground: '#1e293b',
+  },
+  flowchart: {
+    curve: 'basis',
+    padding: 20,
+    nodeSpacing: 50,
+    rankSpacing: 60,
+    htmlLabels: true,
+    useMaxWidth: true,
+  },
+  sequence: {
+    actorFontSize: 14,
+    messageFontSize: 14,
+    noteFontSize: 13,
+    mirrorActors: false,
+    bottomMarginAdj: 2,
+    useMaxWidth: true,
+  },
+  er: {
+    fontSize: 18,
+    useMaxWidth: true,
+    layoutDirection: 'TB',
+  },
+});
+</script>
+<script>
+(function(){
+  var btn=document.getElementById('menuToggle'),
+      sb=document.getElementById('sidebar'),
+      ov=document.getElementById('sidebarOverlay'),
+      cl=document.getElementById('sidebarClose');
+  function open(){sb.classList.add('open');ov.classList.add('open');document.body.style.overflow='hidden';}
+  function close(){sb.classList.remove('open');ov.classList.remove('open');document.body.style.overflow='';}
+  if(btn)btn.addEventListener('click',open);
+  if(ov)ov.addEventListener('click',close);
+  if(cl)cl.addEventListener('click',close);
+  sb.querySelectorAll('a').forEach(function(a){a.addEventListener('click',close);});
+})();
+</script>
+</body>
+</html>
