@@ -142,7 +142,7 @@ export function ValidationSummaryPanel({
   const hasDuplicateFlow = (data.duplicateCount ?? 0) > 0
     && data.totalCertificates != null && data.processedCount != null;
   const dupCount = data.duplicateCount ?? 0;
-  const newCount = data.processedCount ?? 0;
+  const newCount = (data.totalCertificates ?? 0) - (data.duplicateCount ?? 0);
   const fileTotal = data.totalCertificates ?? 0;
   const dupPct = fileTotal > 0 ? Math.round((dupCount / fileTotal) * 100) : 0;
   const hasAnyAnalysisSection = hasTrustChainData || hasIcaoData || hasExpirationData

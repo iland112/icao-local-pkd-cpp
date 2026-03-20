@@ -182,6 +182,22 @@ export function UploadHistory() {
     };
   }, [uploads, totalElements]);
 
+  // Calculate duplicate count for detail dialog:
+  // uploadIssues.totalDuplicates only covers certificate_duplicates table (individual upload),
+  // but LDIF uploads skip duplicates via fingerprint cache without recording to that table.
+  // Fallback: totalEntries - stored certificates (CSCA+DSC+DSC_NC+MLSC+CRL)
+  const detailDuplicateCount = useMemo(() => {
+    if (uploadIssues?.totalDuplicates && uploadIssues.totalDuplicates > 0) {
+      return uploadIssues.totalDuplicates;
+    }
+    if (!selectedUpload || !selectedUpload.totalEntries) return 0;
+    const storedCount = (selectedUpload.cscaCount || 0) + (selectedUpload.dscCount || 0)
+      + (selectedUpload.dscNcCount || 0) + (selectedUpload.mlscCount || 0)
+      + (selectedUpload.crlCount || 0);
+    const diff = selectedUpload.totalEntries - storedCount;
+    return diff > 0 ? diff : 0;
+  }, [selectedUpload, uploadIssues]);
+
   // Parse PostgreSQL timestamp format: "2025-12-31 09:04:28.432487+09"
   const formatDuration = (startStr: string, endStr: string): string => {
     if (!startStr || !endStr) return '-';
@@ -770,7 +786,7 @@ export function UploadHistory() {
               </div>
 
               {/* Tabs - Show if Master List/LDIF file or has duplicates */}
-              {((selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST' || selectedUpload.fileFormat === 'LDIF') || (uploadIssues && uploadIssues.totalDuplicates > 0)) && (
+              {((selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST' || selectedUpload.fileFormat === 'LDIF') || detailDuplicateCount > 0) && (
                 <div className="flex gap-2">
                   <button
                     onClick={() => setActiveTab('details')}
@@ -798,7 +814,7 @@ export function UploadHistory() {
                       {selectedUpload.fileFormat === 'LDIF' ? t('upload:history.ldifStructure') : t('upload:history.mlStructure')}
                     </button>
                   )}
-                  {uploadIssues && uploadIssues.totalDuplicates > 0 && (
+                  {detailDuplicateCount > 0 && (
                     <button
                       onClick={() => setActiveTab('duplicates')}
                       className={cn(
@@ -810,7 +826,7 @@ export function UploadHistory() {
                     >
                       {t('upload:detail.duplicateCertificates')}
                       <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-200 dark:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200">
-                        {uploadIssues.totalDuplicates}
+                        {detailDuplicateCount.toLocaleString()}
                       </span>
                     </button>
                   )}
@@ -1006,7 +1022,7 @@ export function UploadHistory() {
                         icaoCompliantCount: selectedUpload.validation.icaoCompliantCount,
                         icaoNonCompliantCount: selectedUpload.validation.icaoNonCompliantCount,
                         icaoWarningCount: selectedUpload.validation.icaoWarningCount,
-                        duplicateCount: uploadIssues?.totalDuplicates,
+                        duplicateCount: detailDuplicateCount > 0 ? detailDuplicateCount : undefined,
                         totalCertificates: selectedUpload.totalEntries,
                         processedCount: selectedUpload.processedEntries,
                         complianceViolations,
@@ -1103,8 +1119,8 @@ export function UploadHistory() {
                 </div>
               )}
 
-              {/* Duplicates Tab - Duplicate Certificates Tree */}
-              {activeTab === 'duplicates' && uploadIssues && (
+              {/* Duplicates Tab - Duplicate Certificates Tree or computed summary */}
+              {activeTab === 'duplicates' && detailDuplicateCount > 0 && uploadIssues && uploadIssues.totalDuplicates > 0 && (
                 <div className="space-y-2.5">
                   {/* Header with export buttons — compact */}
                   <div className="flex items-center justify-between pb-2 border-b border-gray-200 dark:border-gray-700">
@@ -1191,6 +1207,79 @@ export function UploadHistory() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* Duplicates Tab - Computed summary (LDIF uploads without certificate_duplicates records) */}
+              {activeTab === 'duplicates' && detailDuplicateCount > 0 && (!uploadIssues || uploadIssues.totalDuplicates === 0) && selectedUpload && (
+                <div className="space-y-2.5">
+                  <div className="flex items-center gap-1.5 pb-2 border-b border-gray-200 dark:border-gray-700">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {t('upload:history.duplicateList')}
+                    </h3>
+                    <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
+                      {t('upload:history.totalItemCount', { num: detailDuplicateCount.toLocaleString() })}
+                    </span>
+                  </div>
+
+                  {/* Summary cards */}
+                  <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                    <div className="flex items-center gap-3 justify-center mb-3">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-lg px-4 py-2 text-center">
+                        <p className="text-lg font-bold text-slate-700 dark:text-slate-300">{(selectedUpload.totalEntries || 0).toLocaleString()}</p>
+                        <span className="text-xs text-slate-500">{t('upload:validationSummary.fileTotal')}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                      <div className="bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-lg px-4 py-2 text-center">
+                        <p className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{detailDuplicateCount.toLocaleString()}</p>
+                        <span className="text-xs text-yellow-600">{t('upload:validationSummary.duplicatePercent', { pct: selectedUpload.totalEntries ? Math.round((detailDuplicateCount / selectedUpload.totalEntries) * 100) : 0 })}</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-gray-300" />
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2 text-center">
+                        <p className="text-lg font-bold text-blue-700 dark:text-blue-300">{((selectedUpload.totalEntries || 0) - detailDuplicateCount).toLocaleString()}</p>
+                        <span className="text-xs text-blue-600">{t('upload:validationSummary.newlyProcessed')}</span>
+                      </div>
+                    </div>
+
+                    {/* Stored breakdown by type */}
+                    <div className="flex flex-wrap gap-1.5 justify-center">
+                      {(selectedUpload.cscaCount || 0) > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded px-3 py-1.5 text-center">
+                          <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{selectedUpload.cscaCount}</span>
+                          <span className="text-xs text-blue-700 dark:text-blue-300 ml-1">CSCA</span>
+                        </div>
+                      )}
+                      {(selectedUpload.mlscCount || 0) > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800 rounded px-3 py-1.5 text-center">
+                          <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{selectedUpload.mlscCount}</span>
+                          <span className="text-xs text-purple-700 dark:text-purple-300 ml-1">MLSC</span>
+                        </div>
+                      )}
+                      {(selectedUpload.dscCount || 0) > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-800 rounded px-3 py-1.5 text-center">
+                          <span className="text-sm font-bold text-green-600 dark:text-green-400">{selectedUpload.dscCount}</span>
+                          <span className="text-xs text-green-700 dark:text-green-300 ml-1">DSC</span>
+                        </div>
+                      )}
+                      {(selectedUpload.dscNcCount || 0) > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-800 rounded px-3 py-1.5 text-center">
+                          <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{selectedUpload.dscNcCount}</span>
+                          <span className="text-xs text-orange-700 dark:text-orange-300 ml-1">DSC_NC</span>
+                        </div>
+                      )}
+                      {(selectedUpload.crlCount || 0) > 0 && (
+                        <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded px-3 py-1.5 text-center">
+                          <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{selectedUpload.crlCount}</span>
+                          <span className="text-xs text-amber-700 dark:text-amber-300 ml-1">CRL</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-yellow-700 dark:text-yellow-400 text-center mt-3">
+                      {t('upload:validationSummary.fileTotal')} {(selectedUpload.totalEntries || 0).toLocaleString()}개 중 {detailDuplicateCount.toLocaleString()}개가 이미 등록된 인증서입니다.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
