@@ -433,6 +433,12 @@ public:
      */
     bool isFingerprintCached(const std::string& fingerprint) const;
 
+    /**
+     * @brief Get cached fingerprint info (id, firstUploadId)
+     * @return optional CachedFingerprintInfo if found in cache
+     */
+    std::optional<CachedFingerprintInfo> getCachedFingerprintInfo(const std::string& fingerprint) const;
+
     /// @}
 
 private:

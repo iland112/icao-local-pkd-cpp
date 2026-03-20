@@ -225,6 +225,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Without this check, each duplicate still triggers X.509 validation + LDAP write (~10ms/cert).
     // With this check, duplicates are skipped in ~0.001ms (hash lookup only).
     if (g_services->certificateRepository()->isFingerprintCached(fingerprint)) {
+        auto cachedInfo = g_services->certificateRepository()->getCachedFingerprintInfo(fingerprint);
         X509_free(cert);
         enhancedStats.totalCertificates++;
         enhancedStats.duplicateCount++;
@@ -232,6 +233,12 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         // Copy existing validation_result for this upload_id so that
         // per-certificate ICAO violation details can be queried by upload_id
         g_services->validationRepository()->copyForUpload(fingerprint, uploadId);
+
+        // Track duplicate in certificate_duplicates table for UI display
+        if (cachedInfo) {
+            certificate_utils::trackCertificateDuplicate(
+                cachedInfo->id, uploadId, "LDIF_PARSED", countryCode, entry.dn, "");
+        }
 
         return true;  // Already processed — skip validation, DB save, and LDAP write
     }
@@ -652,6 +659,11 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
     if (isDuplicate) {
         enhancedStats.duplicateCount++;
+        // Track duplicate in certificate_duplicates table for UI display
+        if (!certId.empty()) {
+            certificate_utils::trackCertificateDuplicate(
+                certId, uploadId, "LDIF_PARSED", countryCode, entry.dn, "");
+        }
     }
 
     // Invalidate CSCA cache when a new CSCA is added to DB

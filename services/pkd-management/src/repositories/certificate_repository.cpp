@@ -1709,4 +1709,11 @@ bool CertificateRepository::isFingerprintCached(const std::string& fingerprint) 
     return fingerprintCacheLoaded_ && fingerprintCache_.count(fingerprint) > 0;
 }
 
+std::optional<CachedFingerprintInfo> CertificateRepository::getCachedFingerprintInfo(const std::string& fingerprint) const {
+    if (!fingerprintCacheLoaded_) return std::nullopt;
+    auto it = fingerprintCache_.find(fingerprint);
+    if (it != fingerprintCache_.end()) return it->second;
+    return std::nullopt;
+}
+
 } // namespace repositories
