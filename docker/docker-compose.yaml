@@ -301,6 +301,14 @@ services:
       - SYNC_INTERVAL_MINUTES=5
       - AUTO_RECONCILE=true
       - MAX_RECONCILE_BATCH_SIZE=100
+      # ICAO PKD LDAP Simulation Sync (v2.39.0)
+      - ICAO_LDAP_SYNC_ENABLED=${ICAO_LDAP_SYNC_ENABLED:-false}
+      - ICAO_LDAP_HOST=icao-pkd-ldap
+      - ICAO_LDAP_PORT=389
+      - ICAO_LDAP_BIND_DN=cn=admin,dc=icao,dc=int
+      - ICAO_LDAP_BIND_PASSWORD=${ICAO_LDAP_ADMIN_PASSWORD:-icao_sim_password}
+      - ICAO_LDAP_BASE_DN=dc=download,dc=pkd,dc=icao,dc=int
+      - ICAO_LDAP_SYNC_INTERVAL_MINUTES=${ICAO_LDAP_SYNC_INTERVAL_MINUTES:-60}
     depends_on:
       openldap1:
         condition: service_healthy
@@ -631,6 +639,48 @@ services:
     volumes:
       - ../.docker-data/openldap2/data:/var/lib/ldap
       - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
+    networks:
+      - pkd-network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # ICAO PKD Simulation LDAP (Mock ICAO PKD Download Server)
+  # ---------------------------------------------------------------------------
+  # Simulates pkddownloadsg.icao.int for development/testing
+  # DIT: dc=download,dc=pkd,dc=icao,dc=int
+  icao-pkd-ldap:
+    build:
+      context: ../icao-pkd-ldap
+      dockerfile: Dockerfile
+    image: icao-local-pkd-icao-sim:1.0.0
+    container_name: icao-local-pkd-icao-sim
+    hostname: icao-pkd-ldap
+    command: --copy-service
+    ports:
+      - "13893:389"
+    environment:
+      - LDAP_ORGANISATION=ICAO
+      - LDAP_DOMAIN=icao.int
+      - LDAP_BASE_DN=dc=icao,dc=int
+      - LDAP_ADMIN_PASSWORD=${ICAO_LDAP_ADMIN_PASSWORD:-icao_sim_password}
+      - LDAP_CONFIG_PASSWORD=${ICAO_LDAP_CONFIG_PASSWORD:-icao_sim_config}
+      - LDAP_READONLY_USER=false
+      - LDAP_TLS=false
+    volumes:
+      - ../.docker-data/icao-pkd-ldap/data:/var/lib/ldap
+      - ../.docker-data/icao-pkd-ldap/config:/etc/ldap/slapd.d
     networks:
       - pkd-network
     deploy:

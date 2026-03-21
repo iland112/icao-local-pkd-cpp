@@ -29,6 +29,9 @@
 #include "../services/reconciliation_service.h"
 #include "../services/validation_service.h"
 
+// ICAO LDAP Sync
+#include "../relay/icao-ldap/icao_ldap_sync_service.h"
+
 namespace infrastructure {
 
 struct ServiceContainer::Impl {
@@ -48,6 +51,9 @@ struct ServiceContainer::Impl {
     std::shared_ptr<icao::relay::services::SyncService> syncService;
     std::shared_ptr<icao::relay::services::ReconciliationService> reconciliationService;
     std::shared_ptr<icao::relay::services::ValidationService> validationService;
+
+    // ICAO LDAP Sync (optional — only when ICAO_LDAP_SYNC_ENABLED=true)
+    std::shared_ptr<icao::relay::IcaoLdapSyncService> icaoLdapSyncService;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -148,6 +154,19 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
             impl_->crlRepo.get()
         );
 
+        // Step 6: ICAO LDAP Sync Service (optional)
+        if (config.icaoLdapSyncEnabled) {
+            spdlog::info("Creating ICAO LDAP Sync Service (host={}:{})...",
+                        config.icaoLdapHost, config.icaoLdapPort);
+            impl_->icaoLdapSyncService = std::make_shared<icao::relay::IcaoLdapSyncService>(
+                config,
+                impl_->queryExecutor.get(),
+                impl_->ldapPool.get()
+            );
+        } else {
+            spdlog::info("ICAO LDAP Sync disabled (ICAO_LDAP_SYNC_ENABLED=false)");
+        }
+
         spdlog::info("All PKD Relay Service dependencies initialized successfully");
         return true;
 
@@ -163,6 +182,9 @@ void ServiceContainer::shutdown() {
     spdlog::info("Shutting down PKD Relay Service dependencies...");
 
     // Delete in reverse order of initialization
+    // ICAO LDAP Sync (optional)
+    impl_->icaoLdapSyncService.reset();
+
     // Services first
     impl_->validationService.reset();
     impl_->reconciliationService.reset();
@@ -233,6 +255,10 @@ icao::relay::services::ReconciliationService* ServiceContainer::reconciliationSe
 
 icao::relay::services::ValidationService* ServiceContainer::validationService() const {
     return impl_->validationService.get();
+}
+
+icao::relay::IcaoLdapSyncService* ServiceContainer::icaoLdapSyncService() const {
+    return impl_->icaoLdapSyncService.get();
 }
 
 } // namespace infrastructure

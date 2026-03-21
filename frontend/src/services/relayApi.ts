@@ -472,7 +472,72 @@ export const syncApi = {
    */
   getReconciliationDetails: (id: number) =>
     relayApi.get<ReconciliationDetailsResponse>(`/sync/reconcile/${id}`),
+
+  // -------------------------------------------------------------------------
+  // ICAO PKD LDAP Sync (v2.39.0)
+  // -------------------------------------------------------------------------
+
+  /** Trigger manual ICAO PKD LDAP sync */
+  triggerIcaoLdapSync: () =>
+    relayApi.post<{ status: string; message: string }>('/sync/icao-ldap/trigger'),
+
+  /** Get ICAO LDAP sync status */
+  getIcaoLdapSyncStatus: () =>
+    relayApi.get<IcaoLdapSyncStatus>('/sync/icao-ldap/status'),
+
+  /** Get ICAO LDAP sync history */
+  getIcaoLdapSyncHistory: (limit: number = 20) =>
+    relayApi.get<IcaoLdapSyncHistoryItem[]>('/sync/icao-ldap/history', { params: { limit } }),
+
+  /** Get ICAO LDAP sync config */
+  getIcaoLdapSyncConfig: () =>
+    relayApi.get<IcaoLdapSyncConfig>('/sync/icao-ldap/config'),
+
+  /** Update ICAO LDAP sync config */
+  updateIcaoLdapSyncConfig: (data: Partial<IcaoLdapSyncConfig>) =>
+    relayApi.put<{ status: string; enabled: boolean; syncIntervalMinutes: number }>('/sync/icao-ldap/config', data),
 };
+
+// --- ICAO LDAP Sync Types ---
+
+export interface IcaoLdapSyncStatus {
+  enabled: boolean;
+  running: boolean;
+  host: string;
+  port: number;
+  syncIntervalMinutes: number;
+  lastSync?: {
+    status: string;
+    syncType: string;
+    triggeredBy: string;
+    totalRemoteCount: number;
+    newCertificates: number;
+    existingSkipped: number;
+    failedCount: number;
+    durationMs: number;
+    errorMessage?: string;
+  };
+}
+
+export interface IcaoLdapSyncHistoryItem {
+  syncType: string;
+  status: string;
+  triggeredBy: string;
+  totalRemoteCount: number;
+  newCertificates: number;
+  existingSkipped: number;
+  failedCount: number;
+  durationMs: number;
+  errorMessage?: string;
+}
+
+export interface IcaoLdapSyncConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  baseDn: string;
+  syncIntervalMinutes: number;
+}
 
 // --- Default Export ---
 

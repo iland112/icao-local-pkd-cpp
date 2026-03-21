@@ -1,0 +1,45 @@
+# =============================================================================
+# ICAO PKD Simulation - DIT Structure
+# =============================================================================
+# Simulates: pkddownloadsg.icao.int LDAP DIT
+# Base DN: dc=icao,dc=int (auto-created by osixia/openldap)
+# Download DN: dc=download,dc=pkd,dc=icao,dc=int
+#
+# ICAO PKD DN Format:
+#   DSC:  cn=<issuerDN>+sn=<serialHex>,o=dsc,c=<CC>,dc=data,...
+#   CRL:  cn=<issuerDN>,o=crl,c=<CC>,dc=data,...
+#   ML:   cn=<cn>,o=ml,c=<CC>,dc=data,...
+#   NC:   cn=<issuerDN>+sn=<serialHex>,o=dsc,c=<CC>,dc=nc-data,...
+# =============================================================================
+
+# Create PKD container
+dn: dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: pkd
+o: ICAO PKD
+
+# Create download container
+dn: dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: download
+o: PKD Download
+
+# Create data container (conformant certificates)
+dn: dc=data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: data
+o: PKD Data
+
+# Create nc-data container (non-conformant DSC)
+dn: dc=nc-data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: nc-data
+o: PKD Non-Conformant Data

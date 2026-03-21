@@ -58,6 +58,17 @@ struct Config {
     bool revalidateCertsOnSync = true;
     /// @}
 
+    /// @name ICAO PKD LDAP Sync (simulation / production)
+    /// @{
+    bool icaoLdapSyncEnabled = false;
+    std::string icaoLdapHost = "icao-pkd-ldap";
+    int icaoLdapPort = 389;
+    std::string icaoLdapBindDn = "cn=admin,dc=icao,dc=int";
+    std::string icaoLdapBindPassword;
+    std::string icaoLdapBaseDn = "dc=download,dc=pkd,dc=icao,dc=int";
+    int icaoLdapSyncIntervalMinutes = 60;  // Sync interval in minutes
+    /// @}
+
     /** @brief Load configuration from environment variables */
     void loadFromEnv() {
         if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
@@ -80,6 +91,14 @@ struct Config {
         if (auto e = std::getenv("DAILY_SYNC_HOUR")) dailySyncHour = std::stoi(e);
         if (auto e = std::getenv("DAILY_SYNC_MINUTE")) dailySyncMinute = std::stoi(e);
         if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
+        // ICAO PKD LDAP Sync
+        if (auto e = std::getenv("ICAO_LDAP_SYNC_ENABLED")) icaoLdapSyncEnabled = (std::string(e) == "true");
+        if (auto e = std::getenv("ICAO_LDAP_HOST")) icaoLdapHost = e;
+        if (auto e = std::getenv("ICAO_LDAP_PORT")) icaoLdapPort = std::stoi(e);
+        if (auto e = std::getenv("ICAO_LDAP_BIND_DN")) icaoLdapBindDn = e;
+        if (auto e = std::getenv("ICAO_LDAP_BIND_PASSWORD")) icaoLdapBindPassword = e;
+        if (auto e = std::getenv("ICAO_LDAP_BASE_DN")) icaoLdapBaseDn = e;
+        if (auto e = std::getenv("ICAO_LDAP_SYNC_INTERVAL_MINUTES")) icaoLdapSyncIntervalMinutes = std::stoi(e);
     }
 
     /** @brief Validate that required credentials are set */

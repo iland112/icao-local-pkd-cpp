@@ -68,6 +68,10 @@ set(SOURCE_FILES
     src/handlers/sync_handler.cpp
     src/handlers/reconciliation_handler.cpp
     src/handlers/notification_handler.cpp
+    src/handlers/icao_ldap_handler.cpp
+    # ICAO PKD LDAP Sync
+    src/relay/icao-ldap/icao_ldap_client.cpp
+    src/relay/icao-ldap/icao_ldap_sync_service.cpp
     # Repository Pattern - Domain Models
     src/domain/models/validation_result.cpp
     # Repository Pattern - Repositories
@@ -101,6 +105,11 @@ set(HEADER_FILES
     src/handlers/sync_handler.h
     src/handlers/reconciliation_handler.h
     src/handlers/notification_handler.h
+    src/handlers/icao_ldap_handler.h
+    # ICAO PKD LDAP Sync
+    src/relay/icao-ldap/icao_ldap_types.h
+    src/relay/icao-ldap/icao_ldap_client.h
+    src/relay/icao-ldap/icao_ldap_sync_service.h
     # Repository Pattern - Domain Models
     src/domain/models/sync_status.h
     src/domain/models/reconciliation_summary.h

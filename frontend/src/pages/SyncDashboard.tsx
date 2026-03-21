@@ -33,6 +33,7 @@ import { SyncConfigDialog } from '@/components/sync/SyncConfigDialog';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import { GlossaryTerm } from '@/components/common';
+import IcaoLdapSyncCard from '@/components/sync/IcaoLdapSyncCard';
 
 export function SyncDashboard() {
   const { t } = useTranslation(['sync', 'common']);
@@ -722,6 +723,9 @@ export function SyncDashboard() {
           </div>
         )}
       </div>
+
+      {/* ICAO PKD LDAP Sync */}
+      <IcaoLdapSyncCard />
 
       {/* Revalidation History */}
       <RevalidationHistoryTable items={revalidationHistory} />

@@ -38,6 +38,9 @@ namespace icao::relay::services {
     class ValidationService;
 }
 
+// Forward declaration - ICAO LDAP Sync
+namespace icao::relay { class IcaoLdapSyncService; }
+
 namespace infrastructure {
 
 /**
@@ -87,6 +90,7 @@ public:
     icao::relay::services::SyncService* syncService() const;
     icao::relay::services::ReconciliationService* reconciliationService() const;
     icao::relay::services::ValidationService* validationService() const;
+    icao::relay::IcaoLdapSyncService* icaoLdapSyncService() const;
 
 private:
     struct Impl;

@@ -37,6 +37,7 @@
 #include "handlers/sync_handler.h"
 #include "handlers/reconciliation_handler.h"
 #include "handlers/notification_handler.h"
+#include "handlers/icao_ldap_handler.h"
 
 // Notification
 #include "common/notification_manager.h"
@@ -59,6 +60,7 @@ std::unique_ptr<handlers::HealthHandler> g_healthHandler;
 std::unique_ptr<handlers::SyncHandler> g_syncHandler;
 std::unique_ptr<handlers::ReconciliationHandler> g_reconciliationHandler;
 std::unique_ptr<handlers::NotificationHandler> g_notificationHandler;
+std::unique_ptr<icao::relay::IcaoLdapHandler> g_icaoLdapHandler;
 
 // --- Logging Setup ---
 void setupLogging() {
@@ -429,6 +431,14 @@ int main() {
         g_services->syncStatusRepository());
 
     g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
+
+    // ICAO LDAP Sync Handler (optional)
+    if (g_services->icaoLdapSyncService()) {
+        g_icaoLdapHandler = std::make_unique<icao::relay::IcaoLdapHandler>(
+            g_services->icaoLdapSyncService());
+        g_icaoLdapHandler->registerRoutes(app());
+        spdlog::info("ICAO LDAP sync endpoints registered");
+    }
 
     // Register HTTP routes
     registerRoutes();
