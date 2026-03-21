@@ -77,6 +77,19 @@ void NotificationManager::sendHeartbeat() {
 std::string NotificationManager::registerClient(
     std::function<void(const std::string&)> callback) {
     std::lock_guard<std::mutex> lock(mutex_);
+
+    // Safety: limit max SSE clients (prevent accumulation from leaked connections)
+    constexpr size_t MAX_CLIENTS = 50;
+    if (clients_.size() >= MAX_CLIENTS) {
+        // Remove oldest clients (lowest client IDs)
+        size_t toRemove = clients_.size() - MAX_CLIENTS + 1;
+        auto it = clients_.begin();
+        for (size_t i = 0; i < toRemove && it != clients_.end(); ++i) {
+            spdlog::warn("[Notification] Evicting stale client: {}", it->first);
+            it = clients_.erase(it);
+        }
+    }
+
     std::string clientId = "client_" + std::to_string(++clientCounter_);
     clients_[clientId] = std::move(callback);
     spdlog::info("[Notification] Client registered: {} (total: {})",

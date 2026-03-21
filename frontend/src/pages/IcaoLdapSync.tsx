@@ -43,6 +43,12 @@ export default function IcaoLdapSync() {
     } catch { /* non-critical */ }
   }, []);
 
+  // Refs for stable SSE callback access (avoids stale closure)
+  const fetchStatusRef = useRef(fetchStatus);
+  const fetchHistoryRef = useRef(fetchHistory);
+  fetchStatusRef.current = fetchStatus;
+  fetchHistoryRef.current = fetchHistory;
+
   // SSE listener for real-time sync progress
   useEffect(() => {
     // Connect via API Gateway (same origin as the page)
@@ -61,19 +67,18 @@ export default function IcaoLdapSync() {
             setTimeout(() => {
               setProgress(null);
               setSyncing(false);
-              fetchStatus();
-              fetchHistory();
+              fetchStatusRef.current();
+              fetchHistoryRef.current();
             }, 2000);
           }
         }
-        // Also handle start/complete notifications to update syncing state
         if (data.type === 'ICAO_LDAP_SYNC_STARTED') {
           setSyncing(true);
         }
         if (data.type === 'ICAO_LDAP_SYNC_COMPLETED' || data.type === 'ICAO_LDAP_SYNC_FAILED') {
           setSyncing(false);
-          fetchStatus();
-          fetchHistory();
+          fetchStatusRef.current();
+          fetchHistoryRef.current();
         }
       } catch { /* ignore parse errors */ }
     });
@@ -82,8 +87,12 @@ export default function IcaoLdapSync() {
       // SSE reconnect handled by browser automatically
     };
 
-    return () => { es.close(); };
-  }, [fetchStatus, fetchHistory]);
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // Mount/unmount only — no deps to prevent SSE reconnection loop
 
   useEffect(() => {
     fetchStatus();

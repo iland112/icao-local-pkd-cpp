@@ -623,12 +623,15 @@ bool IcaoLdapSyncService::saveCertificateToLocalLdap(const IcaoLdapCertEntry& en
 bool IcaoLdapSyncService::saveCrlToDb(const IcaoLdapCertEntry& entry,
                                       const std::string& fingerprint) {
     if (!queryExecutor_) return false;
+    if (entry.binaryData.empty()) return false;  // Skip empty CRL data (ORA-24333 prevention)
 
     try {
         std::ostringstream hexStream;
         for (auto b : entry.binaryData) {
             hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
         }
+        std::string hexData = hexStream.str();
+        if (hexData.empty()) return false;  // Double-check
 
         std::string dbType = queryExecutor_->getDatabaseType();
 
@@ -648,7 +651,7 @@ bool IcaoLdapSyncService::saveCrlToDb(const IcaoLdapCertEntry& entry,
         }
 
         queryExecutor_->executeQuery(sql, {
-            fingerprint, entry.countryCode, hexStream.str(), std::string("ICAO_PKD_SYNC")
+            fingerprint, entry.countryCode, hexData, std::string("ICAO_PKD_SYNC")
         });
         return true;
 
@@ -722,6 +725,9 @@ void IcaoLdapSyncService::saveSyncLog(const IcaoLdapSyncResult& result) {
                   "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())";
         }
 
+        // Oracle treats empty string as NULL — use space for non-null empty values
+        std::string errorMsg = result.errorMessage.empty() ? " " : result.errorMessage;
+
         queryExecutor_->executeQuery(sql, {
             result.syncType, result.status, result.triggeredBy,
             std::to_string(result.totalRemoteCount),
@@ -729,7 +735,7 @@ void IcaoLdapSyncService::saveSyncLog(const IcaoLdapSyncResult& result) {
             std::to_string(result.existingSkipped),
             std::to_string(result.failedCount),
             std::to_string(result.durationMs),
-            result.errorMessage
+            errorMsg
         });
     } catch (const std::exception& e) {
         spdlog::warn("[IcaoLdapSync] Failed to save sync log: {}", e.what());
