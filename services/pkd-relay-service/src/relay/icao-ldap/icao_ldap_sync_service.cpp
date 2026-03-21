@@ -16,16 +16,48 @@
 #include "query_helpers.h"
 #include <ldap_connection_pool.h>
 
+// Validation library (shared lib - resolved by CMake include paths)
+#include <icao/validation/trust_chain_builder.h>
+#include <icao/validation/crl_checker.h>
+#include <icao/validation/cert_ops.h>
+#include <icao/validation/types.h>
+// Adapters & repositories (relative to src/)
+#include "../../adapters/relay_csca_provider.h"
+#include "../../adapters/relay_crl_provider.h"
+#include "../../repositories/certificate_repository.h"
+#include "../../repositories/crl_repository.h"
+#include "../../repositories/validation_repository.h"
+
 namespace icao {
 namespace relay {
 
 IcaoLdapSyncService::IcaoLdapSyncService(const Config& config,
                                          common::IQueryExecutor* queryExecutor,
-                                         common::LdapConnectionPool* localLdapPool)
-    : config_(config), queryExecutor_(queryExecutor), localLdapPool_(localLdapPool)
+                                         common::LdapConnectionPool* localLdapPool,
+                                         icao::relay::repositories::CertificateRepository* certRepo,
+                                         icao::relay::repositories::CrlRepository* crlRepo,
+                                         icao::relay::repositories::ValidationRepository* validationRepo)
+    : config_(config), queryExecutor_(queryExecutor), localLdapPool_(localLdapPool),
+      certRepo_(certRepo), crlRepo_(crlRepo), validationRepo_(validationRepo)
 {
     spdlog::info("[IcaoLdapSync] Initialized (enabled={}, host={}:{})",
                 config_.icaoLdapSyncEnabled, config_.icaoLdapHost, config_.icaoLdapPort);
+}
+
+void IcaoLdapSyncService::initValidation() {
+    if (trustChainBuilder_) return;  // Already initialized
+
+    if (!certRepo_ || !crlRepo_) {
+        spdlog::warn("[IcaoLdapSync] Cannot init validation: certRepo or crlRepo is null");
+        return;
+    }
+
+    cscaProvider_ = std::make_unique<adapters::RelayCscaProvider>(certRepo_);
+    crlProvider_ = std::make_unique<adapters::RelayCrlProvider>(crlRepo_);
+    trustChainBuilder_ = std::make_unique<icao::validation::TrustChainBuilder>(cscaProvider_.get());
+    crlChecker_ = std::make_unique<icao::validation::CrlChecker>(crlProvider_.get());
+
+    spdlog::info("[IcaoLdapSync] Validation components initialized (TrustChainBuilder + CrlChecker)");
 }
 
 IcaoLdapSyncService::~IcaoLdapSyncService() = default;
@@ -136,10 +168,115 @@ bool IcaoLdapSyncService::processEntry(const IcaoLdapCertEntry& entry) {
         if (saved) saveCrlToLocalLdap(entry, fingerprint);
     } else {
         saved = saveCertificateToDb(entry, fingerprint);
-        if (saved) saveCertificateToLocalLdap(entry, fingerprint);
+        if (saved) {
+            saveCertificateToLocalLdap(entry, fingerprint);
+
+            // Trust Chain validation for DSC certificates
+            if (entry.certType == "DSC" || entry.certType == "DSC_NC") {
+                const uint8_t* p = entry.binaryData.data();
+                X509* cert = d2i_X509(nullptr, &p, static_cast<long>(entry.binaryData.size()));
+                if (cert) {
+                    validateAndSaveResult(entry, fingerprint, cert);
+                    X509_free(cert);
+                }
+            }
+        }
     }
 
     return saved;
+}
+
+void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
+                                                const std::string& fingerprint,
+                                                X509* cert) {
+    if (!validationRepo_ || !cert) return;
+
+    try {
+        // Lazy-init validation components
+        initValidation();
+        if (!trustChainBuilder_ || !crlChecker_) return;
+
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Step 1: Build trust chain (DSC → CSCA)
+        std::string validationStatus = "PENDING";
+        std::string validationMessage = "Trust chain not verified";
+        bool cscaFound = false;
+        std::string trustChainPath;
+
+        try {
+            auto chainResult = trustChainBuilder_->build(cert);
+            if (chainResult.valid) {
+                validationStatus = "VALID";
+                validationMessage = "Trust chain verified";
+                cscaFound = true;
+                trustChainPath = chainResult.path;
+            } else {
+                validationStatus = !chainResult.cscaSubjectDn.empty() ? "INVALID" : "PENDING";
+                validationMessage = chainResult.message;
+                cscaFound = !chainResult.cscaSubjectDn.empty();
+            }
+        } catch (const std::exception& e) {
+            validationMessage = std::string("Trust chain error: ") + e.what();
+        }
+
+        // Step 2: CRL check (only if trust chain is valid)
+        if (validationStatus == "VALID") {
+            try {
+                auto crlResult = crlChecker_->check(cert, entry.countryCode);
+                if (crlResult.status == icao::validation::CrlCheckStatus::REVOKED) {
+                    validationStatus = "INVALID";
+                    validationMessage = "Certificate revoked (CRL): " + crlResult.revocationReason;
+                }
+            } catch (...) {
+                /* CRL check failure is non-fatal */
+            }
+        }
+
+        // Step 3: Check expiration
+        if (validationStatus == "VALID") {
+            // Check notAfter
+            const ASN1_TIME* notAfter = X509_get0_notAfter(cert);
+            if (notAfter && X509_cmp_current_time(notAfter) < 0) {
+                validationStatus = "EXPIRED_VALID";
+                validationMessage = "Certificate expired but trust chain valid";
+            }
+        }
+
+        // Save to validation_result table
+        std::string sql;
+        if (dbType == "oracle") {
+            sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
+                  "validation_status, trust_chain_message, csca_found, "
+                  "trust_chain_path, created_at) "
+                  "VALUES (SYS_GUID(), $1, $2, $3, $4, "
+                  + common::db::boolLiteral(dbType, cscaFound) + ", $5, "
+                  + common::db::currentTimestamp(dbType) + ")";
+        } else {
+            sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
+                  "validation_status, trust_chain_message, csca_found, "
+                  "trust_chain_path, created_at) "
+                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW()) "
+                  "ON CONFLICT (certificate_id, upload_id) DO NOTHING";
+        }
+
+        queryExecutor_->executeQuery(sql, {
+            fingerprint,                              // certificate_id
+            std::string("ICAO_PKD_SYNC"),            // upload_id (marker)
+            validationStatus,
+            validationMessage,
+            dbType == "oracle" ? "" : (cscaFound ? "true" : "false"),  // PostgreSQL bool
+            trustChainPath.empty() ? validationStatus : trustChainPath
+        });
+
+        // Update certificate validation_status
+        queryExecutor_->executeQuery(
+            "UPDATE certificate SET validation_status = $1 WHERE fingerprint_sha256 = $2",
+            {validationStatus, fingerprint});
+
+    } catch (const std::exception& e) {
+        spdlog::warn("[IcaoLdapSync] validateAndSaveResult failed for {}: {}", fingerprint, e.what());
+    }
 }
 
 std::string IcaoLdapSyncService::computeFingerprint(const std::vector<uint8_t>& derData) const {
@@ -195,10 +332,75 @@ bool IcaoLdapSyncService::saveCertificateToDb(const IcaoLdapCertEntry& entry,
             return false;
         }
 
+        // --- Extract 22 X.509 metadata fields ---
         char subjectBuf[512] = {0}, issuerBuf[512] = {0};
         X509_NAME_oneline(X509_get_subject_name(cert), subjectBuf, sizeof(subjectBuf));
         X509_NAME_oneline(X509_get_issuer_name(cert), issuerBuf, sizeof(issuerBuf));
 
+        // Version
+        int version = X509_get_version(cert);
+
+        // Serial number
+        std::string serialNumber;
+        {
+            ASN1_INTEGER* serial = X509_get_serialNumber(cert);
+            if (serial) {
+                BIGNUM* bn = ASN1_INTEGER_to_BN(serial, nullptr);
+                if (bn) {
+                    char* hex = BN_bn2hex(bn);
+                    if (hex) { serialNumber = hex; OPENSSL_free(hex); }
+                    BN_free(bn);
+                }
+            }
+        }
+
+        // Signature algorithm
+        std::string sigAlg;
+        {
+            const X509_ALGOR* algor = nullptr;
+            X509_get0_signature(nullptr, &algor, cert);
+            if (algor) {
+                int nid = OBJ_obj2nid(algor->algorithm);
+                sigAlg = (nid != NID_undef) ? OBJ_nid2sn(nid) : "unknown";
+            }
+        }
+
+        // Public key algorithm + size
+        std::string pubKeyAlg;
+        int pubKeySize = 0;
+        {
+            EVP_PKEY* pkey = X509_get0_pubkey(cert);
+            if (pkey) {
+                int pkType = EVP_PKEY_base_id(pkey);
+                if (pkType == EVP_PKEY_RSA) pubKeyAlg = "RSA";
+                else if (pkType == EVP_PKEY_EC) pubKeyAlg = "ECDSA";
+                else if (pkType == EVP_PKEY_DSA) pubKeyAlg = "DSA";
+                else pubKeyAlg = OBJ_nid2sn(pkType);
+                pubKeySize = EVP_PKEY_bits(pkey);
+            }
+        }
+
+        // Validity dates
+        std::string notBefore, notAfter;
+        {
+            auto asn1ToStr = [](const ASN1_TIME* t) -> std::string {
+                if (!t) return "";
+                BIO* bio = BIO_new(BIO_s_mem());
+                if (!bio) return "";
+                ASN1_TIME_print(bio, t);
+                char buf[128] = {0};
+                BIO_read(bio, buf, sizeof(buf) - 1);
+                BIO_free(bio);
+                return buf;
+            };
+            notBefore = asn1ToStr(X509_get0_notBefore(cert));
+            notAfter = asn1ToStr(X509_get0_notAfter(cert));
+        }
+
+        // Self-signed check
+        bool isSelfSigned = (X509_name_cmp(X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
+
+        // DER hex for storage
         std::ostringstream hexStream;
         for (auto b : entry.binaryData) {
             hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
@@ -207,19 +409,29 @@ bool IcaoLdapSyncService::saveCertificateToDb(const IcaoLdapCertEntry& entry,
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string certType = entry.certType;
 
+        // --- Insert with full metadata ---
         std::string sql;
         if (dbType == "oracle") {
             sql = "INSERT INTO certificate (id, fingerprint_sha256, certificate_type, "
                   "country_code, subject_dn, issuer_dn, certificate_data, source_type, "
+                  "version, serial_number, signature_algorithm, "
+                  "public_key_algorithm, public_key_size, "
+                  "not_before, not_after, is_self_signed, "
                   "stored_in_ldap, created_at) "
                   "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, "
+                  "$8, $9, $10, $11, $12, $13, $14, "
+                  + common::db::boolLiteral(dbType, isSelfSigned) + ", "
                   + common::db::boolLiteral(dbType, false) + ", "
                   + common::db::currentTimestamp(dbType) + ")";
         } else {
             sql = "INSERT INTO certificate (id, fingerprint_sha256, certificate_type, "
                   "country_code, subject_dn, issuer_dn, certificate_data, source_type, "
+                  "version, serial_number, signature_algorithm, "
+                  "public_key_algorithm, public_key_size, "
+                  "not_before, not_after, is_self_signed, "
                   "stored_in_ldap, created_at) "
                   "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, decode($6, 'hex'), $7, "
+                  "$8, $9, $10, $11, $12, $13, $14, $15, "
                   "FALSE, NOW()) "
                   "ON CONFLICT (fingerprint_sha256) DO NOTHING";
         }
@@ -227,7 +439,11 @@ bool IcaoLdapSyncService::saveCertificateToDb(const IcaoLdapCertEntry& entry,
         queryExecutor_->executeQuery(sql, {
             fingerprint, certType, entry.countryCode,
             std::string(subjectBuf), std::string(issuerBuf),
-            hexStream.str(), std::string("ICAO_PKD_SYNC")
+            hexStream.str(), std::string("ICAO_PKD_SYNC"),
+            std::to_string(version), serialNumber, sigAlg,
+            pubKeyAlg, std::to_string(pubKeySize),
+            notBefore, notAfter,
+            (dbType == "oracle" ? "" : (isSelfSigned ? "true" : "false"))
         });
 
         X509_free(cert);

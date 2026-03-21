@@ -161,7 +161,10 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
             impl_->icaoLdapSyncService = std::make_shared<icao::relay::IcaoLdapSyncService>(
                 config,
                 impl_->queryExecutor.get(),
-                impl_->ldapPool.get()
+                impl_->ldapPool.get(),
+                impl_->certificateRepo.get(),
+                impl_->crlRepo.get(),
+                impl_->validationRepo.get()
             );
         } else {
             spdlog::info("ICAO LDAP Sync disabled (ICAO_LDAP_SYNC_ENABLED=false)");
