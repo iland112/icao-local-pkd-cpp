@@ -631,8 +631,13 @@ scripts/
 - **LDIF 중복 인증서 기록**: fingerprint 캐시 히트 시 certificate_duplicates 테이블에 기록 → 국가별 트리 표시
 - **사용자 관리 감사 연동**: 카드에 인증/운영 감사 로그 바로 접근 버튼 추가, ?username= URL 파라미터 필터
 - **OperationType**: `PA_TRUST_MATERIALS` 추가
-- OpenAPI pa-service.yaml v2.1.8, PA_API_GUIDE v2.1.13
-- ~30 files changed (6 new, ~24 modified)
+- **프론트엔드 대형 페이지 컴포넌트 분리** (4개 페이지, 총 2,389줄 감소 -48%):
+  - UploadHistory (1,507→913줄): UploadDetailModal (667줄) 분리
+  - ApiClientManagement (1,288→377줄): ApiClientDialogs (987줄, 7개 컴포넌트) 분리
+  - SyncDashboard (1,471→808줄): 7개 컴포넌트 (SyncConfigDialog, ReconciliationHistory 등) 분리
+  - PAHistory (1,046→649줄): PADetailModal (486줄) + ClientPATable (194줄) 분리
+- OpenAPI pa-service.yaml v2.1.9, PA_API_GUIDE v2.1.14
+- ~45 files changed (17 new, ~28 modified)
 
 ### v2.37.0 (2026-03-18) - 6차 코드 보안 강화 + 권한 관리 수정 + 브랜드 리네이밍 완료
 - **Admin 초기 비밀번호 환경변수 전환**: DB init 스크립트 하드코딩 admin/admin123 제거 → 서비스 기동 시 `ADMIN_INITIAL_PASSWORD` 환경변수로 admin 자동 생성 (ensureAdminUser, Phase 8)
