@@ -48,6 +48,10 @@ export function NotificationListener() {
           const data = JSON.parse(event.data);
           // Validate expected fields are strings (defense against malformed server data)
           const type = typeof data.type === 'string' ? data.type : 'UNKNOWN';
+
+          // ICAO LDAP sync progress: page-only display, skip notification bell
+          if (type === 'ICAO_LDAP_SYNC_PROGRESS') return;
+
           const title = typeof data.title === 'string' ? data.title.slice(0, 200) : 'System Notification';
           const message = typeof data.message === 'string' ? data.message.slice(0, 1000) : '';
           const timestamp = typeof data.timestamp === 'string' ? data.timestamp : new Date().toISOString();

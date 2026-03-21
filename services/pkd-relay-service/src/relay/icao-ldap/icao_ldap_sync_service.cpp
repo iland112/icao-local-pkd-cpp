@@ -99,6 +99,12 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
         }
         auto& client = *clientPtr;
 
+        // Notify: sync started (shown in notification bell)
+        notification::NotificationManager::getInstance().broadcast(
+            "ICAO_LDAP_SYNC_STARTED",
+            "ICAO PKD 동기화 시작",
+            config_.icaoLdapHost + ":" + std::to_string(config_.icaoLdapPort) + " 연결 중...");
+
         if (!client.connect()) {
             result.status = "FAILED";
             result.errorMessage = "Failed to connect to ICAO PKD LDAP at " +
@@ -194,6 +200,13 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
         spdlog::info("[IcaoLdapSync] Sync completed: new={}, skipped={}, failed={}, duration={}ms",
                     result.newCertificates, result.existingSkipped, result.failedCount, result.durationMs);
 
+        // Notify: sync completed (shown in notification bell)
+        notification::NotificationManager::getInstance().broadcast(
+            "ICAO_LDAP_SYNC_COMPLETED",
+            "ICAO PKD 동기화 완료",
+            "신규 " + std::to_string(result.newCertificates) + "건, " +
+            std::to_string(result.durationMs / 1000) + "초 소요");
+
     } catch (const std::exception& e) {
         result.status = "FAILED";
         result.errorMessage = e.what();
@@ -202,6 +215,12 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             std::chrono::duration_cast<std::chrono::milliseconds>(
                 result.completedAt - result.startedAt).count());
         spdlog::error("[IcaoLdapSync] Sync failed: {}", e.what());
+
+        // Notify: sync failed (shown in notification bell)
+        notification::NotificationManager::getInstance().broadcast(
+            "ICAO_LDAP_SYNC_FAILED",
+            "ICAO PKD 동기화 실패",
+            result.errorMessage);
     }
 
     saveSyncLog(result);
