@@ -71,6 +71,14 @@ const OPERATION_TYPE_LABEL_KEYS: Record<OperationType, string> = {
   REVALIDATE: 'admin:operationAudit.types.revalidate',
   TRIGGER_DAILY_SYNC: 'admin:operationAudit.types.triggerDailySync',
   CONFIG_UPDATE: 'admin:operationAudit.types.configUpdate',
+  PA_TRUST_MATERIALS: 'admin:operationAudit.types.paTrustMaterials',
+  CSR_GENERATE: 'admin:operationAudit.types.csrGenerate',
+  CSR_EXPORT: 'admin:operationAudit.types.csrExport',
+  CSR_VIEW: 'admin:operationAudit.types.csrView',
+  CSR_DELETE: 'admin:operationAudit.types.csrDelete',
+  DSC_PENDING_SAVE: 'admin:operationAudit.types.dscPendingSave',
+  DSC_APPROVE: 'admin:operationAudit.types.dscApprove',
+  DSC_REJECT: 'admin:operationAudit.types.dscReject',
 };
 
 // Operation type icons
@@ -102,6 +110,14 @@ const OPERATION_TYPE_ICONS: Record<OperationType, React.ReactNode> = {
   REVALIDATE: <ShieldCheck className="w-3.5 h-3.5" />,
   TRIGGER_DAILY_SYNC: <Activity className="w-3.5 h-3.5" />,
   CONFIG_UPDATE: <Settings className="w-3.5 h-3.5" />,
+  PA_TRUST_MATERIALS: <Globe className="w-3.5 h-3.5" />,
+  CSR_GENERATE: <FileText className="w-3.5 h-3.5" />,
+  CSR_EXPORT: <Download className="w-3.5 h-3.5" />,
+  CSR_VIEW: <FileText className="w-3.5 h-3.5" />,
+  CSR_DELETE: <Trash2 className="w-3.5 h-3.5" />,
+  DSC_PENDING_SAVE: <ShieldCheck className="w-3.5 h-3.5" />,
+  DSC_APPROVE: <ShieldCheck className="w-3.5 h-3.5" />,
+  DSC_REJECT: <ShieldCheck className="w-3.5 h-3.5" />,
 };
 
 export function OperationAuditLog() {

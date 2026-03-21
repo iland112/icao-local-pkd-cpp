@@ -453,7 +453,15 @@
       "reconcile": "재조정",
       "revalidate": "재검증",
       "triggerDailySync": "일일 동기화",
-      "configUpdate": "설정 변경"
+      "configUpdate": "설정 변경",
+      "paTrustMaterials": "Client PA 자료 제공",
+      "csrGenerate": "CSR 생성",
+      "csrExport": "CSR 내보내기",
+      "csrView": "CSR 조회",
+      "csrDelete": "CSR 삭제",
+      "dscPendingSave": "DSC 등록 대기",
+      "dscApprove": "DSC 등록 승인",
+      "dscReject": "DSC 등록 거부"
     },
     "pageTitle": "운영 감사 로그",
     "pageSubtitle": "시스템 작업 추적 및 모니터링",

@@ -453,7 +453,15 @@
       "reconcile": "Reconciliation",
       "revalidate": "Revalidation",
       "triggerDailySync": "Daily Sync",
-      "configUpdate": "Configuration Update"
+      "configUpdate": "Configuration Update",
+      "paTrustMaterials": "Client PA Trust Materials",
+      "csrGenerate": "CSR Generate",
+      "csrExport": "CSR Export",
+      "csrView": "CSR View",
+      "csrDelete": "CSR Delete",
+      "dscPendingSave": "DSC Pending Save",
+      "dscApprove": "DSC Approve",
+      "dscReject": "DSC Reject"
     },
     "pageTitle": "Operation Audit Log",
     "pageSubtitle": "System operation tracking and monitoring",

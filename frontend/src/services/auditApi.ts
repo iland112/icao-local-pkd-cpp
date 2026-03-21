@@ -42,7 +42,15 @@ export type OperationType =
   | 'RECONCILE'
   | 'REVALIDATE'
   | 'TRIGGER_DAILY_SYNC'
-  | 'CONFIG_UPDATE';
+  | 'CONFIG_UPDATE'
+  | 'PA_TRUST_MATERIALS'
+  | 'CSR_GENERATE'
+  | 'CSR_EXPORT'
+  | 'CSR_VIEW'
+  | 'CSR_DELETE'
+  | 'DSC_PENDING_SAVE'
+  | 'DSC_APPROVE'
+  | 'DSC_REJECT';
 
 /**
  * Audit log entry
