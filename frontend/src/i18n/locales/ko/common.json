@@ -84,6 +84,7 @@
     "action": "작업",
     "total": "전체",
     "count": "건수",
+    "timestamp": "시각",
     "createdAt": "생성일",
     "updatedAt": "수정일",
     "version": "버전",

@@ -84,6 +84,7 @@
     "action": "Action",
     "total": "Total",
     "count": "Count",
+    "timestamp": "Timestamp",
     "createdAt": "Created",
     "updatedAt": "Updated",
     "version": "Version",
