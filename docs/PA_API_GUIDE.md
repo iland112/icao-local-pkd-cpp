@@ -1,6 +1,6 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.14
+**Version**: 2.1.15
 **Last Updated**: 2026-03-21
 **API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
@@ -10,8 +10,13 @@
 
 PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) 검증을 수행하는 REST API 서비스입니다. 전자여권 판독기가 연결된 외부 클라이언트 애플리케이션에서 이 API를 사용하여 여권의 진위를 검증할 수 있습니다.
 
-**세 가지 검증/분석 방식**을 제공합니다:
-- **전체 검증** (`POST /api/pa/verify`): SOD + Data Groups를 전송하여 8단계 전체 PA 검증 수행
+**두 가지 PA 검증 모드** + **조회/분석 방식**을 제공합니다:
+
+**PA 검증 모드**:
+- **서버 PA (Server-side PA)** (`POST /api/pa/verify`): SOD + Data Groups를 서버로 전송하여 **서버에서 8단계 전체 PA 검증을 수행**합니다. 클라이언트는 SOD/DG 바이너리만 전달하면 됩니다.
+- **클라이언트 PA (Client-side PA)** (`POST /api/pa/trust-materials` 시리즈): 서버에서 **CSCA/CRL/Link Certificate를 다운로드**한 후 **클라이언트(ICRM 등)가 로컬에서 PA를 수행**하고, 검증 결과를 서버에 보고합니다. SOD/DG 원본이 서버로 전송되지 않아 **PII(개인정보) 노출을 최소화**합니다. (v2.1.14+)
+
+**조회/분석 방식**:
 - **간편 조회** (`POST /api/certificates/pa-lookup`): DSC Subject DN 또는 Fingerprint만으로 기존 Trust Chain 검증 결과를 즉시 조회 (v2.1.3+)
 - **AI 인증서 분석** (`GET /api/ai/certificate/{fingerprint}`): ML 기반 이상 탐지 및 위험도 분석 결과 조회 (v2.1.7+)
 
@@ -79,8 +84,9 @@ API Key에 할당 가능한 PA 관련 권한:
 
 | Permission | 접근 가능 엔드포인트 |
 |------------|-------------------|
-| `pa:verify` | `POST /api/pa/verify`, `POST /api/pa/parse-sod`, `POST /api/pa/parse-dg1`, `POST /api/pa/parse-dg2`, `POST /api/pa/parse-mrz-text` |
-| `pa:read` | `GET /api/pa/history`, `GET /api/pa/{id}`, `GET /api/pa/{id}/datagroups`, `GET /api/pa/statistics` |
+| `pa:verify` | `POST /api/pa/verify`, `POST /api/pa/parse-sod`, `POST /api/pa/parse-dg1`, `POST /api/pa/parse-dg2`, `POST /api/pa/parse-mrz-text`, `POST /api/pa/trust-materials`, `POST /api/pa/trust-materials/result` |
+| `pa:read` | `GET /api/pa/history`, `GET /api/pa/{id}`, `GET /api/pa/{id}/datagroups`, `GET /api/pa/trust-materials/history` |
+| `pa:stats` | `GET /api/pa/statistics`, `GET /api/pa/combined-statistics` |
 | `cert:read` | `POST /api/certificates/pa-lookup`, `GET /api/certificates/search` |
 | `ai:read` | `GET /api/ai/certificate/{fingerprint}`, `GET /api/ai/anomalies`, `GET /api/ai/statistics`, 리포트 API |
 
@@ -101,26 +107,33 @@ API Key에 할당 가능한 PA 관련 권한:
 | 7 | `GET` | `/api/pa/history` | PA | 검증 이력 조회 |
 | 8 | `GET` | `/api/pa/{id}` | PA | 검증 상세 조회 |
 | 9 | `GET` | `/api/pa/{id}/datagroups` | PA | Data Groups 상세 조회 |
-| 10 | `GET` | `/api/pa/statistics` | PA | 검증 통계 |
-| 11 | `GET` | `/api/health` | PA | 서비스 헬스 체크 |
-| 12 | `GET` | `/api/health/database` | PA | DB 연결 상태 |
-| 13 | `GET` | `/api/health/ldap` | PA | LDAP 연결 상태 |
-| **14** | **`GET`** | **`/api/ai/certificate/{fingerprint}`** | **AI** | **인증서 AI 분석 결과 조회 (v2.1.7+)** |
-| 15 | `GET` | `/api/ai/anomalies` | AI | 이상 인증서 목록 (필터/페이지네이션) (v2.1.7+) |
-| 16 | `GET` | `/api/ai/statistics` | AI | AI 분석 전체 통계 (v2.1.7+) |
-| 17 | `POST` | `/api/ai/analyze` | AI | 전체 인증서 일괄 분석 실행 (v2.1.7+) |
-| 18 | `GET` | `/api/ai/analyze/status` | AI | 분석 작업 진행 상태 (v2.1.7+) |
-| 19 | `GET` | `/api/ai/reports/country-maturity` | AI | 국가별 PKI 성숙도 (v2.1.7+) |
-| 20 | `GET` | `/api/ai/reports/algorithm-trends` | AI | 알고리즘 마이그레이션 트렌드 (v2.1.7+) |
-| 21 | `GET` | `/api/ai/reports/risk-distribution` | AI | 위험 수준별 분포 (v2.1.7+) |
-| 22 | `GET` | `/api/ai/reports/country/{code}` | AI | 국가별 상세 분석 (v2.1.7+) |
-| 23 | `GET` | `/api/ai/health` | AI | AI 서비스 헬스 체크 (v2.1.7+) |
+| 10 | `GET` | `/api/pa/statistics` | PA | 서버 PA 검증 통계 |
+| **11** | **`POST`** | **`/api/pa/trust-materials`** | **PA** | **클라이언트 PA: Trust Materials (CSCA/CRL/LC) 다운로드 (v2.1.14+)** |
+| **12** | **`POST`** | **`/api/pa/trust-materials/result`** | **PA** | **클라이언트 PA: 검증 결과 + 암호화 MRZ 보고 (v2.1.14+)** |
+| **13** | **`GET`** | **`/api/pa/trust-materials/history`** | **PA** | **클라이언트 PA: 요청 이력 조회 (v2.1.14+)** |
+| **14** | **`GET`** | **`/api/pa/combined-statistics`** | **PA** | **서버 PA + 클라이언트 PA 통합 통계 (v2.1.14+)** |
+| 15 | `GET` | `/api/health` | PA | 서비스 헬스 체크 |
+| 16 | `GET` | `/api/health/database` | PA | DB 연결 상태 |
+| 17 | `GET` | `/api/health/ldap` | PA | LDAP 연결 상태 |
+| **18** | **`GET`** | **`/api/ai/certificate/{fingerprint}`** | **AI** | **인증서 AI 분석 결과 조회 (v2.1.7+)** |
+| 19 | `GET` | `/api/ai/anomalies` | AI | 이상 인증서 목록 (필터/페이지네이션) (v2.1.7+) |
+| 20 | `GET` | `/api/ai/statistics` | AI | AI 분석 전체 통계 (v2.1.7+) |
+| 21 | `POST` | `/api/ai/analyze` | AI | 전체 인증서 일괄 분석 실행 (v2.1.7+) |
+| 22 | `GET` | `/api/ai/analyze/status` | AI | 분석 작업 진행 상태 (v2.1.7+) |
+| 23 | `GET` | `/api/ai/reports/country-maturity` | AI | 국가별 PKI 성숙도 (v2.1.7+) |
+| 24 | `GET` | `/api/ai/reports/algorithm-trends` | AI | 알고리즘 마이그레이션 트렌드 (v2.1.7+) |
+| 25 | `GET` | `/api/ai/reports/risk-distribution` | AI | 위험 수준별 분포 (v2.1.7+) |
+| 26 | `GET` | `/api/ai/reports/country/{code}` | AI | 국가별 상세 분석 (v2.1.7+) |
+| 27 | `GET` | `/api/ai/health` | AI | AI 서비스 헬스 체크 (v2.1.7+) |
 
 ---
 
-## 1. PA 검증 (Passive Authentication)
+## 1. 서버 PA 검증 (Server-side Passive Authentication)
 
-전자여권의 SOD와 Data Groups를 검증합니다. **8단계 검증 프로세스**를 수행하며, 검증 중 발견된 DSC(Document Signer Certificate)를 자동으로 Local PKD에 등록합니다.
+> 서버 PA는 SOD + Data Groups를 **서버로 전송**하여 서버에서 전체 검증을 수행하는 방식입니다.
+> 클라이언트에서 로컬로 PA를 수행하고 결과만 보고하려면 [1-B. 클라이언트 PA 검증](#1-b-클라이언트-pa-검증-client-side-pa)을 참조하세요.
+
+전자여권의 SOD와 Data Groups를 서버로 전송하여 **8단계 검증 프로세스**를 수행합니다. 검증 중 발견된 신규 DSC(Document Signer Certificate)는 관리자 승인 대기 상태로 등록됩니다.
 
 **Endpoint**: `POST /api/pa/verify`
 
@@ -135,7 +148,7 @@ API Key에 할당 가능한 PA 관련 권한:
 | 5 | SOD Signature | SOD 서명 유효성 검증 |
 | 6 | DG Hash | Data Group 해시값 검증 (SOD 내 기대값과 비교) |
 | 7 | CRL Check | CRL 유효기간 확인 + DSC 인증서 폐지 여부 확인 |
-| 8 | DSC Auto-Registration | 신규 DSC를 Local PKD에 자동 등록 (`source_type='PA_EXTRACTED'`) |
+| 8 | DSC Registration | 신규 DSC를 관리자 승인 대기 상태로 등록 (`pending_dsc_registration`, 관리자 승인 후 Local PKD에 최종 등록) |
 
 ### Request
 
@@ -219,8 +232,10 @@ API Key에 할당 가능한 PA 관련 권한:
 
     "dscAutoRegistration": {
       "registered": true,
-      "newlyRegistered": false,
-      "certificateId": "660e8400-e29b-41d4-a716-446655440099",
+      "newlyRegistered": true,
+      "pendingApproval": true,
+      "pendingId": "770e8400-e29b-41d4-a716-446655440100",
+      "alreadyRegistered": false,
       "fingerprint": "a1b2c3d4e5f6...(SHA256 hex 64 chars)",
       "countryCode": "KR"
     }
@@ -303,21 +318,297 @@ API Key에 할당 가능한 PA 관련 권한:
 | pkdConformanceCode | string | ICAO PKD 비준수 사유 코드 (예: `ERR:CSCA.CDP.14`) (v2.1.4+, `dscNonConformant=true` 시에만 포함) |
 | pkdConformanceText | string | ICAO PKD 비준수 사유 설명 (v2.1.4+, `dscNonConformant=true` 시에만 포함) |
 
-### DSC Auto-Registration Fields (v2.1.0+)
+### DSC Registration Fields (v2.31.0+)
 
 | Field | Type | Description |
 |-------|------|-------------|
-| registered | boolean | DSC 등록 성공 여부 |
-| newlyRegistered | boolean | `true`: 신규 등록, `false`: 이미 존재 |
-| certificateId | string (UUID) | DB 인증서 레코드 ID |
+| registered | boolean | DSC 등록 처리 여부 |
+| newlyRegistered | boolean | `true`: 신규 등록 대기, `false`: 이미 존재 |
+| pendingApproval | boolean | `true`: 관리자 승인 대기 중 (v2.31.0+) |
+| pendingId | string (UUID) | 승인 대기 레코드 ID (v2.31.0+) |
+| alreadyRegistered | boolean | `true`: 이미 인증서 또는 승인 대기 목록에 존재 |
+| certificateId | string (UUID) | DB 인증서 레코드 ID (이미 등록된 경우) |
 | fingerprint | string | DSC SHA-256 지문 (hex, 64자) |
 | countryCode | string | DSC 국가 코드 |
 
-> **Note**: `dscAutoRegistration` 필드는 DSC 자동 등록이 성공한 경우에만 포함됩니다. 자동 등록은 PA 검증 결과에 영향을 주지 않습니다 (검증이 INVALID여도 DSC 등록은 시도됩니다).
+> **Note (v2.31.0 변경)**: PA 검증에서 발견된 신규 DSC는 **즉시 등록되지 않고** `pending_dsc_registration` 테이블에 **관리자 승인 대기** 상태로 저장됩니다. 관리자가 `/admin/pending-dsc` 페이지 또는 `POST /api/certificates/pending-dsc/{id}/approve` API로 승인하면 최종 등록됩니다. DSC 등록 프로세스는 PA 검증 결과에 영향을 주지 않습니다.
 
 > **Point-in-Time Validation (v1.2.0+)**: ICAO 9303 표준에 따라, 인증서가 현재 만료되었더라도 여권 서명 당시에 유효했다면 `validAtSigningTime`이 `true`로 설정됩니다. 이 경우 `expirationStatus`는 `EXPIRED`이지만 검증은 성공(`valid: true`)할 수 있습니다.
 
 > **DSC Non-Conformant 상태 (v2.1.4+)**: DSC가 ICAO PKD의 비준수(Non-Conformant) 인증서로 분류된 경우 `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` 필드가 응답에 포함됩니다. Non-Conformant는 ICAO Doc 9303 기술 사양 비준수를 의미하며, 인증서의 유효성과는 독립적입니다. 검증 결과(`valid`)는 Trust Chain, 서명 검증, CRL 상태에 의해 결정됩니다. 자세한 내용은 [DSC_NC_HANDLING.md](DSC_NC_HANDLING.md)를 참조하세요.
+
+---
+
+## 1-B. 클라이언트 PA 검증 (Client-side PA) (v2.1.14+)
+
+> 클라이언트 PA는 서버에서 **Trust Materials(CSCA/CRL/Link Certificate)를 다운로드**한 후, **클라이언트(ICRM 등)가 로컬에서 PA 검증을 수행**하고 결과만 서버에 보고하는 방식입니다.
+
+### 서버 PA vs 클라이언트 PA
+
+| 항목 | 서버 PA (`/api/pa/verify`) | 클라이언트 PA (`/api/pa/trust-materials`) |
+|------|---------------------------|----------------------------------------|
+| **검증 수행 위치** | 서버 | 클라이언트 (로컬) |
+| **SOD/DG 전송** | 서버로 전송 필수 | 전송 불필요 (PII 보호) |
+| **서버 역할** | 8단계 전체 검증 수행 | Trust Materials 제공 + 결과 수신 |
+| **MRZ 데이터** | 서버에서 DG1 파싱 | 결과 보고 시에만 암호화 전송 (선택) |
+| **대역폭** | SOD/DG 바이너리 전송 (수십~수백 KB) | 인증서 목록만 다운로드 |
+| **적용 시나리오** | 서버에서 통합 검증이 필요한 경우 | ICRM 등 클라이언트에서 로컬 PA 수행 시 |
+
+### 호출 절차 (2단계)
+
+```
+클라이언트(ICRM)                          ICAO Local PKD 서버
+    │                                            │
+    │  Step 1: Trust Materials 요청               │
+    │  POST /api/pa/trust-materials              │
+    │  { countryCode: "KR" }           ────────→ │
+    │                                            │ → LDAP에서 CSCA/CRL/LC 조회
+    │                                            │ → requestId 생성
+    │  ←──────────  200 OK                       │
+    │  { requestId, csca[], link_cert[], crl[] } │
+    │                                            │
+    │  [클라이언트에서 로컬 PA 검증 수행]           │
+    │  - CSCA로 DSC Trust Chain 검증              │
+    │  - CRL로 DSC 폐기 여부 확인                  │
+    │  - SOD 서명 검증 + DG 해시 검증              │
+    │                                            │
+    │  Step 2: 검증 결과 보고                      │
+    │  POST /api/pa/trust-materials/result       │
+    │  { requestId, verificationStatus,          │
+    │    encryptedMrz (선택) }         ────────→  │
+    │                                            │ → 결과 저장 + MRZ 복호화/재암호화
+    │  ←──────────  200 OK                       │
+    │                                            │
+```
+
+### Step 1: Trust Materials 요청
+
+**Endpoint**: `POST /api/pa/trust-materials`
+
+서버에서 지정 국가의 CSCA, CRL, Link Certificate를 **DER Base64** 형식으로 다운로드합니다.
+
+#### Request
+
+```json
+{
+  "countryCode": "KR",
+  "dscIssuerDn": "/C=KR/O=Government/CN=CSCA",
+  "requestedBy": "icrm-agent-001"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| countryCode | string | **필수** | ISO 3166-1 alpha-2 국가 코드 (2자리 대문자, 예: `KR`, `US`, `DE`) |
+| dscIssuerDn | string | 선택 | DSC 발급자 DN (특정 CSCA만 필터링할 때 사용) |
+| requestedBy | string | 선택 | 요청자 식별자 (로깅용, 기본: `anonymous`) |
+
+#### Response (Success)
+
+```json
+{
+  "success": true,
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "data": {
+    "csca": [
+      {
+        "subjectDn": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+        "issuerDn": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+        "derBase64": "MIIFljCCA36gAwIBAgI...(DER Base64 인코딩된 CSCA 인증서)",
+        "notBefore": "Jan  1 00:00:00 2020 GMT",
+        "notAfter": "Jan  1 00:00:00 2035 GMT"
+      }
+    ],
+    "link_cert": [
+      {
+        "subjectDn": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+        "issuerDn": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR (old)",
+        "derBase64": "MIIFmjCCA4KgAwIBAgI...(DER Base64 인코딩된 Link Certificate)",
+        "notBefore": "Jul  1 00:00:00 2024 GMT",
+        "notAfter": "Jul  1 00:00:00 2030 GMT"
+      }
+    ],
+    "crl": [
+      {
+        "issuerDn": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+        "derBase64": "MIIBojCBiwIBATANBgk...(DER Base64 인코딩된 CRL)",
+        "thisUpdate": "Feb  1 00:00:00 2026 GMT",
+        "nextUpdate": "Mar  1 00:00:00 2026 GMT"
+      }
+    ]
+  }
+}
+```
+
+| Response Field | Type | Description |
+|----------------|------|-------------|
+| requestId | string (UUID) | 요청 고유 ID — Step 2에서 결과 보고 시 사용 |
+| data.csca[] | array | CSCA 인증서 목록 (자체 서명된 Root CSCA) |
+| data.link_cert[] | array | Link Certificate 목록 (CSCA 키 교체 시 사용) |
+| data.crl[] | array | CRL 목록 (인증서 폐기 목록) |
+| *.derBase64 | string | DER 형식 바이너리를 Base64 인코딩한 인증서/CRL |
+| *.subjectDn / issuerDn | string | X.509 Subject/Issuer Distinguished Name |
+| *.notBefore / notAfter | string | 인증서 유효 기간 |
+| *.thisUpdate / nextUpdate | string | CRL 발급/다음 갱신 일시 |
+
+#### Response (Error — 해당 국가 데이터 없음)
+
+```json
+{
+  "success": false,
+  "error": "No trust materials found for country: XX"
+}
+```
+
+### Step 2: 검증 결과 보고
+
+**Endpoint**: `POST /api/pa/trust-materials/result`
+
+클라이언트에서 로컬 PA 검증을 완료한 후, 검증 결과를 서버에 보고합니다.
+
+#### Request
+
+```json
+{
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "verificationStatus": "VALID",
+  "verificationMessage": "All checks passed",
+  "trustChainValid": true,
+  "sodSignatureValid": true,
+  "dgHashValid": true,
+  "crlCheckPassed": true,
+  "processingTimeMs": 150,
+  "encryptedMrz": "<AES-256-GCM 암호화된 MRZ 문자열 (선택)>"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| requestId | string (UUID) | **필수** | Step 1에서 받은 `requestId` |
+| verificationStatus | string | **필수** | 검증 결과: `VALID`, `INVALID`, `ERROR` |
+| verificationMessage | string | 선택 | 검증 결과 상세 메시지 |
+| trustChainValid | boolean | 선택 | DSC → CSCA Trust Chain 검증 통과 여부 |
+| sodSignatureValid | boolean | 선택 | SOD 서명 검증 통과 여부 |
+| dgHashValid | boolean | 선택 | Data Group 해시 검증 통과 여부 |
+| crlCheckPassed | boolean | 선택 | CRL 기반 DSC 폐기 여부 확인 통과 |
+| processingTimeMs | integer | 선택 | 클라이언트 검증 소요 시간 (밀리초) |
+| encryptedMrz | string | 선택 | AES-256-GCM으로 암호화된 MRZ 텍스트 (TD3 형식 2줄 × 44자) |
+
+#### MRZ 전송 (PII 보호)
+
+- Trust Materials 요청 시 (Step 1) MRZ는 **전송하지 않습니다**
+- 결과 보고 시 (Step 2)에만 **암호화된 MRZ**를 선택적으로 전송할 수 있습니다
+- 서버는 수신한 MRZ를 복호화한 후 **서버 측 키로 재암호화**하여 DB에 저장합니다
+- MRZ에서 추출되는 필드: `nationality` (국적), `documentType` (문서 유형), `documentNumber` (여권 번호)
+- 여권 번호는 **개인정보보호법 제24조** 고유식별정보에 해당하며 암호화 저장이 법적 의무입니다
+
+#### Response (Success)
+
+```json
+{
+  "success": true
+}
+```
+
+#### Response (Error — requestId 없음)
+
+```json
+{
+  "success": false,
+  "error": "Request not found: 550e8400-..."
+}
+```
+
+### 클라이언트 PA 이력 조회
+
+**Endpoint**: `GET /api/pa/trust-materials/history`
+
+클라이언트 PA 요청 이력을 페이지네이션으로 조회합니다.
+
+#### Query Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| page | integer | 0 | 페이지 번호 (0부터 시작) |
+| size | integer | 20 | 페이지 크기 (최대 100) |
+| country | string | - | 국가 코드 필터 (예: `KR`) |
+
+```bash
+curl "https://pkd.smartcoreinc.com/api/pa/trust-materials/history?page=0&size=10&country=KR" | jq .
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "countryCode": "KR",
+      "cscaCount": 3,
+      "linkCertCount": 1,
+      "crlCount": 1,
+      "requestedBy": "icrm-agent-001",
+      "requestTimestamp": "2026-03-21T10:30:00",
+      "processingTimeMs": 45,
+      "status": "VALID",
+      "verificationStatus": "VALID",
+      "verificationMessage": "All checks passed",
+      "mrzNationality": "KOR",
+      "mrzDocumentType": "P",
+      "clientIp": "192.168.*.**"
+    }
+  ],
+  "total": 150,
+  "page": 0,
+  "size": 10
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| status | string | 상태: `REQUESTED` (결과 미보고), `VALID`, `INVALID`, `ERROR` |
+| verificationStatus | string | 클라이언트가 보고한 검증 결과 (결과 보고 전에는 null) |
+| mrzNationality | string | MRZ에서 추출된 국적 (보고된 경우에만) |
+| clientIp | string | 요청 클라이언트 IP (**마스킹 처리**) |
+
+### 통합 통계
+
+**Endpoint**: `GET /api/pa/combined-statistics`
+
+서버 PA와 클라이언트 PA 통계를 통합 조회합니다.
+
+```bash
+curl "https://pkd.smartcoreinc.com/api/pa/combined-statistics" | jq .
+```
+
+#### Response
+
+```json
+{
+  "success": true,
+  "serverPA": {
+    "totalVerifications": 1200,
+    "successRate": 90.5,
+    "byCountry": [{"country": "KR", "count": 500}],
+    "byStatus": {"VALID": 1086, "INVALID": 114}
+  },
+  "clientPA": {
+    "totalRequests": 350,
+    "byStatus": {"REQUESTED": 10, "VALID": 300, "INVALID": 30, "ERROR": 10},
+    "byCountry": [{"countryCode": "KR", "count": 200}],
+    "resultReportedCount": 340,
+    "validCount": 300,
+    "invalidCount": 30
+  },
+  "combined": {
+    "totalRequests": 1550,
+    "serverCount": 1200,
+    "clientCount": 350
+  }
+}
+```
 
 ---
 
@@ -1073,6 +1364,94 @@ class PAServiceClient:
         )
         return response.json()
 
+    # --- Client PA API (v2.1.14+) ---
+
+    def get_trust_materials(self, country_code: str,
+                            dsc_issuer_dn: str = None,
+                            requested_by: str = None) -> dict:
+        """
+        Download CSCA/CRL/Link Certificate for client-side PA.
+
+        Args:
+            country_code: ISO 3166-1 alpha-2 country code (e.g., "KR")
+            dsc_issuer_dn: Optional DSC issuer DN filter
+            requested_by: Optional requester identifier
+        Returns:
+            dict: {"success": true, "requestId": "...",
+                   "data": {"csca": [...], "link_cert": [...], "crl": [...]}}
+        """
+        body = {"countryCode": country_code}
+        if dsc_issuer_dn:
+            body["dscIssuerDn"] = dsc_issuer_dn
+        if requested_by:
+            body["requestedBy"] = requested_by
+
+        response = requests.post(
+            f"{self.base_url}/pa/trust-materials",
+            json=body, headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def report_trust_material_result(self, request_id: str,
+                                      verification_status: str,
+                                      trust_chain_valid: bool = None,
+                                      sod_signature_valid: bool = None,
+                                      dg_hash_valid: bool = None,
+                                      crl_check_passed: bool = None,
+                                      processing_time_ms: int = None,
+                                      encrypted_mrz: str = None) -> dict:
+        """
+        Report client-side PA verification result.
+
+        Args:
+            request_id: requestId from get_trust_materials()
+            verification_status: "VALID", "INVALID", or "ERROR"
+            encrypted_mrz: AES-256-GCM encrypted MRZ text (optional)
+        """
+        body = {
+            "requestId": request_id,
+            "verificationStatus": verification_status,
+        }
+        if trust_chain_valid is not None:
+            body["trustChainValid"] = trust_chain_valid
+        if sod_signature_valid is not None:
+            body["sodSignatureValid"] = sod_signature_valid
+        if dg_hash_valid is not None:
+            body["dgHashValid"] = dg_hash_valid
+        if crl_check_passed is not None:
+            body["crlCheckPassed"] = crl_check_passed
+        if processing_time_ms is not None:
+            body["processingTimeMs"] = processing_time_ms
+        if encrypted_mrz is not None:
+            body["encryptedMrz"] = encrypted_mrz
+
+        response = requests.post(
+            f"{self.base_url}/pa/trust-materials/result",
+            json=body, headers=self.headers
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_trust_material_history(self, page=0, size=20,
+                                    country=None) -> dict:
+        """Get client PA verification history."""
+        params = {"page": page, "size": size}
+        if country:
+            params["country"] = country
+        response = requests.get(
+            f"{self.base_url}/pa/trust-materials/history",
+            params=params, headers=self.headers
+        )
+        return response.json()
+
+    def get_combined_statistics(self) -> dict:
+        """Get server PA + client PA combined statistics."""
+        response = requests.get(
+            f"{self.base_url}/pa/combined-statistics", headers=self.headers
+        )
+        return response.json()
+
     # --- AI Analysis API (v2.1.7+) ---
 
     def get_ai_analysis(self, fingerprint: str) -> dict:
@@ -1183,7 +1562,33 @@ if __name__ == "__main__":
     else:
         print("DSC not found in local PKD")
 
-    # Option C: AI analysis after PA verification (v2.1.7+)
+    # Option C: Client-side PA verification (v2.1.14+)
+    # Step 1: Download trust materials
+    trust = client.get_trust_materials("KR", requested_by="icrm-agent")
+    if trust["success"]:
+        request_id = trust["requestId"]
+        csca_list = trust["data"]["csca"]       # CSCA DER Base64 list
+        crl_list = trust["data"]["crl"]         # CRL DER Base64 list
+        lc_list = trust["data"]["link_cert"]    # Link Certificate list
+        print(f"Downloaded: {len(csca_list)} CSCA, {len(crl_list)} CRL, {len(lc_list)} LC")
+
+        # [Client performs local PA verification using downloaded materials]
+        # ... local_pa_result = perform_local_pa(sod, dg1, dg2, csca_list, crl_list)
+
+        # Step 2: Report verification result
+        report = client.report_trust_material_result(
+            request_id=request_id,
+            verification_status="VALID",  # or "INVALID", "ERROR"
+            trust_chain_valid=True,
+            sod_signature_valid=True,
+            dg_hash_valid=True,
+            crl_check_passed=True,
+            processing_time_ms=150,
+            # encrypted_mrz="<AES-256-GCM encrypted MRZ>"  # Optional
+        )
+        print(f"Result reported: {report['success']}")
+
+    # Option D: AI analysis after PA verification (v2.1.7+)
     if result["success"] and result["data"]["status"] == "VALID":
         dsc_reg = result["data"].get("dscAutoRegistration", {})
         fingerprint = dsc_reg.get("fingerprint")
@@ -1393,6 +1798,32 @@ curl http://localhost:8080/api/pa/statistics | jq .
 
 # Health check
 curl http://localhost:8080/api/health | jq .
+
+# --- Client PA (v2.1.14+) ---
+
+# Step 1: Download trust materials for a country
+curl -X POST http://localhost:8080/api/pa/trust-materials \
+  -H "Content-Type: application/json" \
+  -d '{"countryCode": "KR", "requestedBy": "curl-test"}' | jq .
+
+# Step 2: Report client PA result (requestId from Step 1)
+curl -X POST http://localhost:8080/api/pa/trust-materials/result \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestId": "550e8400-e29b-41d4-a716-446655440000",
+    "verificationStatus": "VALID",
+    "trustChainValid": true,
+    "sodSignatureValid": true,
+    "dgHashValid": true,
+    "crlCheckPassed": true,
+    "processingTimeMs": 150
+  }' | jq .
+
+# Client PA history
+curl "http://localhost:8080/api/pa/trust-materials/history?page=0&size=10&country=KR" | jq .
+
+# Combined statistics (server PA + client PA)
+curl http://localhost:8080/api/pa/combined-statistics | jq .
 
 # --- AI Certificate Analysis (v2.1.7+) ---
 
@@ -1612,6 +2043,20 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 ---
 
 ## Changelog
+
+### v2.1.15 (2026-03-21)
+
+**Client PA API 명세 + DSC 등록 승인 방식 문서 반영**:
+- 클라이언트 PA (Trust Materials) API 전체 명세 추가 — §1-B 신규 섹션
+  - 서버 PA vs 클라이언트 PA 비교표, 2단계 호출 절차 시퀀스 다이어그램
+  - 4개 엔드포인트 Request/Response 상세 (필드별 설명 + 예시 JSON)
+  - PII 보호 설계 (MRZ 암호화 전송 흐름) 설명
+- Integration Examples에 Client PA 코드 추가 (Python, curl)
+- API Endpoints Summary 테이블에 4개 Client PA 엔드포인트 추가 (#11~#14)
+- DSC Auto-Registration → DSC Registration (관리자 승인 대기) 문서 반영 (v2.31.0 변경사항)
+  - Step 8 설명: "자동 등록" → "관리자 승인 대기 상태로 등록"
+  - `dscAutoRegistration` 응답 필드: `pendingApproval`, `pendingId`, `alreadyRegistered` 추가
+- Permission 테이블: `pa:stats` 권한 추가 (통계 조회 독립 관리)
 
 ### v2.1.14 (2026-03-21)
 
