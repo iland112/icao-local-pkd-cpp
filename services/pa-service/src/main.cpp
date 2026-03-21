@@ -177,7 +177,8 @@ void registerRoutes() {
         g_services->dataGroupRepository(),
         g_services->sodParser(),
         g_services->dgParser(),
-        g_services->queryExecutor()
+        g_services->queryExecutor(),
+        g_services->trustMaterialService()
     );
     paHandler.registerRoutes(app);
 

@@ -24,6 +24,7 @@ namespace repositories {
     class DataGroupRepository;
     class LdapCertificateRepository;
     class LdapCrlRepository;
+    class TrustMaterialRequestRepository;
 }
 
 // Forward declarations - Services/Parsers
@@ -35,6 +36,7 @@ namespace services {
     class CertificateValidationService;
     class DscAutoRegistrationService;
     class PaVerificationService;
+    class TrustMaterialService;
 }
 
 namespace infrastructure {
@@ -76,6 +78,8 @@ public:
     services::CertificateValidationService* certificateValidationService() const;
     services::DscAutoRegistrationService* dscAutoRegistrationService() const;
     services::PaVerificationService* paVerificationService() const;
+    repositories::TrustMaterialRequestRepository* trustMaterialRequestRepository() const;
+    services::TrustMaterialService* trustMaterialService() const;
 
 private:
     struct Impl;

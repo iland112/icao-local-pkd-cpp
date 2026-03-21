@@ -649,6 +649,43 @@ END;
 /
 
 -- =============================================================================
+-- Trust Material Request (Client-side PA support)
+-- =============================================================================
+
+BEGIN
+    EXECUTE IMMEDIATE '
+    CREATE TABLE trust_material_request (
+        id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+        country_code VARCHAR2(3) NOT NULL,
+        dsc_issuer_dn VARCHAR2(4000),
+        mrz_nationality VARCHAR2(1024),
+        mrz_document_type VARCHAR2(1024),
+        mrz_document_number VARCHAR2(1024),
+        csca_count NUMBER(10) DEFAULT 0,
+        link_cert_count NUMBER(10) DEFAULT 0,
+        crl_count NUMBER(10) DEFAULT 0,
+        client_ip VARCHAR2(1024),
+        user_agent VARCHAR2(4000),
+        requested_by VARCHAR2(100),
+        api_client_id VARCHAR2(100),
+        request_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
+        processing_time_ms NUMBER(10),
+        status VARCHAR2(20) DEFAULT ''SUCCESS'',
+        error_message VARCHAR2(4000)
+    )';
+EXCEPTION WHEN OTHERS THEN
+    IF SQLCODE != -955 THEN RAISE; END IF;
+END;
+/
+
+BEGIN EXECUTE IMMEDIATE 'CREATE INDEX idx_tmr_country ON trust_material_request(country_code)'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 AND SQLCODE != -1408 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'CREATE INDEX idx_tmr_timestamp ON trust_material_request(request_timestamp DESC)'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 AND SQLCODE != -1408 THEN RAISE; END IF; END;
+/
+BEGIN EXECUTE IMMEDIATE 'CREATE INDEX idx_tmr_status ON trust_material_request(status)'; EXCEPTION WHEN OTHERS THEN IF SQLCODE != -955 AND SQLCODE != -1408 THEN RAISE; END IF; END;
+/
+
+-- =============================================================================
 -- Commit and Exit
 -- =============================================================================
 

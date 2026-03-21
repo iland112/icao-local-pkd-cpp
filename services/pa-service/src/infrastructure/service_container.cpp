@@ -21,6 +21,7 @@
 #include "../repositories/data_group_repository.h"
 #include "../repositories/ldap_certificate_repository.h"
 #include "../repositories/ldap_crl_repository.h"
+#include "../repositories/trust_material_request_repository.h"
 
 // Parsers
 #include <sod_parser.h>
@@ -30,6 +31,7 @@
 #include "../services/certificate_validation_service.h"
 #include "../services/dsc_auto_registration_service.h"
 #include "../services/pa_verification_service.h"
+#include "../services/trust_material_service.h"
 
 namespace infrastructure {
 
@@ -53,6 +55,10 @@ struct ServiceContainer::Impl {
     std::unique_ptr<services::CertificateValidationService> certificateValidationService;
     std::unique_ptr<services::DscAutoRegistrationService> dscAutoRegistrationService;
     std::unique_ptr<services::PaVerificationService> paVerificationService;
+
+    // Trust Material (client-side PA support)
+    std::unique_ptr<repositories::TrustMaterialRequestRepository> trustMaterialRequestRepo;
+    std::unique_ptr<services::TrustMaterialService> trustMaterialService;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -186,6 +192,14 @@ bool ServiceContainer::initialize(const AppConfig& config) {
             impl_->dgParser.get(),
             impl_->dscAutoRegistrationService.get());
 
+        // Step 7: Trust Material Service (client-side PA support)
+        impl_->trustMaterialRequestRepo = std::make_unique<repositories::TrustMaterialRequestRepository>(
+            impl_->queryExecutor.get());
+        impl_->trustMaterialService = std::make_unique<services::TrustMaterialService>(
+            impl_->ldapCertificateRepo.get(),
+            impl_->ldapCrlRepo.get(),
+            impl_->trustMaterialRequestRepo.get());
+
         spdlog::info("All PA Service dependencies initialized successfully");
         return true;
 
@@ -201,6 +215,8 @@ void ServiceContainer::shutdown() {
     spdlog::info("Shutting down PA Service dependencies...");
 
     // Delete in reverse order of initialization
+    impl_->trustMaterialService.reset();
+    impl_->trustMaterialRequestRepo.reset();
     impl_->paVerificationService.reset();
     impl_->dscAutoRegistrationService.reset();
     impl_->certificateValidationService.reset();
@@ -239,5 +255,7 @@ icao::DgParser* ServiceContainer::dgParser() const { return impl_->dgParser.get(
 services::CertificateValidationService* ServiceContainer::certificateValidationService() const { return impl_->certificateValidationService.get(); }
 services::DscAutoRegistrationService* ServiceContainer::dscAutoRegistrationService() const { return impl_->dscAutoRegistrationService.get(); }
 services::PaVerificationService* ServiceContainer::paVerificationService() const { return impl_->paVerificationService.get(); }
+repositories::TrustMaterialRequestRepository* ServiceContainer::trustMaterialRequestRepository() const { return impl_->trustMaterialRequestRepo.get(); }
+services::TrustMaterialService* ServiceContainer::trustMaterialService() const { return impl_->trustMaterialService.get(); }
 
 } // namespace infrastructure

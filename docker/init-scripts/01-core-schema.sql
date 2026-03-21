@@ -560,3 +560,42 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX idx_audit_log_timestamp ON audit_log(event_timestamp DESC);
 CREATE INDEX idx_audit_log_event_type ON audit_log(event_type);
 CREATE INDEX idx_audit_log_entity ON audit_log(entity_type, entity_id);
+
+-- =============================================
+-- Trust Material Request (Client-side PA support)
+-- =============================================
+CREATE TABLE IF NOT EXISTS trust_material_request (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Request info
+    country_code VARCHAR(3) NOT NULL,
+    dsc_issuer_dn TEXT,
+
+    -- MRZ-derived audit fields (AES-256-GCM encrypted)
+    mrz_nationality VARCHAR(1024),
+    mrz_document_type VARCHAR(1024),
+    mrz_document_number VARCHAR(1024),
+
+    -- Response info
+    csca_count INTEGER DEFAULT 0,
+    link_cert_count INTEGER DEFAULT 0,
+    crl_count INTEGER DEFAULT 0,
+
+    -- Request metadata (PII encrypted)
+    client_ip VARCHAR(1024),
+    user_agent TEXT,
+    requested_by VARCHAR(100),
+    api_client_id VARCHAR(100),
+
+    -- Timing
+    request_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    processing_time_ms INTEGER,
+
+    -- Status
+    status VARCHAR(20) DEFAULT 'SUCCESS',
+    error_message TEXT
+);
+
+CREATE INDEX idx_tmr_country ON trust_material_request(country_code);
+CREATE INDEX idx_tmr_timestamp ON trust_material_request(request_timestamp DESC);
+CREATE INDEX idx_tmr_status ON trust_material_request(status);

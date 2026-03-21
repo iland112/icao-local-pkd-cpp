@@ -18,6 +18,7 @@
 
 #include "../services/pa_verification_service.h"
 #include "../repositories/data_group_repository.h"
+#include "../services/trust_material_service.h"
 #include "../common/country_code_utils.h"
 #include <sod_parser.h>
 #include <dg_parser.h>
@@ -53,19 +54,22 @@ PaHandler::PaHandler(
     repositories::DataGroupRepository* dataGroupRepository,
     icao::SodParser* sodParserService,
     icao::DgParser* dataGroupParserService,
-    common::IQueryExecutor* queryExecutor)
+    common::IQueryExecutor* queryExecutor,
+    services::TrustMaterialService* trustMaterialService)
     : paVerificationService_(paVerificationService),
       dataGroupRepository_(dataGroupRepository),
       sodParserService_(sodParserService),
       dataGroupParserService_(dataGroupParserService),
-      queryExecutor_(queryExecutor) {
+      queryExecutor_(queryExecutor),
+      trustMaterialService_(trustMaterialService) {
 
     if (!paVerificationService_ || !dataGroupRepository_ ||
         !sodParserService_ || !dataGroupParserService_) {
         throw std::invalid_argument("PaHandler: service/repository pointers cannot be nullptr");
     }
 
-    spdlog::info("[PaHandler] Initialized with Service Pattern");
+    spdlog::info("[PaHandler] Initialized with Service Pattern (trustMaterials={})",
+        trustMaterialService_ ? "enabled" : "disabled");
 }
 
 // --- Route Registration ---
@@ -77,6 +81,16 @@ void PaHandler::registerRoutes(drogon::HttpAppFramework& app) {
         [this](const drogon::HttpRequestPtr& req,
                std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             handleVerify(req, std::move(callback));
+        },
+        {drogon::Post}
+    );
+
+    // POST /api/pa/trust-materials
+    app.registerHandler(
+        "/api/pa/trust-materials",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handleTrustMaterials(req, std::move(callback));
         },
         {drogon::Post}
     );
@@ -723,6 +737,86 @@ void PaHandler::handleDataGroups(
         callback(resp);
     } catch (const std::exception& e) {
         callback(common::handler::internalError("PaHandler::handleDataGroups", e));
+    }
+}
+
+// --- POST /api/pa/trust-materials ---
+
+void PaHandler::handleTrustMaterials(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback)
+{
+    if (!trustMaterialService_) {
+        Json::Value err;
+        err["success"] = false;
+        err["error"] = "Trust material service not available";
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+        resp->setStatusCode(drogon::k503ServiceUnavailable);
+        callback(resp);
+        return;
+    }
+
+    try {
+        auto body = req->getJsonObject();
+        if (!body) {
+            callback(common::handler::badRequest("Invalid JSON body"));
+            return;
+        }
+
+        std::string countryCode = (*body).get("countryCode", "").asString();
+        if (countryCode.empty()) {
+            callback(common::handler::badRequest("countryCode is required"));
+            return;
+        }
+
+        // Build service request
+        services::TrustMaterialService::TrustMaterialRequest tmRequest;
+        tmRequest.countryCode = countryCode;
+        tmRequest.dscIssuerDn = (*body).get("dscIssuerDn", "").asString();
+        tmRequest.encryptedMrz = (*body).get("encryptedMrz", "").asString();
+        tmRequest.requestedBy = (*body).get("requestedBy", "").asString();
+
+        // Extract client metadata
+        tmRequest.clientIp = req->getHeader("X-Real-IP");
+        if (tmRequest.clientIp.empty()) tmRequest.clientIp = req->getHeader("X-Forwarded-For");
+        if (tmRequest.clientIp.empty()) tmRequest.clientIp = req->getPeerAddr().toIp();
+        tmRequest.userAgent = req->getHeader("User-Agent");
+        tmRequest.apiClientId = req->getHeader("X-Client-Id");
+
+        // Call service
+        auto result = trustMaterialService_->fetchTrustMaterials(tmRequest);
+
+        // Audit log
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(
+                req, icao::audit::OperationType::PA_TRUST_MATERIALS);
+            entry.resourceType = "trust_material";
+            entry.success = result.success;
+            Json::Value meta;
+            meta["countryCode"] = countryCode;
+            meta["cscaCount"] = static_cast<int>(result.data.get("csca", Json::arrayValue).size());
+            meta["crlCount"] = static_cast<int>(result.data.get("crl", Json::arrayValue).size());
+            entry.metadata = meta;
+            if (!result.success) entry.errorMessage = result.errorMessage;
+            icao::audit::logOperation(queryExecutor_, entry);
+        } catch (...) { /* non-critical */ }
+
+        // Build response
+        Json::Value response;
+        response["success"] = result.success;
+        if (result.success) {
+            response["data"] = result.data;
+        } else {
+            response["error"] = result.errorMessage;
+        }
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        resp->setStatusCode(result.success ? drogon::k200OK : drogon::k404NotFound);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaHandler] handleTrustMaterials error: {}", e.what());
+        callback(common::handler::internalError("PaHandler::handleTrustMaterials", e));
     }
 }
 

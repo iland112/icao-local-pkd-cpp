@@ -83,6 +83,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
 
     // --- PA (Passive Authentication) Service (Demo/Verification functionality) ---
     "^/api/pa/verify$",            // PA verification (main function)
+    "^/api/pa/trust-materials$",   // Trust materials for client-side PA
     "^/api/pa/parse-sod$",         // Parse SOD (Security Object Document)
     "^/api/pa/parse-dg1$",         // Parse DG1 (MRZ data)
     "^/api/pa/parse-dg2$",         // Parse DG2 (Face image)

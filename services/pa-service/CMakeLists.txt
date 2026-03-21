@@ -77,6 +77,7 @@ set(REPOSITORIES_SRC
     src/repositories/ldap_certificate_repository.cpp
     src/repositories/ldap_crl_repository.cpp
     src/repositories/data_group_repository.cpp
+    src/repositories/trust_material_request_repository.cpp
 )
 
 # Services
@@ -85,6 +86,7 @@ set(SERVICES_SRC
     src/services/certificate_validation_service.cpp
     src/services/dsc_auto_registration_service.cpp
     src/services/pa_verification_service.cpp
+    src/services/trust_material_service.cpp
     # Provider Adapters (v2.11.0: icao::validation library integration)
     src/adapters/ldap_csca_provider.cpp
     src/adapters/ldap_crl_provider.cpp

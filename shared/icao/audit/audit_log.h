@@ -82,6 +82,9 @@ enum class OperationType {
     DSC_APPROVE,        // Admin approved pending DSC registration
     DSC_REJECT,         // Admin rejected pending DSC registration
 
+    // PA Service — Trust Materials
+    PA_TRUST_MATERIALS, // Trust material request (client-side PA support)
+
     // CSR Management
     CSR_GENERATE,       // CSR key pair generation
     CSR_EXPORT,         // CSR export (PEM/DER download)
@@ -146,6 +149,9 @@ inline std::string operationTypeToString(OperationType type) {
         case OperationType::DSC_PENDING_SAVE: return "DSC_PENDING_SAVE";
         case OperationType::DSC_APPROVE: return "DSC_APPROVE";
         case OperationType::DSC_REJECT: return "DSC_REJECT";
+
+        // PA Service — Trust Materials
+        case OperationType::PA_TRUST_MATERIALS: return "PA_TRUST_MATERIALS";
 
         // CSR Management
         case OperationType::CSR_GENERATE: return "CSR_GENERATE";

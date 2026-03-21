@@ -12,6 +12,7 @@ namespace common {
 }
 namespace services {
     class PaVerificationService;
+    class TrustMaterialService;
 }
 namespace repositories {
     class DataGroupRepository;
@@ -54,7 +55,8 @@ public:
         repositories::DataGroupRepository* dataGroupRepository,
         icao::SodParser* sodParserService,
         icao::DgParser* dataGroupParserService,
-        common::IQueryExecutor* queryExecutor = nullptr);
+        common::IQueryExecutor* queryExecutor = nullptr,
+        services::TrustMaterialService* trustMaterialService = nullptr);
 
     /**
      * @brief Register PA routes
@@ -71,6 +73,17 @@ private:
     icao::SodParser* sodParserService_;
     icao::DgParser* dataGroupParserService_;
     common::IQueryExecutor* queryExecutor_;
+    services::TrustMaterialService* trustMaterialService_;
+
+    /**
+     * @brief POST /api/pa/trust-materials
+     *
+     * Fetch trust materials (CSCA/CRL/Link Certificates) for client-side PA.
+     * Accepts optional encrypted MRZ for audit/statistics.
+     */
+    void handleTrustMaterials(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
     /**
      * @brief POST /api/pa/verify
