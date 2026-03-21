@@ -32,7 +32,10 @@ export default function IcaoLdapSync() {
       const res = await syncApi.getIcaoLdapSyncStatus();
       setStatus(res.data);
       if (res.data.running && !syncing) setSyncing(true);
-      if (!res.data.running && syncing && !progress) setSyncing(false);
+      if (!res.data.running && syncing) {
+        setSyncing(false);
+        setProgress(null);
+      }
     } catch { /* non-critical */ }
   }, [syncing, progress]);
 
@@ -77,6 +80,7 @@ export default function IcaoLdapSync() {
         }
         if (data.type === 'ICAO_LDAP_SYNC_COMPLETED' || data.type === 'ICAO_LDAP_SYNC_FAILED') {
           setSyncing(false);
+          setProgress(null);
           fetchStatusRef.current();
           fetchHistoryRef.current();
         }
@@ -122,6 +126,7 @@ export default function IcaoLdapSync() {
           if (!res.data.running) {
             clearInterval(pollInterval);
             setSyncing(false);
+            setProgress(null);
             fetchHistory();
           }
         } catch { /* ignore */ }
