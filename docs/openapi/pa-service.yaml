@@ -6,6 +6,7 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
+    - **v2.1.8** (2026-03-21): POST /api/pa/trust-materials — 클라이언트 PA 지원 API (CSCA/CRL/Link Certificate DER Base64 제공, 암호화 MRZ 감사 추적)
     - **v2.1.7** (2026-03-18): dscAutoRegistration 응답에 pendingApproval, alreadyRegistered, pendingId 필드 추가 (v2.31.0 DSC 승인 워크플로우 대응)
     - **v2.1.6** (2026-02-19): Country code DG1 MRZ fallback (request param → MRZ → DSC C= → XX), requestedBy field
     - **v2.1.5** (2026-02-19): requestedBy field, pkdConformanceText DB persistence, country code "XX" fallback
@@ -16,7 +17,7 @@ info:
     - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 2.1.7
+  version: 2.1.8
   contact:
     name: SMARTCORE Inc.
     email: support@smartcoreinc.com
@@ -104,6 +105,33 @@ paths:
                 $ref: '#/components/schemas/PAVerifyResponse'
         '400':
           description: Invalid request
+
+  /api/pa/trust-materials:
+    post:
+      tags: [PA]
+      summary: Fetch trust materials for client-side PA
+      operationId: getTrustMaterials
+      description: |
+        클라이언트(ICRM)가 로컬에서 PA를 수행할 수 있도록 국가별 CSCA/CRL/Link Certificate를
+        DER(Base64) 형태로 제공합니다. 암호화된 MRZ 데이터를 함께 전송하여 감사 추적 및
+        통계 분석이 가능합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrustMaterialRequest'
+      responses:
+        '200':
+          description: Trust materials found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrustMaterialResponse'
+        '400':
+          description: Invalid request (missing countryCode)
+        '404':
+          description: No trust materials found for the given country
 
   /api/pa/history:
     get:
@@ -535,3 +563,75 @@ components:
               pkdConformanceText:
                 type: string
                 description: ICAO PKD non-conformance description
+
+    TrustMaterialRequest:
+      type: object
+      required: [countryCode]
+      properties:
+        countryCode:
+          type: string
+          description: ISO 3166-1 alpha-2/3 country code
+          example: KR
+        dscIssuerDn:
+          type: string
+          description: DSC issuer DN for targeted CSCA filtering (optional)
+        encryptedMrz:
+          type: string
+          description: AES-256-GCM encrypted MRZ data ("ENC:" + hex). Uses shared PII_ENCRYPTION_KEY.
+        requestedBy:
+          type: string
+          description: Identifier for the requesting system/user
+
+    TrustMaterialResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            countryCode:
+              type: string
+            csca:
+              type: array
+              items:
+                type: object
+                properties:
+                  subjectDn:
+                    type: string
+                  issuerDn:
+                    type: string
+                  notBefore:
+                    type: string
+                  notAfter:
+                    type: string
+                  derBase64:
+                    type: string
+                    description: DER-encoded certificate in Base64
+            linkCertificates:
+              type: array
+              items:
+                type: object
+                properties:
+                  subjectDn:
+                    type: string
+                  derBase64:
+                    type: string
+            crl:
+              type: array
+              items:
+                type: object
+                properties:
+                  issuerDn:
+                    type: string
+                  thisUpdate:
+                    type: string
+                  nextUpdate:
+                    type: string
+                  derBase64:
+                    type: string
+            timestamp:
+              type: string
+              format: date-time
+            processingTimeMs:
+              type: integer

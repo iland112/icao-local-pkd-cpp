@@ -299,6 +299,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/pa/statistics` - PA statistics
 - `GET /api/pa/{id}` - Verification detail
 - `GET /api/pa/{id}/datagroups` - DataGroups detail
+- `POST /api/pa/trust-materials` - Trust materials for client-side PA (CSCA/CRL/LC DER Base64, encrypted MRZ audit)
 
 ### PKD Relay (via :8080/api)
 

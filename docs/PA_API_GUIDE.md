@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.12
-**Last Updated**: 2026-02-25
+**Version**: 2.1.13
+**Last Updated**: 2026-03-21
 **API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
 ---
@@ -1612,6 +1612,17 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 ---
 
 ## Changelog
+
+### v2.1.13 (2026-03-21)
+
+**클라이언트 PA 지원 — Trust Materials API (v2.38.0)**:
+- `POST /api/pa/trust-materials` 엔드포인트 추가 — 클라이언트(ICRM)가 로컬에서 PA 수행 가능
+- 국가별 CSCA/CRL/Link Certificate를 DER(Base64) 형태로 제공
+- 암호화된 MRZ 데이터 전송으로 감사 추적 및 통계 분석 (AES-256-GCM, PII_ENCRYPTION_KEY 공유)
+- PII 미전송 설계: 여권번호, DG1(MRZ), DG2(얼굴사진)가 서버에 올라가지 않음 (프라이버시 강화)
+- `trust_material_request` 테이블에 요청 기록 (국가, MRZ nationality/docType 암호화 저장)
+- Request: `{ countryCode, dscIssuerDn?, encryptedMrz?, requestedBy? }`
+- Response: `{ csca: [{subjectDn, derBase64, ...}], linkCertificates: [...], crl: [...] }`
 
 ### v2.1.12 (2026-02-25)
 

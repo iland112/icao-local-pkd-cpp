@@ -8,7 +8,7 @@
  * - PA verification history & statistics
  * - Lightweight PA lookup by subject DN or fingerprint
  *
- * @version 2.12.0
+ * @version 2.13.0
  */
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
@@ -78,4 +78,12 @@ export const paApi = {
   /** Get data groups (DG1, DG2) for a PA verification record */
   getDataGroups: (verificationId: string) =>
     paClient.get(`/pa/${verificationId}/datagroups`),
+
+  /** Fetch trust materials (CSCA/CRL/Link Certificates) for client-side PA */
+  getTrustMaterials: (params: {
+    countryCode: string;
+    dscIssuerDn?: string;
+    encryptedMrz?: string;
+    requestedBy?: string;
+  }) => paClient.post('/pa/trust-materials', params),
 };
