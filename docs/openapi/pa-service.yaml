@@ -6,7 +6,8 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
-    - **v2.1.8** (2026-03-21): POST /api/pa/trust-materials — 클라이언트 PA 지원 API (CSCA/CRL/Link Certificate DER Base64 제공, 암호화 MRZ 감사 추적)
+    - **v2.1.9** (2026-03-21): Client PA 이중 모드 완전 지원 — POST /api/pa/trust-materials/result (결과 보고 + 암호화 MRZ), GET /api/pa/trust-materials/history, GET /api/pa/combined-statistics
+    - **v2.1.8** (2026-03-21): POST /api/pa/trust-materials — 클라이언트 PA 지원 API (CSCA/CRL/Link Certificate DER Base64 제공)
     - **v2.1.7** (2026-03-18): dscAutoRegistration 응답에 pendingApproval, alreadyRegistered, pendingId 필드 추가 (v2.31.0 DSC 승인 워크플로우 대응)
     - **v2.1.6** (2026-02-19): Country code DG1 MRZ fallback (request param → MRZ → DSC C= → XX), requestedBy field
     - **v2.1.5** (2026-02-19): requestedBy field, pkdConformanceText DB persistence, country code "XX" fallback
@@ -17,7 +18,7 @@ info:
     - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 2.1.8
+  version: 2.1.9
   contact:
     name: SMARTCORE Inc.
     email: support@smartcoreinc.com
@@ -132,6 +133,78 @@ paths:
           description: Invalid request (missing countryCode)
         '404':
           description: No trust materials found for the given country
+
+  /api/pa/trust-materials/result:
+    post:
+      tags: [PA]
+      summary: Report client PA verification result with encrypted MRZ
+      operationId: reportTrustMaterialResult
+      description: |
+        클라이언트에서 PA 수행 후 결과와 암호화된 MRZ를 서버에 보고합니다.
+        MRZ는 AES-256-GCM으로 암호화하여 전송하며, 서버에서 복호화 후 재암호화하여 DB에 저장합니다.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requestId, verificationStatus]
+              properties:
+                requestId:
+                  type: string
+                  description: trust-materials 요청 시 반환된 requestId
+                verificationStatus:
+                  type: string
+                  enum: [VALID, INVALID, ERROR]
+                verificationMessage:
+                  type: string
+                trustChainValid:
+                  type: boolean
+                sodSignatureValid:
+                  type: boolean
+                dgHashValid:
+                  type: boolean
+                crlCheckPassed:
+                  type: boolean
+                processingTimeMs:
+                  type: integer
+                encryptedMrz:
+                  type: string
+                  description: AES-256-GCM encrypted MRZ data ("ENC:" + hex)
+      responses:
+        '200':
+          description: Result reported successfully
+        '400':
+          description: Invalid request
+
+  /api/pa/trust-materials/history:
+    get:
+      tags: [PA]
+      summary: Client PA request history
+      operationId: getTrustMaterialHistory
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, default: 20 }
+        - name: country
+          in: query
+          schema: { type: string }
+          description: Filter by country code
+      responses:
+        '200':
+          description: Paginated trust material request history
+
+  /api/pa/combined-statistics:
+    get:
+      tags: [PA]
+      summary: Combined PA statistics (server + client)
+      operationId: getCombinedStatistics
+      responses:
+        '200':
+          description: Combined statistics from server PA and client PA
 
   /api/pa/history:
     get:

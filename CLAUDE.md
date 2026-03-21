@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.37.0
-**Last Updated**: 2026-03-18
+**Current Version**: v2.38.0
+**Last Updated**: 2026-03-21
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -141,6 +141,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - LDAP integration (MMR cluster, Software Load Balancing)
 - Passive Authentication verification (ICAO 9303 Part 10 & 11)
 - Lightweight PA lookup: DSC subject DN or fingerprint → pre-computed trust chain result (no SOD/DG upload)
+- **Client PA support**: Trust Materials API — 클라이언트에서 로컬 PA 수행을 위한 CSCA/CRL/LC 제공 + 암호화 MRZ 결과 보고 + 이력/통계
 - DSC auto-registration from PA verification (source_type='PA_EXTRACTED')
 - **Real-time notification system**: SSE-based backend event broadcasting (NotificationManager singleton, Header Bell UI with unread badge + dropdown panel)
 - **DSC expiration revalidation**: Bulk trust chain re-evaluation for expired DSC certificates (Relay ValidationService + SyncDashboard result dialog)
@@ -299,7 +300,10 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/pa/statistics` - PA statistics
 - `GET /api/pa/{id}` - Verification detail
 - `GET /api/pa/{id}/datagroups` - DataGroups detail
-- `POST /api/pa/trust-materials` - Trust materials for client-side PA (CSCA/CRL/LC DER Base64, encrypted MRZ audit)
+- `POST /api/pa/trust-materials` - Trust materials for client-side PA (CSCA/CRL/LC DER Base64)
+- `POST /api/pa/trust-materials/result` - Report client PA result + encrypted MRZ
+- `GET /api/pa/trust-materials/history` - Client PA request history (paginated, country filter)
+- `GET /api/pa/combined-statistics` - Server PA + Client PA combined statistics
 
 ### PKD Relay (via :8080/api)
 
@@ -335,7 +339,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), AI Analysis (all endpoints), Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, PA trust-materials (request/result/history/combined-statistics), Certificate preview, Code Master (GET), AI Analysis (all endpoints), Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE), CSR Management (all endpoints)
 
 ---
@@ -611,6 +615,24 @@ scripts/
 ---
 
 ## Version History
+
+### v2.38.0 (2026-03-21) - Client PA 지원 (Trust Materials API) + 업로드 중복 표시 개선 + 사용자 관리 감사 연동
+- **Client PA Trust Materials API**: 클라이언트(ICRM)가 로컬에서 PA 수행 가능하도록 4개 엔드포인트 추가
+  - `POST /api/pa/trust-materials`: 국가별 CSCA/CRL/Link Certificate DER(Base64) 제공, requestId 발급
+  - `POST /api/pa/trust-materials/result`: 클라이언트 PA 결과 + 암호화 MRZ 보고 (AES-256-GCM)
+  - `GET /api/pa/trust-materials/history`: 클라이언트 PA 요청 이력 (페이지네이션, 국가 필터)
+  - `GET /api/pa/combined-statistics`: 서버 PA + 클라이언트 PA 통합 통계
+- **PII 보호 설계**: trust-materials 요청 시 MRZ 미전송 → 결과 보고 시에만 암호화 MRZ 전송 → 서버에서 복호화 후 재암호화 저장
+- **DB 스키마**: `trust_material_request` 테이블 — 요청/결과/MRZ 통합 (PostgreSQL + Oracle)
+  - 상태 흐름: REQUESTED → VALID/INVALID/ERROR (결과 보고 시 UPDATE)
+- **PA 이력 페이지 이중 모드**: 서버 PA / 클라이언트 PA 탭 토글, ClientPATable 컴포넌트 분리 (필터+페이지네이션)
+- **PA 대시보드 통합 통계**: 총 검증 카드에 Server N / Client M 분리 표시
+- **업로드 상세 중복/신규 표시 개선**: ValidationSummaryPanel 신규 처리 수 계산 수정, LDIF 중복 계산 기반 표시
+- **LDIF 중복 인증서 기록**: fingerprint 캐시 히트 시 certificate_duplicates 테이블에 기록 → 국가별 트리 표시
+- **사용자 관리 감사 연동**: 카드에 인증/운영 감사 로그 바로 접근 버튼 추가, ?username= URL 파라미터 필터
+- **OperationType**: `PA_TRUST_MATERIALS` 추가
+- OpenAPI pa-service.yaml v2.1.8, PA_API_GUIDE v2.1.13
+- ~30 files changed (6 new, ~24 modified)
 
 ### v2.37.0 (2026-03-18) - 6차 코드 보안 강화 + 권한 관리 수정 + 브랜드 리네이밍 완료
 - **Admin 초기 비밀번호 환경변수 전환**: DB init 스크립트 하드코딩 admin/admin123 제거 → 서비스 기동 시 `ADMIN_INITIAL_PASSWORD` 환경변수로 admin 자동 생성 (ensureAdminUser, Phase 8)
