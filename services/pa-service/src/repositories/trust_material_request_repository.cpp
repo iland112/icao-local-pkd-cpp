@@ -4,6 +4,7 @@
 #include "../auth/personal_info_crypto.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <uuid/uuid.h>
 
 namespace repositories {
 
@@ -44,17 +45,25 @@ std::string TrustMaterialRequestRepository::insert(const RequestRecord& record) 
             auto result = queryExecutor_->executeScalar(query, params);
             return result.asString();
         } else {
+            // Oracle: generate UUID before INSERT to avoid race condition
+            uuid_t uuid;
+            uuid_generate(uuid);
+            char uuidStr[37];
+            uuid_unparse_upper(uuid, uuidStr);
+            std::string generatedId(uuidStr);
+
             const char* query =
                 "INSERT INTO trust_material_request ("
-                "country_code, dsc_issuer_dn, "
+                "id, country_code, dsc_issuer_dn, "
                 "csca_count, link_cert_count, crl_count, "
                 "client_ip, user_agent, requested_by, api_client_id, "
                 "processing_time_ms, status, error_message"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
                 ")";
 
             std::vector<std::string> params = {
+                generatedId,
                 record.countryCode, record.dscIssuerDn,
                 std::to_string(record.cscaCount), std::to_string(record.linkCertCount),
                 std::to_string(record.crlCount),
@@ -63,12 +72,7 @@ std::string TrustMaterialRequestRepository::insert(const RequestRecord& record) 
             };
 
             queryExecutor_->executeCommand(query, params);
-
-            auto idResult = queryExecutor_->executeScalar(
-                "SELECT id FROM trust_material_request WHERE country_code = $1 "
-                "ORDER BY request_timestamp DESC FETCH FIRST 1 ROWS ONLY",
-                {record.countryCode});
-            return idResult.asString();
+            return generatedId;
         }
     } catch (const std::exception& e) {
         spdlog::error("[TrustMaterialRequestRepo] Insert failed: {}", e.what());

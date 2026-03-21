@@ -10,8 +10,7 @@
 #include <openssl/buffer.h>
 #include <spdlog/spdlog.h>
 #include <chrono>
-#include <algorithm>
-#include <cstring>
+#include <cctype>
 
 namespace services {
 
@@ -28,13 +27,11 @@ TrustMaterialService::TrustMaterialService(
 }
 
 std::string TrustMaterialService::base64Encode(const std::vector<uint8_t>& data) {
-    BIO* b64 = BIO_new(BIO_f_base64());
+    if (data.empty()) return "";
     BIO* bmem = BIO_new(BIO_s_mem());
-    if (!b64 || !bmem) {
-        if (b64) BIO_free(b64);
-        if (bmem) BIO_free(bmem);
-        return "";
-    }
+    if (!bmem) return "";
+    BIO* b64 = BIO_new(BIO_f_base64());
+    if (!b64) { BIO_free(bmem); return ""; }
     b64 = BIO_push(b64, bmem);
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     BIO_write(b64, data.data(), static_cast<int>(data.size()));
