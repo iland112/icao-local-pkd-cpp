@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import {
   ChevronLeft,
@@ -15,6 +15,10 @@ import type { TrustMaterialHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { formatDateTime } from '@/utils/dateFormat';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
+
+type ClientPAStatus = 'REQUESTED' | 'VALID' | 'INVALID' | 'ERROR' | '';
 
 export function ClientPATable() {
   const { t } = useTranslation(['pa', 'common']);
@@ -26,6 +30,10 @@ export function ClientPATable() {
 
   // Filters
   const [countryFilter, setCountryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<ClientPAStatus>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [appliedCountry, setAppliedCountry] = useState('');
 
   useEffect(() => {
@@ -37,7 +45,7 @@ export function ClientPATable() {
     try {
       const response = await paApi.getTrustMaterialHistory({
         page,
-        size: pageSize,
+        size: 100, // Fetch more for client-side filtering
         ...(appliedCountry ? { country: appliedCountry } : {}),
       });
       const resData = response.data;
@@ -51,63 +59,176 @@ export function ClientPATable() {
     }
   };
 
-  const applyFilter = () => {
-    setAppliedCountry(countryFilter.toUpperCase());
-    setPage(0);
-  };
+  // Unique countries for dropdown
+  const uniqueCountries = useMemo(() => {
+    const countries = [...new Set(history.map(h => h.countryCode).filter(Boolean))].sort();
+    return countries;
+  }, [history]);
 
-  const clearFilter = () => {
+  // Client-side filtering (same as server PA)
+  const filteredHistory = useMemo(() => {
+    return history.filter((item) => {
+      const matchesStatus = !statusFilter || item.status === statusFilter;
+      const matchesSearch = !searchTerm ||
+        item.requestedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.countryCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.id?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      // Date range filter
+      let matchesDate = true;
+      if (dateFrom || dateTo) {
+        const itemDate = item.requestTimestamp ? new Date(item.requestTimestamp) : null;
+        if (itemDate) {
+          if (dateFrom && itemDate < new Date(dateFrom)) matchesDate = false;
+          if (dateTo) {
+            const endDate = new Date(dateTo);
+            endDate.setHours(23, 59, 59, 999);
+            if (itemDate > endDate) matchesDate = false;
+          }
+        }
+      }
+
+      return matchesStatus && matchesSearch && matchesDate;
+    });
+  }, [history, statusFilter, searchTerm, dateFrom, dateTo]);
+
+  const { sortedData: sortedHistory, sortConfig, requestSort } = useSortableTable<TrustMaterialHistoryItem>(filteredHistory);
+
+  // Paginate sorted+filtered results
+  const paginatedHistory = useMemo(() => {
+    const start = page * pageSize;
+    return sortedHistory.slice(start, start + pageSize);
+  }, [sortedHistory, page, pageSize]);
+
+  const clearFilters = () => {
     setCountryFilter('');
     setAppliedCountry('');
+    setStatusFilter('');
+    setSearchTerm('');
+    setDateFrom('');
+    setDateTo('');
     setPage(0);
   };
 
-  const totalPages = Math.ceil(total / pageSize) || 1;
+  const hasActiveFilters = statusFilter || appliedCountry || searchTerm || dateFrom || dateTo;
+  const totalFiltered = filteredHistory.length;
+  const totalPages = Math.ceil(totalFiltered / pageSize) || 1;
 
   return (
     <div className="space-y-4">
-      {/* Filter Card */}
+      {/* Filter Card — same layout as Server PA */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-purple-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('common:label.searchFilter')}</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('pa:history.filterLabel')}</h3>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex-1 max-w-xs">
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('common:label.country')}</label>
-            <input
-              type="text"
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {/* Country */}
+          <div>
+            <label htmlFor="cpa-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {t('pa:history.filterCountry')}
+            </label>
+            <select
+              id="cpa-country"
+              name="countryFilter"
               value={countryFilter}
-              onChange={(e) => setCountryFilter(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && applyFilter()}
-              placeholder="KR, US, JP..."
-              className="w-full px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-purple-500"
+              onChange={(e) => { setCountryFilter(e.target.value); setAppliedCountry(e.target.value); setPage(0); }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">{t('pa:history.allCountries')}</option>
+              {uniqueCountries.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Status */}
+          <div>
+            <label htmlFor="cpa-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {t('pa:history.filterStatus')}
+            </label>
+            <select
+              id="cpa-status"
+              name="statusFilter"
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value as ClientPAStatus); setPage(0); }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            >
+              <option value="">{t('pa:history.allStatuses')}</option>
+              <option value="REQUESTED">REQUESTED</option>
+              <option value="VALID">{t('common:status.valid')}</option>
+              <option value="INVALID">{t('common:status.invalid')}</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label htmlFor="cpa-date-from" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {t('pa:history.dateFrom')}
+            </label>
+            <input
+              id="cpa-date-from"
+              name="dateFrom"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); setPage(0); }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
           </div>
-          <div className="flex items-center gap-2 pt-5">
-            <button
-              onClick={applyFilter}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-purple-500 hover:bg-purple-600 rounded-lg transition-colors"
-            >
-              <Search className="w-3.5 h-3.5" />
+
+          {/* Date To */}
+          <div>
+            <label htmlFor="cpa-date-to" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {t('pa:history.dateTo')}
+            </label>
+            <input
+              id="cpa-date-to"
+              name="dateTo"
+              type="date"
+              value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); setPage(0); }}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          {/* Search + Actions */}
+          <div>
+            <label htmlFor="cpa-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               {t('common:button.search')}
-            </button>
-            {appliedCountry && (
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input
+                  id="cpa-search"
+                  name="search"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setPage(0); }}
+                  placeholder={t('pa:history.searchPlaceholder')}
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                />
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  title={t('common:button.reset')}
+                >
+                  <X className="w-4 h-4 text-gray-400" />
+                </button>
+              )}
               <button
-                onClick={clearFilter}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                onClick={fetchHistory}
+                disabled={loading}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title={t('common:button.refresh')}
               >
-                <X className="w-3.5 h-3.5" />
-                {t('common:button.reset')}
+                <RefreshCw className={cn('w-4 h-4 text-gray-500', loading && 'animate-spin')} />
               </button>
-            )}
-            <button
-              onClick={fetchHistory}
-              disabled={loading}
-              className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            >
-              <RefreshCw className={cn('w-4 h-4 text-gray-500', loading && 'animate-spin')} />
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -118,21 +239,21 @@ export function ClientPATable() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 bg-slate-100 dark:bg-slate-800">
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.country')}</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.passportNumber')}</th>
+                <SortableHeader label={t('common:label.country')} sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
+                <SortableHeader label={t('pa:history.passportNumber')} sortKey="mrzNationality" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">CSCA/CRL</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.status')}</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.verificationResult')}</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.timestamp')}</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.requestedBy')}</th>
+                <SortableHeader label={t('common:label.status')} sortKey="status" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
+                <SortableHeader label={t('pa:history.verificationResult')} sortKey="verificationStatus" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
+                <SortableHeader label={t('common:label.timestamp')} sortKey="requestTimestamp" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
+                <SortableHeader label={t('pa:history.requestedBy')} sortKey="requestedBy" sortConfig={sortConfig} onSort={requestSort} className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
               {loading ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400"><Loader2 className="w-5 h-5 animate-spin inline-block mr-2" />{t('common:table.loading')}</td></tr>
-              ) : history.length === 0 ? (
+              ) : paginatedHistory.length === 0 ? (
                 <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('common:table.noData')}</td></tr>
-              ) : history.map((item) => (
+              ) : paginatedHistory.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center justify-center gap-1.5">
@@ -178,13 +299,16 @@ export function ClientPATable() {
           </table>
         </div>
         {/* Pagination */}
-        {total > pageSize && (
+        {totalFiltered > pageSize && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
-            <span className="text-xs text-gray-500 dark:text-gray-400">{t('common:label.total')} {total.toLocaleString()}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t('common:label.total')} {totalFiltered.toLocaleString()}
+              {totalFiltered !== total && <span className="text-gray-400"> / {total.toLocaleString()}</span>}
+            </span>
             <div className="flex items-center gap-2">
               <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
               <span className="text-xs text-gray-500 dark:text-gray-400">{page + 1} / {totalPages}</span>
-              <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * pageSize >= total} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setPage(p => p + 1)} disabled={(page + 1) * pageSize >= totalFiltered} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>
         )}
