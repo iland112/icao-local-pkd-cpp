@@ -1,6 +1,7 @@
 {
   "home": "Home",
   "sections": {
+    "icaoIntegration": "ICAO Integration",
     "certManagement": "Certificate Management",
     "forgeryDetection": "Forgery Detection",
     "reportsAnalysis": "Reports & Analysis",

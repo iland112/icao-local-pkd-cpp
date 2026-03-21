@@ -70,16 +70,22 @@ interface NavSection {
 function buildNavSections(): NavSection[] {
   return [
     {
-      titleKey: 'sections.certManagement',
-      icon: <FolderKey className="w-5 h-5 flex-shrink-0" />,
+      titleKey: 'sections.icaoIntegration',
+      icon: <Globe className="w-5 h-5 flex-shrink-0" />,
       items: [
         { path: '/icao', labelKey: 'menu.icaoVersion', icon: <Zap className="w-4 h-4" />, permission: 'icao:read' },
         { path: '/upload', labelKey: 'menu.fileUpload', icon: <Upload className="w-4 h-4" />, permission: 'upload:write' },
+        { path: '/sync/icao-ldap', labelKey: 'menu.icaoLdapSync', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
+      ],
+    },
+    {
+      titleKey: 'sections.certManagement',
+      icon: <FolderKey className="w-5 h-5 flex-shrink-0" />,
+      items: [
         { path: '/upload/certificate', labelKey: 'menu.certUpload', icon: <FileText className="w-4 h-4" />, permission: 'upload:write' },
         { path: '/pkd/certificates', labelKey: 'menu.certSearch', icon: <Key className="w-4 h-4" />, permission: 'cert:read' },
         { path: '/upload-history', labelKey: 'menu.uploadHistory', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
         { path: '/sync', labelKey: 'menu.syncStatus', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
-        { path: '/sync/icao-ldap', labelKey: 'menu.icaoLdapSync', icon: <Globe className="w-4 h-4" />, permission: 'sync:read' },
       ],
     },
     {
