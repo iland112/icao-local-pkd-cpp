@@ -388,22 +388,26 @@ flowchart LR
 flowchart LR
     subgraph API["API Layer"]
         Verify["PA Verify API<br/>SOD and DG"]
+        TrustMat["Trust Materials API<br/>Client PA"]
+        TrustResult["Result Report API<br/>MRZ + Result"]
         ParseSOD["SOD Parsing<br/>Metadata"]
         ParseDG1["DG1 Parsing<br/>MRZ"]
         ParseDG2["DG2 Parsing<br/>Face"]
-        Stats["Statistics<br/>Metrics"]
+        Stats["Statistics<br/>Combined"]
     end
 
     subgraph Logic["Business Logic"]
         SODVerify["SOD Verifier<br/>CMS"]
         HashVerify["Hash Verifier<br/>DG"]
         ChainVerify["Trust Chain<br/>CSCA-DSC"]
+        TrustMatSvc["Trust Material<br/>Service"]
         MRZParser["MRZ Parser<br/>TD1/TD2/TD3"]
         ImageExtractor["Image Extractor<br/>JPEG"]
     end
 
     subgraph DataAccess["Data Access"]
         PARepo["PA Repository<br/>PostgreSQL"]
+        TMRepo["Trust Material<br/>Request Repo"]
         LDAPRepo["LDAP Repository<br/>Certificates"]
     end
 
@@ -419,6 +423,13 @@ flowchart LR
     Verify --> SODVerify
     Verify --> HashVerify
     Verify --> ChainVerify
+
+    TrustMat --> TrustMatSvc
+    TrustResult --> TrustMatSvc
+    TrustResult --> MRZParser
+    TrustMatSvc --> LDAPRepo
+    TrustMatSvc --> TMRepo
+    Stats --> TMRepo
 
     ParseSOD --> SODVerify
     ParseDG1 --> MRZParser
@@ -446,9 +457,11 @@ flowchart LR
 
 **Key Features**:
 - ICAO 9303 PA Compliance (Part 10, 11, 12)
+- **Dual PA Mode**: Server PA (full 8-step) + Client PA (Trust Materials API)
 - SOD CMS Verification + DG Hash Validation
 - Trust Chain Validation (icao::validation shared library)
 - CRL Revocation Checking (RFC 5280)
+- Client PA: CSCA/CRL/LC DER Base64 제공 → 클라이언트 로컬 PA → 결과+암호화 MRZ 보고
 - DSC Auto-Registration (PA_EXTRACTED source type)
 - DSC Non-Conformant (nc-data) Support
 - MRZ Parsing (TD1/TD2/TD3) + Face Image Extraction (JPEG2000 conversion)
@@ -2048,7 +2061,7 @@ Handlers -> Services -> LDAP Providers -> Repositories -> QueryExecutor -> LDAP 
 | Service | ServiceContainer | Key Components |
 |--------|:----------------:|-----------|
 | PKD Management | O | 16 repos, 8 services, 9 handlers |
-| PA Service | O | 4 repos, 2 parsers, 3 services |
+| PA Service | O | 5 repos, 2 parsers, 4 services |
 | PKD Relay | O | 5 repos, 3 services, SyncScheduler |
 | Monitoring | - | DB-independent (direct HTTP/system calls) |
 
