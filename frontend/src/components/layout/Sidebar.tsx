@@ -31,6 +31,7 @@ import {
   Settings,
   FlaskConical,
   FileKey,
+  Globe,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 
@@ -78,6 +79,7 @@ function buildNavSections(): NavSection[] {
         { path: '/pkd/certificates', labelKey: 'menu.certSearch', icon: <Key className="w-4 h-4" />, permission: 'cert:read' },
         { path: '/upload-history', labelKey: 'menu.uploadHistory', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
         { path: '/sync', labelKey: 'menu.syncStatus', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
+        { path: '/sync/icao-ldap', labelKey: 'menu.icaoLdapSync', icon: <Globe className="w-4 h-4" />, permission: 'sync:read' },
       ],
     },
     {

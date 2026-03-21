@@ -14,6 +14,7 @@
     "uploadHistory": "업로드 이력",
     "pendingDsc": "DSC 등록 승인",
     "syncStatus": "동기화 상태",
+    "icaoLdapSync": "ICAO PKD 동기화",
     "csrManagement": "CSR 관리",
     "paVerify": "PA 검증 수행",
     "verifyHistory": "검증 이력",

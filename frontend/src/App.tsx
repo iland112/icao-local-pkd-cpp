@@ -18,6 +18,7 @@ const PAHistory = lazy(() => import('./pages/PAHistory'));
 const PADetail = lazy(() => import('./pages/PADetail'));
 const PADashboard = lazy(() => import('./pages/PADashboard'));
 const SyncDashboard = lazy(() => import('./pages/SyncDashboard'));
+const IcaoLdapSync = lazy(() => import('./pages/IcaoLdapSync'));
 const IcaoStatus = lazy(() => import('./pages/IcaoStatus'));
 const MonitoringDashboard = lazy(() => import('./pages/MonitoringDashboard'));
 const AiAnalysisDashboard = lazy(() => import('./pages/AiAnalysisDashboard'));
@@ -104,6 +105,7 @@ function App() {
             <Route path="pa/:paId" element={<Suspense fallback={<PageLoader />}><PADetail /></Suspense>} />
             <Route path="pa/dashboard" element={<Suspense fallback={<PageLoader />}><PADashboard /></Suspense>} />
             <Route path="sync" element={<Suspense fallback={<PageLoader />}><SyncDashboard /></Suspense>} />
+            <Route path="sync/icao-ldap" element={<Suspense fallback={<PageLoader />}><IcaoLdapSync /></Suspense>} />
             <Route path="icao" element={<Suspense fallback={<PageLoader />}><IcaoStatus /></Suspense>} />
             <Route path="monitoring" element={<Suspense fallback={<PageLoader />}><MonitoringDashboard /></Suspense>} />
             <Route path="ai/analysis" element={<Suspense fallback={<PageLoader />}><AiAnalysisDashboard /></Suspense>} />
