@@ -43,17 +43,15 @@ export default function IcaoLdapSync() {
     } catch { /* non-critical */ }
   }, []);
 
-  // SSE listener
+  // SSE listener for real-time sync progress
   useEffect(() => {
-    const baseUrl = window.location.origin.includes(':13080')
-      ? window.location.origin.replace(':13080', ':18080')
-      : window.location.origin.replace(/:\d+$/, '') + ':18080';
-    const apiBase = window.location.port === '80' || window.location.port === ''
-      ? window.location.origin : baseUrl;
-    const es = new EventSource(`${apiBase}/api/sync/notifications/stream`);
+    // Connect via API Gateway (same origin as the page)
+    const sseUrl = `${window.location.origin}/api/sync/notifications/stream`;
+    const es = new EventSource(sseUrl);
     eventSourceRef.current = es;
 
-    es.onmessage = (event) => {
+    // Server sends SSE with event type "notification"
+    es.addEventListener('notification', (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'ICAO_LDAP_SYNC_PROGRESS') {
@@ -68,7 +66,20 @@ export default function IcaoLdapSync() {
             }, 2000);
           }
         }
-      } catch { /* ignore */ }
+        // Also handle start/complete notifications to update syncing state
+        if (data.type === 'ICAO_LDAP_SYNC_STARTED') {
+          setSyncing(true);
+        }
+        if (data.type === 'ICAO_LDAP_SYNC_COMPLETED' || data.type === 'ICAO_LDAP_SYNC_FAILED') {
+          setSyncing(false);
+          fetchStatus();
+          fetchHistory();
+        }
+      } catch { /* ignore parse errors */ }
+    });
+
+    es.onerror = () => {
+      // SSE reconnect handled by browser automatically
     };
 
     return () => { es.close(); };
@@ -94,6 +105,20 @@ export default function IcaoLdapSync() {
     setProgress(null);
     try {
       await syncApi.triggerIcaoLdapSync();
+      // Polling fallback: if SSE doesn't deliver progress, poll status
+      const pollInterval = setInterval(async () => {
+        try {
+          const res = await syncApi.getIcaoLdapSyncStatus();
+          setStatus(res.data);
+          if (!res.data.running) {
+            clearInterval(pollInterval);
+            setSyncing(false);
+            fetchHistory();
+          }
+        } catch { /* ignore */ }
+      }, 3000);
+      // Auto-clear after 10 min max
+      setTimeout(() => clearInterval(pollInterval), 600000);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '동기화 트리거 실패');
       setSyncing(false);
