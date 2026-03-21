@@ -2,8 +2,9 @@
  * @file icao_ldap_client.h
  * @brief LDAP V3 client for connecting to ICAO PKD (simulation or production)
  *
- * Connects to the ICAO PKD LDAP server and retrieves certificates/CRLs
- * using standard LDAP V3 search operations.
+ * Supports two authentication modes:
+ * 1. Simple Bind (simulation): DN + password
+ * 2. TLS Mutual Auth (production): Client certificate + SASL EXTERNAL
  */
 #pragma once
 
@@ -19,11 +20,26 @@ typedef struct ldap LDAP;
 namespace icao {
 namespace relay {
 
+/// TLS configuration for ICAO PKD LDAP client certificate authentication
+struct IcaoLdapTlsConfig {
+    bool enabled = false;
+    std::string certFile;    // Client certificate PEM file path
+    std::string keyFile;     // Client private key PEM file path
+    std::string caCertFile;  // CA certificate PEM file path (D-Trust CA)
+};
+
 class IcaoLdapClient {
 public:
+    /// Constructor for Simple Bind mode (simulation)
     IcaoLdapClient(const std::string& host, int port,
                    const std::string& bindDn, const std::string& bindPassword,
                    const std::string& baseDn);
+
+    /// Constructor for TLS Mutual Auth mode (production ICAO PKD)
+    IcaoLdapClient(const std::string& host, int port,
+                   const std::string& baseDn,
+                   const IcaoLdapTlsConfig& tlsConfig);
+
     ~IcaoLdapClient();
 
     // Non-copyable
@@ -58,6 +74,12 @@ public:
     int getTotalEntryCount();
 
 private:
+    /// Connect with Simple Bind (simulation mode)
+    bool connectSimpleBind();
+
+    /// Connect with TLS + SASL EXTERNAL (production mode)
+    bool connectTlsMutualAuth();
+
     /// Generic LDAP search with result parsing
     std::vector<IcaoLdapCertEntry> searchEntries(
         const std::string& searchBase,
@@ -79,6 +101,7 @@ private:
     std::string bindDn_;
     std::string bindPassword_;
     std::string baseDn_;
+    IcaoLdapTlsConfig tlsConfig_;
     LDAP* ldap_ = nullptr;
 };
 

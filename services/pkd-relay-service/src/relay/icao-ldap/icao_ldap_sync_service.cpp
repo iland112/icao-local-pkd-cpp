@@ -79,9 +79,24 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
     spdlog::info("[IcaoLdapSync] Starting {} sync (triggered by: {})", result.syncType, triggeredBy);
 
     try {
-        IcaoLdapClient client(config_.icaoLdapHost, config_.icaoLdapPort,
-                              config_.icaoLdapBindDn, config_.icaoLdapBindPassword,
-                              config_.icaoLdapBaseDn);
+        // Create client based on auth mode
+        std::unique_ptr<IcaoLdapClient> clientPtr;
+        if (config_.icaoLdapUseTls) {
+            IcaoLdapTlsConfig tlsCfg;
+            tlsCfg.enabled = true;
+            tlsCfg.certFile = config_.icaoLdapTlsCertFile;
+            tlsCfg.keyFile = config_.icaoLdapTlsKeyFile;
+            tlsCfg.caCertFile = config_.icaoLdapTlsCaCertFile;
+            clientPtr = std::make_unique<IcaoLdapClient>(
+                config_.icaoLdapHost, config_.icaoLdapPort,
+                config_.icaoLdapBaseDn, tlsCfg);
+        } else {
+            clientPtr = std::make_unique<IcaoLdapClient>(
+                config_.icaoLdapHost, config_.icaoLdapPort,
+                config_.icaoLdapBindDn, config_.icaoLdapBindPassword,
+                config_.icaoLdapBaseDn);
+        }
+        auto& client = *clientPtr;
 
         if (!client.connect()) {
             result.status = "FAILED";

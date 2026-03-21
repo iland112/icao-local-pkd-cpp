@@ -67,6 +67,11 @@ struct Config {
     std::string icaoLdapBindPassword;
     std::string icaoLdapBaseDn = "dc=download,dc=pkd,dc=icao,dc=int";
     int icaoLdapSyncIntervalMinutes = 60;  // Sync interval in minutes
+    // TLS mutual authentication (production ICAO PKD)
+    bool icaoLdapUseTls = false;           // true = LDAPS + SASL EXTERNAL
+    std::string icaoLdapTlsCertFile;       // Client certificate PEM path
+    std::string icaoLdapTlsKeyFile;        // Client private key PEM path
+    std::string icaoLdapTlsCaCertFile;     // CA certificate PEM path (D-Trust CA)
     /// @}
 
     /** @brief Load configuration from environment variables */
@@ -99,6 +104,11 @@ struct Config {
         if (auto e = std::getenv("ICAO_LDAP_BIND_PASSWORD")) icaoLdapBindPassword = e;
         if (auto e = std::getenv("ICAO_LDAP_BASE_DN")) icaoLdapBaseDn = e;
         if (auto e = std::getenv("ICAO_LDAP_SYNC_INTERVAL_MINUTES")) icaoLdapSyncIntervalMinutes = std::stoi(e);
+        // TLS mutual authentication
+        if (auto e = std::getenv("ICAO_LDAP_USE_TLS")) icaoLdapUseTls = (std::string(e) == "true");
+        if (auto e = std::getenv("ICAO_LDAP_TLS_CERT_FILE")) icaoLdapTlsCertFile = e;
+        if (auto e = std::getenv("ICAO_LDAP_TLS_KEY_FILE")) icaoLdapTlsKeyFile = e;
+        if (auto e = std::getenv("ICAO_LDAP_TLS_CA_CERT_FILE")) icaoLdapTlsCaCertFile = e;
     }
 
     /** @brief Validate that required credentials are set */

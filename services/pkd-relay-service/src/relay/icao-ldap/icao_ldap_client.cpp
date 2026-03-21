@@ -10,10 +10,18 @@
 namespace icao {
 namespace relay {
 
+// Simple Bind constructor (simulation mode)
 IcaoLdapClient::IcaoLdapClient(const std::string& host, int port,
                                const std::string& bindDn, const std::string& bindPassword,
                                const std::string& baseDn)
     : host_(host), port_(port), bindDn_(bindDn), bindPassword_(bindPassword), baseDn_(baseDn)
+{}
+
+// TLS Mutual Auth constructor (production ICAO PKD)
+IcaoLdapClient::IcaoLdapClient(const std::string& host, int port,
+                               const std::string& baseDn,
+                               const IcaoLdapTlsConfig& tlsConfig)
+    : host_(host), port_(port), baseDn_(baseDn), tlsConfig_(tlsConfig)
 {}
 
 IcaoLdapClient::~IcaoLdapClient() {
@@ -23,6 +31,13 @@ IcaoLdapClient::~IcaoLdapClient() {
 bool IcaoLdapClient::connect() {
     if (ldap_) disconnect();
 
+    if (tlsConfig_.enabled) {
+        return connectTlsMutualAuth();
+    }
+    return connectSimpleBind();
+}
+
+bool IcaoLdapClient::connectSimpleBind() {
     std::string uri = "ldap://" + host_ + ":" + std::to_string(port_);
     int rc = ldap_initialize(&ldap_, uri.c_str());
     if (rc != LDAP_SUCCESS) {
@@ -31,28 +46,106 @@ bool IcaoLdapClient::connect() {
         return false;
     }
 
-    // Set LDAP V3
     int version = LDAP_VERSION3;
     ldap_set_option(ldap_, LDAP_OPT_PROTOCOL_VERSION, &version);
 
-    // Set network timeout
-    struct timeval tv = {10, 0};  // 10 seconds
+    struct timeval tv = {10, 0};
     ldap_set_option(ldap_, LDAP_OPT_NETWORK_TIMEOUT, &tv);
 
-    // Bind
     struct berval cred;
     cred.bv_val = const_cast<char*>(bindPassword_.c_str());
     cred.bv_len = bindPassword_.length();
 
     rc = ldap_sasl_bind_s(ldap_, bindDn_.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] Bind failed to {}: {}", uri, ldap_err2string(rc));
+        spdlog::error("[IcaoLdapClient] Simple bind failed to {}: {}", uri, ldap_err2string(rc));
         ldap_unbind_ext_s(ldap_, nullptr, nullptr);
         ldap_ = nullptr;
         return false;
     }
 
-    spdlog::info("[IcaoLdapClient] Connected to ICAO PKD LDAP: {}", uri);
+    spdlog::info("[IcaoLdapClient] Connected (Simple Bind): {}", uri);
+    return true;
+}
+
+bool IcaoLdapClient::connectTlsMutualAuth() {
+    // LDAPS URI (TLS from the start)
+    std::string uri = "ldaps://" + host_ + ":" + std::to_string(port_);
+
+    spdlog::info("[IcaoLdapClient] Connecting with TLS mutual auth to {}", uri);
+    spdlog::info("[IcaoLdapClient]   Client cert: {}", tlsConfig_.certFile);
+    spdlog::info("[IcaoLdapClient]   Client key:  {}", tlsConfig_.keyFile);
+    spdlog::info("[IcaoLdapClient]   CA cert:     {}", tlsConfig_.caCertFile);
+
+    // Validate TLS config
+    if (tlsConfig_.certFile.empty() || tlsConfig_.keyFile.empty()) {
+        spdlog::error("[IcaoLdapClient] TLS cert/key files not configured");
+        return false;
+    }
+
+    // Set TLS options BEFORE ldap_initialize (global options for OpenLDAP)
+    int rc;
+
+    // CA certificate for server verification
+    if (!tlsConfig_.caCertFile.empty()) {
+        rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_CACERTFILE, tlsConfig_.caCertFile.c_str());
+        if (rc != LDAP_SUCCESS) {
+            spdlog::error("[IcaoLdapClient] Failed to set TLS CA cert: {}", ldap_err2string(rc));
+            return false;
+        }
+    }
+
+    // Client certificate (ICAO-issued)
+    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_CERTFILE, tlsConfig_.certFile.c_str());
+    if (rc != LDAP_SUCCESS) {
+        spdlog::error("[IcaoLdapClient] Failed to set TLS client cert: {}", ldap_err2string(rc));
+        return false;
+    }
+
+    // Client private key (from CSR generation)
+    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_KEYFILE, tlsConfig_.keyFile.c_str());
+    if (rc != LDAP_SUCCESS) {
+        spdlog::error("[IcaoLdapClient] Failed to set TLS client key: {}", ldap_err2string(rc));
+        return false;
+    }
+
+    // Require server certificate verification
+    int requireCert = LDAP_OPT_X_TLS_DEMAND;
+    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_REQUIRE_CERT, &requireCert);
+    if (rc != LDAP_SUCCESS) {
+        spdlog::warn("[IcaoLdapClient] Failed to set TLS require cert: {}", ldap_err2string(rc));
+    }
+
+    // Force new TLS context with updated options
+    int newCtx = 0;
+    ldap_set_option(nullptr, LDAP_OPT_X_TLS_NEWCTX, &newCtx);
+
+    // Initialize LDAP connection
+    rc = ldap_initialize(&ldap_, uri.c_str());
+    if (rc != LDAP_SUCCESS) {
+        spdlog::error("[IcaoLdapClient] ldap_initialize failed for {}: {}", uri, ldap_err2string(rc));
+        ldap_ = nullptr;
+        return false;
+    }
+
+    int version = LDAP_VERSION3;
+    ldap_set_option(ldap_, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+    struct timeval tv = {15, 0};  // 15s timeout for TLS handshake
+    ldap_set_option(ldap_, LDAP_OPT_NETWORK_TIMEOUT, &tv);
+
+    // SASL EXTERNAL bind — authentication via client certificate
+    // Empty DN + "EXTERNAL" mechanism = server extracts identity from TLS cert
+    struct berval cred = {0, const_cast<char*>("")};
+    rc = ldap_sasl_bind_s(ldap_, "", "EXTERNAL", &cred, nullptr, nullptr, nullptr);
+    if (rc != LDAP_SUCCESS) {
+        spdlog::error("[IcaoLdapClient] SASL EXTERNAL bind failed to {}: {}", uri, ldap_err2string(rc));
+        ldap_unbind_ext_s(ldap_, nullptr, nullptr);
+        ldap_ = nullptr;
+        return false;
+    }
+
+    spdlog::info("[IcaoLdapClient] Connected (TLS Mutual Auth / SASL EXTERNAL): {}", uri);
     return true;
 }
 

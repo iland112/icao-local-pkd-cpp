@@ -301,20 +301,26 @@ services:
       - SYNC_INTERVAL_MINUTES=5
       - AUTO_RECONCILE=true
       - MAX_RECONCILE_BATCH_SIZE=100
-      # ICAO PKD LDAP Simulation Sync (v2.39.0)
+      # ICAO PKD LDAP Sync (v2.39.0)
       - ICAO_LDAP_SYNC_ENABLED=${ICAO_LDAP_SYNC_ENABLED:-false}
-      - ICAO_LDAP_HOST=icao-pkd-ldap
-      - ICAO_LDAP_PORT=389
-      - ICAO_LDAP_BIND_DN=cn=admin,dc=icao,dc=int
+      - ICAO_LDAP_HOST=${ICAO_LDAP_HOST:-icao-pkd-ldap}
+      - ICAO_LDAP_PORT=${ICAO_LDAP_PORT:-389}
+      - ICAO_LDAP_BIND_DN=${ICAO_LDAP_BIND_DN:-cn=admin,dc=icao,dc=int}
       - ICAO_LDAP_BIND_PASSWORD=${ICAO_LDAP_ADMIN_PASSWORD:-icao_sim_password}
-      - ICAO_LDAP_BASE_DN=dc=download,dc=pkd,dc=icao,dc=int
+      - ICAO_LDAP_BASE_DN=${ICAO_LDAP_BASE_DN:-dc=download,dc=pkd,dc=icao,dc=int}
       - ICAO_LDAP_SYNC_INTERVAL_MINUTES=${ICAO_LDAP_SYNC_INTERVAL_MINUTES:-60}
+      # TLS Mutual Auth (production: ICAO_LDAP_USE_TLS=true)
+      - ICAO_LDAP_USE_TLS=${ICAO_LDAP_USE_TLS:-false}
+      - ICAO_LDAP_TLS_CERT_FILE=${ICAO_LDAP_TLS_CERT_FILE:-}
+      - ICAO_LDAP_TLS_KEY_FILE=${ICAO_LDAP_TLS_KEY_FILE:-}
+      - ICAO_LDAP_TLS_CA_CERT_FILE=${ICAO_LDAP_TLS_CA_CERT_FILE:-}
     depends_on:
       openldap1:
         condition: service_healthy
       # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
       - ../.docker-data/sync-logs:/app/logs
+      - ../.docker-data/icao-pkd-tls:/app/icao-tls:ro   # ICAO PKD TLS client certs (production)
     networks:
       - pkd-network
     restart: unless-stopped
