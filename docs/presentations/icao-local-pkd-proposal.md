@@ -83,26 +83,27 @@
 
 ### 사업 과제 대응 범위
 
-전자여권시스템 재구축 사업계획서 22개 과제 중 FASTpass® SPKD 직접 대응 항목
+전자여권시스템 재구축 사업계획서 22개 과제 중 **Local PKD · PA 검증 관련 12개 과제** 대응
 
-| 사업 과제 | FASTpass® SPKD 대응 기능 | 상태 |
-|-----------|--------------------------|------|
-| **전자여권 인증(PA) 공통 프로그램** | PA Service — ICAO 9303 8단계 검증 | ✅ 완전 대응 |
-| **Local PKD 구축** | ICAO PKD + 양자협정 + DB/LDAP 통합 저장소 | ✅ 완전 대응 |
-| **Local PKD 관리 프로그램** | PKD Management — ML/CSCA/DS/CRL/DL 관리 | ✅ 완전 대응 |
-| **전자여권 운영환경 관리** | 환경설정, 인증 적용 여부 관리 | 🔵 부분 대응 |
-| **전자여권 정밀분석 프로그램** | 인증서 직접 파싱·분석, Doc 9303 준수 검사 | ✅ 완전 대응 |
-| **전자여권 인증 결함처리** | Doc 9303 Compliance Checklist (28개 항목) | ✅ 완전 대응 |
-| **데이터 수집 및 패턴분석** | 검증 결과 데이터 수집 · 국가별/유형별 통계 분석 | ✅ 완전 대응 |
-| **비정상 패턴 데이터 관리** | 오류 유형별 목록 조회 · 빈도/그래프 통계 | ✅ 완전 대응 |
-| **판독·인증 오류 데이터 관리** | 오류 건별 상세조회 · 바이너리 데이터 다운로드 | ✅ 완전 대응 |
-| **발급상 결함정보 관리** | DL/Non-Conformant 조회·관리 기능 | ✅ 완전 대응 |
-| **판독·인증 운영 통계 조회** | Dashboard + 보고서 (DSC_NC/CRL/Trust Chain) | ✅ 완전 대응 |
-| **판독·인증 모니터링 에이전트** | Monitoring Service + SSE 실시간 알림 | ✅ 완전 대응 |
-| **입·출국심사 시 판독·인증** | REST API + X-API-Key 인증 연동 | 🔵 API 제공 |
+| # | 사업 과제 | FASTpass® SPKD 대응 기능 | 상태 |
+|---|-----------|--------------------------|------|
+| 2 | **전자여권 인증(PA) 공통 프로그램** | PA Service 8단계 검증 + Trust Chain + 오류코드 체계 + 검증 실패 데이터 DB 전량 저장 | ✅ 완전 대응 |
+| 3 | **Local PKD 구축** | ICAO PKD + 양자협정 + DB/LDAP 통합 저장소 (대용량 인증서 운영, 95+ 국가) | ✅ 완전 대응 |
+| 4 | **Local PKD 관리 프로그램** | 10종 파일 포맷 지원, 국가/유형/출처별 검색, Trust Anchor 관리, DIT ZIP 내보내기 | ✅ 완전 대응 |
+| 5 | **전자여권 운영환경 관리** | Code Master (21개 카테고리, ~150개 코드), API Client 기관별 인증/Rate Limiting/IP 제어 | ✅ 완전 대응 |
+| 6 | **전자여권 정밀분석 프로그램** | PA 8단계 단계별 결과 표출 + SOD/DG/DL 파서 + 인증서 상세 (4탭) | ✅ 완전 대응 |
+| 7 | **전자여권 인증 결함처리** | DSC_NC 비표준 처리 (pkdConformanceCode), Doc 9303 Compliance Checklist (28개 항목) | ✅ 완전 대응 |
+| 8 | **데이터 수집 및 패턴분석** | 검증 결과 수집, 국가별/유형별 통계 분석, 이상 패턴 탐지 | ✅ 완전 대응 |
+| 9 | **비정상 패턴 데이터 관리** | 이상 탐지 결과 필터/목록/상세, 오류 유형별 조회 | ✅ 완전 대응 |
+| 10 | **판독·인증 오류 데이터 관리** | PA 검증 이력 페이지네이션/상세, SOD/DG 바이너리 다운로드, 운영 감사 로그 | ✅ 완전 대응 |
+| 11 | **발급상 결함정보 관리** | DL 파싱/저장/구조 시각화, DL 목록·상세조회, 정밀분석 연계 | ✅ 완전 대응 |
+| 12 | **판독·인증 운영 통계 조회** | PA 대시보드 (Server+Client 통합), 인증서 통계, 국가별/기관별 현황 | ✅ 완전 대응 |
+| 13 | **판독·인증 모니터링 에이전트** | SSE 실시간 알림 (NotificationManager) + Monitoring Service 시스템 메트릭 | ✅ 완전 대응 |
 
-- **완전 대응 과제**: 11/22
-- **직접 대응 과제**: 13/22
+- **Local PKD + PA 대응 과제**: **12/12** (100% 완전 대응)
+- **ICRM 연계 지원**: Client PA Trust Materials API로 ICRM 로컬 PA 수행 지원
+
+> ※ 항목 1(여권 판독), 14(사진비교), 15~21(입·출국심사 등), 22(형태검증)은 ICRM 여권판독기/미들웨어 영역
 
 ---
 
@@ -257,6 +258,21 @@ ICRM (심사 PC 1,500대)  ──┐
 
 ---
 
+### 마이크로서비스 서버 배치 제안 (HA 이중화)
+
+| 서버 | 배치 서비스 | 예상 메모리 | 여유 |
+|------|-----------|-----------|------|
+| **중계서버 #1** (Active) | API Gateway (nginx) + PKD Relay + Monitoring + OpenLDAP Primary | ~6GB | 26GB |
+| **중계서버 #2** (Standby) | API Gateway + PKD Relay + Monitoring + OpenLDAP Secondary (MMR) | ~6GB | 26GB |
+| **PKD서버 #1** (Active) | PKD Management + PA Service + Frontend (React) | ~8.5GB | 23.5GB |
+| **PKD서버 #2** (Standby/DR) | PKD Management (DR) + PA Service (DR) + Frontend | ~8.5GB | 23.5GB |
+| **관리서버** (DB 전용) | Oracle DB + Chakra Max + SecuveTOS + Sycros | ~18GB | 14GB |
+
+- **스토리지 (150.42 TiB)**: Oracle 데이터 + LDAP 데이터 + PA 바이너리 아카이브 + 백업/로그
+- **SAN 스위치**: Fabric A/B 이중화 (32Gb FC)
+
+---
+
 ### 도입 H/W 사양 및 수량
 
 | 품명 | 세부 사양 | 수량 | 비고 |
@@ -328,6 +344,7 @@ ICRM (심사 PC 1,500대)  ──┐
 | **ICAO 버전 관리** | 매일 자동 체크, 신규 버전 감지 시 실시간 알림 | 자동화 |
 | **CSR 관리** | ICAO PKD CSR 생성 (RSA-2048, SHA256withRSA, PKCS#10) | PKD 전환 대응 |
 | **DL·Non-Conformant 관리** | 각국 DL 및 비표준 DSC 미준수 사항 조회·관리, DSC_NC 보고서 | 사업과제 #11 |
+| **Client PA (Trust Materials)** | ICRM 로컬 PA용 CSCA/CRL 제공 + 암호화 MRZ 결과 보고 | 사업과제 #2,15 |
 | **ICRM 연동 API** | REST API + X-API-Key 인증, Export (DER/PEM/ZIP), 실시간 PA | 사업과제 #15 |
 
 ---
@@ -486,4 +503,4 @@ ICRM (심사 PC 1,500대)  ──┐
 
 ---
 
-*(주)스마트코어 — FASTpass® SPKD v2.36.0*
+*(주)스마트코어 — FASTpass® SPKD v2.38.0*

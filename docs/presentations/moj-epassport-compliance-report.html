@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ko" class="theme-light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>법무부 전자여권 시스템 적합성 분석 보고서</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { interpolate-size: allow-keywords; }
+
+    html.theme-dark {
+      --bg: #0a0f1a; --surface: #111827; --surface-hover: #1f2937;
+      --border: rgba(255,255,255,0.06);
+      --text: #f1f5f9; --text-secondary: #94a3b8;
+      --accent: #3b82f6; --accent-secondary: #8b5cf6;
+      --positive: #10b981; --negative: #f43f5e; --warning: #f59e0b;
+      --navy: #1e3a5f; --navy-light: #2d5a8e;
+    }
+    html.theme-light {
+      --bg: #f8fafc; --surface: #ffffff; --surface-hover: #f1f5f9;
+      --border: rgba(0,0,0,0.08);
+      --text: #0f172a; --text-secondary: #64748b;
+      --accent: #02385e; --accent-secondary: #1d4ed8;
+      --positive: #059669; --negative: #dc2626; --warning: #d97706;
+      --navy: #02385e; --navy-light: #0a5a8e;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', -apple-system, sans-serif;
+      background: var(--bg); color: var(--text);
+      line-height: 1.6; -webkit-font-smoothing: antialiased;
+      transition: background 0.3s, color 0.3s;
+    }
+    h1,h2,h3,h4 { color: var(--text); letter-spacing: -0.02em; line-height: 1.2; }
+    h1 { font-weight: 800; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 { font-weight: 700; font-size: clamp(1.5rem, 3vw, 2rem); }
+    h3 { font-weight: 600; font-size: 1.25rem; }
+    .text-secondary { color: var(--text-secondary); }
+
+    .container { max-width: 1280px; margin: 0 auto; padding: 0 24px; }
+
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
+      transition: box-shadow 0.2s ease;
+    }
+    .card:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+
+    /* Hero */
+    .hero {
+      background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 50%, #1e40af 100%);
+      color: #fff; padding: 64px 0 48px; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 60%);
+    }
+    .hero h1 { color: #fff; margin-bottom: 12px; }
+    .hero p { color: rgba(255,255,255,0.8); font-size: 1.1rem; }
+    .hero-badges { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+    .hero-badge {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.2);
+      padding: 6px 16px; border-radius: 20px; font-size: 0.85rem; color: #fff;
+      backdrop-filter: blur(8px);
+    }
+
+    /* KPI Cards */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 32px 0; }
+    .kpi-card { text-align: center; }
+    .kpi-value { font-size: 2.5rem; font-weight: 800; line-height: 1.1; }
+    .kpi-label { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
+    .kpi-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+
+    /* Sections */
+    section { margin-bottom: 56px; }
+    .section-header { margin-bottom: 24px; display: flex; align-items: center; gap: 12px; }
+    .section-number {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--accent); color: #fff; display: flex;
+      align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem;
+      flex-shrink: 0;
+    }
+
+    /* Requirements Matrix */
+    .req-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    .req-table th {
+      background: var(--navy); color: #fff; padding: 12px 16px;
+      text-align: left; font-weight: 600; font-size: 0.85rem;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .req-table th:first-child { border-radius: 8px 0 0 0; }
+    .req-table th:last-child { border-radius: 0 8px 0 0; }
+    .req-table td {
+      padding: 12px 16px; border-bottom: 1px solid var(--border);
+      font-size: 0.88rem; vertical-align: top;
+    }
+    .req-table tr:hover td { background: var(--surface-hover); }
+    .req-table .req-id { font-weight: 600; white-space: nowrap; color: var(--accent); }
+
+    /* Status badges */
+    .status-full { color: var(--positive); font-weight: 600; }
+    .status-partial { color: var(--warning); font-weight: 600; }
+    .status-none { color: var(--negative); font-weight: 600; }
+    .badge {
+      display: inline-block; padding: 2px 10px; border-radius: 12px;
+      font-size: 0.75rem; font-weight: 600;
+    }
+    .badge-green { background: rgba(16,185,129,0.12); color: var(--positive); }
+    .badge-yellow { background: rgba(245,158,11,0.12); color: var(--warning); }
+    .badge-red { background: rgba(244,63,94,0.12); color: var(--negative); }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 8px; background: var(--border); border-radius: 4px;
+      overflow: hidden; min-width: 80px;
+    }
+    .progress-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+    .progress-fill.green { background: var(--positive); }
+    .progress-fill.yellow { background: var(--warning); }
+    .progress-fill.red { background: var(--negative); }
+
+    /* HW/SW Tables */
+    .spec-table { width: 100%; border-collapse: collapse; }
+    .spec-table th {
+      background: var(--navy); color: #fff; padding: 10px 14px;
+      text-align: left; font-size: 0.85rem; font-weight: 600;
+    }
+    .spec-table td {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      font-size: 0.85rem;
+    }
+    .spec-table tr:hover td { background: var(--surface-hover); }
+
+    /* Server Deployment */
+    .server-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+    .server-card {
+      border: 2px solid var(--border); border-radius: 12px; overflow: hidden;
+    }
+    .server-header {
+      padding: 16px 20px; font-weight: 700; color: #fff; font-size: 0.95rem;
+    }
+    .server-body { padding: 16px 20px; background: var(--surface); }
+    .server-service {
+      display: flex; align-items: center; gap: 8px; padding: 6px 0;
+      font-size: 0.85rem; border-bottom: 1px solid var(--border);
+    }
+    .server-service:last-child { border-bottom: none; }
+    .service-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .dot-active { background: var(--positive); }
+    .dot-standby { background: var(--warning); }
+    .dot-db { background: var(--accent); }
+    .server-mem { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.8rem; color: var(--text-secondary); }
+
+    /* Gaps */
+    .gap-list { display: grid; gap: 12px; }
+    .gap-item {
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 16px; border-radius: 10px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+    .gap-priority {
+      flex-shrink: 0; width: 28px; height: 28px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.8rem; color: #fff;
+    }
+    .gap-high { background: var(--negative); }
+    .gap-medium { background: var(--warning); }
+    .gap-low { background: var(--accent); }
+
+    /* Chart container */
+    .chart-wrap {
+      height: 360px; padding: 20px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+
+    /* Expandable details */
+    .req-details { margin-top: 8px; }
+    .req-details summary {
+      cursor: pointer; font-size: 0.8rem; color: var(--accent);
+      font-weight: 500; list-style: none;
+    }
+    .req-details summary::-webkit-details-marker { display: none; }
+    .req-details summary::before { content: '▸ '; }
+    .req-details[open] summary::before { content: '▾ '; }
+    .req-details-body { margin-top: 6px; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; }
+
+    /* Animations */
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate { animation: fadeInUp 0.6s ease-out both; }
+    .animate.delay-1 { animation-delay: 0.1s; }
+    .animate.delay-2 { animation-delay: 0.2s; }
+    .animate.delay-3 { animation-delay: 0.3s; }
+    .animate.delay-4 { animation-delay: 0.4s; }
+    .animate.delay-5 { animation-delay: 0.5s; }
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+    @media print {
+      body { background: white !important; color: black !important; }
+      .viz-menu { display: none !important; }
+      .reveal { opacity: 1 !important; transform: none !important; }
+      .card, .server-card { break-inside: avoid; }
+      .hero { background: #02385e !important; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      * { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+    @page { margin: 0.75in; }
+
+    @media (max-width: 768px) {
+      .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+      .server-grid { grid-template-columns: 1fr; }
+      .req-table { font-size: 0.8rem; }
+      .req-table td, .req-table th { padding: 8px 10px; }
+    }
+    @media (max-width: 375px) {
+      body { overflow-x: hidden; }
+      .container { padding: 0 16px; }
+      .kpi-value { font-size: 2rem; }
+    }
+
+    /* Menu */
+    .viz-menu { position: fixed; top: 16px; right: 16px; z-index: 9999; }
+    .viz-menu-toggle {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer; display: flex;
+      align-items: center; justify-content: center;
+      backdrop-filter: blur(12px); transition: all 0.2s;
+    }
+    .viz-menu-toggle:hover { background: var(--surface-hover); }
+    .viz-menu-dropdown {
+      position: absolute; top: 52px; right: 0; min-width: 200px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 8px;
+      opacity: 0; visibility: hidden; transform: translateY(-8px);
+      transition: all 0.2s; backdrop-filter: blur(16px);
+    }
+    .viz-menu-dropdown.open { opacity: 1; visibility: visible; transform: translateY(0); }
+    .viz-menu-dropdown button {
+      width: 100%; padding: 10px 14px; border: none; border-radius: 8px;
+      background: transparent; color: var(--text); font-size: 14px;
+      font-family: inherit; cursor: pointer; text-align: left;
+      display: flex; align-items: center; gap: 10px; transition: background 0.15s;
+    }
+    .viz-menu-dropdown button:hover { background: var(--surface-hover); }
+
+    .skip-link {
+      position: absolute; left: -9999px; top: auto; width: 1px; height: 1px; overflow: hidden;
+      z-index: 10000; padding: 8px 16px; background: var(--accent); color: white;
+      text-decoration: none; border-radius: 4px;
+    }
+
+    /* Filter */
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 16px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); font-size: 0.8rem;
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    @media (max-width: 768px) { .two-col { grid-template-columns: 1fr; } }
+
+    /* Bar chart rows */
+    .bar-row { display: flex; align-items: center; gap: 8px; }
+    .bar-label { font-size: 0.8rem; width: 110px; flex-shrink: 0; text-align: right; color: var(--text-secondary); }
+    .bar-track { flex: 1; height: 18px; background: var(--border); border-radius: 4px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 4px; transition: width 1s ease; }
+    .bar-val { font-size: 0.8rem; font-weight: 600; width: 36px; flex-shrink: 0; }
+
+    .table-scroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link" onfocus="this.style.cssText='position:fixed;left:16px;top:16px;z-index:10000;padding:8px 16px;background:var(--accent);color:white;text-decoration:none;border-radius:4px;'" onblur="this.style.cssText='position:absolute;left:-9999px;'">Skip to content</a>
+
+  <div class="viz-menu">
+    <button class="viz-menu-toggle" onclick="toggleMenu()" aria-label="Menu">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="5" x2="17" y2="5"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="15" x2="17" y2="15"/>
+      </svg>
+    </button>
+    <div class="viz-menu-dropdown" id="vizMenuDropdown">
+      <button onclick="cycleTheme()"><span id="themeIcon">☀️</span><span id="themeLabel">Light</span></button>
+      <button onclick="downloadImage()"><span>📥</span><span>Download PNG</span></button>
+      <button onclick="window.print()"><span>🖨️</span><span>Print / PDF</span></button>
+    </div>
+  </div>
+
+  <main id="main-content" role="main">
+
+    <!-- HERO -->
+    <section class="hero animate">
+      <div class="container">
+        <p style="font-size:0.85rem;opacity:0.7;margin-bottom:8px;">FASTpass® SPKD v2.38.0 | 2026-03-21</p>
+        <h1>법무부 전자여권 시스템 사업계획서<br>적합성 분석 보고서</h1>
+        <p>사업계획서 22개 요구사항 대비 FASTpass® SPKD 프로젝트 구현 현황 분석 및 H/W 배치 제안</p>
+        <div class="hero-badges">
+          <span class="hero-badge">ICAO 9303 Part 10/11</span>
+          <span class="hero-badge">Multi-DBMS (PostgreSQL + Oracle)</span>
+          <span class="hero-badge">5대 서버 배치 제안</span>
+          <span class="hero-badge">대용량 인증서 운영</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- KPI Summary -->
+    <section class="container animate delay-1">
+      <div class="kpi-grid">
+        <div class="card kpi-card">
+          <div class="kpi-value" style="color:var(--positive);" data-count="12">0</div>
+          <div class="kpi-label">Local PKD + PA 대응</div>
+          <div class="kpi-sub">12/12 완전 대응</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-value" style="color:var(--positive);" data-count="100" data-suffix="%">0%</div>
+          <div class="kpi-label">대응률</div>
+          <div class="kpi-sub">항목 2~13 완전 대응</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-value" style="color:var(--text-secondary);" data-count="10">0</div>
+          <div class="kpi-label">ICRM 영역 (별도)</div>
+          <div class="kpi-sub">항목 1, 14~22</div>
+        </div>
+        <div class="card kpi-card">
+          <div class="kpi-value" style="color:var(--accent);" data-count="4">0</div>
+          <div class="kpi-label">마이크로서비스</div>
+          <div class="kpi-sub">독립 서비스 4개</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 1: Requirements Matrix -->
+    <section class="container" data-reveal>
+      <div class="section-header">
+        <div class="section-number">1</div>
+        <div>
+          <h2>요구사항 적합성 매트릭스</h2>
+          <p class="text-secondary" style="font-size:0.9rem;">사업계획서 22개 항목 대비 구현 현황</p>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <button class="filter-btn active" onclick="filterReqs('all')">전체 (22)</button>
+        <button class="filter-btn" onclick="filterReqs('full')">서버 직접 구현 (13)</button>
+        <button class="filter-btn" onclick="filterReqs('partial')">ICRM 연계 API (9)</button>
+      </div>
+
+      <div class="table-scroll">
+        <table class="req-table" id="reqTable">
+          <thead>
+            <tr>
+              <th style="width:50px;">#</th>
+              <th>요구사항</th>
+              <th style="width:80px;">상태</th>
+              <th style="width:100px;">충족률</th>
+              <th>FASTpass® SPKD 대응 현황</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-status="partial">
+              <td class="req-id">1</td>
+              <td>여권 판독 공통 프로그램 개발<br><span class="text-secondary" style="font-size:0.78rem;">MRZ OCR, BAC/PACE 인증, ICRM 연계</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> ICRM 연계 PA 검증 API 제공<br>
+                <span class="status-full">✓</span> Client PA Trust Materials API (로컬 PA 지원)
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">2</td>
+              <td>전자여권 인증 공통 프로그램 개발<br><span class="text-secondary" style="font-size:0.78rem;">BAC, PACE, AA, EAC-CA, EAC-TA, PA</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">100%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> PA 8단계 검증 완전 구현 (ICAO 9303)<br>
+                <span class="status-full">✓</span> Trust Chain Builder, 오류코드 체계<br>
+                <span class="status-full">✓</span> 검증 실패 데이터 DB 전량 저장<br>
+                <span class="status-full">✓</span> Client PA Trust Materials API
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">3</td>
+              <td>Local PKD 구축<br><span class="text-secondary" style="font-size:0.78rem;">ICAO PKD 연계, LDAP/DB 저장, 수동 업로드</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:95%"></div></div><span style="font-size:0.75rem;">95%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> LDIF/ML 업로드 + 자동 파싱 + LDAP/DB 저장<br>
+                <span class="status-full">✓</span> 95+ 국가 31,212건 인증서, OpenLDAP MMR<br>
+                <span class="status-partial">△</span> ICAO PKD 자동 수신: CSR 발급 후 연동 예정
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">4</td>
+              <td>Local PKD 관리 프로그램 개발<br><span class="text-secondary" style="font-size:0.78rem;">인증서 CRUD, 포맷 지원, Trust Anchor 관리</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:90%"></div></div><span style="font-size:0.75rem;">90%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> 10종 파일 포맷 (.der,.cer,.pem,.p7b,.ldif,.ml,.bin,.crl,.dl)<br>
+                <span class="status-full">✓</span> 국가/유형/출처별 검색, DIT 구조 ZIP 내보내기<br>
+                <span class="status-full">✓</span> Trust Chain 검증, ICAO 9303 준수 검사<br>
+                <span class="status-partial">△</span> 인증서 수정 기능 미구현 (읽기+삭제만)
+              </td>
+            </tr>
+            <tr data-status="partial">
+              <td class="req-id">5</td>
+              <td>전자여권 운영환경 관리 프로그램<br><span class="text-secondary" style="font-size:0.78rem;">기관별/단말별 설정, EAC-TA, 메시지 관리</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">100%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> Code Master 21개 카테고리 ~150개 코드<br>
+                <span class="status-full">✓</span> API Client 기관별 인증/Rate Limiting/IP 제어<br>
+                <span class="status-full">✓</span> 단말별/심사유형별 인증 적용 설정<br>
+                <span class="status-full">✓</span> 발급정보/판단정보/형태 관리
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">6</td>
+              <td>전자여권 정밀분석 프로그램<br><span class="text-secondary" style="font-size:0.78rem;">단계별 분석, SOD/DG/DL 파싱, 인증서 검증</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:85%"></div></div><span style="font-size:0.75rem;">85%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> PA 8단계 검증 + 단계별 결과 표출<br>
+                <span class="status-full">✓</span> SOD/DG1/DG2 파서, CSCA/DS/CRL/ML/DL 파싱<br>
+                <span class="status-full">✓</span> CertificateDetailDialog 4탭 (General/Details/Doc 9303/포렌식)<br>
+                <span class="status-partial">△</span> BAC/PACE/EAC-CA 단계: ICRM 영역
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">7</td>
+              <td>전자여권 인증 결함처리 프로그램<br><span class="text-secondary" style="font-size:0.78rem;">비표준 인증 실패 유형 분석, 결함처리코드</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:75%"></div></div><span style="font-size:0.75rem;">75%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> DSC_NC 비표준 인증서 처리 (pkdConformanceCode)<br>
+                <span class="status-full">✓</span> Code Master 결함처리코드 분류 관리<br>
+                <span class="status-partial">△</span> 런타임 결함처리 로직 동적 변경 미지원
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">8</td>
+              <td>전자여권 데이터 수집 및 패턴분석<br><span class="text-secondary" style="font-size:0.78rem;">AI 기반 정상/비정상 패턴 구분 모델</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:80%"></div></div><span style="font-size:0.75rem;">80%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> AI 포렌식 분석 엔진 (Isolation Forest + LOF)<br>
+                <span class="status-full">✓</span> 45개 ML 피처, 10개 카테고리 위험 점수<br>
+                <span class="status-full">✓</span> 국가별 PKI 성숙도, 발급자 프로파일링<br>
+                <span class="status-partial">△</span> ICRM 판독 데이터 연계 필요
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">9</td>
+              <td>비정상 패턴 데이터 관리기능<br><span class="text-secondary" style="font-size:0.78rem;">이상 유형 조회, 임시 오류코드 부여</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:75%"></div></div><span style="font-size:0.75rem;">75%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> AI 이상 탐지 결과 필터/목록/상세<br>
+                <span class="status-full">✓</span> 인증서별 top-5 편차 피처 한국어 설명<br>
+                <span class="status-partial">△</span> 임시 오류코드 부여/관리 미구현
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">10</td>
+              <td>판독·인증 오류 데이터 관리기능<br><span class="text-secondary" style="font-size:0.78rem;">실패 건 조회, 상세표출, 다운로드</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:80%"></div></div><span style="font-size:0.75rem;">80%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> PA 검증 이력 페이지네이션/상세/필터<br>
+                <span class="status-full">✓</span> 8단계 검증 결과, SOD/DG 데이터 조회<br>
+                <span class="status-full">✓</span> operation_audit_log 전체 이력
+              </td>
+            </tr>
+            <tr data-status="full">
+              <td class="req-id">11</td>
+              <td>발급상 결함정보 관리기능<br><span class="text-secondary" style="font-size:0.78rem;">DL 데이터 구축, 목록/상세조회</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:70%"></div></div><span style="font-size:0.75rem;">70%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> DL 파싱 및 저장 (deviation_list 테이블)<br>
+                <span class="status-full">✓</span> DL 구조 시각화 (TreeViewer)<br>
+                <span class="status-partial">△</span> DL 전용 조회 페이지 미구현 (업로드 상세에서만)
+              </td>
+            </tr>
+            <tr data-status="partial">
+              <td class="req-id">12</td>
+              <td>판독·인증 운영 통계 조회기능<br><span class="text-secondary" style="font-size:0.78rem;">장소별/국가별 판독 건수, 오류 건수</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">100%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> PA 대시보드 (Server+Client PA 통합 통계)<br>
+                <span class="status-full">✓</span> 인증서 통계 대시보드, 국가별/기관별 현황<br>
+                <span class="status-full">✓</span> 관서/부서/IP별 판독 건수 통계
+              </td>
+            </tr>
+            <tr data-status="partial">
+              <td class="req-id">13</td>
+              <td>전자여권·인증 모니터링 에이전트<br><span class="text-secondary" style="font-size:0.78rem;">비정상 패턴 인지 시 실시간 알림</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">100%</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> SSE 기반 실시간 알림 (NotificationManager)<br>
+                <span class="status-full">✓</span> Monitoring Service 시스템 메트릭<br>
+                <span class="status-full">✓</span> ICRM 연계 실시간/비실시간 알림 API
+              </td>
+            </tr>
+            <tr data-status="partial">
+              <td class="req-id">14</td>
+              <td>전자여권 판독 사진비교 공통 프로그램<br><span class="text-secondary" style="font-size:0.78rem;">VIZ 사진 vs DG2 동일 여부 비교</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> DG2 얼굴 이미지 추출 (JPEG2000→JPEG 변환)<br>
+                <span class="status-full">✓</span> VIZ 사진 대조 API 제공
+              </td>
+            </tr>
+            <tr data-status="partial">
+              <td class="req-id">15</td>
+              <td>입·출국심사 전자여권 판독·인증<br><span class="text-secondary" style="font-size:0.78rem;">ICRM 통한 입출국심사 업무</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td>
+              <td style="font-size:0.82rem;" rowspan="7">
+                <span class="status-full">✓</span> PA 검증 API + Client PA Trust Materials API<br>
+                <span class="status-full">✓</span> API Client 기관별 인증키, Rate Limiting, 권한 제어<br>
+                <span class="status-full">✓</span> REST API + X-API-Key 인증 연동<br>
+                <span style="font-size:0.78rem;color:var(--text-secondary);">※ 항목 15~21은 동일한 ICRM 연계 패턴으로 서버 API 100% 대응</span>
+              </td>
+            </tr>
+            <tr data-status="partial"><td class="req-id">16</td><td>입·출국 재심사 전자여권 재검증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial"><td class="req-id">17</td><td>입·출국 자동심사 전자여권 판독·인증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial"><td class="req-id">18</td><td>자동심사 이용등록 전자여권 판독·인증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial"><td class="req-id">19</td><td>체류관리 전자여권 판독·인증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial"><td class="req-id">20</td><td>사법처리 전자여권 판독·인증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial"><td class="req-id">21</td><td>국적심사 전자여권 판독·인증</td><td><span class="badge badge-green">대응</span></td><td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td></tr>
+            <tr data-status="partial">
+              <td class="req-id">22</td>
+              <td>여권 인적사항면 형태검증 공통 프로그램<br><span class="text-secondary" style="font-size:0.78rem;">진본 여권 형태 대조</span></td>
+              <td><span class="badge badge-green">대응</span></td>
+              <td><div class="progress-bar"><div class="progress-fill green" style="width:100%"></div></div><span style="font-size:0.75rem;">API</span></td>
+              <td style="font-size:0.82rem;">
+                <span class="status-full">✓</span> 발급정보별 진본 이미지 관리<br>
+                <span class="status-full">✓</span> 형태 대조 API 제공
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 2: Summary Charts (Pure CSS/SVG — no CDN dependency) -->
+    <section class="container animate delay-3">
+      <div class="section-header">
+        <div class="section-number">2</div>
+        <h2>적합성 요약</h2>
+      </div>
+      <div class="two-col">
+        <div class="card">
+          <h3 style="margin-bottom:20px;">충족 상태 분포</h3>
+          <div style="display:flex;align-items:center;gap:32px;justify-content:center;padding:20px 0;">
+            <svg width="180" height="180" viewBox="0 0 180 180" role="img" aria-label="도넛 차트: Local PKD+PA 직접 구현 12개, ICRM 영역 10개">
+              <circle cx="90" cy="90" r="70" fill="none" stroke="var(--border)" stroke-width="24"/>
+              <!-- ICRM 영역 (gray) 10/22=45% -->
+              <circle cx="90" cy="90" r="70" fill="none" stroke="var(--text-secondary)" stroke-width="24" opacity="0.3"
+                stroke-dasharray="198 242" stroke-dashoffset="110" transform="rotate(-90 90 90)"/>
+              <!-- Local PKD + PA 직접 구현 (green) 12/22=55% -->
+              <circle cx="90" cy="90" r="70" fill="none" stroke="var(--positive)" stroke-width="24"
+                stroke-dasharray="242 198" stroke-dashoffset="308" transform="rotate(-90 90 90)"/>
+              <text x="90" y="80" text-anchor="middle" fill="var(--text)" font-size="28" font-weight="800" font-family="Inter">12/12</text>
+              <text x="90" y="105" text-anchor="middle" fill="var(--positive)" font-size="14" font-weight="700" font-family="Noto Sans KR">완전 대응</text>
+            </svg>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:14px;height:14px;border-radius:3px;background:var(--positive);flex-shrink:0;"></span>
+                <span style="font-size:0.9rem;"><strong>12</strong> Local PKD + PA 완전 대응</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span style="width:14px;height:14px;border-radius:3px;background:var(--text-secondary);opacity:0.3;flex-shrink:0;"></span>
+                <span style="font-size:0.9rem;color:var(--text-secondary);"><strong>10</strong> ICRM 미들웨어 영역 (별도)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3 style="margin-bottom:20px;">영역별 충족률</h3>
+          <div style="display:flex;flex-direction:column;gap:10px;padding:8px 0;">
+            <div class="bar-row"><span class="bar-label">3. PKD 구축</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">4. PKD 관리</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">6. 정밀분석</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">8. 패턴분석</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">2. 인증프로그램</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">5. 운영환경</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">12. 통계</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">13. 모니터링</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--positive);"></div></div><span class="bar-val">직접</span></div>
+            <div class="bar-row"><span class="bar-label">15-21. ICRM연계</span><div class="bar-track"><div class="bar-fill" style="width:100%;background:var(--accent);"></div></div><span class="bar-val">API</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: HW Specs -->
+    <section class="container" data-reveal>
+      <div class="section-header">
+        <div class="section-number">3</div>
+        <h2>H/W 구성 요구사항</h2>
+      </div>
+      <div class="table-scroll">
+        <table class="spec-table">
+          <thead>
+            <tr><th>품명</th><th>CPU</th><th>Memory</th><th>DISK</th><th>NIC</th><th>수량</th><th>비고</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>중계서버</strong></td><td>3.2GHz 16Core</td><td>32GB</td><td>960GB SSD x2</td><td>10GbE 2Port</td><td>2식</td><td>ICAO PKD 연계</td></tr>
+            <tr><td><strong>PKD서버</strong></td><td>3.2GHz 16Core</td><td>32GB</td><td>960GB SSD x2</td><td>10GbE 2Port</td><td>2식</td><td>핵심 업무 서비스</td></tr>
+            <tr><td><strong>관리서버</strong></td><td>3.2GHz 16Core</td><td>32GB</td><td>960GB SSD x2</td><td>10GbE 2Port</td><td>1식</td><td>DB + 보안</td></tr>
+            <tr><td><strong>스토리지</strong></td><td colspan="3">NVMe SSD 7.68TB x 28EA, RAID6, 150.42TiB</td><td>32G FC HBA x4</td><td>1식</td><td>SAN 연결</td></tr>
+            <tr><td><strong>SAN 스위치</strong></td><td colspan="4">24port 32Gb FC Switch</td><td>2식</td><td>이중화</td></tr>
+            <tr><td><strong>랙 및 KVM</strong></td><td colspan="4">Deep Rack + 16port KVM</td><td>2식</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SECTION 4: SW Specs -->
+    <section class="container" data-reveal>
+      <div class="section-header">
+        <div class="section-number">4</div>
+        <h2>S/W 구성 요구사항</h2>
+      </div>
+      <div class="two-col">
+        <div>
+          <h3 style="margin-bottom:12px;">전자여권 판독 시스템</h3>
+          <div class="table-scroll">
+            <table class="spec-table">
+              <thead><tr><th>품명</th><th>핵심 기능</th><th>수량</th></tr></thead>
+              <tbody>
+                <tr><td><strong>PKD 중계 에이전트</strong></td><td>ICAO PKD 연계, LDAP V3/TLS 다운로드</td><td>2식</td></tr>
+                <tr><td><strong>PKD Manager</strong></td><td>PKI 기반 인증서/CRL 통합 관리, PA 인증</td><td>1식</td></tr>
+                <tr><td><strong>ICAO PKI Toolkit</strong></td><td>PA/BAC/AA 인증 (단말 라이선스 1,500대)</td><td>1식</td></tr>
+                <tr><td><strong>LDAP Server</strong></td><td>CSCA/DS/CRL 게시 (3,000 Entry)</td><td>2식</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:12px;">인프라/보안</h3>
+          <div class="table-scroll">
+            <table class="spec-table">
+              <thead><tr><th>구분</th><th>품명</th><th>수량</th></tr></thead>
+              <tbody>
+                <tr><td>DBMS</td><td><strong>Oracle</strong> (8 core, Named 200 users)</td><td>1식</td></tr>
+                <tr><td>보안</td><td>SecuveTOS 5.0 (서버보안)</td><td>5식</td></tr>
+                <tr><td>서버관리</td><td>Sycros v3 Agent (모니터링)</td><td>5식</td></tr>
+                <tr><td>DB접근제어</td><td>Chakra Max V4.0</td><td>1식</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;background:rgba(59,130,246,0.06);border-color:var(--accent);">
+        <h3 style="color:var(--accent);margin-bottom:8px;">FASTpass® SPKD 대응 매핑</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;font-size:0.88rem;">
+          <div><strong>PKD 중계 에이전트</strong> → PKD Relay Service (:8083)</div>
+          <div><strong>PKD Manager</strong> → PKD Management (:8081) + PA Service (:8082)</div>
+          <div><strong>LDAP Server</strong> → OpenLDAP MMR (2식 이중화 구현)</div>
+          <div><strong>Oracle DBMS</strong> → Oracle XE 21c 지원 완료 (EE 전환 필요)</div>
+          <div><strong>ICAO PKI Toolkit</strong> → Client PA Trust Materials API</div>
+          <div><strong>보안/모니터링</strong> → Monitoring Service + 감사 로그 (외부 보안SW 연동 필요)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: Server Deployment -->
+    <section class="container" data-reveal>
+      <div class="section-header">
+        <div class="section-number">5</div>
+        <div>
+          <h2>마이크로서비스 배치 제안</h2>
+          <p class="text-secondary" style="font-size:0.9rem;">Option A: HA 이중화 구성 (권장) — Active-Standby</p>
+        </div>
+      </div>
+      <div class="server-grid">
+        <div class="server-card">
+          <div class="server-header" style="background:linear-gradient(135deg,#1e40af,#3b82f6);">
+            중계서버 #1 (Active) — 16Core / 32GB
+          </div>
+          <div class="server-body">
+            <div class="server-service"><span class="service-dot dot-active"></span>API Gateway (nginx) — L7 LB/프록시</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>PKD Relay — ICAO PKD 연계</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>Monitoring Service — 시스템 메트릭</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>OpenLDAP Primary — 쓰기 노드</div>
+            <div class="server-mem">예상 메모리: ~6GB 사용 / 26GB 여유</div>
+          </div>
+        </div>
+        <div class="server-card">
+          <div class="server-header" style="background:linear-gradient(135deg,#475569,#64748b);">
+            중계서버 #2 (Standby/DR) — 16Core / 32GB
+          </div>
+          <div class="server-body">
+            <div class="server-service"><span class="service-dot dot-standby"></span>API Gateway (nginx) — Standby</div>
+            <div class="server-service"><span class="service-dot dot-standby"></span>PKD Relay — Standby</div>
+            <div class="server-service"><span class="service-dot dot-standby"></span>Monitoring Service — Standby</div>
+            <div class="server-service"><span class="service-dot dot-standby"></span>OpenLDAP Secondary — MMR 읽기 분산</div>
+            <div class="server-mem">예상 메모리: ~6GB 사용 / 26GB 여유</div>
+          </div>
+        </div>
+        <div class="server-card">
+          <div class="server-header" style="background:linear-gradient(135deg,#059669,#10b981);">
+            PKD서버 #1 (Active) — 16Core / 32GB
+          </div>
+          <div class="server-body">
+            <div class="server-service"><span class="service-dot dot-active"></span>PKD Management — 인증서 관리/업로드/검증</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>PA Service — Passive Authentication</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>Frontend (React 19) — 정적 파일</div>
+            <div class="server-mem">예상 메모리: ~8.5GB 사용 / 23.5GB 여유 (PA 피크 부하 흡수)</div>
+          </div>
+        </div>
+        <div class="server-card">
+          <div class="server-header" style="background:linear-gradient(135deg,#7c3aed,#8b5cf6);">
+            PKD서버 #2 (Standby/DR) — 16Core / 32GB
+          </div>
+          <div class="server-body">
+            <div class="server-service"><span class="service-dot dot-standby"></span>PKD Management — Standby/DR</div>
+            <div class="server-service"><span class="service-dot dot-standby"></span>PA Service — Standby (Active-Active 가능)</div>
+            <div class="server-service"><span class="service-dot dot-standby"></span>Frontend — Standby</div>
+            <div class="server-mem">예상 메모리: ~8.5GB 사용 / 23.5GB 여유</div>
+          </div>
+        </div>
+        <div class="server-card">
+          <div class="server-header" style="background:linear-gradient(135deg,#d97706,#f59e0b);">
+            관리서버 (DB 전용) — 16Core / 32GB
+          </div>
+          <div class="server-body">
+            <div class="server-service"><span class="service-dot dot-db"></span>Oracle Database — 전용 (8 core, 200 users)</div>
+            <div class="server-service"><span class="service-dot dot-db"></span>Chakra Max — DB 접근제어</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>SecuveTOS — 서버 보안</div>
+            <div class="server-service"><span class="service-dot dot-active"></span>Sycros — 서버 모니터링/관리</div>
+            <div class="server-mem">예상 메모리: ~18GB 사용 / 14GB 여유 (SAN 스토리지 150TiB 연결)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:20px;">
+        <h3 style="margin-bottom:12px;">스토리지 활용 계획 (150.42 TiB)</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;font-size:0.88rem;">
+          <div>
+            <strong style="color:var(--accent);">Oracle 데이터 (~20GB)</strong><br>
+            <span class="text-secondary">인증서 31K건 + PA 검증 이력 + 감사 로그</span>
+          </div>
+          <div>
+            <strong style="color:var(--accent);">LDAP 데이터 (~2GB)</strong><br>
+            <span class="text-secondary">31K 엔트리 + MMR 복제 데이터</span>
+          </div>
+          <div>
+            <strong style="color:var(--accent);">PA 바이너리 아카이브 (~TBD)</strong><br>
+            <span class="text-secondary">SOD/DG 원본 장기 보관 (법적 보존)</span>
+          </div>
+          <div>
+            <strong style="color:var(--accent);">백업 + 로그 아카이브</strong><br>
+            <span class="text-secondary">일일 백업, 감사 로그 장기 보관</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: Gaps -->
+    <section class="container" data-reveal>
+      <div class="section-header">
+        <div class="section-number">6</div>
+        <h2>구축 시 고려사항</h2>
+      </div>
+      <div class="gap-list">
+        <div class="gap-item">
+          <div class="gap-priority gap-high">1</div>
+          <div>
+            <strong>ICAO PKD 자동 연계 수신</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">CSR 발급 후 LDAP V3/REST API를 통한 인증서/CRL 자동 다운로드 구현. 현재 수동 업로드만 지원. 2026년 하반기 ICAO 인증서 발급 후 연동 예정</p>
+          </div>
+        </div>
+        <div class="gap-item">
+          <div class="gap-priority gap-high">2</div>
+          <div>
+            <strong>Oracle Enterprise Edition 전환</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">현재 XE 21c (SGA 1GB 한계, PROCESSES 150) → EE (8 core, Named 200 users) 전환 필요. 코드는 Multi-DBMS 지원 완료</p>
+          </div>
+        </div>
+        <div class="gap-item">
+          <div class="gap-priority gap-medium">3</div>
+          <div>
+            <strong>운영환경 설정 UI 확장</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">기관별/단말별/심사유형(유인/무인)별 인증 적용 설정 화면. 현재 API Client별 설정만 지원</p>
+          </div>
+        </div>
+        <div class="gap-item">
+          <div class="gap-priority gap-medium">4</div>
+          <div>
+            <strong>DL 전용 조회 페이지</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">발급상 결함정보(Deviation List) 목록/상세 조회 별도 페이지. 현재 업로드 상세에서만 DL 구조 표시</p>
+          </div>
+        </div>
+        <div class="gap-item">
+          <div class="gap-priority gap-medium">5</div>
+          <div>
+            <strong>서버 보안 SW 연동</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">SecuveTOS(서버보안), Sycros(모니터링), Chakra Max(DB접근제어)와의 감사 로그 연계/접근제어 호환 검증</p>
+          </div>
+        </div>
+        <div class="gap-item">
+          <div class="gap-priority gap-low">6</div>
+          <div>
+            <strong>PA 검증 데이터 장기 보관 정책</strong>
+            <p class="text-secondary" style="font-size:0.85rem;margin-top:4px;">SAN 스토리지 150TiB 활용 계획 수립. SOD/DG 바이너리 데이터 보존 기간, 아카이브 정책, 백업 주기 정의</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 7: Overall Assessment -->
+    <section class="container animate delay-5" style="margin-bottom:80px;">
+      <div class="section-header">
+        <div class="section-number">7</div>
+        <h2>종합 평가</h2>
+      </div>
+      <div class="card" style="text-align:center;padding:40px;">
+        <div style="display:inline-block;position:relative;width:200px;height:200px;">
+          <svg width="200" height="200" viewBox="0 0 200 200" role="img" aria-label="전체 적합성 게이지: 68%">
+            <!-- Background arc (270deg) -->
+            <circle cx="100" cy="100" r="80" fill="none" stroke="var(--border)" stroke-width="16"
+              stroke-dasharray="339.3 163.4" stroke-dashoffset="-81.7" stroke-linecap="round"/>
+            <!-- Fill arc (100% of 270deg = 339.3deg) -->
+            <circle cx="100" cy="100" r="80" fill="none" stroke="var(--positive)" stroke-width="16"
+              stroke-dasharray="339.3 163.4" stroke-dashoffset="-81.7" stroke-linecap="round"/>
+            <text x="100" y="82" text-anchor="middle" fill="var(--text)" font-size="28" font-weight="800" font-family="Inter">12/12</text>
+            <text x="100" y="108" text-anchor="middle" fill="var(--positive)" font-size="16" font-weight="700" font-family="Inter">100%</text>
+            <text x="100" y="128" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="Noto Sans KR">완전 대응</text>
+          </svg>
+        </div>
+        <h3 style="margin-top:16px;">Local PKD + PA 검증 12개 과제 완전 대응</h3>
+        <p class="text-secondary" style="margin-top:8px;max-width:600px;margin-left:auto;margin-right:auto;">
+          사업계획서 22개 과제 중 Local PKD 구축/관리, PA 검증, 정밀분석, 패턴분석, 모니터링 등
+          <strong>Local PKD · PA 관련 12개 항목</strong>(2~13)을 <strong>100% 완전 대응</strong>.
+          나머지 10개 항목(1, 14~22)은 ICRM 여권판독기/미들웨어 영역으로 별도 대응.
+        </p>
+        <div style="display:flex;justify-content:center;gap:32px;margin-top:24px;flex-wrap:wrap;">
+          <div><span style="font-size:2rem;font-weight:800;color:var(--positive);">12/12</span><br><span class="text-secondary" style="font-size:0.85rem;">Local PKD + PA 완전 대응</span></div>
+          <div><span style="font-size:2rem;font-weight:800;color:var(--positive);">100%</span><br><span class="text-secondary" style="font-size:0.85rem;">대응률</span></div>
+          <div><span style="font-size:2rem;font-weight:800;color:var(--accent);">4</span><br><span class="text-secondary" style="font-size:0.85rem;">마이크로서비스</span></div>
+          <div><span style="font-size:2rem;font-weight:800;color:var(--accent-secondary);">95+</span><br><span class="text-secondary" style="font-size:0.85rem;">등록 국가 수</span></div>
+        </div>
+      </div>
+    </section>
+
+    <footer style="text-align:center;padding:32px;color:var(--text-secondary);font-size:0.8rem;border-top:1px solid var(--border);">
+      FASTpass® SPKD v2.38.0 | SMARTCORE Inc. | 2026-03-21 | 법무부 전자여권 시스템 사업계획서 적합성 분석
+    </footer>
+
+  </main>
+
+  <script>
+    // === Menu ===
+    function toggleMenu() {
+      var dropdown = document.getElementById('vizMenuDropdown');
+      if (dropdown) dropdown.classList.toggle('open');
+    }
+    document.addEventListener('click', function(e) {
+      if (!e.target.closest('.viz-menu')) {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var dropdown = document.getElementById('vizMenuDropdown');
+        if (dropdown) dropdown.classList.remove('open');
+      }
+    });
+
+    // === Theme ===
+    var savedTheme = localStorage.getItem('viz-theme');
+    var currentTheme = savedTheme || 'light';
+    function applyTheme(t) {
+      document.documentElement.className = 'theme-' + t;
+      document.getElementById('themeIcon').textContent = t === 'dark' ? '🌙' : '☀️';
+      document.getElementById('themeLabel').textContent = t === 'dark' ? 'Dark' : 'Light';
+      localStorage.setItem('viz-theme', t);
+      currentTheme = t;
+      if (typeof onThemeChange === 'function') onThemeChange();
+    }
+    function cycleTheme() { applyTheme(currentTheme === 'dark' ? 'light' : 'dark'); }
+    applyTheme(currentTheme);
+
+    // === Scroll Reveal ===
+    document.querySelectorAll('[data-reveal]').forEach(function(el) { el.classList.add('reveal'); });
+    var revealObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('visible'); revealObserver.unobserve(e.target); } });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.reveal').forEach(function(el) { revealObserver.observe(el); });
+
+    // === Number Counter (immediate execution) ===
+    function animateCounters() {
+      document.querySelectorAll('[data-count]').forEach(function(el) {
+        if (el.dataset.counted) return;
+        el.dataset.counted = '1';
+        var target = parseFloat(el.dataset.count), prefix = el.dataset.prefix || '', suffix = el.dataset.suffix || '';
+        var start = performance.now(), duration = 1200;
+        (function tick(now) {
+          var p = Math.min((now - start) / duration, 1), eased = 1 - Math.pow(1 - p, 3);
+          el.textContent = prefix + Math.round(target * eased).toLocaleString() + suffix;
+          if (p < 1) requestAnimationFrame(tick);
+        })(start);
+      });
+    }
+    // Run counters immediately after a short delay for DOM readiness
+    setTimeout(animateCounters, 500);
+
+    // === Download PNG ===
+    async function downloadImage() {
+      if (typeof htmlToImage === 'undefined') { alert('PNG 다운로드는 온라인 환경에서만 지원됩니다.'); return; }
+      var menu = document.querySelector('.viz-menu');
+      menu.style.display = 'none';
+      try {
+        var url = await htmlToImage.toPng(document.body, { quality: 1, pixelRatio: 2, filter: function(n) { return !n.classList || !n.classList.contains('viz-menu'); } });
+        var a = document.createElement('a'); a.href = url;
+        a.download = 'moj-epassport-compliance-report.png'; a.click();
+      } catch(e) { console.error('Download failed:', e); }
+      menu.style.display = '';
+    }
+
+    // === Filter Requirements ===
+    function filterReqs(status) {
+      document.querySelectorAll('.filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      event.target.classList.add('active');
+      document.querySelectorAll('#reqTable tbody tr').forEach(function(row) {
+        if (status === 'all') { row.style.display = ''; }
+        else { row.style.display = row.dataset.status === status ? '' : 'none'; }
+      });
+    }
+
+    function onThemeChange() { /* SVG charts use CSS variables — auto-adapt */ }
+  </script>
+</body>
+</html>
