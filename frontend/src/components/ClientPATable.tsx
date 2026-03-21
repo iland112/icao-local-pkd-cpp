@@ -119,7 +119,7 @@ export function ClientPATable() {
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700 bg-slate-100 dark:bg-slate-800">
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.country')}</th>
-                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">MRZ</th>
+                <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.passportNumber')}</th>
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">CSCA/CRL</th>
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.status')}</th>
                 <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.verificationResult')}</th>
@@ -141,9 +141,9 @@ export function ClientPATable() {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-center text-xs text-gray-500">
-                    {item.mrzNationality && <span className="mr-1">{item.mrzNationality}</span>}
-                    {item.mrzDocumentType && <span className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">{item.mrzDocumentType}</span>}
-                    {!item.mrzNationality && !item.mrzDocumentType && <span className="text-gray-300">—</span>}
+                    {item.mrzDocumentType && <span className="px-1 py-0.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded text-[10px] font-medium mr-1">{item.mrzDocumentType}</span>}
+                    {item.mrzNationality && <span className="text-gray-600 dark:text-gray-300">{item.mrzNationality}</span>}
+                    {!item.mrzNationality && !item.mrzDocumentType && <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </td>
                   <td className="px-3 py-2 text-center text-xs">
                     <span className="text-blue-600">{item.cscaCount} CSCA</span>

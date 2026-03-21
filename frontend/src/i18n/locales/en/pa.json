@@ -198,6 +198,7 @@
     "dgLoadFailed": "Failed to load DG data.",
     "verificationDetail": "Verification Detail",
     "verificationResult": "Verification Result",
+    "passportNumber": "Passport No.",
     "verificationTime": "Verification Time",
     "pageSubtitle": "View and filter Passive Authentication verification history.",
     "totalVerifications": "Total",

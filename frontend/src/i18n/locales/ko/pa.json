@@ -198,6 +198,7 @@
     "dgLoadFailed": "DG 데이터를 불러올 수 없습니다.",
     "verificationDetail": "검증 상세 정보",
     "verificationResult": "검증 결과",
+    "passportNumber": "여권 번호",
     "verificationTime": "검증 시각",
     "pageSubtitle": "Passive Authentication 검증 이력을 조회하고 필터링합니다.",
     "totalVerifications": "전체 검증",
