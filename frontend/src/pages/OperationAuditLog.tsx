@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
@@ -105,6 +106,7 @@ const OPERATION_TYPE_ICONS: Record<OperationType, React.ReactNode> = {
 
 export function OperationAuditLog() {
   const { t } = useTranslation(['admin', 'common']);
+  const [searchParams] = useSearchParams();
   // Data state
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,9 +116,9 @@ export function OperationAuditLog() {
   const [page, setPage] = useState(0);
   const limit = DEFAULT_PAGE_SIZE;
 
-  // Filters
+  // Filters — initialize from URL query params
   const [operationTypeFilter, setOperationTypeFilter] = useState<OperationType | ''>('');
-  const [usernameFilter, setUsernameFilter] = useState('');
+  const [usernameFilter, setUsernameFilter] = useState(searchParams.get('username') || '');
   const [successFilter, setSuccessFilter] = useState<'all' | 'success' | 'failure'>('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');

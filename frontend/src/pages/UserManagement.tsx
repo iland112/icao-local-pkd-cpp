@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle, Mail, Clock, User } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle, Mail, Clock, User, FileText, Activity } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { createAuthenticatedClient } from '@/services/authApi';
 import { authApi } from '@/services/api';
 import { PERMISSION_GROUPS, AVAILABLE_PERMISSIONS } from '@/utils/permissions';
@@ -31,6 +32,7 @@ const authClient = createAuthenticatedClient('/api/auth');
 
 export function UserManagement() {
   const { t } = useTranslation(['admin', 'common']);
+  const navigate = useNavigate();
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -387,28 +389,46 @@ export function UserManagement() {
               </div>
 
               {/* Card Footer — Actions */}
-              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-end gap-1">
-                <button
-                  onClick={() => openEditModal(user)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
-                >
-                  <Edit className="w-3.5 h-3.5" />
-                  {t('common:button.edit')}
-                </button>
-                <button
-                  onClick={() => openPasswordModal(user)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
-                >
-                  <Key className="w-3.5 h-3.5" />
-                  {t('common:label.password')}
-                </button>
-                <button
-                  onClick={() => openDeleteModal(user)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {t('common:button.delete')}
-                </button>
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
+                <div className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => navigate(`/admin/audit-log?username=${encodeURIComponent(user.username)}`)}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    title={t('admin:auditLog.title')}
+                  >
+                    <FileText className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => navigate(`/admin/operation-audit?username=${encodeURIComponent(user.username)}`)}
+                    className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                    title={t('admin:operationAudit.title')}
+                  >
+                    <Activity className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => openEditModal(user)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    {t('common:button.edit')}
+                  </button>
+                  <button
+                    onClick={() => openPasswordModal(user)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
+                  >
+                    <Key className="w-3.5 h-3.5" />
+                    {t('common:label.password')}
+                  </button>
+                  <button
+                    onClick={() => openDeleteModal(user)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {t('common:button.delete')}
+                  </button>
+                </div>
               </div>
             </div>
           ))}

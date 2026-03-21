@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
@@ -31,13 +32,14 @@ interface AuditStats {
 
 export function AuditLog() {
   const { t } = useTranslation(['admin', 'common']);
+  const [searchParams] = useSearchParams();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
 
-  // Filters
-  const [username, setUsername] = useState('');
+  // Filters — initialize from URL query params
+  const [username, setUsername] = useState(searchParams.get('username') || '');
   const [eventType, setEventType] = useState('');
   const [successFilter, setSuccessFilter] = useState('');
 
