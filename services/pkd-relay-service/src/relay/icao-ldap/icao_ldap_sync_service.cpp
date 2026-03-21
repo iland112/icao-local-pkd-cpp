@@ -15,6 +15,7 @@
 #include "i_query_executor.h"
 #include "query_helpers.h"
 #include <ldap_connection_pool.h>
+#include "../../common/notification_manager.h"
 
 // Validation library (shared lib - resolved by CMake include paths)
 #include <icao/validation/trust_chain_builder.h>
@@ -107,27 +108,74 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             return result;
         }
 
+        // Broadcast: connected
+        currentProgress_ = {};
+        currentProgress_.phase = "CONNECTING";
+        currentProgress_.message = "ICAO PKD LDAP 연결됨, 인증서 수 확인 중...";
+        broadcastProgress(currentProgress_);
+
         result.totalRemoteCount = client.getTotalEntryCount();
+        currentProgress_.totalRemoteCount = result.totalRemoteCount;
         spdlog::info("[IcaoLdapSync] Total entries in ICAO PKD: {}", result.totalRemoteCount);
 
-        // Sync helper lambda
+        // Sync helper lambda with per-entry progress broadcast
+        int typeIndex = 0;
         auto syncEntries = [&](const std::string& typeName,
                                std::vector<IcaoLdapCertEntry> (IcaoLdapClient::*searchFn)(int)) {
+            // Phase: searching
+            currentProgress_.phase = "SEARCHING";
+            currentProgress_.currentType = typeName;
+            currentProgress_.message = typeName + " 인증서 검색 중...";
+            broadcastProgress(currentProgress_);
+
             auto entries = (client.*searchFn)(0);
+
+            // Phase: processing
+            currentProgress_.phase = "PROCESSING";
+            currentProgress_.currentTypeTotal = static_cast<int>(entries.size());
+            currentProgress_.currentTypeProcessed = 0;
+            currentProgress_.currentTypeNew = 0;
+            currentProgress_.currentTypeSkipped = 0;
+            currentProgress_.message = typeName + " " + std::to_string(entries.size()) + "건 처리 중...";
+            broadcastProgress(currentProgress_);
+
             spdlog::info("[IcaoLdapSync] Processing {} {} entries...", entries.size(), typeName);
 
             for (const auto& entry : entries) {
                 try {
                     if (processEntry(entry)) {
                         result.newCertificates++;
+                        currentProgress_.currentTypeNew++;
+                        currentProgress_.totalNew++;
                     } else {
                         result.existingSkipped++;
+                        currentProgress_.currentTypeSkipped++;
+                        currentProgress_.totalSkipped++;
                     }
                 } catch (const std::exception& e) {
                     result.failedCount++;
+                    currentProgress_.totalFailed++;
                     spdlog::warn("[IcaoLdapSync] Failed to process {}: {}", entry.dn, e.what());
                 }
+
+                currentProgress_.currentTypeProcessed++;
+
+                // Broadcast every 50 entries or on last entry
+                if (currentProgress_.currentTypeProcessed % 50 == 0 ||
+                    currentProgress_.currentTypeProcessed == currentProgress_.currentTypeTotal) {
+                    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now() - result.startedAt).count();
+                    currentProgress_.elapsedMs = static_cast<int>(elapsed);
+                    currentProgress_.message = typeName + " " +
+                        std::to_string(currentProgress_.currentTypeProcessed) + "/" +
+                        std::to_string(currentProgress_.currentTypeTotal) + " 처리 완료 (신규: " +
+                        std::to_string(currentProgress_.currentTypeNew) + ")";
+                    broadcastProgress(currentProgress_);
+                }
             }
+
+            typeIndex++;
+            currentProgress_.completedTypes = typeIndex;
         };
 
         syncEntries("CSCA", &IcaoLdapClient::searchCscaCertificates);
@@ -722,6 +770,86 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(int limit) c
     }
 
     return history;
+}
+
+void IcaoLdapSyncService::broadcastProgress(const IcaoLdapSyncProgress& progress) {
+    Json::Value data;
+    data["phase"] = progress.phase;
+    data["currentType"] = progress.currentType;
+    data["totalTypes"] = progress.totalTypes;
+    data["completedTypes"] = progress.completedTypes;
+    data["currentTypeTotal"] = progress.currentTypeTotal;
+    data["currentTypeProcessed"] = progress.currentTypeProcessed;
+    data["currentTypeNew"] = progress.currentTypeNew;
+    data["currentTypeSkipped"] = progress.currentTypeSkipped;
+    data["totalNew"] = progress.totalNew;
+    data["totalSkipped"] = progress.totalSkipped;
+    data["totalFailed"] = progress.totalFailed;
+    data["totalRemoteCount"] = progress.totalRemoteCount;
+    data["message"] = progress.message;
+    data["elapsedMs"] = progress.elapsedMs;
+
+    notification::NotificationManager::getInstance().broadcast(
+        "ICAO_LDAP_SYNC_PROGRESS",
+        "ICAO PKD 동기화",
+        progress.message,
+        data);
+}
+
+IcaoLdapConnectionTestResult IcaoLdapSyncService::testConnection() {
+    IcaoLdapConnectionTestResult result;
+
+    auto start = std::chrono::steady_clock::now();
+
+    try {
+        std::unique_ptr<IcaoLdapClient> clientPtr;
+        if (config_.icaoLdapUseTls) {
+            IcaoLdapTlsConfig tlsCfg;
+            tlsCfg.enabled = true;
+            tlsCfg.certFile = config_.icaoLdapTlsCertFile;
+            tlsCfg.keyFile = config_.icaoLdapTlsKeyFile;
+            tlsCfg.caCertFile = config_.icaoLdapTlsCaCertFile;
+            clientPtr = std::make_unique<IcaoLdapClient>(
+                config_.icaoLdapHost, config_.icaoLdapPort,
+                config_.icaoLdapBaseDn, tlsCfg);
+            result.tlsMode = "TLS Mutual Auth (SASL EXTERNAL)";
+        } else {
+            clientPtr = std::make_unique<IcaoLdapClient>(
+                config_.icaoLdapHost, config_.icaoLdapPort,
+                config_.icaoLdapBindDn, config_.icaoLdapBindPassword,
+                config_.icaoLdapBaseDn);
+            result.tlsMode = "Simple Bind";
+        }
+
+        if (!clientPtr->connect()) {
+            result.success = false;
+            result.errorMessage = "Connection failed to " + config_.icaoLdapHost +
+                                 ":" + std::to_string(config_.icaoLdapPort);
+            auto elapsed = std::chrono::steady_clock::now() - start;
+            result.latencyMs = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+            return result;
+        }
+
+        auto elapsed = std::chrono::steady_clock::now() - start;
+        result.latencyMs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+
+        result.entryCount = clientPtr->getTotalEntryCount();
+        result.serverInfo = config_.icaoLdapHost + ":" + std::to_string(config_.icaoLdapPort);
+        result.success = true;
+
+        clientPtr->disconnect();
+
+    } catch (const std::exception& e) {
+        result.success = false;
+        result.errorMessage = e.what();
+        auto elapsed = std::chrono::steady_clock::now() - start;
+        result.latencyMs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());
+    }
+
+    return result;
 }
 
 } // namespace relay

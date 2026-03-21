@@ -40,6 +40,10 @@ private:
     void handleUpdateConfig(const drogon::HttpRequestPtr& req,
                            std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
+    /// POST /api/sync/icao-ldap/test — Test connection
+    void handleTestConnection(const drogon::HttpRequestPtr& req,
+                             std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
     IcaoLdapSyncService* syncService_;
 };
 

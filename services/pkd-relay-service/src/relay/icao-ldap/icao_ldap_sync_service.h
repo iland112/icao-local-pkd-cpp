@@ -57,6 +57,9 @@ public:
     /// Trigger a full sync (blocking). Returns result.
     IcaoLdapSyncResult performFullSync(const std::string& triggeredBy = "MANUAL");
 
+    /// Test connection to ICAO PKD LDAP (non-destructive)
+    IcaoLdapConnectionTestResult testConnection();
+
     /// Check if sync is currently running
     bool isSyncRunning() const { return syncRunning_.load(); }
 
@@ -120,9 +123,13 @@ private:
     /// Initialize validation components (lazy)
     void initValidation();
 
+    /// Broadcast current progress via SSE
+    void broadcastProgress(const IcaoLdapSyncProgress& progress);
+
     std::atomic<bool> syncRunning_{false};
     mutable std::mutex resultMutex_;
     IcaoLdapSyncResult lastResult_;
+    IcaoLdapSyncProgress currentProgress_;
 };
 
 } // namespace relay

@@ -496,6 +496,10 @@ export const syncApi = {
   /** Update ICAO LDAP sync config */
   updateIcaoLdapSyncConfig: (data: Partial<IcaoLdapSyncConfig>) =>
     relayApi.put<{ status: string; enabled: boolean; syncIntervalMinutes: number }>('/sync/icao-ldap/config', data),
+
+  /** Test ICAO LDAP connection */
+  testIcaoLdapConnection: () =>
+    relayApi.post<IcaoLdapConnectionTestResult>('/sync/icao-ldap/test'),
 };
 
 // --- ICAO LDAP Sync Types ---
@@ -537,6 +541,36 @@ export interface IcaoLdapSyncConfig {
   port: number;
   baseDn: string;
   syncIntervalMinutes: number;
+  useTls: boolean;
+  tlsCertFile: string;
+  tlsKeyFile: string;
+  tlsCaCertFile: string;
+}
+
+export interface IcaoLdapConnectionTestResult {
+  success: boolean;
+  latencyMs: number;
+  entryCount: number;
+  serverInfo: string;
+  tlsMode: string;
+  errorMessage?: string;
+}
+
+export interface IcaoLdapSyncProgress {
+  phase: string;
+  currentType: string;
+  totalTypes: number;
+  completedTypes: number;
+  currentTypeTotal: number;
+  currentTypeProcessed: number;
+  currentTypeNew: number;
+  currentTypeSkipped: number;
+  totalNew: number;
+  totalSkipped: number;
+  totalFailed: number;
+  totalRemoteCount: number;
+  message: string;
+  elapsedMs: number;
 }
 
 // --- Default Export ---

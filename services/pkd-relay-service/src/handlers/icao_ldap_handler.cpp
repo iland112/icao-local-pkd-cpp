@@ -38,6 +38,11 @@ void IcaoLdapHandler::registerRoutes(drogon::HttpAppFramework& app) {
         "/api/sync/icao-ldap/config",
         [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) { handleUpdateConfig(req, std::move(cb)); },
         {drogon::Put});
+
+    app.registerHandler(
+        "/api/sync/icao-ldap/test",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) { handleTestConnection(req, std::move(cb)); },
+        {drogon::Post});
 }
 
 void IcaoLdapHandler::handleTriggerSync(const drogon::HttpRequestPtr& req,
@@ -191,6 +196,32 @@ void IcaoLdapHandler::handleUpdateConfig(const drogon::HttpRequestPtr& req,
     json["status"] = "updated";
     json["enabled"] = config.enabled;
     json["syncIntervalMinutes"] = config.syncIntervalMinutes;
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(json);
+    callback(resp);
+}
+
+void IcaoLdapHandler::handleTestConnection(const drogon::HttpRequestPtr& req,
+                                           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    if (!syncService_) {
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(
+            Json::Value("ICAO LDAP sync not configured"));
+        resp->setStatusCode(drogon::k503ServiceUnavailable);
+        callback(resp);
+        return;
+    }
+
+    auto result = syncService_->testConnection();
+
+    Json::Value json;
+    json["success"] = result.success;
+    json["latencyMs"] = result.latencyMs;
+    json["entryCount"] = result.entryCount;
+    json["serverInfo"] = result.serverInfo;
+    json["tlsMode"] = result.tlsMode;
+    if (!result.errorMessage.empty()) {
+        json["errorMessage"] = result.errorMessage;
+    }
+
     auto resp = drogon::HttpResponse::newHttpJsonResponse(json);
     callback(resp);
 }
