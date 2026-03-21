@@ -118,21 +118,6 @@ TrustMaterialService::TrustMaterialResponse TrustMaterialService::fetchTrustMate
 
     std::string countryCode = request.countryCode.substr(0, 2); // Normalize to alpha-2
 
-    // Decrypt MRZ if provided
-    MrzFields mrzFields;
-    if (!request.encryptedMrz.empty()) {
-        try {
-            std::string decryptedMrz = auth::pii::decrypt(request.encryptedMrz);
-            if (!decryptedMrz.empty()) {
-                mrzFields = parseMrz(decryptedMrz);
-                spdlog::debug("[TrustMaterialService] MRZ parsed: nationality={}, docType={}",
-                    mrzFields.nationality, mrzFields.documentType);
-            }
-        } catch (const std::exception& e) {
-            spdlog::warn("[TrustMaterialService] MRZ decryption failed (non-critical): {}", e.what());
-        }
-    }
-
     // Fetch CSCAs from LDAP
     Json::Value cscaArray(Json::arrayValue);
     Json::Value linkCertArray(Json::arrayValue);
@@ -267,14 +252,12 @@ TrustMaterialService::TrustMaterialResponse TrustMaterialService::fetchTrustMate
     int processingMs = static_cast<int>(
         std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
 
-    // Save audit record
+    // Save audit record (status=REQUESTED, MRZ will be added when result is reported)
+    std::string requestId;
     try {
         repositories::TrustMaterialRequestRepository::RequestRecord record;
         record.countryCode = countryCode;
         record.dscIssuerDn = request.dscIssuerDn;
-        record.mrzNationality = mrzFields.nationality;
-        record.mrzDocumentType = mrzFields.documentType;
-        record.mrzDocumentNumber = mrzFields.documentNumber;
         record.cscaCount = cscaCount;
         record.linkCertCount = linkCertCount;
         record.crlCount = crlCount;
@@ -283,14 +266,16 @@ TrustMaterialService::TrustMaterialResponse TrustMaterialService::fetchTrustMate
         record.requestedBy = request.requestedBy;
         record.apiClientId = request.apiClientId;
         record.processingTimeMs = processingMs;
-        record.status = (cscaCount > 0) ? "SUCCESS" : "NOT_FOUND";
-        requestRepo_->insert(record);
+        record.status = (cscaCount > 0) ? "REQUESTED" : "NOT_FOUND";
+        requestId = requestRepo_->insert(record);
     } catch (const std::exception& e) {
         spdlog::warn("[TrustMaterialService] Audit record insert failed (non-critical): {}", e.what());
     }
 
     // Build response
+    response.requestId = requestId;
     response.data["countryCode"] = countryCode;
+    response.data["requestId"] = requestId;
     response.data["csca"] = cscaArray;
     response.data["linkCertificates"] = linkCertArray;
     response.data["crl"] = crlArray;
@@ -312,6 +297,62 @@ TrustMaterialService::TrustMaterialResponse TrustMaterialService::fetchTrustMate
 
     spdlog::info("[TrustMaterialService] Response: country={}, csca={}, linkCert={}, crl={}, {}ms",
         countryCode, cscaCount, linkCertCount, crlCount, processingMs);
+
+    return response;
+}
+
+TrustMaterialService::ResultReportResponse TrustMaterialService::reportResult(
+    const ResultReport& report, const std::string& clientIp)
+{
+    ResultReportResponse response;
+
+    if (report.requestId.empty()) {
+        response.errorMessage = "requestId is required";
+        return response;
+    }
+
+    if (report.verificationStatus.empty()) {
+        response.errorMessage = "verificationStatus is required";
+        return response;
+    }
+
+    // Decrypt MRZ if provided
+    MrzFields mrzFields;
+    if (!report.encryptedMrz.empty()) {
+        try {
+            std::string decryptedMrz = auth::pii::decrypt(report.encryptedMrz);
+            if (!decryptedMrz.empty()) {
+                mrzFields = parseMrz(decryptedMrz);
+                spdlog::debug("[TrustMaterialService] MRZ parsed: nationality={}, docType={}",
+                    mrzFields.nationality, mrzFields.documentType);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("[TrustMaterialService] MRZ decryption failed (non-critical): {}", e.what());
+        }
+    }
+
+    // Update DB record with result + MRZ
+    repositories::TrustMaterialRequestRepository::ResultRecord resultRecord;
+    resultRecord.requestId = report.requestId;
+    resultRecord.verificationStatus = report.verificationStatus;
+    resultRecord.verificationMessage = report.verificationMessage;
+    resultRecord.trustChainValid = report.trustChainValid;
+    resultRecord.sodSignatureValid = report.sodSignatureValid;
+    resultRecord.dgHashValid = report.dgHashValid;
+    resultRecord.crlCheckPassed = report.crlCheckPassed;
+    resultRecord.clientProcessingTimeMs = report.processingTimeMs;
+    resultRecord.mrzNationality = mrzFields.nationality;
+    resultRecord.mrzDocumentType = mrzFields.documentType;
+    resultRecord.mrzDocumentNumber = mrzFields.documentNumber;
+
+    response.success = requestRepo_->updateResult(resultRecord);
+    if (!response.success) {
+        response.errorMessage = "Failed to update result (requestId may not exist)";
+    }
+
+    spdlog::info("[TrustMaterialService] Result reported: requestId={}, status={}, mrz={}",
+        report.requestId.substr(0, 8), report.verificationStatus,
+        mrzFields.nationality.empty() ? "none" : mrzFields.nationality);
 
     return response;
 }

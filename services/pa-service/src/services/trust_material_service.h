@@ -26,7 +26,6 @@ public:
     struct TrustMaterialRequest {
         std::string countryCode;
         std::string dscIssuerDn;
-        std::string encryptedMrz;
         std::string requestedBy;
         std::string clientIp;
         std::string userAgent;
@@ -35,11 +34,31 @@ public:
 
     struct TrustMaterialResponse {
         bool success = false;
+        std::string requestId;
         Json::Value data;
         std::string errorMessage;
     };
 
     TrustMaterialResponse fetchTrustMaterials(const TrustMaterialRequest& request);
+
+    struct ResultReport {
+        std::string requestId;
+        std::string verificationStatus;  // VALID, INVALID, ERROR
+        std::string verificationMessage;
+        bool trustChainValid = false;
+        bool sodSignatureValid = false;
+        bool dgHashValid = false;
+        bool crlCheckPassed = false;
+        int processingTimeMs = 0;
+        std::string encryptedMrz;        // AES-256-GCM encrypted MRZ
+    };
+
+    struct ResultReportResponse {
+        bool success = false;
+        std::string errorMessage;
+    };
+
+    ResultReportResponse reportResult(const ResultReport& report, const std::string& clientIp);
 
 private:
     repositories::LdapCertificateRepository* certRepo_;

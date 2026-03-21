@@ -25,7 +25,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { paApi } from '@/services/paApi';
-import type { PAHistoryItem, PAStatus } from '@/types';
+import type { PAHistoryItem, PAStatus, TrustMaterialHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { getCountryName } from '@/utils/countryNames';
@@ -89,6 +89,13 @@ export function PAHistory() {
     error: number;
   }>({ total: 0, valid: 0, expiredValid: 0, invalid: 0, error: 0 });
 
+  // PA mode tab
+  const [paMode, setPaMode] = useState<'server' | 'client'>('server');
+  const [clientHistory, setClientHistory] = useState<TrustMaterialHistoryItem[]>([]);
+  const [clientLoading, setClientLoading] = useState(false);
+  const [clientPage, setClientPage] = useState(0);
+  const [clientTotal, setClientTotal] = useState(0);
+
   const pageSize = DEFAULT_PAGE_SIZE;
 
   useEffect(() => {
@@ -141,6 +148,26 @@ export function PAHistory() {
       setHistory([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch client PA history
+  useEffect(() => {
+    if (paMode === 'client') fetchClientHistory();
+  }, [paMode, clientPage]);
+
+  const fetchClientHistory = async () => {
+    setClientLoading(true);
+    try {
+      const response = await paApi.getTrustMaterialHistory({ page: clientPage, size: pageSize });
+      const resData = response.data;
+      setClientHistory(resData.data ?? []);
+      setClientTotal(resData.total ?? 0);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Failed to fetch client PA history:', error);
+      setClientHistory([]);
+    } finally {
+      setClientLoading(false);
     }
   };
 
@@ -382,7 +409,119 @@ export function PAHistory() {
         </div>
       </div>
 
-      {/* Filters Card */}
+      {/* PA Mode Tabs */}
+      <div className="flex gap-2 mb-4">
+        <button
+          onClick={() => setPaMode('server')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+            paMode === 'server'
+              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          )}
+        >
+          {t('pa:history.serverPA', 'Server PA')}
+        </button>
+        <button
+          onClick={() => setPaMode('client')}
+          className={cn(
+            'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
+            paMode === 'client'
+              ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300'
+              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+          )}
+        >
+          {t('pa:history.clientPA', 'Client PA')}
+          {clientTotal > 0 && (
+            <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-200 dark:bg-purple-900/70 text-purple-800 dark:text-purple-200">
+              {clientTotal.toLocaleString()}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Client PA History Table */}
+      {paMode === 'client' && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-slate-100 dark:bg-slate-800">
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.country')}</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">MRZ</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">CSCA/CRL</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:status.status')}</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.verificationResult')}</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('common:label.timestamp')}</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-gray-600 dark:text-gray-300">{t('pa:history.requestedBy')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50">
+                {clientLoading ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400"><Loader2 className="w-5 h-5 animate-spin inline-block mr-2" />{t('common:status.loading')}</td></tr>
+                ) : clientHistory.length === 0 ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">{t('common:label.noData')}</td></tr>
+                ) : clientHistory.map((item) => (
+                  <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                    <td className="px-3 py-2 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <img src={getFlagSvgPath(item.countryCode)} alt="" className="w-4 h-3 object-cover rounded-sm" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        <span className="font-medium">{item.countryCode}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-center text-xs text-gray-500">
+                      {item.mrzNationality && <span className="mr-1">{item.mrzNationality}</span>}
+                      {item.mrzDocumentType && <span className="px-1 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-xs">{item.mrzDocumentType}</span>}
+                      {!item.mrzNationality && !item.mrzDocumentType && <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-center text-xs">
+                      <span className="text-blue-600">{item.cscaCount} CSCA</span>
+                      {item.crlCount > 0 && <span className="ml-1 text-amber-600">{item.crlCount} CRL</span>}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <span className={cn('px-2 py-0.5 text-xs font-medium rounded-full',
+                        item.status === 'REQUESTED' ? 'bg-yellow-100 text-yellow-700' :
+                        item.status === 'VALID' ? 'bg-green-100 text-green-700' :
+                        item.status === 'INVALID' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-600'
+                      )}>
+                        {item.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {item.verificationStatus ? (
+                        <span className={cn('px-2 py-0.5 text-xs font-medium rounded-full',
+                          item.verificationStatus === 'VALID' ? 'bg-green-100 text-green-700' :
+                          item.verificationStatus === 'INVALID' ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        )}>
+                          {item.verificationStatus}
+                        </span>
+                      ) : <span className="text-xs text-gray-300">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-center text-xs text-gray-500">{formatDateTime(item.requestTimestamp)}</td>
+                    <td className="px-3 py-2 text-center text-xs text-gray-500">{item.requestedBy || item.clientIp || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {/* Client PA Pagination */}
+          {clientTotal > pageSize && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+              <span className="text-xs text-gray-500">{t('common:label.total')} {clientTotal.toLocaleString()}</span>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setClientPage(p => Math.max(0, p - 1))} disabled={clientPage === 0} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs text-gray-500">{clientPage + 1} / {Math.ceil(clientTotal / pageSize)}</span>
+                <button onClick={() => setClientPage(p => p + 1)} disabled={(clientPage + 1) * pageSize >= clientTotal} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Server PA: Filters Card + Table (existing) */}
+      {paMode === 'server' && (<>
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-blue-500" />
@@ -650,8 +789,9 @@ export function PAHistory() {
           </>
         )}
       </div>
+      </>)}
 
-      {/* Detail Modal */}
+      {/* Detail Modal (shown for server PA mode) */}
       {isModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center">
           {/* Backdrop */}

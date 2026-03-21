@@ -571,11 +571,6 @@ CREATE TABLE IF NOT EXISTS trust_material_request (
     country_code VARCHAR(3) NOT NULL,
     dsc_issuer_dn TEXT,
 
-    -- MRZ-derived audit fields (AES-256-GCM encrypted)
-    mrz_nationality VARCHAR(1024),
-    mrz_document_type VARCHAR(1024),
-    mrz_document_number VARCHAR(1024),
-
     -- Response info
     csca_count INTEGER DEFAULT 0,
     link_cert_count INTEGER DEFAULT 0,
@@ -591,9 +586,24 @@ CREATE TABLE IF NOT EXISTS trust_material_request (
     request_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     processing_time_ms INTEGER,
 
-    -- Status
-    status VARCHAR(20) DEFAULT 'SUCCESS',
-    error_message TEXT
+    -- Status (REQUESTED → VALID/INVALID/ERROR)
+    status VARCHAR(20) DEFAULT 'REQUESTED',
+    error_message TEXT,
+
+    -- Client PA result (reported via POST /api/pa/trust-materials/result)
+    verification_status VARCHAR(20),
+    verification_message TEXT,
+    trust_chain_valid BOOLEAN,
+    sod_signature_valid BOOLEAN,
+    dg_hash_valid BOOLEAN,
+    crl_check_passed BOOLEAN,
+    result_reported_at TIMESTAMP WITH TIME ZONE,
+    client_processing_time_ms INTEGER,
+
+    -- MRZ-derived audit fields (AES-256-GCM encrypted, sent with result)
+    mrz_nationality VARCHAR(1024),
+    mrz_document_type VARCHAR(1024),
+    mrz_document_number VARCHAR(1024)
 );
 
 CREATE INDEX idx_tmr_country ON trust_material_request(country_code);

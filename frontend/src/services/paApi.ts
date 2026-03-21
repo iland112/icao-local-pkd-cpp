@@ -83,7 +83,27 @@ export const paApi = {
   getTrustMaterials: (params: {
     countryCode: string;
     dscIssuerDn?: string;
-    encryptedMrz?: string;
     requestedBy?: string;
   }) => paClient.post('/pa/trust-materials', params),
+
+  /** Report client-side PA verification result with encrypted MRZ */
+  reportTrustMaterialResult: (params: {
+    requestId: string;
+    verificationStatus: string;
+    verificationMessage?: string;
+    trustChainValid?: boolean;
+    sodSignatureValid?: boolean;
+    dgHashValid?: boolean;
+    crlCheckPassed?: boolean;
+    processingTimeMs?: number;
+    encryptedMrz?: string;
+  }) => paClient.post('/pa/trust-materials/result', params),
+
+  /** Get client PA (trust material) request history */
+  getTrustMaterialHistory: (params?: { page?: number; size?: number; country?: string }) =>
+    paClient.get('/pa/trust-materials/history', { params }),
+
+  /** Get combined statistics (server PA + client PA) */
+  getCombinedStatistics: () =>
+    paClient.get('/pa/combined-statistics'),
 };

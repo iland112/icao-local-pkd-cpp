@@ -658,9 +658,6 @@ BEGIN
         id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
         country_code VARCHAR2(3) NOT NULL,
         dsc_issuer_dn VARCHAR2(4000),
-        mrz_nationality VARCHAR2(1024),
-        mrz_document_type VARCHAR2(1024),
-        mrz_document_number VARCHAR2(1024),
         csca_count NUMBER(10) DEFAULT 0,
         link_cert_count NUMBER(10) DEFAULT 0,
         crl_count NUMBER(10) DEFAULT 0,
@@ -670,8 +667,19 @@ BEGIN
         api_client_id VARCHAR2(100),
         request_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
         processing_time_ms NUMBER(10),
-        status VARCHAR2(20) DEFAULT ''SUCCESS'',
-        error_message VARCHAR2(4000)
+        status VARCHAR2(20) DEFAULT ''REQUESTED'',
+        error_message VARCHAR2(4000),
+        verification_status VARCHAR2(20),
+        verification_message VARCHAR2(4000),
+        trust_chain_valid NUMBER(1),
+        sod_signature_valid NUMBER(1),
+        dg_hash_valid NUMBER(1),
+        crl_check_passed NUMBER(1),
+        result_reported_at TIMESTAMP,
+        client_processing_time_ms NUMBER(10),
+        mrz_nationality VARCHAR2(1024),
+        mrz_document_type VARCHAR2(1024),
+        mrz_document_number VARCHAR2(1024)
     )';
 EXCEPTION WHEN OTHERS THEN
     IF SQLCODE != -955 THEN RAISE; END IF;

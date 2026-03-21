@@ -38,6 +38,7 @@ export function PADashboard() {
   const [stats, setStats] = useState<PAStatisticsOverview | null>(null);
   const [recentVerifications, setRecentVerifications] = useState<PAHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [clientPAStats, setClientPAStats] = useState<{ totalRequests: number; validCount: number; invalidCount: number; resultReportedCount: number } | null>(null);
 
   const formatTimeAgo = (diffMinutes: number): string => {
     if (diffMinutes < 60) {
@@ -56,9 +57,10 @@ export function PADashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [statsResponse, historyResponse] = await Promise.all([
+      const [statsResponse, historyResponse, combinedResponse] = await Promise.all([
         paApi.getStatistics(),
         paApi.getHistory({ page: 0, size: 100 }),
+        paApi.getCombinedStatistics().catch(() => null),
       ]);
 
       // Map backend statistics format to PAStatisticsOverview
@@ -76,6 +78,11 @@ export function PADashboard() {
       // Backend returns { success, total, page, size, data: [...] }
       const items = historyResponse.data.data ?? [];
       setRecentVerifications(items);
+
+      // Client PA statistics
+      if (combinedResponse?.data?.clientPA) {
+        setClientPAStats(combinedResponse.data.clientPA);
+      }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to fetch PA dashboard data:', error);
     } finally {
@@ -272,9 +279,14 @@ export function PADashboard() {
                       {t('pa:dashboard.totalVerificationCount')}
                     </h3>
                     <div className="text-3xl font-bold text-teal-500">
-                      {(stats?.totalVerifications ?? 0).toLocaleString()}
+                      {((stats?.totalVerifications ?? 0) + (clientPAStats?.totalRequests ?? 0)).toLocaleString()}
                     </div>
-                    <p className="text-xs mt-1 text-gray-400">{t('pa:dashboard.totalVerificationDesc')}</p>
+                    <p className="text-xs mt-1 text-gray-400">
+                      Server {(stats?.totalVerifications ?? 0).toLocaleString()}
+                      {(clientPAStats?.totalRequests ?? 0) > 0 && (
+                        <span className="ml-1">/ Client {clientPAStats!.totalRequests.toLocaleString()}</span>
+                      )}
+                    </p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-teal-50 dark:bg-teal-900/30">
                     <ShieldCheck className="w-8 h-8 text-teal-500" />

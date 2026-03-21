@@ -16,6 +16,7 @@ namespace services {
 }
 namespace repositories {
     class DataGroupRepository;
+    class TrustMaterialRequestRepository;
 }
 namespace icao {
     class SodParser;
@@ -56,7 +57,8 @@ public:
         icao::SodParser* sodParserService,
         icao::DgParser* dataGroupParserService,
         common::IQueryExecutor* queryExecutor = nullptr,
-        services::TrustMaterialService* trustMaterialService = nullptr);
+        services::TrustMaterialService* trustMaterialService = nullptr,
+        repositories::TrustMaterialRequestRepository* trustMaterialRequestRepo = nullptr);
 
     /**
      * @brief Register PA routes
@@ -74,14 +76,25 @@ private:
     icao::DgParser* dataGroupParserService_;
     common::IQueryExecutor* queryExecutor_;
     services::TrustMaterialService* trustMaterialService_;
+    repositories::TrustMaterialRequestRepository* trustMaterialRequestRepo_;
 
-    /**
-     * @brief POST /api/pa/trust-materials
-     *
-     * Fetch trust materials (CSCA/CRL/Link Certificates) for client-side PA.
-     * Accepts optional encrypted MRZ for audit/statistics.
-     */
+    /** POST /api/pa/trust-materials — Fetch CSCA/CRL for client-side PA */
     void handleTrustMaterials(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** POST /api/pa/trust-materials/result — Report client PA result + encrypted MRZ */
+    void handleTrustMaterialResult(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** GET /api/pa/trust-materials/history — Client PA request history */
+    void handleTrustMaterialHistory(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** GET /api/pa/combined-statistics — Server PA + Client PA combined stats */
+    void handleCombinedStatistics(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 

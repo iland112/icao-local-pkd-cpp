@@ -216,6 +216,8 @@
     "viewDetail": "상세 보기",
     "errorMessage": "오류 메시지",
     "newVerification": "새 검증",
+    "serverPA": "서버 PA",
+    "clientPA": "클라이언트 PA",
     "itemCount": "{{num}}건",
     "paginationInfo": "총 {{total}}개 중 {{from}}-{{to}}개 표시",
     "typeLookup": "간편",

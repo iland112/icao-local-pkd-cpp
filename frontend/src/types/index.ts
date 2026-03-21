@@ -798,6 +798,43 @@ export interface PAHistoryListResponse {
   data: PAHistoryItem[];
 }
 
+/** Trust Material Request history item (Client PA) */
+export interface TrustMaterialHistoryItem {
+  id: string;
+  countryCode: string;
+  cscaCount: number;
+  linkCertCount: number;
+  crlCount: number;
+  requestedBy?: string;
+  requestTimestamp: string;
+  processingTimeMs: number;
+  status: string;
+  verificationStatus?: string;
+  verificationMessage?: string;
+  mrzNationality?: string;
+  mrzDocumentType?: string;
+  clientIp?: string;
+}
+
+/** Backend response for GET /api/pa/combined-statistics */
+export interface CombinedPAStatistics {
+  success: boolean;
+  serverPA: PAStatisticsRawResponse;
+  clientPA: {
+    totalRequests: number;
+    byStatus: Record<string, number>;
+    byCountry: Array<{ countryCode: string; count: number }>;
+    resultReportedCount: number;
+    validCount: number;
+    invalidCount: number;
+  };
+  combined: {
+    totalRequests: number;
+    serverCount: number;
+    clientCount: number;
+  };
+}
+
 /** Backend response for POST /api/upload/certificate */
 export interface CertificateUploadResponse {
   success: boolean;

@@ -216,6 +216,8 @@
     "viewDetail": "View Detail",
     "errorMessage": "Error Message",
     "newVerification": "New Verification",
+    "serverPA": "Server PA",
+    "clientPA": "Client PA",
     "itemCount": "{{num}} items",
     "paginationInfo": "Showing {{from}}-{{to}} of {{total}}",
     "typeLookup": "Lookup",
