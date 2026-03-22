@@ -6,7 +6,280 @@
 
 ---
 
-## 1. 구현 완료 항목
+## 1. ICAO PKD LDAP 통신 전체 절차
+
+### 1.1 전체 흐름도
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                                                                         │
+│   [Step 1]  CSR 생성                                                    │
+│   ┌────────────────────────────────────────────┐                       │
+│   │  CSR 관리 페이지 (/admin/csr)               │                       │
+│   │                                            │                       │
+│   │  관리자 입력:                                │                       │
+│   │    Country Code: KR                        │                       │
+│   │    Organization: Ministry of Justice        │                       │
+│   │    Common Name:  KRDownloader03            │                       │
+│   │                                            │                       │
+│   │  자동 생성:                                  │                       │
+│   │    RSA-2048 키 페어 (공개키 + 개인키)         │                       │
+│   │    PKCS#10 CSR (SHA256withRSA 서명)          │                       │
+│   │                                            │                       │
+│   │  DB 저장:                                   │                       │
+│   │    csr_pem ← AES-256-GCM 암호화            │                       │
+│   │    private_key_encrypted ← AES-256-GCM     │                       │
+│   │    status: CREATED                         │                       │
+│   └────────────────────────────────────────────┘                       │
+│                         │                                               │
+│                         ▼                                               │
+│   [Step 2]  인증서 발급 (2가지 경로)                                     │
+│   ┌─────────────────────┬──────────────────────┐                       │
+│   │  경로 A: 로컬 CA     │  경로 B: ICAO 발급    │                       │
+│   │  (개발/테스트)        │  (프로덕션)           │                       │
+│   │                     │                      │                       │
+│   │  "CA 인증서 발급"    │  "PEM 내보내기"       │                       │
+│   │  버튼 클릭           │  → CSR 파일 다운로드   │                       │
+│   │       │             │       │              │                       │
+│   │       ▼             │       ▼              │                       │
+│   │  Private CA가       │  ICAO에 이메일 제출   │                       │
+│   │  CSR 자동 서명       │       │              │                       │
+│   │  (SHA256, 365일)    │       ▼              │                       │
+│   │       │             │  ICAO가 D-Trust CA로 │                       │
+│   │       │             │  인증서 발급          │                       │
+│   │       │             │       │              │                       │
+│   │       │             │       ▼              │                       │
+│   │       │             │  "ICAO 발급 인증서    │                       │
+│   │       │             │   등록" 버튼 클릭     │                       │
+│   │       │             │  (공개키 매칭 검증)    │                       │
+│   │       ▼             │       ▼              │                       │
+│   │  status: ISSUED     │  status: ISSUED      │                       │
+│   └─────────────────────┴──────────────────────┘                       │
+│                         │                                               │
+│                         ▼                                               │
+│   [Step 3]  TLS 인증서 파일 배포                                         │
+│   ┌────────────────────────────────────────────┐                       │
+│   │  /app/icao-tls/ (Docker 볼륨)               │                       │
+│   │                                            │                       │
+│   │  ┌──────────────┐  CSR 서명 시 자동 생성    │                       │
+│   │  │ client.pem   │  ← 클라이언트 인증서      │                       │
+│   │  │              │     (CA 서명된 공개키)     │                       │
+│   │  ├──────────────┤                          │                       │
+│   │  │ client-key   │  ← 클라이언트 개인키      │                       │
+│   │  │   .pem       │     (DB에서 복호화)       │                       │
+│   │  ├──────────────┤                          │                       │
+│   │  │ ca.pem       │  ← CA 인증서             │                       │
+│   │  │              │     (서버 검증용)         │                       │
+│   │  └──────────────┘                          │                       │
+│   │                                            │                       │
+│   │  ┌──────────────┐  init-icao-sim-cert.sh   │                       │
+│   │  │ ldap-server  │  ← LDAP 서버 인증서      │                       │
+│   │  │   .crt       │     (Private CA 서명)     │                       │
+│   │  ├──────────────┤                          │                       │
+│   │  │ ldap-server  │  ← LDAP 서버 개인키      │                       │
+│   │  │   .key       │                          │                       │
+│   │  └──────────────┘                          │                       │
+│   └────────────────────────────────────────────┘                       │
+│                         │                                               │
+│                         ▼                                               │
+│   [Step 4]  TLS 상호 인증 연결 (LDAPS)                                   │
+│   ┌────────────────────────────────────────────────────────────┐       │
+│   │                                                            │       │
+│   │  PKD Relay                    ICAO PKD LDAP               │       │
+│   │  ┌──────────┐                ┌──────────────┐             │       │
+│   │  │          │───── TLS ─────→│              │             │       │
+│   │  │ LDAP V3  │  ClientHello   │  LDAPS :636  │             │       │
+│   │  │ Client   │←── ServerHello │  OpenLDAP    │             │       │
+│   │  │          │   + 서버 인증서  │  TLS 서버     │             │       │
+│   │  │          │                │              │             │       │
+│   │  │  ① 서버 인증서 검증         │              │             │       │
+│   │  │    ca.pem으로 서버 cert 확인│              │             │       │
+│   │  │                           │              │             │       │
+│   │  │  ② 클라이언트 인증서 전송    │              │             │       │
+│   │  │    client.pem ──────────→ │              │             │       │
+│   │  │                           │              │             │       │
+│   │  │                           │ ③ 클라이언트   │             │       │
+│   │  │                           │   인증서 검증  │             │       │
+│   │  │                           │   ca.pem으로  │             │       │
+│   │  │                           │   client 확인 │             │       │
+│   │  │                           │              │             │       │
+│   │  │  ④ TLS 핸드셰이크 완료      │              │             │       │
+│   │  │    (암호화 채널 수립)        │              │             │       │
+│   │  │                           │              │             │       │
+│   │  │  ⑤ SASL EXTERNAL Bind     │              │             │       │
+│   │  │    (비밀번호 불필요 — 인증서 │              │             │       │
+│   │  │     기반 신원 확인)         │              │             │       │
+│   │  │                           │              │             │       │
+│   │  │  ⑥ LDAP Search 시작       │              │             │       │
+│   │  │    인증서 다운로드          │              │             │       │
+│   │  └──────────┘                └──────────────┘             │       │
+│   │                                                            │       │
+│   └────────────────────────────────────────────────────────────┘       │
+│                         │                                               │
+│                         ▼                                               │
+│   [Step 5]  인증서 동기화                                                │
+│   ┌────────────────────────────────────────────────────────────┐       │
+│   │                                                            │       │
+│   │  ICAO PKD LDAP                     Local PKD              │       │
+│   │  dc=download,dc=pkd,              ┌──────────────┐       │       │
+│   │  dc=icao,dc=int                   │              │       │       │
+│   │                                   │   Oracle DB  │       │       │
+│   │  ┌─ dc=data ──────────┐          │   + 메타추출  │       │       │
+│   │  │  c=KR              │  ──────→  │   + Trust    │       │       │
+│   │  │   o=csca (CSCA)    │  LDAP V3  │     Chain    │       │       │
+│   │  │   o=dsc  (DSC)     │  검색     │     검증     │       │       │
+│   │  │   o=crl  (CRL)     │          │   + CRL 확인  │       │       │
+│   │  │  c=JP              │          │              │       │       │
+│   │  │   o=csca           │          ├──────────────┤       │       │
+│   │  │   o=dsc            │          │              │       │       │
+│   │  │   ...              │          │  Local LDAP  │       │       │
+│   │  └────────────────────┘          │  OpenLDAP    │       │       │
+│   │  ┌─ dc=nc-data ───────┐          │  (MMR)       │       │       │
+│   │  │  c=XX              │  ──────→  │              │       │       │
+│   │  │   o=dsc (DSC_NC)   │          │              │       │       │
+│   │  └────────────────────┘          └──────────────┘       │       │
+│   │                                                            │       │
+│   │  처리 파이프라인:                                            │       │
+│   │  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐          │       │
+│   │  │ CSCA   │→ │  DSC   │→ │  CRL   │→ │ DSC_NC │          │       │
+│   │  │ 889건  │  │30,046건│  │  90건  │  │ 502건  │          │       │
+│   │  └────────┘  └────────┘  └────────┘  └────────┘          │       │
+│   │       │           │           │           │                │       │
+│   │       ▼           ▼           ▼           ▼                │       │
+│   │  fingerprint 중복 체크 (SHA-256)                            │       │
+│   │       │                                                    │       │
+│   │       ├── 기존: SKIP                                       │       │
+│   │       │                                                    │       │
+│   │       └── 신규:                                            │       │
+│   │            ├── X.509 메타데이터 22개 필드 추출               │       │
+│   │            ├── DB 저장 (certificate 테이블)                 │       │
+│   │            ├── LDAP 저장 (로컬 OpenLDAP)                   │       │
+│   │            ├── Trust Chain 검증 (DSC→Link→Root CSCA)       │       │
+│   │            ├── CRL 폐기 확인                               │       │
+│   │            └── validation_result 테이블 저장               │       │
+│   │                                                            │       │
+│   └────────────────────────────────────────────────────────────┘       │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.2 인증서 신뢰 체인 (Trust Chain)
+
+```
+Private CA (ca.key / ca.crt)
+    │
+    │  ICAO Local PKD Private CA
+    │  C=KR/O=SmartCore Inc./OU=PKD Operations
+    │  RSA 4096-bit, 10년 유효
+    │
+    ├── [서버 인증서] ldap-server.crt
+    │       Subject: C=CH/O=ICAO/OU=PKD/CN=icao-pkd-ldap
+    │       SAN: DNS=icao-pkd-ldap, localhost
+    │       RSA 2048-bit, 365일 유효
+    │       용도: ICAO PKD LDAP 서버의 LDAPS 서비스
+    │
+    └── [클라이언트 인증서] client.pem
+            Subject: C=KR/O=Ministry of Justice/CN=KRDownloader03
+            RSA 2048-bit, 365일 유효
+            용도: PKD Relay가 SASL EXTERNAL 인증에 사용
+
+동일 CA → 서버/클라이언트 상호 검증 가능
+```
+
+### 1.3 TLS 상호 인증 상세 시퀀스
+
+```
+  PKD Relay (Client)                              ICAO PKD LDAP (Server)
+       │                                                │
+   ①  │──── TCP Connect ──────────────────────────────→│  ldaps://host:636
+       │                                                │
+   ②  │──── ClientHello ─────────────────────────────→│  TLS 1.2/1.3
+       │     (지원 cipher suites, 프로토콜 버전)          │
+       │                                                │
+   ③  │←─── ServerHello + ServerCertificate ──────────│
+       │     (ldap-server.crt 전송)                      │
+       │                                                │
+   ④  │     서버 인증서 검증:                             │
+       │     ca.pem으로 ldap-server.crt 서명 확인         │
+       │     CN/SAN 호스트명 일치 확인                     │
+       │     유효기간 확인                                │
+       │                                                │
+   ⑤  │←─── CertificateRequest ──────────────────────│
+       │     (서버가 클라이언트 인증서 요청)                │
+       │                                                │
+   ⑥  │──── ClientCertificate ───────────────────────→│
+       │     (client.pem 전송)                           │
+       │                                                │
+   ⑦  │──── CertificateVerify ──────────────────────→│
+       │     (client-key.pem으로 서명 증명)               │
+       │                                                │
+   ⑧  │                                                │  클라이언트 인증서 검증:
+       │                                                │  ca.pem으로 client.pem 서명 확인
+       │                                                │  Subject DN에서 신원 추출
+       │                                                │
+   ⑨  │──── Finished ←─→ Finished ──────────────────│  TLS 핸드셰이크 완료
+       │     (암호화 채널 수립)                            │
+       │                                                │
+   ⑩  │──── SASL EXTERNAL Bind ─────────────────────→│
+       │     DN="" mechanism="EXTERNAL"                  │
+       │     (비밀번호 없음 — 인증서로 인증 완료)           │
+       │                                                │
+   ⑪  │←─── Bind Success ───────────────────────────│
+       │                                                │
+   ⑫  │──── LDAP Search ────────────────────────────→│
+       │     base: dc=data,dc=download,...               │
+       │     filter: (objectClass=pkdDownload)           │
+       │     scope: subtree                              │
+       │                                                │
+   ⑬  │←─── Search Results (인증서 바이너리) ──────────│
+       │     userCertificate;binary (DER)                │
+       │     certificateRevocationList;binary (DER)      │
+       │                                                │
+   ⑭  │──── Unbind ─────────────────────────────────→│
+       │                                                │
+```
+
+### 1.4 환경별 설정 비교
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    개발/테스트 환경                                │
+│                                                                  │
+│  .env:                                                           │
+│    ICAO_LDAP_HOST=icao-pkd-ldap        ← Docker 컨테이너명       │
+│    ICAO_LDAP_PORT=636                  ← LDAPS                  │
+│    ICAO_LDAP_USE_TLS=true                                       │
+│    ICAO_LDAP_TLS_CERT_FILE=/app/icao-tls/client.pem             │
+│    ICAO_LDAP_TLS_KEY_FILE=/app/icao-tls/client-key.pem          │
+│    ICAO_LDAP_TLS_CA_CERT_FILE=/app/icao-tls/ca.pem              │
+│                                                                  │
+│  CA: Private CA (자체 서명)                                      │
+│  인증서 발급: CSR 관리 → "CA 인증서 발급" 버튼                    │
+│  LDAP 서버: icao-pkd-ldap Docker 컨테이너                        │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│                    프로덕션 환경                                  │
+│                                                                  │
+│  .env:                                                           │
+│    ICAO_LDAP_HOST=pkddownloadsg.icao.int   ← ICAO PKD 서버      │
+│    ICAO_LDAP_PORT=636                      ← LDAPS              │
+│    ICAO_LDAP_USE_TLS=true                                       │
+│    ICAO_LDAP_TLS_CERT_FILE=/app/icao-tls/client.pem             │
+│    ICAO_LDAP_TLS_KEY_FILE=/app/icao-tls/client-key.pem          │
+│    ICAO_LDAP_TLS_CA_CERT_FILE=/app/icao-tls/d-trust-ca.pem     │
+│                                                                  │
+│  CA: D-Trust Extended Validation TLS CA (ICAO 공인 CA)           │
+│  인증서 발급: CSR PEM → ICAO 이메일 제출 → ICAO 발급 → 등록     │
+│  LDAP 서버: pkddownloadsg.icao.int (싱가포르)                    │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+
+전환 시 변경사항: .env 파일의 5개 값만 변경 (코드 변경 없음)
+```
+
+---
+
+## 2. 구현 상세
 
 ### Phase 1: Private CA 인증서 발급 + UI (완료)
 
@@ -16,104 +289,68 @@
 |------|---------|
 | **API** | `POST /api/csr/{id}/sign` — Private CA로 CSR 서명 |
 | **서명 로직** | OpenSSL `X509_REQ` → `X509` 변환, SHA256 서명, 365일 유효 |
-| **CA 로드** | `/app/ssl/ca.key` + `/app/ssl/ca.crt` (환경변수 CA_KEY_PATH, CA_CERT_PATH로 변경 가능) |
+| **CA 로드** | `/app/ssl/ca.key` + `/app/ssl/ca.crt` (환경변수로 변경 가능) |
 | **인증서 저장** | 기존 `registerCertificate()` 재사용 → DB ISSUED 자동 전환 |
 | **TLS 파일 출력** | `/app/icao-tls/client.pem`, `client-key.pem`, `ca.pem` 저장 |
 | **개인키 복호화** | DB에서 AES-256-GCM 복호화 → PEM 파일 저장 |
-| **감사 로그** | `CSR_GENERATE` 타입으로 기록 (metadata: action=signWithCA) |
+| **감사 로그** | `CSR_GENERATE` 타입으로 기록 |
 
 #### Frontend — CsrManagement 페이지
 
 | 버튼 | 상태 | 동작 |
 |------|------|------|
-| **CA 인증서 발급** (blue) | CREATED | Private CA로 즉시 서명 → ISSUED 전환 |
-| **ICAO 발급 인증서 등록** (amber) | CREATED | PEM 수동 입력 → 공개키 매칭 → ISSUED (프로덕션용) |
-| **ICAO PKD 연결 적용** (green) | ISSUED | ICAO PKD 동기화 페이지로 네비게이션 |
-
-#### Docker 설정
-
-```yaml
-# PKD Management 볼륨 추가
-volumes:
-  - ../.docker-data/ssl:/app/ssl:ro              # Private CA (read-only)
-  - ../.docker-data/icao-pkd-tls:/app/icao-tls   # TLS 출력 (client cert/key)
-```
-
-### 파일 변경 목록
-
-| 파일 | 변경 |
-|------|------|
-| `services/pkd-management/src/services/csr_service.h` | `signWithCA()` 메서드 선언 |
-| `services/pkd-management/src/services/csr_service.cpp` | `signWithCA()` 구현 (120줄) |
-| `services/pkd-management/src/handlers/csr_handler.h` | `handleSignWithCA()` 선언 |
-| `services/pkd-management/src/handlers/csr_handler.cpp` | `/api/csr/{id}/sign` 엔드포인트 + 핸들러 |
-| `frontend/src/services/csrApi.ts` | `signWithCA(id)` API 함수 |
-| `frontend/src/pages/CsrManagement.tsx` | CA 발급 + ICAO 연결 적용 버튼 |
-| `docker/docker-compose.yaml` | PKD Management CA/TLS 볼륨 마운트 |
-
----
-
-## 2. 구현 완료 항목 (Phase 2~3)
+| **CA 인증서 발급** (blue) | CREATED | Private CA로 즉시 서명 → ISSUED |
+| **ICAO 발급 인증서 등록** (amber) | CREATED | PEM 수동 입력 → 공개키 매칭 → ISSUED |
+| **ICAO PKD 연결 적용** (green) | ISSUED | ICAO PKD 동기화 페이지로 이동 |
 
 ### Phase 2: ICAO PKD LDAP TLS 서버 설정 (완료)
 
-| 항목 | 내용 | 상태 |
-|------|------|------|
-| 서버 인증서 발급 | `scripts/ssl/init-icao-sim-cert.sh` — Private CA로 LDAP 서버 cert 발급 | ✅ 완료 |
-| Docker TLS 활성화 | `LDAP_TLS=true`, `LDAP_TLS_VERIFY_CLIENT=try` | ✅ 완료 |
-| LDAPS 포트 636 | docker-compose `13636:636` 매핑 | ✅ 완료 |
-| TLS 볼륨 마운트 | `.docker-data/icao-pkd-tls/` → `/container/service/slapd/assets/certs/` | ✅ 완료 |
+| 항목 | 내용 |
+|------|------|
+| 서버 인증서 발급 | `scripts/ssl/init-icao-sim-cert.sh` — Private CA로 서버 cert 발급 |
+| Docker TLS 활성화 | `LDAP_TLS=true`, `LDAP_TLS_VERIFY_CLIENT=try` |
+| LDAPS 포트 | `13636:636` |
+| TLS 볼륨 | `.docker-data/icao-pkd-tls/` → slapd certs |
 
 ### Phase 3: PKD Relay TLS 연결 (완료)
 
-| 항목 | 내용 | 상태 |
-|------|------|------|
-| .env TLS 설정 | `ICAO_LDAP_USE_TLS=true`, `ICAO_LDAP_PORT=636` | ✅ 완료 |
-| 연결 테스트 | `POST /api/sync/icao-ldap/test` → TLS Mutual Auth (SASL EXTERNAL), 58ms | ✅ 성공 |
-| E2E 검증 | CSR 생성 → CA 서명 → client.pem → LDAPS:636 SASL EXTERNAL | ✅ 성공 |
+| 항목 | 내용 |
+|------|------|
+| .env TLS 설정 | `ICAO_LDAP_USE_TLS=true`, `ICAO_LDAP_PORT=636` |
+| 연결 테스트 결과 | TLS Mutual Auth (SASL EXTERNAL), **58ms** |
+| E2E 검증 | CSR → CA 서명 → client.pem → LDAPS:636 SASL EXTERNAL ✅ |
 
 ---
 
-## 3. 사용자 시나리오
-
-### 현재 (Phase 1 완료)
+## 3. 파일 구조
 
 ```
-1. CSR 관리 (/admin/csr) → "CSR 생성" → RSA-2048 키 생성
-2. 상세 다이얼로그 → "CA 인증서 발급" → Private CA로 즉시 서명
-   → status: CREATED → ISSUED
-   → /app/icao-tls/ 에 client.pem, client-key.pem, ca.pem 저장
-3. "ICAO PKD 연결 적용" → ICAO PKD 동기화 페이지로 이동
+.docker-data/icao-pkd-tls/
+├── ca.pem              ← Private CA 인증서 (서버/클라이언트 공용)
+├── client.pem          ← 클라이언트 인증서 (CSR → CA 서명)
+├── client-key.pem      ← 클라이언트 개인키 (DB 복호화)
+├── ldap-server.crt     ← LDAP 서버 인증서 (Private CA 서명)
+└── ldap-server.key     ← LDAP 서버 개인키
 ```
-
-### 프로덕션 전환 시
-
-```
-1. CSR 관리 → "CSR 생성" → "PEM 내보내기" → ICAO에 제출
-2. ICAO 발급 인증서 수신 → "ICAO 발급 인증서 등록" → 공개키 매칭 → ISSUED
-3. .env 변경: ICAO_LDAP_HOST=pkddownloadsg.icao.int, ICAO_LDAP_USE_TLS=true
-```
-
----
 
 ## 4. 검증 결과
 
 | 항목 | 결과 |
 |------|------|
-| PKD Management Docker 빌드 | [100%] Built target pkd-management |
-| Frontend TypeScript 검증 | 에러 없음 |
-| Frontend Docker 빌드 | Built |
-| ICAO LDAP LDAPS 내부 테스트 | ldapsearch -H ldaps://localhost 성공 |
-| PKD Relay TLS 연결 테스트 | TLS Mutual Auth (SASL EXTERNAL), 58ms |
-| TLS 파일 생성 | client.pem + client-key.pem + ca.pem + ldap-server.crt/key |
-| 전체 서비스 healthy | ✅ |
+| PKD Management Docker 빌드 | ✅ Built |
+| Frontend TypeScript 검증 | ✅ 에러 없음 |
+| ICAO LDAP LDAPS 내부 테스트 | ✅ ldapsearch -H ldaps://localhost |
+| PKD Relay TLS 연결 | ✅ SASL EXTERNAL, 58ms |
+| TLS 파일 생성 | ✅ 5개 파일 (client + server + CA) |
+| 전체 서비스 | ✅ healthy |
 
 ### E2E 시나리오 검증
 
 ```
-1. CSR 생성 (POST /api/csr/generate) → RSA-2048 ✅
-2. CA 인증서 발급 (POST /api/csr/{id}/sign) → Private CA 서명 ✅
-3. TLS 파일 자동 저장 → client.pem, client-key.pem, ca.pem ✅
-4. LDAP TLS 서버 → icao-pkd-ldap:636 LDAPS ✅
-5. PKD Relay TLS 연결 → SASL EXTERNAL 인증 58ms ✅
+1. CSR 생성 (POST /api/csr/generate)           → RSA-2048      ✅
+2. CA 인증서 발급 (POST /api/csr/{id}/sign)      → Private CA 서명 ✅
+3. TLS 파일 자동 저장                            → 3개 파일       ✅
+4. LDAP TLS 서버 (icao-pkd-ldap:636)            → LDAPS 활성화   ✅
+5. PKD Relay TLS 연결 (SASL EXTERNAL)           → 58ms           ✅
+6. 인증서 동기화 (CSCA/DSC/CRL/DSC_NC)          → 31,277건       ✅
 ```
