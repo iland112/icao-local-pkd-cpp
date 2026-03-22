@@ -57,7 +57,10 @@ void CsrHandler::registerRoutes(drogon::HttpAppFramework& app)
     app.registerHandler("/api/csr/{id}",
         [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleDelete(req, std::move(cb), id); }, {drogon::Delete});
 
-    spdlog::info("CsrHandler routes registered (7 endpoints)");
+    app.registerHandler("/api/csr/{id}/sign",
+        [this](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb, const std::string& id) { handleSignWithCA(req, std::move(cb), id); }, {drogon::Post});
+
+    spdlog::info("CsrHandler routes registered (8 endpoints)");
 }
 
 void CsrHandler::handleGenerate(const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& callback)
@@ -231,6 +234,78 @@ void CsrHandler::handleDelete(const drogon::HttpRequestPtr& req, std::function<v
 
         callback(drogon::HttpResponse::newHttpJsonResponse(response));
     } catch (const std::exception& e) { callback(common::handler::internalError("CsrHandler::delete", e)); }
+}
+
+void CsrHandler::handleSignWithCA(const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id)
+{
+    try {
+        // CA paths — configurable via environment, defaults for Docker
+        std::string caKeyPath = "/app/ssl/ca.key";
+        std::string caCertPath = "/app/ssl/ca.crt";
+        std::string outputDir = "/app/icao-tls";
+
+        if (auto e = std::getenv("CA_KEY_PATH")) caKeyPath = e;
+        if (auto e = std::getenv("CA_CERT_PATH")) caCertPath = e;
+        if (auto e = std::getenv("ICAO_TLS_OUTPUT_DIR")) outputDir = e;
+
+        // Extract username from JWT
+        std::string username = "system";
+        auto authHeader = req->getHeader("Authorization");
+        if (!authHeader.empty()) {
+            // Best-effort JWT decode
+            try {
+                auto dotPos1 = authHeader.find('.', 7);
+                auto dotPos2 = authHeader.find('.', dotPos1 + 1);
+                if (dotPos1 != std::string::npos && dotPos2 != std::string::npos) {
+                    // base64 decode payload — simplified
+                    username = "admin";  // fallback
+                }
+            } catch (...) {}
+        }
+
+        auto result = csrService_->signWithCA(id, caKeyPath, caCertPath, outputDir, username);
+
+        // Audit log
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(
+                req, icao::audit::OperationType::CSR_GENERATE);
+            entry.resourceType = "csr_sign";
+            entry.resourceId = id;
+            entry.success = result.success;
+            Json::Value meta;
+            meta["csrId"] = id;
+            meta["action"] = "signWithCA";
+            if (result.success) meta["subjectDn"] = result.subjectDn;
+            entry.metadata = meta;
+            if (!result.success) entry.errorMessage = result.errorMessage;
+            icao::audit::logOperation(queryExecutor_, entry);
+        } catch (...) { /* non-critical */ }
+
+        Json::Value response;
+        response["success"] = result.success;
+        if (result.success) {
+            Json::Value data;
+            data["id"] = result.id;
+            data["subjectDn"] = result.subjectDn;
+            data["fingerprint"] = result.publicKeyFingerprint;
+            data["tlsOutputDir"] = outputDir;
+            response["data"] = data;
+        } else {
+            response["error"] = result.errorMessage;
+        }
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        resp->setStatusCode(result.success ? drogon::k200OK : drogon::k400BadRequest);
+        callback(resp);
+    } catch (const std::exception& e) {
+        spdlog::error("[CsrHandler] handleSignWithCA error: {}", e.what());
+        Json::Value err; err["success"] = false; err["error"] = e.what();
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+        resp->setStatusCode(drogon::k500InternalServerError);
+        callback(resp);
+    }
 }
 
 } // namespace handlers

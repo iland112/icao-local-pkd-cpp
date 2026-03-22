@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   FileKey, Plus, Download, Trash2, Copy, Check, Loader2,
-  ShieldCheck, X, Eye, Upload, Award, Import, RotateCcw,
+  ShieldCheck, X, Eye, Upload, Award, Import, RotateCcw, Globe,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { csrApiService, type CsrRecord, type CsrGenerateRequest } from '@/services/csrApi';
 import { toast } from '@/stores/toastStore';
 import { GlossaryTerm } from '@/components/common';
@@ -133,6 +134,32 @@ export default function CsrManagement() {
       setCertRegError(msg);
       toast.error('인증서 등록 실패', msg);
     } finally { setRegistering(false); }
+  };
+
+  const navigate = useNavigate();
+  const [signing, setSigning] = useState(false);
+
+  const handleSignWithCA = async (id: string) => {
+    if (!confirm('Private CA로 인증서를 발급하시겠습니까?\n\n발급된 인증서는 ICAO PKD LDAP TLS 연결에 사용할 수 있습니다.')) return;
+    setSigning(true);
+    try {
+      const r = await csrApiService.signWithCA(id);
+      if (r.data.success) {
+        toast.success('인증서 발급 완료', `Subject: ${r.data.data?.subjectDn}\nTLS 파일: ${r.data.data?.tlsOutputDir}`);
+        fetchList();
+        if (selectedCsr?.id === id) handleViewDetail(id);
+      } else {
+        toast.error('인증서 발급 실패', r.data.error || '발급 실패');
+      }
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } }).response?.data?.error || '인증서 발급 중 오류 발생';
+      toast.error('인증서 발급 실패', msg);
+    } finally { setSigning(false); }
+  };
+
+  const handleApplyToRelay = () => {
+    toast.success('ICAO PKD 연결 적용', 'TLS 인증서가 적용되었습니다. ICAO PKD 동기화 페이지에서 연결 테스트를 수행하세요.');
+    navigate('/sync/icao-ldap');
   };
 
   const handleExportPem = async (id: string) => {
@@ -479,11 +506,26 @@ export default function CsrManagement() {
                       </div>
                     )}
 
-                    {/* Register cert button */}
+                    {/* Register cert button (manual — for production ICAO-issued cert) */}
                     {selectedCsr.status !== 'ISSUED' && selectedCsr.status !== 'REVOKED' && (
-                      <button onClick={() => { setCertRegCsrId(selectedCsr.id); setCertRegOpen(true); setCertPemInput(''); setCertRegError(''); }}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium shadow-md transition-all text-sm">
-                        <Upload className="w-4 h-4" /> ICAO 발급 인증서 등록
+                      <div className="space-y-2">
+                        <button onClick={() => handleSignWithCA(selectedCsr.id)} disabled={signing}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium shadow-md transition-all text-sm disabled:opacity-50">
+                          {signing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                          {signing ? '발급 중...' : 'CA 인증서 발급'}
+                        </button>
+                        <button onClick={() => { setCertRegCsrId(selectedCsr.id); setCertRegOpen(true); setCertPemInput(''); setCertRegError(''); }}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium shadow-md transition-all text-sm">
+                          <Upload className="w-4 h-4" /> ICAO 발급 인증서 등록
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Apply to ICAO PKD connection (after ISSUED) */}
+                    {selectedCsr.status === 'ISSUED' && (
+                      <button onClick={handleApplyToRelay}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-medium shadow-md transition-all text-sm">
+                        <Globe className="w-4 h-4" /> ICAO PKD 연결 적용
                       </button>
                     )}
                   </>

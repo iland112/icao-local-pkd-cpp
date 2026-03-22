@@ -59,6 +59,22 @@ public:
                                            const std::string& certPem,
                                            const std::string& username);
 
+    /**
+     * Sign CSR with local Private CA and issue client certificate.
+     * Saves client cert + key + CA cert to outputDir for ICAO PKD LDAP TLS.
+     *
+     * @param id CSR ID
+     * @param caKeyPath Private CA key file path
+     * @param caCertPath Private CA cert file path
+     * @param outputDir Directory to save client cert/key files
+     * @param username User performing the operation
+     */
+    CsrGenerateResult signWithCA(const std::string& id,
+                                  const std::string& caKeyPath,
+                                  const std::string& caCertPath,
+                                  const std::string& outputDir,
+                                  const std::string& username);
+
     Json::Value getById(const std::string& id);
     Json::Value list(int page, int pageSize, const std::string& statusFilter = "");
     std::string getPemById(const std::string& id);

@@ -168,6 +168,8 @@ services:
       - ../.docker-data/pkd-logs:/app/logs
       - ../.docker-data/pkd-uploads:/app/uploads
       - ../data/cert:/app/data/cert:ro
+      - ../.docker-data/ssl:/app/ssl:ro                  # Private CA for CSR signing
+      - ../.docker-data/icao-pkd-tls:/app/icao-tls       # Output: client cert/key for ICAO TLS
     networks:
       - pkd-network
     restart: unless-stopped

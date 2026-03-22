@@ -331,4 +331,137 @@ bool CsrService::deleteById(const std::string& id)
     return csrRepo_->deleteById(id);
 }
 
+CsrGenerateResult CsrService::signWithCA(
+    const std::string& id,
+    const std::string& caKeyPath,
+    const std::string& caCertPath,
+    const std::string& outputDir,
+    const std::string& username)
+{
+    CsrGenerateResult result;
+    result.success = false;
+    result.id = id;
+
+    // 1. Load CSR from DB
+    Json::Value csrData = csrRepo_->findById(id);
+    if (csrData.isNull()) { result.errorMessage = "CSR not found"; return result; }
+    if (csrData.get("status", "").asString() == "ISSUED") {
+        result.errorMessage = "Certificate already issued for this CSR";
+        return result;
+    }
+
+    // 2. Load Private CA key
+    std::unique_ptr<BIO, decltype(&BIO_free)> caKeyBio(
+        BIO_new_file(caKeyPath.c_str(), "r"), BIO_free);
+    if (!caKeyBio) { result.errorMessage = "Cannot open CA key file: " + caKeyPath; return result; }
+    std::unique_ptr<EVP_PKEY, decltype(&EVP_PKEY_free)> caKey(
+        PEM_read_bio_PrivateKey(caKeyBio.get(), nullptr, nullptr, nullptr), EVP_PKEY_free);
+    if (!caKey) { result.errorMessage = "Failed to parse CA key"; return result; }
+
+    // 3. Load Private CA certificate
+    std::unique_ptr<BIO, decltype(&BIO_free)> caCertBio(
+        BIO_new_file(caCertPath.c_str(), "r"), BIO_free);
+    if (!caCertBio) { result.errorMessage = "Cannot open CA cert file: " + caCertPath; return result; }
+    std::unique_ptr<X509, decltype(&X509_free)> caCert(
+        PEM_read_bio_X509(caCertBio.get(), nullptr, nullptr, nullptr), X509_free);
+    if (!caCert) { result.errorMessage = "Failed to parse CA certificate"; return result; }
+
+    // 4. Load CSR DER from DB and parse
+    std::string encPem = csrData.get("csr_pem", "").asString();
+    std::string csrPem = auth::pii::decrypt(encPem);
+    if (csrPem.empty()) { result.errorMessage = "Failed to decrypt CSR PEM"; return result; }
+
+    std::unique_ptr<BIO, decltype(&BIO_free)> csrBio(
+        BIO_new_mem_buf(csrPem.data(), static_cast<int>(csrPem.size())), BIO_free);
+    std::unique_ptr<X509_REQ, decltype(&X509_REQ_free)> csr(
+        PEM_read_bio_X509_REQ(csrBio.get(), nullptr, nullptr, nullptr), X509_REQ_free);
+    if (!csr) { result.errorMessage = "Failed to parse CSR"; return result; }
+
+    // 5. Create X509 certificate from CSR
+    std::unique_ptr<X509, decltype(&X509_free)> cert(X509_new(), X509_free);
+    if (!cert) { result.errorMessage = "Failed to create X509 structure"; return result; }
+
+    X509_set_version(cert.get(), 2);  // v3
+
+    // Serial number (random)
+    std::unique_ptr<ASN1_INTEGER, decltype(&ASN1_INTEGER_free)> serialNum(
+        ASN1_INTEGER_new(), ASN1_INTEGER_free);
+    std::unique_ptr<BIGNUM, decltype(&BN_free)> bn(BN_new(), BN_free);
+    BN_rand(bn.get(), 64, 0, 0);
+    BN_to_ASN1_INTEGER(bn.get(), serialNum.get());
+    X509_set_serialNumber(cert.get(), serialNum.get());
+
+    // Validity: now ~ 365 days
+    X509_gmtime_adj(X509_getm_notBefore(cert.get()), 0);
+    X509_gmtime_adj(X509_getm_notAfter(cert.get()), 365 * 24 * 3600);
+
+    // Subject from CSR, Issuer from CA
+    X509_set_subject_name(cert.get(), X509_REQ_get_subject_name(csr.get()));
+    X509_set_issuer_name(cert.get(), X509_get_subject_name(caCert.get()));
+
+    // Public key from CSR
+    EVP_PKEY* reqPubKey = X509_REQ_get0_pubkey(csr.get());
+    X509_set_pubkey(cert.get(), reqPubKey);
+
+    // Sign with CA key (SHA256)
+    if (!X509_sign(cert.get(), caKey.get(), EVP_sha256())) {
+        result.errorMessage = "Failed to sign certificate with CA key";
+        return result;
+    }
+
+    // 6. Convert to PEM
+    std::unique_ptr<BIO, decltype(&BIO_free)> certPemBio(BIO_new(BIO_s_mem()), BIO_free);
+    PEM_write_bio_X509(certPemBio.get(), cert.get());
+    char* pemData = nullptr;
+    long pemLen = BIO_get_mem_data(certPemBio.get(), &pemData);
+    std::string certPem(pemData, pemLen);
+
+    // 7. Register certificate via existing registerCertificate method
+    auto regResult = registerCertificate(id, certPem, username);
+    if (!regResult.success) return regResult;
+
+    // 8. Save files to outputDir for TLS usage
+    try {
+        // Client certificate
+        {
+            std::string clientCertPath = outputDir + "/client.pem";
+            std::unique_ptr<BIO, decltype(&BIO_free)> outBio(
+                BIO_new_file(clientCertPath.c_str(), "w"), BIO_free);
+            if (outBio) PEM_write_bio_X509(outBio.get(), cert.get());
+            spdlog::info("[CsrService] Client cert saved: {}", clientCertPath);
+        }
+
+        // Client private key (decrypt from DB)
+        {
+            std::string encKey = csrData.get("private_key_encrypted", "").asString();
+            std::string privKeyPem = auth::pii::decrypt(encKey);
+            if (!privKeyPem.empty()) {
+                std::string keyPath = outputDir + "/client-key.pem";
+                std::unique_ptr<BIO, decltype(&BIO_free)> keyBio(
+                    BIO_new_file(keyPath.c_str(), "w"), BIO_free);
+                if (keyBio) BIO_write(keyBio.get(), privKeyPem.data(), static_cast<int>(privKeyPem.size()));
+                spdlog::info("[CsrService] Client key saved: {}", keyPath);
+            }
+        }
+
+        // CA certificate (copy)
+        {
+            std::string caOutPath = outputDir + "/ca.pem";
+            std::unique_ptr<BIO, decltype(&BIO_free)> caOutBio(
+                BIO_new_file(caOutPath.c_str(), "w"), BIO_free);
+            if (caOutBio) PEM_write_bio_X509(caOutBio.get(), caCert.get());
+            spdlog::info("[CsrService] CA cert saved: {}", caOutPath);
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[CsrService] Failed to save TLS files: {} (non-critical)", e.what());
+    }
+
+    result.success = true;
+    result.subjectDn = regResult.subjectDn;
+    result.publicKeyFingerprint = regResult.publicKeyFingerprint;
+    spdlog::info("[CsrService] CSR signed with CA: id={}, issuer={}",
+                id, X509_NAME_oneline(X509_get_subject_name(caCert.get()), nullptr, 0));
+    return result;
+}
+
 } // namespace services

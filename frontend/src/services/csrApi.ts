@@ -115,4 +115,12 @@ export const csrApiService = {
 
   deleteById: (id: string) =>
     csrApi.delete<{ success: boolean }>(`/${id}`),
+
+  /** Sign CSR with local Private CA and issue client certificate */
+  signWithCA: (id: string) =>
+    csrApi.post<{
+      success: boolean;
+      data?: { id: string; subjectDn: string; fingerprint: string; tlsOutputDir: string };
+      error?: string;
+    }>(`/${id}/sign`),
 };

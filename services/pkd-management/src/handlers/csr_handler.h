@@ -60,6 +60,11 @@ private:
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
 
+    void handleSignWithCA(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+        const std::string& id);
+
     services::CsrService* csrService_;
     common::IQueryExecutor* queryExecutor_;
 };
