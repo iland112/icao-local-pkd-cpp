@@ -184,6 +184,16 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
                 }
             }
 
+            // Collect per-type stats
+            IcaoLdapTypeStat typeStat;
+            typeStat.type = typeName;
+            typeStat.total = currentProgress_.currentTypeTotal;
+            typeStat.newCount = currentProgress_.currentTypeNew;
+            typeStat.skipped = currentProgress_.currentTypeSkipped;
+            typeStat.failed = currentProgress_.currentTypeTotal -
+                             currentProgress_.currentTypeNew - currentProgress_.currentTypeSkipped;
+            result.typeStats.push_back(typeStat);
+
             typeIndex++;
             currentProgress_.completedTypes = typeIndex;
         };
@@ -235,6 +245,15 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
                     broadcastProgress(currentProgress_);
                 }
             }
+
+            // Collect ML→CSCA type stats
+            IcaoLdapTypeStat mlStat;
+            mlStat.type = "ML→CSCA";
+            mlStat.total = currentProgress_.currentTypeTotal;
+            mlStat.newCount = currentProgress_.currentTypeNew;
+            mlStat.skipped = currentProgress_.currentTypeSkipped;
+            result.typeStats.push_back(mlStat);
+
             typeIndex++;
             currentProgress_.completedTypes = typeIndex;
         }
@@ -779,8 +798,26 @@ void IcaoLdapSyncService::saveSyncLog(const IcaoLdapSyncResult& result) {
                   "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())";
         }
 
-        // Oracle treats empty string as NULL — use space for non-null empty values
-        std::string errorMsg = result.errorMessage.empty() ? " " : result.errorMessage;
+        // Build error_message with type stats JSON (for detail view)
+        std::string errorMsg = result.errorMessage;
+        if (!result.typeStats.empty()) {
+            Json::Value statsJson(Json::arrayValue);
+            for (const auto& ts : result.typeStats) {
+                Json::Value item;
+                item["type"] = ts.type;
+                item["total"] = ts.total;
+                item["new"] = ts.newCount;
+                item["skipped"] = ts.skipped;
+                item["failed"] = ts.failed;
+                statsJson.append(item);
+            }
+            Json::StreamWriterBuilder writer;
+            writer["indentation"] = "";
+            std::string statsStr = Json::writeString(writer, statsJson);
+            // Prepend type stats to error_message (separated by |)
+            errorMsg = "STATS:" + statsStr + (errorMsg.empty() ? "" : "|" + errorMsg);
+        }
+        if (errorMsg.empty()) errorMsg = " ";  // Oracle empty string = NULL
 
         queryExecutor_->executeQuery(sql, {
             result.syncType, result.status, result.triggeredBy,
@@ -841,7 +878,32 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(int limit) c
             r.existingSkipped = common::db::scalarToInt(row["updated_certificates"]);
             r.failedCount = common::db::scalarToInt(row["failed_count"]);
             r.durationMs = common::db::scalarToInt(row["duration_ms"]);
-            r.errorMessage = row.get("error_message", "").asString();
+            std::string rawMsg = row.get("error_message", "").asString();
+            // Parse type stats from error_message (format: "STATS:[{...}]|actual error")
+            if (rawMsg.substr(0, 6) == "STATS:") {
+                auto pipePos = rawMsg.find('|', 6);
+                std::string statsStr = (pipePos != std::string::npos)
+                    ? rawMsg.substr(6, pipePos - 6) : rawMsg.substr(6);
+                r.errorMessage = (pipePos != std::string::npos)
+                    ? rawMsg.substr(pipePos + 1) : "";
+
+                Json::CharReaderBuilder reader;
+                std::istringstream ss(statsStr);
+                Json::Value statsJson;
+                if (Json::parseFromStream(reader, ss, &statsJson, nullptr) && statsJson.isArray()) {
+                    for (const auto& item : statsJson) {
+                        IcaoLdapTypeStat ts;
+                        ts.type = item.get("type", "").asString();
+                        ts.total = item.get("total", 0).asInt();
+                        ts.newCount = item.get("new", 0).asInt();
+                        ts.skipped = item.get("skipped", 0).asInt();
+                        ts.failed = item.get("failed", 0).asInt();
+                        r.typeStats.push_back(ts);
+                    }
+                }
+            } else {
+                r.errorMessage = rawMsg;
+            }
             history.push_back(std::move(r));
         }
     } catch (const std::exception& e) {

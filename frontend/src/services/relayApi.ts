@@ -523,6 +523,14 @@ export interface IcaoLdapSyncStatus {
   };
 }
 
+export interface IcaoLdapSyncTypeStat {
+  type: string;    // ML→CSCA, DSC, CRL, DSC_NC
+  total: number;
+  new: number;
+  skipped: number;
+  failed: number;
+}
+
 export interface IcaoLdapSyncHistoryItem {
   syncType: string;
   status: string;
@@ -533,6 +541,7 @@ export interface IcaoLdapSyncHistoryItem {
   failedCount: number;
   durationMs: number;
   errorMessage?: string;
+  typeStats?: IcaoLdapSyncTypeStat[];
 }
 
 export interface IcaoLdapSyncConfig {

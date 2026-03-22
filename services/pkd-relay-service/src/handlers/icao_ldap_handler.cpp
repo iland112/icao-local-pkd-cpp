@@ -139,7 +139,20 @@ void IcaoLdapHandler::handleGetHistory(const drogon::HttpRequestPtr& req,
             item["existingSkipped"] = r.existingSkipped;
             item["failedCount"] = r.failedCount;
             item["durationMs"] = r.durationMs;
-            if (!r.errorMessage.empty()) item["errorMessage"] = r.errorMessage;
+            if (!r.errorMessage.empty() && r.errorMessage != " ") item["errorMessage"] = r.errorMessage;
+            if (!r.typeStats.empty()) {
+                Json::Value stats(Json::arrayValue);
+                for (const auto& ts : r.typeStats) {
+                    Json::Value s;
+                    s["type"] = ts.type;
+                    s["total"] = ts.total;
+                    s["new"] = ts.newCount;
+                    s["skipped"] = ts.skipped;
+                    s["failed"] = ts.failed;
+                    stats.append(s);
+                }
+                item["typeStats"] = stats;
+            }
             json.append(item);
         }
     }

@@ -24,6 +24,15 @@ struct IcaoLdapCertEntry {
     std::string conformanceText;
 };
 
+/// Per-type sync statistics
+struct IcaoLdapTypeStat {
+    std::string type;        // ML→CSCA, DSC, CRL, DSC_NC
+    int total = 0;           // Entries found in ICAO LDAP
+    int newCount = 0;        // New entries saved
+    int skipped = 0;         // Existing entries skipped
+    int failed = 0;          // Failed entries
+};
+
 /// Result of an ICAO LDAP sync operation
 struct IcaoLdapSyncResult {
     std::string syncType;     // FULL or INCREMENTAL
@@ -37,6 +46,9 @@ struct IcaoLdapSyncResult {
     int durationMs = 0;
 
     std::string errorMessage;
+
+    // Per-type breakdown
+    std::vector<IcaoLdapTypeStat> typeStats;
 
     std::chrono::system_clock::time_point startedAt;
     std::chrono::system_clock::time_point completedAt;
