@@ -106,9 +106,17 @@
 │   │  │  ④ TLS 핸드셰이크 완료      │              │             │       │
 │   │  │    (암호화 채널 수립)        │              │             │       │
 │   │  │                           │              │             │       │
-│   │  │  ⑤ SASL EXTERNAL Bind     │              │             │       │
-│   │  │    (비밀번호 불필요 — 인증서 │              │             │       │
-│   │  │     기반 신원 확인)         │              │             │       │
+│   │  │  ⑤ LDAP Bind (2가지 모드)  │              │             │       │
+│   │  │                           │              │             │       │
+│   │  │  [모드 A] Simple Bind      │              │             │       │
+│   │  │    over TLS               │              │             │       │
+│   │  │    DN + password 전송      │              │             │       │
+│   │  │    (개발/스테이징)          │              │             │       │
+│   │  │                           │              │             │       │
+│   │  │  [모드 B] SASL EXTERNAL    │              │             │       │
+│   │  │    인증서 기반 신원 확인     │              │             │       │
+│   │  │    비밀번호 불필요          │              │             │       │
+│   │  │    (프로덕션 ICAO PKD)     │              │             │       │
 │   │  │                           │              │             │       │
 │   │  │  ⑥ LDAP Search 시작       │              │             │       │
 │   │  │    인증서 다운로드          │              │             │       │
@@ -220,9 +228,16 @@ Private CA (ca.key / ca.crt)
    ⑨  │──── Finished ←─→ Finished ──────────────────│  TLS 핸드셰이크 완료
        │     (암호화 채널 수립)                            │
        │                                                │
-   ⑩  │──── SASL EXTERNAL Bind ─────────────────────→│
+   ⑩  │──── LDAP Bind ─────────────────────────────→│
+       │                                                │
+       │   [모드 A] Simple Bind over TLS (개발/스테이징)   │
+       │     DN="cn=admin,dc=icao,dc=int"                │
+       │     password="***"                              │
+       │     ※ TLS 암호화 채널에서 전송 (평문 아님)         │
+       │                                                │
+       │   [모드 B] SASL EXTERNAL (프로덕션 ICAO PKD)     │
        │     DN="" mechanism="EXTERNAL"                  │
-       │     (비밀번호 없음 — 인증서로 인증 완료)           │
+       │     비밀번호 없음 — 인증서로 인증 완료             │
        │                                                │
    ⑪  │←─── Bind Success ───────────────────────────│
        │                                                │
@@ -243,38 +258,53 @@ Private CA (ca.key / ca.crt)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    개발/테스트 환경                                │
+│              모드 1: 평문 (개발 빠른 테스트)                       │
 │                                                                  │
 │  .env:                                                           │
-│    ICAO_LDAP_HOST=icao-pkd-ldap        ← Docker 컨테이너명       │
-│    ICAO_LDAP_PORT=636                  ← LDAPS                  │
+│    ICAO_LDAP_USE_TLS=false                                      │
+│    ICAO_LDAP_HOST=icao-pkd-ldap                                 │
+│    ICAO_LDAP_PORT=389                  ← LDAP (평문)             │
+│    ICAO_LDAP_BIND_DN=cn=admin,dc=icao,dc=int                   │
+│                                                                  │
+│  인증: Simple Bind (평문 채널)                                   │
+│  용도: 빠른 기능 테스트, TLS 인증서 불필요                        │
+│                                                                  │
+├──────────────────────────────────────────────────────────────────┤
+│              모드 2: TLS + Simple Bind (개발/스테이징)             │
+│                                                                  │
+│  .env:                                                           │
 │    ICAO_LDAP_USE_TLS=true                                       │
+│    ICAO_LDAP_HOST=icao-pkd-ldap                                 │
+│    ICAO_LDAP_PORT=636                  ← LDAPS (암호화)          │
+│    ICAO_LDAP_BIND_DN=cn=admin,dc=icao,dc=int                   │
 │    ICAO_LDAP_TLS_CERT_FILE=/app/icao-tls/client.pem             │
 │    ICAO_LDAP_TLS_KEY_FILE=/app/icao-tls/client-key.pem          │
 │    ICAO_LDAP_TLS_CA_CERT_FILE=/app/icao-tls/ca.pem              │
 │                                                                  │
+│  인증: Simple Bind over TLS (암호화 채널 + DN/password)           │
 │  CA: Private CA (자체 서명)                                      │
-│  인증서 발급: CSR 관리 → "CA 인증서 발급" 버튼                    │
-│  LDAP 서버: icao-pkd-ldap Docker 컨테이너                        │
+│  인증서: CSR 관리 → "CA 인증서 발급" 버튼                        │
 │                                                                  │
 ├──────────────────────────────────────────────────────────────────┤
-│                    프로덕션 환경                                  │
+│              모드 3: TLS + SASL EXTERNAL (프로덕션)               │
 │                                                                  │
 │  .env:                                                           │
-│    ICAO_LDAP_HOST=pkddownloadsg.icao.int   ← ICAO PKD 서버      │
-│    ICAO_LDAP_PORT=636                      ← LDAPS              │
 │    ICAO_LDAP_USE_TLS=true                                       │
+│    ICAO_LDAP_HOST=pkddownloadsg.icao.int                        │
+│    ICAO_LDAP_PORT=636                  ← LDAPS (암호화)          │
+│    ICAO_LDAP_BIND_DN=                  ← 비워두면 SASL EXTERNAL  │
 │    ICAO_LDAP_TLS_CERT_FILE=/app/icao-tls/client.pem             │
 │    ICAO_LDAP_TLS_KEY_FILE=/app/icao-tls/client-key.pem          │
 │    ICAO_LDAP_TLS_CA_CERT_FILE=/app/icao-tls/d-trust-ca.pem     │
 │                                                                  │
+│  인증: SASL EXTERNAL (인증서 기반, 비밀번호 불필요)               │
 │  CA: D-Trust Extended Validation TLS CA (ICAO 공인 CA)           │
-│  인증서 발급: CSR PEM → ICAO 이메일 제출 → ICAO 발급 → 등록     │
-│  LDAP 서버: pkddownloadsg.icao.int (싱가포르)                    │
+│  인증서: CSR PEM → ICAO 제출 → ICAO 발급 → "인증서 등록"        │
 │                                                                  │
 └──────────────────────────────────────────────────────────────────┘
 
-전환 시 변경사항: .env 파일의 5개 값만 변경 (코드 변경 없음)
+모드 전환: .env 값 변경만으로 전환 (코드 변경 없음)
+핵심 분기: ICAO_LDAP_BIND_DN 유무 → Simple Bind / SASL EXTERNAL 자동 선택
 ```
 
 ---
@@ -317,8 +347,9 @@ Private CA (ca.key / ca.crt)
 | 항목 | 내용 |
 |------|------|
 | .env TLS 설정 | `ICAO_LDAP_USE_TLS=true`, `ICAO_LDAP_PORT=636` |
-| 연결 테스트 결과 | TLS Mutual Auth (SASL EXTERNAL), **58ms** |
-| E2E 검증 | CSR → CA 서명 → client.pem → LDAPS:636 SASL EXTERNAL ✅ |
+| 인증 모드 | TLS / Simple Bind (BIND_DN 설정 시) 또는 SASL EXTERNAL (BIND_DN 미설정 시) |
+| 연결 테스트 결과 | TLS / Simple Bind, **11ms**, 31,277건 조회 성공 |
+| E2E 검증 | CSR → CA 서명 → client.pem → LDAPS:636 → 동기화 ✅ |
 
 ---
 
@@ -340,7 +371,7 @@ Private CA (ca.key / ca.crt)
 | PKD Management Docker 빌드 | ✅ Built |
 | Frontend TypeScript 검증 | ✅ 에러 없음 |
 | ICAO LDAP LDAPS 내부 테스트 | ✅ ldapsearch -H ldaps://localhost |
-| PKD Relay TLS 연결 | ✅ SASL EXTERNAL, 58ms |
+| PKD Relay TLS 연결 | ✅ TLS / Simple Bind, 11ms, 31,277건 |
 | TLS 파일 생성 | ✅ 5개 파일 (client + server + CA) |
 | 전체 서비스 | ✅ healthy |
 
@@ -351,6 +382,6 @@ Private CA (ca.key / ca.crt)
 2. CA 인증서 발급 (POST /api/csr/{id}/sign)      → Private CA 서명 ✅
 3. TLS 파일 자동 저장                            → 3개 파일       ✅
 4. LDAP TLS 서버 (icao-pkd-ldap:636)            → LDAPS 활성화   ✅
-5. PKD Relay TLS 연결 (SASL EXTERNAL)           → 58ms           ✅
+5. PKD Relay TLS 연결 (TLS / Simple Bind)        → 11ms           ✅
 6. 인증서 동기화 (CSCA/DSC/CRL/DSC_NC)          → 31,277건       ✅
 ```
