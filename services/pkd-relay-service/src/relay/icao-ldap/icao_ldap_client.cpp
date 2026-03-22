@@ -157,15 +157,32 @@ void IcaoLdapClient::disconnect() {
 }
 
 std::vector<IcaoLdapCertEntry> IcaoLdapClient::searchDscCertificates(int maxResults) {
-    return searchEntries("dc=data," + baseDn_,
+    // Search all countries' o=dsc branches under dc=data
+    // Each country has: c=XX,dc=data,... → o=dsc,c=XX,dc=data,...
+    auto all = searchEntries("dc=data," + baseDn_,
                         "(objectClass=pkdDownload)", "DSC", maxResults);
+    // Filter: only entries whose DN contains o=dsc (not o=csca, o=mlsc)
+    std::vector<IcaoLdapCertEntry> result;
+    for (auto& e : all) {
+        if (e.dn.find("o=dsc") != std::string::npos) {
+            e.certType = "DSC";
+            result.push_back(std::move(e));
+        }
+    }
+    return result;
 }
 
 std::vector<IcaoLdapCertEntry> IcaoLdapClient::searchCscaCertificates(int maxResults) {
-    // CSCA certs are in o=csca branches (or extracted from Master Lists)
-    return searchEntries("dc=data," + baseDn_,
-                        "(&(objectClass=pkdDownload)(!(objectClass=cRLDistributionPoint)))",
-                        "CSCA", maxResults);
+    auto all = searchEntries("dc=data," + baseDn_,
+                        "(objectClass=pkdDownload)", "CSCA", maxResults);
+    std::vector<IcaoLdapCertEntry> result;
+    for (auto& e : all) {
+        if (e.dn.find("o=csca") != std::string::npos) {
+            e.certType = "CSCA";
+            result.push_back(std::move(e));
+        }
+    }
+    return result;
 }
 
 std::vector<IcaoLdapCertEntry> IcaoLdapClient::searchCrls(int maxResults) {
