@@ -477,38 +477,38 @@ export default function IcaoLdapSync() {
             <table className="w-full text-xs">
               <thead>
                 <tr className="bg-slate-100 dark:bg-gray-700">
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">시작시간</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">상태</th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">트리거</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">전체</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">신규</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">기존</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">실패</th>
-                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">소요시간</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">시작시간</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">상태</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">트리거</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">전체</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">신규</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">기존</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">실패</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">소요시간</th>
                   <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">상세</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((h, i) => (
                   <tr key={i} onClick={() => setSelectedHistory(h)} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer">
-                    <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-center text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
+                    <td className="px-3 py-2 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                         h.status === 'COMPLETED' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
                         h.status === 'FAILED' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
                         'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
                       }`}>{statusIcon(h.status)} {h.status}</span>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         h.triggeredBy === 'MANUAL' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
                       }`}>{h.triggeredBy}</span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">{h.totalRemoteCount.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
-                    <td className="px-3 py-2 text-right text-gray-400">{h.existingSkipped.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right text-red-500">{h.failedCount}</td>
-                    <td className="px-3 py-2 text-right text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
+                    <td className="px-3 py-2 text-center font-mono">{h.totalRemoteCount.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
+                    <td className="px-3 py-2 text-center text-gray-400">{h.existingSkipped.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-center text-red-500">{h.failedCount}</td>
+                    <td className="px-3 py-2 text-center text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
                     <td className="px-3 py-2 text-center">
                       <button onClick={(e) => { e.stopPropagation(); setSelectedHistory(h); }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
