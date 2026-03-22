@@ -410,6 +410,7 @@ IcaoVersionRepository::getVersionComparison() {
                 "      ORDER BY upload_timestamp DESC) as rn "
                 "  FROM uploaded_file "
                 "  WHERE status = 'COMPLETED' "
+                "    AND REGEXP_LIKE(original_file_name, '^icaopkd-00[123]-') "
                 ") u ON v.collection_type = u.collection_type AND u.rn = 1 "
                 "ORDER BY v.collection_type";
         } else {
@@ -448,6 +449,7 @@ IcaoVersionRepository::getVersionComparison() {
                 "      ORDER BY upload_timestamp DESC) as rn "
                 "  FROM uploaded_file "
                 "  WHERE status = 'COMPLETED' "
+                "    AND original_file_name ~ '^icaopkd-00[123]-' "
                 ") u ON v.collection_type = u.collection_type AND u.rn = 1 "
                 "ORDER BY v.collection_type";
         }
