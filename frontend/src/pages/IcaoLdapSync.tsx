@@ -200,32 +200,32 @@ export default function IcaoLdapSync() {
 
   return (
     <div className="px-4 lg:px-6 py-4 space-y-4">
-      {/* Header */}
+      {/* Header — matches project design system (gradient icon badge) */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
-            <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 shadow-lg">
+            <Globe className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-bold">ICAO PKD LDAP 동기화</h1>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD LDAP 동기화</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
               ICAO PKD 인증서 자동 다운로드 및 Local PKD 동기화
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setShowSettings(!showSettings)}
-            className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <Settings className="w-3.5 h-3.5" /> 설정
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300">
+            <Settings className="w-4 h-4" /> 설정
           </button>
           <button onClick={handleTestConnection} disabled={testing}
-            className="flex items-center gap-1 px-3 py-2 text-xs font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-            <Plug className={`w-3.5 h-3.5 ${testing ? 'animate-pulse' : ''}`} />
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-gray-700 dark:text-gray-300">
+            <Plug className={`w-4 h-4 ${testing ? 'animate-pulse' : ''}`} />
             {testing ? '테스트 중...' : '연결 테스트'}
           </button>
           <button onClick={handleSync} disabled={syncing || status.running}
-            className="flex items-center gap-1 px-4 py-2 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-            <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700 text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+            <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} />
             {syncing ? '동기화 중...' : '수동 동기화'}
           </button>
         </div>
@@ -239,8 +239,8 @@ export default function IcaoLdapSync() {
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Settings className="w-4 h-4" /> 동기화 설정</h3>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2"><Settings className="w-4 h-4 text-blue-500" /> 동기화 설정</h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <label className="flex items-center gap-2">
               <input type="checkbox" checked={settingsEnabled} onChange={(e) => setSettingsEnabled(e.target.checked)}
@@ -263,66 +263,77 @@ export default function IcaoLdapSync() {
         </div>
       )}
 
-      {/* KPI Cards */}
+      {/* KPI Cards — border-l-4 accent (matches project design system) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Server className="w-4 h-4 text-blue-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">연결 상태</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {status.enabled ? (
-              <><Wifi className="w-4 h-4 text-green-500" /><span className="text-sm font-semibold text-green-600 dark:text-green-400">활성</span></>
-            ) : (
-              <><WifiOff className="w-4 h-4 text-gray-400" /><span className="text-sm font-semibold text-gray-400">비활성</span></>
-            )}
-          </div>
-          <div className="text-[11px] text-gray-400 mt-1 font-mono">{status.host}:{status.port}</div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Clock className="w-4 h-4 text-purple-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">동기화 주기</span>
-          </div>
-          <div className="text-sm font-semibold">{status.syncIntervalMinutes}분</div>
-          <div className="text-[11px] text-gray-400 mt-1">{status.running ? '동기화 실행 중' : '대기'}</div>
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Database className="w-4 h-4 text-green-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">마지막 동기화 결과</span>
-          </div>
-          {status.lastSync ? (
-            <>
-              <div className="flex items-center gap-1.5">
-                {statusIcon(status.lastSync.status)}
-                <span className={`text-sm font-semibold ${status.lastSync.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
-                  {status.lastSync.status}
-                </span>
-              </div>
-              <div className="text-[11px] text-gray-400 mt-1">{(status.lastSync.durationMs / 1000).toFixed(1)}초 소요</div>
-            </>
-          ) : (
-            <div className="text-sm text-gray-400">실행 이력 없음</div>
-          )}
-        </div>
-
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="w-4 h-4 text-orange-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">마지막 동기화 통계</span>
-          </div>
-          {status.lastSync ? (
-            <div className="grid grid-cols-3 gap-1 text-xs">
-              <div><span className="text-gray-400">전체</span><div className="font-semibold">{status.lastSync.totalRemoteCount.toLocaleString()}</div></div>
-              <div><span className="text-green-500">신규</span><div className="font-semibold text-green-600">+{status.lastSync.newCertificates}</div></div>
-              <div><span className="text-red-400">실패</span><div className="font-semibold text-red-500">{status.lastSync.failedCount}</div></div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+              <Server className="w-5 h-5 text-blue-500" />
             </div>
-          ) : (
-            <div className="text-sm text-gray-400">—</div>
-          )}
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">연결 상태</p>
+              {status.enabled ? (
+                <p className="text-xl font-bold text-green-600 dark:text-green-400 flex items-center gap-1"><Wifi className="w-4 h-4" /> 활성</p>
+              ) : (
+                <p className="text-xl font-bold text-gray-400 flex items-center gap-1"><WifiOff className="w-4 h-4" /> 비활성</p>
+              )}
+              <p className="text-xs text-gray-400 font-mono">{status.host}:{status.port}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-purple-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-900/30">
+              <Clock className="w-5 h-5 text-purple-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">동기화 주기</p>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{status.syncIntervalMinutes}분</p>
+              <p className="text-xs text-gray-400">{status.running ? '동기화 실행 중' : '대기'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-green-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/30">
+              <Database className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">마지막 동기화</p>
+              {status.lastSync ? (
+                <>
+                  <p className={`text-xl font-bold flex items-center gap-1 ${status.lastSync.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
+                    {statusIcon(status.lastSync.status)} {status.lastSync.status}
+                  </p>
+                  <p className="text-xs text-gray-400">{(status.lastSync.durationMs / 1000).toFixed(1)}초 소요</p>
+                </>
+              ) : (
+                <p className="text-xl font-bold text-gray-400">—</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-amber-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30">
+              <Activity className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">동기화 통계</p>
+              {status.lastSync ? (
+                <div className="flex items-center gap-3 mt-1">
+                  <span className="text-sm font-bold">{status.lastSync.totalRemoteCount.toLocaleString()}</span>
+                  <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates}</span>
+                  {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount} 실패</span>}
+                </div>
+              ) : (
+                <p className="text-xl font-bold text-gray-400">—</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -443,7 +454,7 @@ export default function IcaoLdapSync() {
       )}
 
       {/* Sync History Table */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-gray-500" />
@@ -465,40 +476,38 @@ export default function IcaoLdapSync() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-gray-500 dark:text-gray-400">
-                  <th className="px-4 py-2 font-medium">시작시간</th>
-                  <th className="px-4 py-2 font-medium">상태</th>
-                  <th className="px-4 py-2 font-medium">트리거</th>
-                  <th className="px-4 py-2 font-medium text-right">전체</th>
-                  <th className="px-4 py-2 font-medium text-right">신규</th>
-                  <th className="px-4 py-2 font-medium text-right">기존</th>
-                  <th className="px-4 py-2 font-medium text-right">실패</th>
-                  <th className="px-4 py-2 font-medium text-right">소요시간</th>
+                <tr className="bg-slate-100 dark:bg-gray-700">
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">시작시간</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">상태</th>
+                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">트리거</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">전체</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">신규</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">기존</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">실패</th>
+                  <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">소요시간</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((h, i) => (
-                  <tr key={i} onClick={() => setSelectedHistory(h)} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer">
-                    <td className="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-1.5">
-                        {statusIcon(h.status)}
-                        <span className={`font-medium ${
-                          h.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' :
-                          h.status === 'FAILED' ? 'text-red-500' : 'text-yellow-500'
-                        }`}>{h.status}</span>
-                      </div>
+                  <tr key={i} onClick={() => setSelectedHistory(h)} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer">
+                    <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                        h.status === 'COMPLETED' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
+                        h.status === 'FAILED' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
+                        'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
+                      }`}>{statusIcon(h.status)} {h.status}</span>
                     </td>
-                    <td className="px-4 py-2.5">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                        h.triggeredBy === 'MANUAL' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        h.triggeredBy === 'MANUAL' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
                       }`}>{h.triggeredBy}</span>
                     </td>
-                    <td className="px-4 py-2.5 text-right font-mono">{h.totalRemoteCount.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400">{h.existingSkipped.toLocaleString()}</td>
-                    <td className="px-4 py-2.5 text-right text-red-500">{h.failedCount}</td>
-                    <td className="px-4 py-2.5 text-right text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
+                    <td className="px-3 py-2 text-right font-mono">{h.totalRemoteCount.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
+                    <td className="px-3 py-2 text-right text-gray-400">{h.existingSkipped.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-red-500">{h.failedCount}</td>
+                    <td className="px-3 py-2 text-right text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
                   </tr>
                 ))}
               </tbody>
