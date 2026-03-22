@@ -209,7 +209,19 @@ Json::Value OracleQueryExecutor::executeQuery(
         }
 
         // Execute statement
-        ub4 iters = isDmlReturning ? 1 : 0;
+        // DML (INSERT/UPDATE/DELETE/MERGE) requires iters=1; SELECT uses iters=0
+        bool isDml = false;
+        {
+            // Find first non-whitespace keyword
+            size_t pos = oracleQuery.find_first_not_of(" \t\n\r");
+            if (pos != std::string::npos) {
+                std::string prefix = oracleQuery.substr(pos, 6);
+                for (auto& c : prefix) c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+                isDml = (prefix.substr(0,6) == "INSERT" || prefix.substr(0,6) == "UPDATE" ||
+                         prefix.substr(0,6) == "DELETE" || prefix.substr(0,5) == "MERGE");
+            }
+        }
+        ub4 iters = (isDml || isDmlReturning) ? 1 : 0;
         status = OCIStmtExecute(session.svcCtx, stmt, session.err, iters, 0,
                                nullptr, nullptr, OCI_DEFAULT);
         if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
