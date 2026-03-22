@@ -295,9 +295,13 @@ std::vector<IcaoLdapCertEntry> IcaoLdapClient::searchEntries(
         // Extract CN
         certEntry.cn = extractStringAttribute(entry, "cn");
 
-        // Extract binary certificate data
+        // Extract binary data (attribute depends on entry type)
         if (certEntry.certType == "CRL") {
             certEntry.binaryData = extractBinaryAttribute(entry, "certificateRevocationList;binary");
+        } else if (certEntry.certType == "ML" || certEntry.dn.find("o=ml") != std::string::npos) {
+            // Master List: pkdMasterListContent (CMS SignedData binary)
+            certEntry.binaryData = extractBinaryAttribute(entry, "pkdMasterListContent");
+            certEntry.certType = "ML";
         } else {
             certEntry.binaryData = extractBinaryAttribute(entry, "userCertificate;binary");
         }

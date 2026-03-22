@@ -96,6 +96,10 @@ private:
     /// Save certificate to local LDAP
     bool saveCertificateToLocalLdap(const IcaoLdapCertEntry& entry, const std::string& fingerprint);
 
+    /// Process Master List: extract CSCAs from CMS SignedData
+    /// Returns number of new CSCAs extracted and saved
+    int processMasterListEntry(const IcaoLdapCertEntry& mlEntry);
+
     /// Save CRL to local DB
     bool saveCrlToDb(const IcaoLdapCertEntry& entry, const std::string& fingerprint);
 

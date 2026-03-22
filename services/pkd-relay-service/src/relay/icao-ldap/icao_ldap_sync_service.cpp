@@ -7,6 +7,7 @@
 #include <spdlog/spdlog.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <openssl/cms.h>
 #include <iomanip>
 #include <sstream>
 #include <chrono>
@@ -187,7 +188,57 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             currentProgress_.completedTypes = typeIndex;
         };
 
-        syncEntries("CSCA", &IcaoLdapClient::searchCscaCertificates);
+        // CSCA: extracted from Master Lists (ICAO PKD has no o=csca branch)
+        {
+            currentProgress_.phase = "SEARCHING";
+            currentProgress_.currentType = "ML→CSCA";
+            currentProgress_.message = "Master List 검색 중 (CSCA 추출)...";
+            broadcastProgress(currentProgress_);
+
+            auto mlEntries = client.searchMasterLists(0);
+            spdlog::info("[IcaoLdapSync] Found {} Master List entries, extracting CSCAs...", mlEntries.size());
+
+            currentProgress_.phase = "PROCESSING";
+            currentProgress_.currentTypeTotal = static_cast<int>(mlEntries.size());
+            currentProgress_.currentTypeProcessed = 0;
+            currentProgress_.currentTypeNew = 0;
+            currentProgress_.currentTypeSkipped = 0;
+            currentProgress_.message = "ML→CSCA " + std::to_string(mlEntries.size()) + "건 처리 중...";
+            broadcastProgress(currentProgress_);
+
+            for (const auto& mlEntry : mlEntries) {
+                try {
+                    int newCscas = processMasterListEntry(mlEntry);
+                    result.newCertificates += newCscas;
+                    currentProgress_.currentTypeNew += newCscas;
+                    currentProgress_.totalNew += newCscas;
+                    if (newCscas == 0) {
+                        result.existingSkipped++;
+                        currentProgress_.currentTypeSkipped++;
+                        currentProgress_.totalSkipped++;
+                    }
+                } catch (const std::exception& e) {
+                    result.failedCount++;
+                    currentProgress_.totalFailed++;
+                    spdlog::warn("[IcaoLdapSync] Failed to process ML {}: {}", mlEntry.dn, e.what());
+                }
+                currentProgress_.currentTypeProcessed++;
+                if (currentProgress_.currentTypeProcessed % 10 == 0 ||
+                    currentProgress_.currentTypeProcessed == currentProgress_.currentTypeTotal) {
+                    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::system_clock::now() - result.startedAt).count();
+                    currentProgress_.elapsedMs = static_cast<int>(elapsed);
+                    currentProgress_.message = "ML→CSCA " +
+                        std::to_string(currentProgress_.currentTypeProcessed) + "/" +
+                        std::to_string(currentProgress_.currentTypeTotal) + " (신규 CSCA: " +
+                        std::to_string(currentProgress_.currentTypeNew) + ")";
+                    broadcastProgress(currentProgress_);
+                }
+            }
+            typeIndex++;
+            currentProgress_.completedTypes = typeIndex;
+        }
+
         syncEntries("DSC", &IcaoLdapClient::searchDscCertificates);
         syncEntries("CRL", &IcaoLdapClient::searchCrls);
         syncEntries("DSC_NC", &IcaoLdapClient::searchNcDscCertificates);
@@ -798,6 +849,141 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(int limit) c
     }
 
     return history;
+}
+
+int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry) {
+    if (mlEntry.binaryData.empty()) return 0;
+
+    // Parse CMS SignedData from Master List binary (pkdMasterListContent)
+    BIO* bio = BIO_new_mem_buf(mlEntry.binaryData.data(), static_cast<int>(mlEntry.binaryData.size()));
+    if (!bio) return 0;
+
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+    BIO_free(bio);
+    if (!cms) {
+        spdlog::warn("[IcaoLdapSync] Failed to parse ML CMS for {}", mlEntry.dn);
+        return 0;
+    }
+
+    int newCscaCount = 0;
+
+    // Extract embedded content (pkiData containing CSCA certificates)
+    ASN1_OCTET_STRING** pContent = CMS_get0_content(cms);
+    if (pContent && *pContent && (*pContent)->data && (*pContent)->length > 0) {
+        // Parse the encapContentInfo as a SET OF Certificate
+        const unsigned char* p = (*pContent)->data;
+        long len = (*pContent)->length;
+
+        // Try parsing as ASN.1 SEQUENCE OF Certificate
+        STACK_OF(X509)* cscas = nullptr;
+        // The content is typically a MasterList ::= SEQUENCE { version, certList SET OF Certificate }
+        // Skip version field and parse certificates
+        // Use d2i_X509 in a loop to extract individual certificates
+        const unsigned char* pos = p;
+        const unsigned char* end = p + len;
+
+        // Skip outer SEQUENCE tag + length
+        if (pos < end && *pos == 0x30) {
+            long outerLen;
+            int tag, xclass;
+            ASN1_get_object(&pos, &outerLen, &tag, &xclass, end - pos);
+
+            // Skip version INTEGER if present
+            if (pos < end && *pos == 0x02) {
+                long verLen;
+                ASN1_get_object(&pos, &verLen, &tag, &xclass, end - pos);
+                pos += verLen;
+            }
+
+            // Now parse SET OF Certificate
+            if (pos < end && (*pos == 0x31 || *pos == 0x30)) {
+                long setLen;
+                ASN1_get_object(&pos, &setLen, &tag, &xclass, end - pos);
+                const unsigned char* setEnd = pos + setLen;
+
+                while (pos < setEnd) {
+                    const unsigned char* certStart = pos;
+                    X509* cert = d2i_X509(nullptr, &pos, setEnd - certStart);
+                    if (!cert) break;
+
+                    // Compute fingerprint
+                    int derLen = i2d_X509(cert, nullptr);
+                    std::vector<uint8_t> derData(derLen);
+                    unsigned char* dPtr = derData.data();
+                    i2d_X509(cert, &dPtr);
+
+                    std::string fingerprint = computeFingerprint(derData);
+
+                    if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
+                        // Determine type: self-signed = CSCA, cross-signed = Link Certificate
+                        bool isSelfSigned = (X509_NAME_cmp(
+                            X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
+                        std::string certType = isSelfSigned ? "CSCA" : "CSCA";  // Both stored as CSCA
+
+                        // Extract country from ML entry
+                        IcaoLdapCertEntry cscaEntry;
+                        cscaEntry.dn = mlEntry.dn;
+                        cscaEntry.countryCode = mlEntry.countryCode;
+                        cscaEntry.certType = certType;
+                        cscaEntry.binaryData = derData;
+
+                        if (saveCertificateToDb(cscaEntry, fingerprint)) {
+                            saveCertificateToLocalLdap(cscaEntry, fingerprint);
+                            newCscaCount++;
+                        }
+                    }
+
+                    X509_free(cert);
+                }
+            }
+        }
+    }
+
+    // Also extract certificates from CMS certificates field (MLSC + additional CSCAs)
+    STACK_OF(X509)* cmsCerts = CMS_get1_certs(cms);
+    if (cmsCerts) {
+        int numCerts = sk_X509_num(cmsCerts);
+        for (int i = 0; i < numCerts; i++) {
+            X509* cert = sk_X509_value(cmsCerts, i);
+            if (!cert) continue;
+
+            int derLen = i2d_X509(cert, nullptr);
+            std::vector<uint8_t> derData(derLen);
+            unsigned char* dPtr = derData.data();
+            i2d_X509(cert, &dPtr);
+
+            std::string fingerprint = computeFingerprint(derData);
+            if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
+                // CMS certificates field typically contains MLSC
+                bool isSelfSigned = (X509_NAME_cmp(
+                    X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
+
+                IcaoLdapCertEntry certEntry;
+                certEntry.dn = mlEntry.dn;
+                certEntry.countryCode = mlEntry.countryCode;
+                certEntry.certType = isSelfSigned ? "CSCA" : "MLSC";
+                certEntry.binaryData = derData;
+
+                if (saveCertificateToDb(certEntry, fingerprint)) {
+                    saveCertificateToLocalLdap(certEntry, fingerprint);
+                    newCscaCount++;
+                }
+            }
+        }
+        // Free the stack (CMS_get1_certs returns a new stack)
+        for (int i = 0; i < sk_X509_num(cmsCerts); i++) {
+            X509_free(sk_X509_value(cmsCerts, i));
+        }
+        sk_X509_free(cmsCerts);
+    }
+
+    CMS_ContentInfo_free(cms);
+
+    if (newCscaCount > 0) {
+        spdlog::info("[IcaoLdapSync] ML {} → {} new CSCAs extracted", mlEntry.countryCode, newCscaCount);
+    }
+
+    return newCscaCount;
 }
 
 void IcaoLdapSyncService::broadcastProgress(const IcaoLdapSyncProgress& progress) {
