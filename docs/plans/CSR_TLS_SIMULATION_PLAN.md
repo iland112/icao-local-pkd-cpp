@@ -1,7 +1,7 @@
 # CSR 기반 TLS 인증서 발급 및 ICAO PKD 연결 — 구현 보고서
 
 > **작성일**: 2026-03-22
-> **상태**: Phase 1 구현 완료 / Phase 2~3 후속 진행 예정
+> **상태**: 전체 구현 완료 (Phase 1~3)
 > **목표**: CSR 관리 → Private CA 서명 → ICAO PKD LDAP TLS 상호 인증 End-to-End 연동
 
 ---
@@ -53,23 +53,24 @@ volumes:
 
 ---
 
-## 2. 후속 구현 예정 (Phase 2~3)
+## 2. 구현 완료 항목 (Phase 2~3)
 
-### Phase 2: ICAO PKD LDAP TLS 서버 설정
-
-| 항목 | 내용 | 상태 |
-|------|------|------|
-| 서버 인증서 발급 스크립트 | `scripts/ssl/init-icao-sim-cert.sh` | 미구현 |
-| Docker LDAP_TLS=true | icao-pkd-ldap 컨테이너 TLS 활성화 | 미구현 |
-| LDAPS 포트 636 | docker-compose 포트 매핑 추가 | 미구현 |
-
-### Phase 3: PKD Relay 동적 TLS 전환
+### Phase 2: ICAO PKD LDAP TLS 서버 설정 (완료)
 
 | 항목 | 내용 | 상태 |
 |------|------|------|
-| config API 확장 | TLS 설정 동적 변경 | 미구현 |
-| IcaoLdapSync 페이지 | TLS 모드 표시 + 인증서 정보 | 미구현 |
-| E2E 테스트 | CSR → 발급 → TLS 연결 → 동기화 | 미구현 |
+| 서버 인증서 발급 | `scripts/ssl/init-icao-sim-cert.sh` — Private CA로 LDAP 서버 cert 발급 | ✅ 완료 |
+| Docker TLS 활성화 | `LDAP_TLS=true`, `LDAP_TLS_VERIFY_CLIENT=try` | ✅ 완료 |
+| LDAPS 포트 636 | docker-compose `13636:636` 매핑 | ✅ 완료 |
+| TLS 볼륨 마운트 | `.docker-data/icao-pkd-tls/` → `/container/service/slapd/assets/certs/` | ✅ 완료 |
+
+### Phase 3: PKD Relay TLS 연결 (완료)
+
+| 항목 | 내용 | 상태 |
+|------|------|------|
+| .env TLS 설정 | `ICAO_LDAP_USE_TLS=true`, `ICAO_LDAP_PORT=636` | ✅ 완료 |
+| 연결 테스트 | `POST /api/sync/icao-ldap/test` → TLS Mutual Auth (SASL EXTERNAL), 58ms | ✅ 성공 |
+| E2E 검증 | CSR 생성 → CA 서명 → client.pem → LDAPS:636 SASL EXTERNAL | ✅ 성공 |
 
 ---
 
@@ -102,4 +103,17 @@ volumes:
 | PKD Management Docker 빌드 | [100%] Built target pkd-management |
 | Frontend TypeScript 검증 | 에러 없음 |
 | Frontend Docker 빌드 | Built |
-| 배포 | 전체 서비스 healthy |
+| ICAO LDAP LDAPS 내부 테스트 | ldapsearch -H ldaps://localhost 성공 |
+| PKD Relay TLS 연결 테스트 | TLS Mutual Auth (SASL EXTERNAL), 58ms |
+| TLS 파일 생성 | client.pem + client-key.pem + ca.pem + ldap-server.crt/key |
+| 전체 서비스 healthy | ✅ |
+
+### E2E 시나리오 검증
+
+```
+1. CSR 생성 (POST /api/csr/generate) → RSA-2048 ✅
+2. CA 인증서 발급 (POST /api/csr/{id}/sign) → Private CA 서명 ✅
+3. TLS 파일 자동 저장 → client.pem, client-key.pem, ca.pem ✅
+4. LDAP TLS 서버 → icao-pkd-ldap:636 LDAPS ✅
+5. PKD Relay TLS 연결 → SASL EXTERNAL 인증 58ms ✅
+```
