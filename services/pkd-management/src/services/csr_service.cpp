@@ -431,9 +431,14 @@ CsrGenerateResult CsrService::signWithCA(
             spdlog::info("[CsrService] Client cert saved: {}", clientCertPath);
         }
 
-        // Client private key (decrypt from DB)
+        // Client private key (query directly from DB — not in findById for security)
         {
-            std::string encKey = csrData.get("private_key_encrypted", "").asString();
+            std::string dbType = queryExecutor_->getDatabaseType();
+            std::string keyQuery = (dbType == "oracle")
+                ? "SELECT TO_CHAR(private_key_encrypted) as private_key_encrypted FROM csr_request WHERE id = $1"
+                : "SELECT private_key_encrypted FROM csr_request WHERE id = $1";
+            auto keyResult = queryExecutor_->executeQuery(keyQuery, {id});
+            std::string encKey = keyResult.empty() ? "" : keyResult[0].get("private_key_encrypted", "").asString();
             std::string privKeyPem = auth::pii::decrypt(encKey);
             if (!privKeyPem.empty()) {
                 std::string keyPath = outputDir + "/client-key.pem";
