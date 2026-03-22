@@ -1,6 +1,6 @@
 # FASTpass® SPKD — Certificate Processing Guide
 
-**Version**: v2.37.0 | **Last Updated**: 2026-03-18
+**Version**: v2.39.0 | **Last Updated**: 2026-03-22
 
 ---
 

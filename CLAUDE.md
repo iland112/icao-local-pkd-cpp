@@ -337,6 +337,12 @@ dc=download,dc=pkd,dc=icao,dc=int
 - `GET /api/sync/reconcile/stats` - Reconciliation statistics
 - `POST /api/sync/revalidate` - Trigger DSC expiration revalidation
 - `GET /api/sync/notifications/stream` - Real-time notification SSE stream
+- `POST /api/sync/icao-ldap/trigger` - Trigger ICAO PKD LDAP sync
+- `GET /api/sync/icao-ldap/status` - ICAO LDAP sync status
+- `GET /api/sync/icao-ldap/history` - ICAO LDAP sync history (paginated, status filter)
+- `GET /api/sync/icao-ldap/config` - ICAO LDAP sync config
+- `PUT /api/sync/icao-ldap/config` - Update ICAO LDAP sync config
+- `POST /api/sync/icao-ldap/test` - Test ICAO LDAP connection
 
 ### AI Analysis Service (via :8080/api/ai)
 
@@ -367,7 +373,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (27 total)
+### Pages (28 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -387,6 +393,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | PADetail | `/pa/:paId` | PA detail |
 | PADashboard | `/pa/dashboard` | PA statistics dashboard |
 | SyncDashboard | `/sync` | DB-LDAP sync monitoring |
+| IcaoLdapSync | `/sync/icao-ldap` | ICAO PKD LDAP auto-sync (TLS, progress, history) |
 | IcaoStatus | `/icao` | ICAO PKD version tracking |
 | MonitoringDashboard | `/monitoring` | System monitoring |
 | AiAnalysisDashboard | `/ai/analysis` | AI certificate forensic analysis & pattern analysis |
@@ -657,10 +664,18 @@ scripts/
 - **SSE 알림 분리**: 시작/완료만 Notification Bell, 진행 상황은 페이지 내 표시
 - **사이드바 재구성**: "ICAO 연계" 섹션 신설 (ICAO 버전 상태, 파일 업로드, ICAO PKD 동기화)
 - **운영 감사 로그**: PA_TRUST_MATERIALS 외 8개 OperationType 라벨 추가
-- **Client PA 필터 개선**: 서버 PA와 동일한 5개 필터 (국가/상태/날짜/검색)
+- **Client PA 필터 개선**: 서버 PA와 동일한 5개 필터 (국가/상태/날짜/검색), MRZ→여권 번호 컬럼 변경
+- **ICAO PKD 동기화 전용 페이지**: `/sync/icao-ldap` 별도 페이지 분리 (SyncDashboard에서 독립)
+  - KPI 카드 4개, 연결 테스트, SSE 실시간 진행 상황, 타입 파이프라인 시각화
+  - 동기화 이력 테이블 (시작시간/상태/트리거/전체/신규/기존/실패/소요시간/상세)
+  - 이력 행 클릭 → 상세 다이얼로그 (타입별 ML→CSCA/DSC/CRL/DSC_NC 통계 테이블)
+  - 페이지네이션 + 상태 필터 + i18n (한국어/영어 60+ 키)
+  - 디자인 시스템 일관성 개선 (gradient header, border-l-4 KPI, shadow-xl table, badge 상태)
+- **ICAO 버전 상태 버그 수정**: 비표준 파일명(.ml) 업로드 후 uploaded_version이 N/A로 표시되는 문제 → ICAO 파일명 패턴 필터 추가
+- **법무부 사업계획서 적합성 분석 보고서**: 22개 요구사항 대비 12/12 Local PKD+PA 완전 대응
 - DB: `icao_ldap_sync_log` 테이블 (PostgreSQL + Oracle)
 - Docker: `icao-pkd-ldap` 컨테이너, PKD Relay ICAO LDAP 환경변수, TLS 볼륨
-- ~20 커밋, ~30 파일 변경
+- 34 커밋, ~50 파일 변경
 
 ### v2.38.0 (2026-03-21) - Client PA 지원 (Trust Materials API) + 업로드 중복 표시 개선 + 사용자 관리 감사 연동
 - **Client PA Trust Materials API**: 클라이언트(ICRM)가 로컬에서 PA 수행 가능하도록 4개 엔드포인트 추가
@@ -726,7 +741,7 @@ scripts/
 ### v2.35.0 (2026-03-16) - ICAO PKD CSR 관리 모듈 + 인증서 등록 + 감사 강화
 - **ICAO PKD CSR 생성**: RSA 2048 bit 공개키 + SHA256withRSA 서명 + Base64(PEM) 인코딩 — ICAO PKD 요구사항 완전 준수
 - **ICAO 요구사항 원문**: "The CSR must contain an RSA 2048 bit public key and be signed using SHA256withRSA and should be Base64 encoded. There are no restrictions on the subjectDN included in the CSR"
-- **7 API 엔드포인트**: `POST /api/csr/generate` (생성), `POST /api/csr/import` (외부 CSR+개인키 가져오기), `GET /api/csr` (목록), `GET /api/csr/{id}` (상세), `GET /api/csr/{id}/export/pem` (PEM 내보내기), `POST /api/csr/{id}/certificate` (ICAO 발급 인증서 등록), `DELETE /api/csr/{id}` (삭제)
+- **8 API 엔드포인트**: `POST /api/csr/generate` (생성), `POST /api/csr/import` (외부 CSR+개인키 가져오기), `GET /api/csr` (목록), `GET /api/csr/{id}` (상세), `GET /api/csr/{id}/export/pem` (PEM 내보내기), `POST /api/csr/{id}/certificate` (ICAO 발급 인증서 등록), `POST /api/csr/{id}/sign` (Private CA 서명 발급), `DELETE /api/csr/{id}` (삭제)
 - **CSR Import**: 외부 생성 CSR + 개인키 PEM 가져오기 — CSR 서명 검증(`X509_REQ_verify`) + 개인키-CSR 공개키 매칭 검증(`EVP_PKEY_eq`)
 - **ICAO 발급 인증서 등록**: `POST /api/csr/{id}/certificate` — X.509 파싱, 공개키 매칭 검증(CSR 핑거프린트 비교), 메타데이터 자동 추출(serial, issuer, validity, fingerprint), 중복 등록 차단
 - **데이터 암호화**: CSR PEM + 개인키 모두 AES-256-GCM 암호화 저장 (`PII_ENCRYPTION_KEY`), API 응답에 개인키 미포함
