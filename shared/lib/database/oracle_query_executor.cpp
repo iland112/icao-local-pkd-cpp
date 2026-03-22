@@ -222,8 +222,10 @@ Json::Value OracleQueryExecutor::executeQuery(
             }
         }
         ub4 iters = (isDml || isDmlReturning) ? 1 : 0;
+        // DML: auto-commit on success; SELECT: default (cursor open)
+        ub4 execMode = isDml ? OCI_COMMIT_ON_SUCCESS : OCI_DEFAULT;
         status = OCIStmtExecute(session.svcCtx, stmt, session.err, iters, 0,
-                               nullptr, nullptr, OCI_DEFAULT);
+                               nullptr, nullptr, execMode);
         if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
             char errbuf[512];
             sb4 errcode = 0;
@@ -609,9 +611,9 @@ int OracleQueryExecutor::executeCommand(
             }
         }
 
-        // Execute statement (iters=1 for DML commands)
+        // Execute statement (iters=1 for DML commands, auto-commit)
         status = OCIStmtExecute(session.svcCtx, stmt, session.err, 1, 0,
-                               nullptr, nullptr, OCI_DEFAULT);
+                               nullptr, nullptr, OCI_COMMIT_ON_SUCCESS);
         if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
             char errbuf[512];
             sb4 errcode = 0;
