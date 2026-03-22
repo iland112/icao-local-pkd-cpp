@@ -134,18 +134,32 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
     struct timeval tv = {15, 0};  // 15s timeout for TLS handshake
     ldap_set_option(ldap_, LDAP_OPT_NETWORK_TIMEOUT, &tv);
 
-    // SASL EXTERNAL bind — authentication via client certificate
-    // Empty DN + "EXTERNAL" mechanism = server extracts identity from TLS cert
-    struct berval cred = {0, const_cast<char*>("")};
-    rc = ldap_sasl_bind_s(ldap_, "", "EXTERNAL", &cred, nullptr, nullptr, nullptr);
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] SASL EXTERNAL bind failed to {}: {}", uri, ldap_err2string(rc));
-        ldap_unbind_ext_s(ldap_, nullptr, nullptr);
-        ldap_ = nullptr;
-        return false;
+    // Bind: SASL EXTERNAL (cert-based) or Simple Bind over TLS
+    if (tlsConfig_.bindDn.empty()) {
+        // SASL EXTERNAL — authentication via client certificate (production ICAO PKD)
+        struct berval cred = {0, const_cast<char*>("")};
+        rc = ldap_sasl_bind_s(ldap_, "", "EXTERNAL", &cred, nullptr, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS) {
+            spdlog::error("[IcaoLdapClient] SASL EXTERNAL bind failed to {}: {}", uri, ldap_err2string(rc));
+            ldap_unbind_ext_s(ldap_, nullptr, nullptr);
+            ldap_ = nullptr;
+            return false;
+        }
+        spdlog::info("[IcaoLdapClient] Connected (TLS / SASL EXTERNAL): {}", uri);
+    } else {
+        // Simple Bind over TLS — encrypted channel + DN/password auth
+        struct berval cred;
+        cred.bv_val = const_cast<char*>(tlsConfig_.bindPassword.c_str());
+        cred.bv_len = tlsConfig_.bindPassword.length();
+        rc = ldap_sasl_bind_s(ldap_, tlsConfig_.bindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS) {
+            spdlog::error("[IcaoLdapClient] Simple Bind over TLS failed to {}: {}", uri, ldap_err2string(rc));
+            ldap_unbind_ext_s(ldap_, nullptr, nullptr);
+            ldap_ = nullptr;
+            return false;
+        }
+        spdlog::info("[IcaoLdapClient] Connected (TLS / Simple Bind): {}", uri);
     }
-
-    spdlog::info("[IcaoLdapClient] Connected (TLS Mutual Auth / SASL EXTERNAL): {}", uri);
     return true;
 }
 

@@ -26,6 +26,9 @@ struct IcaoLdapTlsConfig {
     std::string certFile;    // Client certificate PEM file path
     std::string keyFile;     // Client private key PEM file path
     std::string caCertFile;  // CA certificate PEM file path (D-Trust CA)
+    // Fallback: Simple Bind over TLS (LDAPS + DN/password)
+    std::string bindDn;      // If set, use Simple Bind over LDAPS instead of SASL EXTERNAL
+    std::string bindPassword;
 };
 
 class IcaoLdapClient {

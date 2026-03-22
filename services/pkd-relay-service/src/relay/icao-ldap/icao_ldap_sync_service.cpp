@@ -88,6 +88,9 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             tlsCfg.certFile = config_.icaoLdapTlsCertFile;
             tlsCfg.keyFile = config_.icaoLdapTlsKeyFile;
             tlsCfg.caCertFile = config_.icaoLdapTlsCaCertFile;
+            // Use Simple Bind over TLS if bindDn is configured
+            tlsCfg.bindDn = config_.icaoLdapBindDn;
+            tlsCfg.bindPassword = config_.icaoLdapBindPassword;
             clientPtr = std::make_unique<IcaoLdapClient>(
                 config_.icaoLdapHost, config_.icaoLdapPort,
                 config_.icaoLdapBaseDn, tlsCfg);
@@ -834,10 +837,12 @@ IcaoLdapConnectionTestResult IcaoLdapSyncService::testConnection() {
             tlsCfg.certFile = config_.icaoLdapTlsCertFile;
             tlsCfg.keyFile = config_.icaoLdapTlsKeyFile;
             tlsCfg.caCertFile = config_.icaoLdapTlsCaCertFile;
+            tlsCfg.bindDn = config_.icaoLdapBindDn;
+            tlsCfg.bindPassword = config_.icaoLdapBindPassword;
             clientPtr = std::make_unique<IcaoLdapClient>(
                 config_.icaoLdapHost, config_.icaoLdapPort,
                 config_.icaoLdapBaseDn, tlsCfg);
-            result.tlsMode = "TLS Mutual Auth (SASL EXTERNAL)";
+            result.tlsMode = tlsCfg.bindDn.empty() ? "TLS / SASL EXTERNAL" : "TLS / Simple Bind";
         } else {
             clientPtr = std::make_unique<IcaoLdapClient>(
                 config_.icaoLdapHost, config_.icaoLdapPort,
