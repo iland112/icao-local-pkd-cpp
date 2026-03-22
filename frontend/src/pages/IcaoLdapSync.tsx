@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, RefreshCw, CheckCircle, XCircle, Clock, Wifi, WifiOff,
   Zap, Shield, ShieldCheck, Settings, Plug, Loader2, ArrowRight,
-  Server, Database, Activity, History, AlertTriangle, Info, X, ChevronLeft, ChevronRight
+  Server, Database, Activity, History, AlertTriangle, Info, X, ChevronLeft, ChevronRight, Eye
 } from 'lucide-react';
 import {
   syncApi,
@@ -485,6 +485,7 @@ export default function IcaoLdapSync() {
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">기존</th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">실패</th>
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">소요시간</th>
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">상세</th>
                 </tr>
               </thead>
               <tbody>
@@ -508,6 +509,12 @@ export default function IcaoLdapSync() {
                     <td className="px-3 py-2 text-right text-gray-400">{h.existingSkipped.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right text-red-500">{h.failedCount}</td>
                     <td className="px-3 py-2 text-right text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
+                    <td className="px-3 py-2 text-center">
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedHistory(h); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                        <Eye className="w-3 h-3" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
