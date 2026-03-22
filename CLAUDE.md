@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.38.0
-**Last Updated**: 2026-03-21
+**Current Version**: v2.39.0
+**Last Updated**: 2026-03-22
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -110,18 +110,39 @@ Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services 
 
 ### LDAP Structure
 
+#### Local PKD LDAP (OpenLDAP MMR)
+
 ```
 dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 +-- dc=data
 |   +-- c={COUNTRY}
-|       +-- o=csca  (CSCA certificates)
-|       +-- o=mlsc  (Master List Signer Certificates)
+|       +-- o=csca  (CSCA certificates — ML에서 추출, 로컬 확장)
+|       +-- o=mlsc  (Master List Signer Certificates — 로컬 확장)
+|       +-- o=lc    (Link Certificates — CSCA key rollover, 로컬 확장)
 |       +-- o=dsc   (DSC certificates)
 |       +-- o=crl   (CRLs)
 |       +-- o=ml    (Master Lists)
 +-- dc=nc-data
     +-- c={COUNTRY}
         +-- o=dsc   (Non-conformant DSC)
+```
+
+#### ICAO PKD LDAP (실제 / 시뮬레이션)
+
+```
+dc=download,dc=pkd,dc=icao,dc=int
++-- dc=data
+|   +-- c={COUNTRY}
+|       +-- o=dsc   (DSC certificates)
+|       +-- o=crl   (CRLs)
+|       +-- o=ml    (Master Lists — CSCA가 CMS 안에 포함)
+|       +-- o=dl    (Deviation Lists)
++-- dc=nc-data
+    +-- c={COUNTRY}
+        +-- o=dsc   (Non-conformant DSC)
+
+※ ICAO PKD에는 o=csca 없음 — CSCA는 ML CMS SignedData에서 추출
+※ 로컬 PKD의 o=csca, o=mlsc, o=lc는 로컬 확장 (PA 검증용)
 ```
 
 ---
@@ -615,6 +636,31 @@ scripts/
 ---
 
 ## Version History
+
+### v2.39.0 (2026-03-22) - ICAO PKD LDAP 자동 동기화 + CSR 기반 TLS 인증서 발급
+
+- **ICAO PKD LDAP 자동 동기화**: LDAP V3 프로토콜로 ICAO PKD 서버에서 인증서/CRL 자동 다운로드
+  - 모의 ICAO PKD LDAP 서버 (Docker, `icao-pkd-ldap:389/636`)
+  - `IcaoLdapClient`: Simple Bind / TLS + SASL EXTERNAL 이중 모드
+  - `IcaoLdapSyncService`: fingerprint 중복 체크 → X.509 메타데이터 22개 추출 → Trust Chain 검증 → DB/LDAP 저장
+  - **Master List에서 CSCA 추출**: ICAO PKD DIT에 o=csca 없음 → ML CMS SignedData 파싱 → CSCA/MLSC 추출
+  - 동기화 파이프라인: ML→CSCA → DSC → CRL → DSC_NC (5단계)
+  - SSE 실시간 진행 상황 (타입별 진행률, 파이프라인 시각화)
+  - API 6개: trigger, status, history, config, test, (config update)
+- **CSR 기반 TLS 인증서 발급**: `POST /api/csr/{id}/sign`
+  - Private CA로 CSR 서명 → 클라이언트 인증서 즉시 발급
+  - TLS 파일 자동 저장 (client.pem, client-key.pem, ca.pem)
+  - CsrManagement 페이지: "CA 인증서 발급" + "ICAO PKD 연결 적용" 버튼
+- **ICAO PKD LDAP TLS 서버**: LDAPS:636, Private CA 서버 인증서
+- **3가지 인증 모드**: 평문(389) / TLS+Simple Bind(636) / TLS+SASL EXTERNAL(636)
+- **Oracle OCI 수정**: DML iters=1 + OCI_COMMIT_ON_SUCCESS (ORA-24333 근본 해결)
+- **SSE 알림 분리**: 시작/완료만 Notification Bell, 진행 상황은 페이지 내 표시
+- **사이드바 재구성**: "ICAO 연계" 섹션 신설 (ICAO 버전 상태, 파일 업로드, ICAO PKD 동기화)
+- **운영 감사 로그**: PA_TRUST_MATERIALS 외 8개 OperationType 라벨 추가
+- **Client PA 필터 개선**: 서버 PA와 동일한 5개 필터 (국가/상태/날짜/검색)
+- DB: `icao_ldap_sync_log` 테이블 (PostgreSQL + Oracle)
+- Docker: `icao-pkd-ldap` 컨테이너, PKD Relay ICAO LDAP 환경변수, TLS 볼륨
+- ~20 커밋, ~30 파일 변경
 
 ### v2.38.0 (2026-03-21) - Client PA 지원 (Trust Materials API) + 업로드 중복 표시 개선 + 사용자 관리 감사 연동
 - **Client PA Trust Materials API**: 클라이언트(ICRM)가 로컬에서 PA 수행 가능하도록 4개 엔드포인트 추가
