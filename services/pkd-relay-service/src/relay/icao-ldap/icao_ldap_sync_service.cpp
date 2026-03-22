@@ -856,17 +856,45 @@ void IcaoLdapSyncService::updateConfig(const IcaoLdapSyncConfig& newConfig) {
                 newConfig.enabled, newConfig.syncIntervalMinutes);
 }
 
-std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(int limit) const {
+int IcaoLdapSyncService::getSyncHistoryCount(const std::string& statusFilter) const {
+    if (!queryExecutor_) return 0;
+    try {
+        std::string sql = "SELECT COUNT(*) AS cnt FROM icao_ldap_sync_log";
+        std::vector<std::string> params;
+        if (!statusFilter.empty()) {
+            sql += " WHERE status = $1";
+            params.push_back(statusFilter);
+        }
+        auto result = queryExecutor_->executeQuery(sql, params);
+        if (!result.empty()) return common::db::scalarToInt(result[0]["cnt"]);
+    } catch (...) {}
+    return 0;
+}
+
+std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(
+    int limit, int offset, const std::string& statusFilter) const {
     std::vector<IcaoLdapSyncResult> history;
     if (!queryExecutor_) return history;
 
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
-        auto rows = queryExecutor_->executeQuery(
-            "SELECT sync_type, status, triggered_by, total_remote_count, "
+        std::string sql = "SELECT sync_type, status, triggered_by, total_remote_count, "
             "new_certificates, updated_certificates, failed_count, duration_ms, "
-            "error_message, created_at FROM icao_ldap_sync_log "
-            "ORDER BY created_at DESC " + common::db::limitClause(dbType, limit), {});
+            "error_message, " +
+            (dbType == "oracle"
+                ? std::string("TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at")
+                : std::string("TO_CHAR(created_at, 'YYYY-MM-DD HH24:MI:SS') as created_at")) +
+            " FROM icao_ldap_sync_log";
+
+        std::vector<std::string> params;
+        if (!statusFilter.empty()) {
+            sql += " WHERE status = $1";
+            params.push_back(statusFilter);
+        }
+        sql += " ORDER BY created_at DESC";
+        sql += " " + common::db::paginationClause(dbType, limit, offset);
+
+        auto rows = queryExecutor_->executeQuery(sql, params);
 
         for (const auto& row : rows) {
             IcaoLdapSyncResult r;
@@ -904,6 +932,7 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(int limit) c
             } else {
                 r.errorMessage = rawMsg;
             }
+            r.createdAt = row.get("created_at", "").asString();
             history.push_back(std::move(r));
         }
     } catch (const std::exception& e) {

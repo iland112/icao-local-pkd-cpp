@@ -35,8 +35,8 @@ export default function IcaoLdapSyncCard() {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await syncApi.getIcaoLdapSyncHistory(5);
-      setHistory(Array.isArray(res.data) ? res.data : []);
+      const res = await syncApi.getIcaoLdapSyncHistory({ limit: 5 });
+      setHistory(res.data.data ?? []);
     } catch { /* non-critical */ }
   }, []);
 

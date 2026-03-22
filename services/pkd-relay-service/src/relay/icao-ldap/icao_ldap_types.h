@@ -46,6 +46,7 @@ struct IcaoLdapSyncResult {
     int durationMs = 0;
 
     std::string errorMessage;
+    std::string createdAt;   // ISO timestamp from DB
 
     // Per-type breakdown
     std::vector<IcaoLdapTypeStat> typeStats;

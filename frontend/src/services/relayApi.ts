@@ -485,9 +485,10 @@ export const syncApi = {
   getIcaoLdapSyncStatus: () =>
     relayApi.get<IcaoLdapSyncStatus>('/sync/icao-ldap/status'),
 
-  /** Get ICAO LDAP sync history */
-  getIcaoLdapSyncHistory: (limit: number = 20) =>
-    relayApi.get<IcaoLdapSyncHistoryItem[]>('/sync/icao-ldap/history', { params: { limit } }),
+  /** Get ICAO LDAP sync history (paginated) */
+  getIcaoLdapSyncHistory: (params?: { limit?: number; offset?: number; status?: string }) =>
+    relayApi.get<{ data: IcaoLdapSyncHistoryItem[]; total: number; limit: number; offset: number }>(
+      '/sync/icao-ldap/history', { params }),
 
   /** Get ICAO LDAP sync config */
   getIcaoLdapSyncConfig: () =>
@@ -541,6 +542,7 @@ export interface IcaoLdapSyncHistoryItem {
   failedCount: number;
   durationMs: number;
   errorMessage?: string;
+  createdAt?: string;
   typeStats?: IcaoLdapSyncTypeStat[];
 }
 

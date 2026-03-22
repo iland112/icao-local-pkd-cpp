@@ -72,8 +72,12 @@ public:
     /// Update runtime configuration
     void updateConfig(const IcaoLdapSyncConfig& newConfig);
 
-    /// Get sync history from DB
-    std::vector<IcaoLdapSyncResult> getSyncHistory(int limit = 20) const;
+    /// Get sync history from DB (with pagination and filter)
+    std::vector<IcaoLdapSyncResult> getSyncHistory(int limit = 20, int offset = 0,
+                                                    const std::string& statusFilter = "") const;
+
+    /// Get total sync history count (for pagination)
+    int getSyncHistoryCount(const std::string& statusFilter = "") const;
 
 private:
     /// Process a single certificate entry from ICAO LDAP

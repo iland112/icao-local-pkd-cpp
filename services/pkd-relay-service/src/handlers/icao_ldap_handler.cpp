@@ -121,14 +121,18 @@ void IcaoLdapHandler::handleGetHistory(const drogon::HttpRequestPtr& req,
     Json::Value json(Json::arrayValue);
 
     if (syncService_) {
-        int limit = 20;
+        int limit = 10, offset = 0;
+        std::string statusFilter;
         auto limitParam = req->getParameter("limit");
-        if (!limitParam.empty()) {
-            try { limit = std::stoi(limitParam); } catch (...) {}
-            limit = std::max(1, std::min(100, limit));
-        }
+        auto offsetParam = req->getParameter("offset");
+        auto statusParam = req->getParameter("status");
+        if (!limitParam.empty()) { try { limit = std::stoi(limitParam); } catch (...) {} }
+        if (!offsetParam.empty()) { try { offset = std::stoi(offsetParam); } catch (...) {} }
+        if (!statusParam.empty()) statusFilter = statusParam;
+        limit = std::max(1, std::min(100, limit));
+        offset = std::max(0, offset);
 
-        auto history = syncService_->getSyncHistory(limit);
+        auto history = syncService_->getSyncHistory(limit, offset, statusFilter);
         for (const auto& r : history) {
             Json::Value item;
             item["syncType"] = r.syncType;
@@ -139,6 +143,7 @@ void IcaoLdapHandler::handleGetHistory(const drogon::HttpRequestPtr& req,
             item["existingSkipped"] = r.existingSkipped;
             item["failedCount"] = r.failedCount;
             item["durationMs"] = r.durationMs;
+            if (!r.createdAt.empty()) item["createdAt"] = r.createdAt;
             if (!r.errorMessage.empty() && r.errorMessage != " ") item["errorMessage"] = r.errorMessage;
             if (!r.typeStats.empty()) {
                 Json::Value stats(Json::arrayValue);
@@ -155,6 +160,17 @@ void IcaoLdapHandler::handleGetHistory(const drogon::HttpRequestPtr& req,
             }
             json.append(item);
         }
+
+        int total = syncService_->getSyncHistoryCount(statusFilter);
+        Json::Value response;
+        response["data"] = json;
+        response["total"] = total;
+        response["limit"] = limit;
+        response["offset"] = offset;
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+        return;
     }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(json);

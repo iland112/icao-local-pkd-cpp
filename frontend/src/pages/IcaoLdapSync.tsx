@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Globe, RefreshCw, CheckCircle, XCircle, Clock, Wifi, WifiOff,
   Zap, Shield, ShieldCheck, Settings, Plug, Loader2, ArrowRight,
-  Server, Database, Activity, History, AlertTriangle, Info, X
+  Server, Database, Activity, History, AlertTriangle, Info, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
   syncApi,
@@ -26,6 +26,10 @@ export default function IcaoLdapSync() {
   const [settingsEnabled, setSettingsEnabled] = useState(false);
   const [settingsInterval, setSettingsInterval] = useState(60);
   const [selectedHistory, setSelectedHistory] = useState<IcaoLdapSyncHistoryItem | null>(null);
+  const [historyPage, setHistoryPage] = useState(0);
+  const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyStatusFilter, setHistoryStatusFilter] = useState('');
+  const historyPageSize = 10;
   const eventSourceRef = useRef<EventSource | null>(null);
 
   const fetchStatus = useCallback(async () => {
@@ -42,10 +46,15 @@ export default function IcaoLdapSync() {
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await syncApi.getIcaoLdapSyncHistory(10);
-      setHistory(Array.isArray(res.data) ? res.data : []);
+      const res = await syncApi.getIcaoLdapSyncHistory({
+        limit: historyPageSize,
+        offset: historyPage * historyPageSize,
+        ...(historyStatusFilter ? { status: historyStatusFilter } : {}),
+      });
+      setHistory(res.data.data ?? []);
+      setHistoryTotal(res.data.total ?? 0);
     } catch { /* non-critical */ }
-  }, []);
+  }, [historyPage, historyStatusFilter]);
 
   // Refs for stable SSE callback access (avoids stale closure)
   const fetchStatusRef = useRef(fetchStatus);
@@ -435,18 +444,30 @@ export default function IcaoLdapSync() {
 
       {/* Sync History Table */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl">
-        <div className="flex items-center gap-2 p-4 border-b border-gray-100 dark:border-gray-700">
-          <History className="w-4 h-4 text-gray-500" />
-          <h3 className="text-sm font-semibold">동기화 이력</h3>
-          <span className="text-xs text-gray-400">최근 {history.length}건</span>
+        <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center gap-2">
+            <History className="w-4 h-4 text-gray-500" />
+            <h3 className="text-sm font-semibold">동기화 이력</h3>
+            <span className="text-xs text-gray-400">{historyTotal}건</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <select value={historyStatusFilter}
+              onChange={(e) => { setHistoryStatusFilter(e.target.value); setHistoryPage(0); }}
+              className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+              <option value="">전체 상태</option>
+              <option value="COMPLETED">COMPLETED</option>
+              <option value="FAILED">FAILED</option>
+              <option value="RUNNING">RUNNING</option>
+            </select>
+          </div>
         </div>
         {history.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-gray-700 text-left text-gray-500 dark:text-gray-400">
+                  <th className="px-4 py-2 font-medium">시작시간</th>
                   <th className="px-4 py-2 font-medium">상태</th>
-                  <th className="px-4 py-2 font-medium">유형</th>
                   <th className="px-4 py-2 font-medium">트리거</th>
                   <th className="px-4 py-2 font-medium text-right">전체</th>
                   <th className="px-4 py-2 font-medium text-right">신규</th>
@@ -458,6 +479,7 @@ export default function IcaoLdapSync() {
               <tbody>
                 {history.map((h, i) => (
                   <tr key={i} onClick={() => setSelectedHistory(h)} className="border-b border-gray-50 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30 cursor-pointer">
+                    <td className="px-4 py-2.5 text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
                     <td className="px-4 py-2.5">
                       <div className="flex items-center gap-1.5">
                         {statusIcon(h.status)}
@@ -467,7 +489,6 @@ export default function IcaoLdapSync() {
                         }`}>{h.status}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-2.5 text-gray-500">{h.syncType}</td>
                     <td className="px-4 py-2.5">
                       <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                         h.triggeredBy === 'MANUAL' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
@@ -486,6 +507,25 @@ export default function IcaoLdapSync() {
         ) : (
           <div className="p-8 text-center text-sm text-gray-400">
             아직 동기화 이력이 없습니다. "수동 동기화" 버튼을 눌러 첫 동기화를 실행하세요.
+          </div>
+        )}
+        {/* Pagination */}
+        {historyTotal > historyPageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              총 {historyTotal}건
+            </span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setHistoryPage(p => Math.max(0, p - 1))} disabled={historyPage === 0}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-gray-500">{historyPage + 1} / {Math.ceil(historyTotal / historyPageSize)}</span>
+              <button onClick={() => setHistoryPage(p => p + 1)} disabled={(historyPage + 1) * historyPageSize >= historyTotal}
+                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30">
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
