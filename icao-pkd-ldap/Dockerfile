@@ -5,7 +5,7 @@
 # DIT: dc=download,dc=pkd,dc=icao,dc=int
 # Purpose: Development/testing of automatic LDAP V3 sync
 # =============================================================================
-FROM osixia/openldap:1.5.0
+FROM docker.io/osixia/openldap:1.5.0
 
 # Create required empty config files that osixia startup script expects
 RUN mkdir -p /container/service/slapd/assets/config/replication && \

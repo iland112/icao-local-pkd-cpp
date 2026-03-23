@@ -9,6 +9,7 @@
 #include <thread>
 #include <chrono>
 #include <future>
+#include <memory>
 
 namespace infrastructure {
 namespace http {
@@ -38,28 +39,28 @@ std::optional<std::string> HttpClient::fetchHtml(const std::string& url, int tim
     req->addHeader("User-Agent", "Mozilla/5.0 (compatible; ICAO-Local-PKD/1.7.0)");
     req->addHeader("Accept", "text/html,application/xhtml+xml");
 
-    // Use promise/future for synchronous behavior
-    std::promise<std::optional<std::string>> promise;
-    auto future = promise.get_future();
+    // Use shared_ptr<promise> to prevent use-after-free when callback fires after timeout
+    auto promise = std::make_shared<std::promise<std::optional<std::string>>>();
+    auto future = promise->get_future();
 
-    // Send request asynchronously
-    client->sendRequest(req, [&promise](drogon::ReqResult result,
-                                         const drogon::HttpResponsePtr& response) {
+    // Send request asynchronously — promise captured by value (shared_ptr copy)
+    client->sendRequest(req, [promise](drogon::ReqResult result,
+                                       const drogon::HttpResponsePtr& response) {
         if (result == drogon::ReqResult::Ok && response) {
             if (response->getStatusCode() == drogon::k200OK) {
                 std::string html = std::string(response->getBody());
                 spdlog::info("[HttpClient] Successfully fetched HTML ({} bytes)",
                            html.size());
-                promise.set_value(html);
+                promise->set_value(html);
             } else {
                 spdlog::error("[HttpClient] HTTP error: {}",
                             static_cast<int>(response->getStatusCode()));
-                promise.set_value(std::nullopt);
+                promise->set_value(std::nullopt);
             }
         } else {
             spdlog::error("[HttpClient] Request failed: {}",
                         static_cast<int>(result));
-            promise.set_value(std::nullopt);
+            promise->set_value(std::nullopt);
         }
     });
 

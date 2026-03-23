@@ -74,6 +74,9 @@ ENV DB_PORT=5432
 ENV DB_NAME=localpkd
 ENV DB_USER=pkd
 # DB_PASSWORD must be provided at runtime via docker-compose .env or -e flag (not baked into image)
+ENV LDAPTLS_REQCERT=never
+RUN mkdir -p /etc/ldap && printf "TLS_REQCERT never\nTLS_CACERT /app/icao-tls/ca.pem\nTLS_CERT /app/icao-tls/client.pem\nTLS_KEY /app/icao-tls/client-key.pem\n" > /etc/ldap/ldap.conf && \
+    mkdir -p /etc/openldap && cp /etc/ldap/ldap.conf /etc/openldap/ldap.conf
 ENV LDAP_HOST=haproxy
 ENV LDAP_PORT=389
 ENV LDAP_WRITE_HOST=openldap1

@@ -83,42 +83,9 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
         return false;
     }
 
-    // Set TLS options BEFORE ldap_initialize (global options for OpenLDAP)
+    // TLS options are configured via /etc/ldap/ldap.conf (TLS_REQCERT, TLS_CERT, TLS_KEY, TLS_CACERT)
+    // to avoid conflicts with the local LDAP connection pool's TLS context
     int rc;
-
-    // CA certificate for server verification
-    if (!tlsConfig_.caCertFile.empty()) {
-        rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_CACERTFILE, tlsConfig_.caCertFile.c_str());
-        if (rc != LDAP_SUCCESS) {
-            spdlog::error("[IcaoLdapClient] Failed to set TLS CA cert: {}", ldap_err2string(rc));
-            return false;
-        }
-    }
-
-    // Client certificate (ICAO-issued)
-    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_CERTFILE, tlsConfig_.certFile.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] Failed to set TLS client cert: {}", ldap_err2string(rc));
-        return false;
-    }
-
-    // Client private key (from CSR generation)
-    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_KEYFILE, tlsConfig_.keyFile.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] Failed to set TLS client key: {}", ldap_err2string(rc));
-        return false;
-    }
-
-    // Require server certificate verification
-    int requireCert = LDAP_OPT_X_TLS_DEMAND;
-    rc = ldap_set_option(nullptr, LDAP_OPT_X_TLS_REQUIRE_CERT, &requireCert);
-    if (rc != LDAP_SUCCESS) {
-        spdlog::warn("[IcaoLdapClient] Failed to set TLS require cert: {}", ldap_err2string(rc));
-    }
-
-    // Force new TLS context with updated options
-    int newCtx = 0;
-    ldap_set_option(nullptr, LDAP_OPT_X_TLS_NEWCTX, &newCtx);
 
     // Initialize LDAP connection
     rc = ldap_initialize(&ldap_, uri.c_str());

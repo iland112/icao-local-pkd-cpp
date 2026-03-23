@@ -140,7 +140,7 @@ export default function CsrManagement() {
   const [signing, setSigning] = useState(false);
 
   const handleSignWithCA = async (id: string) => {
-    if (!confirm('Private CA로 인증서를 발급하시겠습니까?\n\n발급된 인증서는 ICAO PKD LDAP TLS 연결에 사용할 수 있습니다.')) return;
+    if (!confirm('Private CA로 TLS 클라이언트 인증서를 발급하시겠습니까?\n\n발급된 인증서는 ICAO PKD LDAP TLS 상호 인증에 사용됩니다.')) return;
     setSigning(true);
     try {
       const r = await csrApiService.signWithCA(id);
@@ -512,7 +512,7 @@ export default function CsrManagement() {
                         <button onClick={() => handleSignWithCA(selectedCsr.id)} disabled={signing}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium shadow-md transition-all text-sm disabled:opacity-50">
                           {signing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                          {signing ? '발급 중...' : 'CA 인증서 발급'}
+                          {signing ? '발급 중...' : 'TLS 클라이언트 인증서 발급'}
                         </button>
                         <button onClick={() => { setCertRegCsrId(selectedCsr.id); setCertRegOpen(true); setCertPemInput(''); setCertRegError(''); }}
                           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl font-medium shadow-md transition-all text-sm">
