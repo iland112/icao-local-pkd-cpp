@@ -225,8 +225,12 @@ export default function AiAnalysisDashboard() {
           fetchAnomaliesRef.current();
           toast.error(t('ai:dashboard.analysisFailed'), res.data.error_message || t('ai:dashboard.analysisError'));
         } else if (res.data.status === 'IDLE') {
-          // Unexpected IDLE during analysis — stop polling
+          // Unexpected IDLE during analysis (can happen with multi-worker uvicorn
+          // where status poll hits a different worker than the one running analysis).
+          // Refresh data in case analysis already completed on another worker.
           setAnalyzing(false);
+          fetchDataRef.current();
+          fetchAnomaliesRef.current();
         }
       } catch {
         errorCount++;
