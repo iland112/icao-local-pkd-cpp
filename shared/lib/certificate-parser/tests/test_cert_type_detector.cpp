@@ -115,8 +115,7 @@ TEST_F(CertTypeDetectorTest, IsMasterListSigner_False_ForCSCA) {
     EXPECT_FALSE(CertTypeDetector::isMasterListSigner(csca_.get()));
 }
 
-TEST_F(CertTypeDetectorTest, DISABLED_IsMasterListSigner_NullCert) {
-    // DISABLED: Source lacks null check — segfaults on nullptr input.
+TEST_F(CertTypeDetectorTest, IsMasterListSigner_NullCert) {
     EXPECT_FALSE(CertTypeDetector::isMasterListSigner(nullptr));
 }
 

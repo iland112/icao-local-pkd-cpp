@@ -102,16 +102,19 @@ CertificateType CertTypeDetector::stringToType(const std::string& str) {
 }
 
 bool CertTypeDetector::isMasterListSigner(X509* cert) {
+    if (!cert) return false;
     // OID: 2.23.136.1.1.9 (id-icao-mrtd-security-masterListSigner)
     return hasExtendedKeyUsage(cert, "2.23.136.1.1.9");
 }
 
 bool CertTypeDetector::isDeviationListSigner(X509* cert) {
+    if (!cert) return false;
     // OID: 2.23.136.1.1.10 (id-icao-mrtd-security-deviationListSigner)
     return hasExtendedKeyUsage(cert, "2.23.136.1.1.10");
 }
 
 bool CertTypeDetector::isDocumentSigner(X509* cert) {
+    if (!cert) return false;
     // OID: 2.23.136.1.1.6 (id-icao-mrtd-security-aaProtocol)
     return hasExtendedKeyUsage(cert, "2.23.136.1.1.6");
 }
@@ -134,6 +137,7 @@ bool CertTypeDetector::isCA(X509* cert) {
 }
 
 bool CertTypeDetector::isSelfSigned(X509* cert) {
+    if (!cert) return false;
     X509_NAME* subject = X509_get_subject_name(cert);
     X509_NAME* issuer = X509_get_issuer_name(cert);
 
@@ -171,6 +175,7 @@ std::string CertTypeDetector::extractCountry(X509* cert) {
 }
 
 bool CertTypeDetector::hasKeyCertSign(X509* cert) {
+    if (!cert) return false;
     // Get Key Usage extension
     ASN1_BIT_STRING* usage = static_cast<ASN1_BIT_STRING*>(
         X509_get_ext_d2i(cert, NID_key_usage, nullptr, nullptr)
@@ -192,6 +197,7 @@ bool CertTypeDetector::hasKeyCertSign(X509* cert) {
 }
 
 std::string CertTypeDetector::calculateFingerprint(X509* cert) {
+    if (!cert) return "";
     unsigned char md[EVP_MAX_MD_SIZE];
     unsigned int md_len = 0;
 

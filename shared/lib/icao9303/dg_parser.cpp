@@ -245,7 +245,12 @@ Json::Value DgParser::parseDg1(const std::vector<uint8_t>& dg1Data) {
     // Try to find MRZ data in DG1 (ICAO 9303 ASN.1 structure)
     // DG1 structure: Tag 0x61, Length, Tag 0x5F1F, Length, MRZ data
     std::string mrzData;
-    for (size_t i = 0; i < dg1Data.size() - 2; i++) {
+    if (dg1Data.size() < 3) {
+        result["success"] = false;
+        result["error"] = "DG1 data too short (" + std::to_string(dg1Data.size()) + " bytes)";
+        return result;
+    }
+    for (size_t i = 0; i + 2 < dg1Data.size(); i++) {
         if (dg1Data[i] == 0x5F && dg1Data[i+1] == 0x1F) {
             // Found MRZ tag
             i += 2;
@@ -326,7 +331,12 @@ Json::Value DgParser::parseDg2(const std::vector<uint8_t>& dg2Data) {
 
     // Search for JPEG or JPEG2000 signature within DG2
     bool foundImage = false;
-    for (size_t i = 0; i < dg2Data.size() - 3; i++) {
+    if (dg2Data.size() < 4) {
+        result["success"] = false;
+        result["error"] = "DG2 data too short (" + std::to_string(dg2Data.size()) + " bytes)";
+        return result;
+    }
+    for (size_t i = 0; i + 3 < dg2Data.size(); i++) {
         // JPEG signature: 0xFFD8FF
         if (dg2Data[i] == 0xFF && dg2Data[i+1] == 0xD8 && dg2Data[i+2] == 0xFF) {
             imageFormat = "JPEG";
@@ -342,7 +352,7 @@ Json::Value DgParser::parseDg2(const std::vector<uint8_t>& dg2Data) {
             if (foundImage) break;
         }
         // JPEG2000 signature: 0x0000000C 0x6A502020
-        else if (i < dg2Data.size() - 8 &&
+        else if (i + 8 < dg2Data.size() &&
                  dg2Data[i] == 0x00 && dg2Data[i+1] == 0x00 &&
                  dg2Data[i+2] == 0x00 && dg2Data[i+3] == 0x0C) {
             imageFormat = "JPEG2000";

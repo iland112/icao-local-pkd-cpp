@@ -649,11 +649,7 @@ TEST_F(ParseDg1Test, ValidTd3DG1Binary_DocumentNumber) {
     EXPECT_EQ(r["documentNumber"].asString(), "L898902C3");
 }
 
-TEST_F(ParseDg1Test, DISABLED_EmptyInput_Fails) {
-    // DISABLED: parseDg1({}) triggers undefined behaviour — the loop condition
-    // uses `dg1Data.size() - 2` which wraps to SIZE_MAX for an empty vector,
-    // causing a segmentation fault before any error path is reached.
-    // This is a known source-level bug; test disabled to avoid crashing the runner.
+TEST_F(ParseDg1Test, EmptyInput_Fails) {
     Json::Value r = parser_.parseDg1({});
     EXPECT_FALSE(r["success"].asBool());
     EXPECT_FALSE(r["error"].asString().empty());
@@ -723,11 +719,7 @@ TEST_F(ParseDg2Test, Jpeg2000Signature_DetectedAsJpeg2000) {
     }
 }
 
-TEST_F(ParseDg2Test, DISABLED_EmptyInput_Fails) {
-    // DISABLED: parseDg2({}) triggers undefined behaviour — the loop condition
-    // uses `dg2Data.size() - 3` which wraps to SIZE_MAX for an empty vector,
-    // causing a segmentation fault.  Same root cause as parseDg1 empty-input.
-    // Disabled to avoid crashing the test runner.
+TEST_F(ParseDg2Test, EmptyInput_Fails) {
     Json::Value r = parser_.parseDg2({});
     EXPECT_FALSE(r["success"].asBool());
     EXPECT_FALSE(r["error"].asString().empty());
