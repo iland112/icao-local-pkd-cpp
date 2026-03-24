@@ -44,7 +44,7 @@
 ## ICAO PKD LDAP 동기화 파이프라인
 
 ML → CSCA 추출 → DSC → CRL → DSC_NC (5단계)
-- `IcaoLdapClient`: Simple Bind / TLS + SASL EXTERNAL 이중 모드
+- `IcaoLdapClient`: Simple Bind / TLS + SASL EXTERNAL 이중 모드, `lastError()` 상세 에러 메시지
 - fingerprint 중복 체크 → X.509 메타데이터 22개 추출 → Trust Chain 검증 → DB/LDAP 저장
 - Master List CMS SignedData에서 CSCA/MLSC 추출 (ICAO PKD DIT에 o=csca 없음)
 

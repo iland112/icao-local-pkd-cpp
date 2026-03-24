@@ -1,6 +1,6 @@
 # ICAO Local PKD - Changelog
 
-**Current Version**: v2.39.0
+**Current Version**: v2.40.0
 **Last Updated**: 2026-03-24
 
 이 파일은 루트 CLAUDE.md에서 분리된 전체 버전 이력입니다.
@@ -8,6 +8,23 @@
 ---
 
 ## Version History
+
+### v2.40.0 (2026-03-24) - 권한 구조 5그룹 개편 + ICAO LDAP TLS Private CA 통합
+
+- **권한 그룹 5그룹 개편** (4→5): ICAO 연계, PKD 관리, 위·변조 검사, 보고서 & 분석, 시스템 관리
+  - "인증서 관리" → "PKD 관리" 리네이밍 (사이드바 + 권한 설정)
+  - `upload:write` → `upload:file` (ML/LDIF 파일 업로드) + `upload:cert` (개별 인증서 업로드) 분리
+  - 총 13개 권한 (기존 12개 + 1)
+  - DB 마이그레이션: PostgreSQL + Oracle 모두 지원
+- **ICAO LDAP TLS Private CA 통합**
+  - clean-and-init: ICAO TLS 인증서를 Private CA로 서명 (CSR 발급과 CA 일관성 보장)
+  - `IcaoLdapClient::lastError()` 메서드 추가 — 연결 실패 시 LDAP 에러 코드 포함 상세 메시지 반환
+  - 프론트엔드: 연결 테스트/동기화 실패 시 백엔드 상세 에러 메시지 표시
+- **Oracle init 수정**: `17-icao-ldap-sync.sql`에 `CONNECT pkd_user` 누락 수정
+- **컨테이너 타임존 통일**: 전체 14개 컨테이너 TZ를 `.env`에서 관리 (`${TZ:-Asia/Seoul}`)
+  - api-gateway, openldap1/2, icao-sim, swagger, docs에 TZ 누락 수정
+- **빌드 개선**: `tsconfig.app.json`에서 테스트 파일 제외 (빌드 시 TS 에러 방지)
+- Docker/Podman compose 동기화 완료
 
 ### v2.39.0 (2026-03-22) - ICAO PKD LDAP 자동 동기화 + CSR 기반 TLS 인증서 발급
 

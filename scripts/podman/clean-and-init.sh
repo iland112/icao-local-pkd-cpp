@@ -108,6 +108,46 @@ if [ "$DB_TYPE" = "oracle" ]; then
     podman volume rm icao-local-pkd-oracle-data 2>/dev/null || true
 fi
 
+# Generate ICAO PKD LDAP TLS certificates using Private CA
+ICAO_TLS_DIR=".docker-data/icao-pkd-tls"
+SSL_DIR=".docker-data/ssl"
+mkdir -p "$ICAO_TLS_DIR"
+echo "  Generating ICAO PKD LDAP TLS certificates..."
+
+if [ -f "$SSL_DIR/ca.key" ] && [ -f "$SSL_DIR/ca.crt" ]; then
+    echo "  Using Private CA ($SSL_DIR/ca.crt)"
+    cp "$SSL_DIR/ca.crt" "$ICAO_TLS_DIR/ca.pem"
+    CA_KEY="$SSL_DIR/ca.key"
+    CA_CERT="$SSL_DIR/ca.crt"
+else
+    echo "  Private CA not found, generating standalone CA"
+    openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+        -keyout "$ICAO_TLS_DIR/ca.key" -out "$ICAO_TLS_DIR/ca.pem" \
+        -subj "/CN=ICAO PKD Simulation CA/O=ICAO/C=CA" 2>/dev/null
+    CA_KEY="$ICAO_TLS_DIR/ca.key"
+    CA_CERT="$ICAO_TLS_DIR/ca.pem"
+fi
+
+# Server cert for icao-sim LDAP
+openssl req -nodes -newkey rsa:2048 \
+    -keyout "$ICAO_TLS_DIR/ldap-server.key" -out "$ICAO_TLS_DIR/ldap-server.csr" \
+    -subj "/CN=icao-pkd-ldap/O=ICAO PKD Simulation/C=CA" 2>/dev/null
+openssl x509 -req -in "$ICAO_TLS_DIR/ldap-server.csr" \
+    -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
+    -out "$ICAO_TLS_DIR/ldap-server.crt" -days 3650 \
+    -extfile <(echo "subjectAltName=DNS:icao-pkd-ldap,DNS:localhost") 2>/dev/null
+
+# Client cert for relay
+openssl req -nodes -newkey rsa:2048 \
+    -keyout "$ICAO_TLS_DIR/client-key.pem" -out "$ICAO_TLS_DIR/client.csr" \
+    -subj "/CN=pkd-relay-client/O=SmartCore PKD/C=KR" 2>/dev/null
+openssl x509 -req -in "$ICAO_TLS_DIR/client.csr" \
+    -CA "$CA_CERT" -CAkey "$CA_KEY" -CAcreateserial \
+    -out "$ICAO_TLS_DIR/client.pem" -days 3650 2>/dev/null
+
+rm -f "$ICAO_TLS_DIR"/*.csr "$ICAO_TLS_DIR"/*.srl "$SSL_DIR"/*.srl
+echo -e "${GREEN}✓ ICAO TLS certificates generated (Private CA)${NC}"
+
 chmod -R 777 .docker-data/
 
 # SELinux context for bind mounts (RHEL 9 Enforcing mode)

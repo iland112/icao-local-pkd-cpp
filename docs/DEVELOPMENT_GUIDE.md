@@ -55,8 +55,9 @@ LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ./docker-stop.sh
 ./docker-health.sh
 
-# Clean init (DB + LDAP reset)
+# Clean init (DB + LDAP reset + ICAO TLS cert generation)
 ./docker-clean-and-init.sh
+# → Private CA가 있으면 ICAO TLS 인증서를 Private CA로 서명 (CSR 발급과 일관성 보장)
 
 # Rebuild individual services
 ./scripts/build/rebuild-pkd-relay.sh [--no-cache]
@@ -125,6 +126,17 @@ Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services 
 | **Strategy Pattern** | Processing strategies (AUTO upload mode) |
 | **RAII** | Connection pooling (DB and LDAP) |
 | **Provider/Adapter Pattern** | Infrastructure abstraction for validation (`ICscaProvider`, `ICrlProvider`) |
+
+---
+
+## Container Timezone
+
+모든 컨테이너의 타임존은 `.env`의 `TZ` 변수로 관리합니다 (기본값: `Asia/Seoul`).
+
+```bash
+# .env
+TZ=Asia/Seoul    # 전체 14개 컨테이너에 적용
+```
 
 ---
 
