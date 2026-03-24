@@ -488,14 +488,19 @@ void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
                   "ON CONFLICT (certificate_id, upload_id) DO NOTHING";
         }
 
-        queryExecutor_->executeQuery(sql, {
+        std::vector<std::string> params = {
             fingerprint,                              // certificate_id
             std::string("ICAO_PKD_SYNC"),            // upload_id (marker)
             validationStatus,
             validationMessage,
-            dbType == "oracle" ? "" : (cscaFound ? "true" : "false"),  // PostgreSQL bool
             trustChainPath.empty() ? validationStatus : trustChainPath
-        });
+        };
+        // PostgreSQL: $5=csca_found bool, $6=trust_chain_path (Oracle uses boolLiteral in SQL)
+        if (dbType != "oracle") {
+            // Insert csca_found before trust_chain_path
+            params.insert(params.begin() + 4, cscaFound ? "true" : "false");
+        }
+        queryExecutor_->executeQuery(sql, params);
 
         // Update certificate validation_status
         queryExecutor_->executeQuery(
