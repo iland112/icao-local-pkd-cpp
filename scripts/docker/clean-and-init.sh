@@ -459,26 +459,44 @@ DITEOF
 
     # Load LDIF files (sorted: 001=DSC, 002=ML, 003=NC)
     TOTAL_FILES=$(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | wc -l)
-    echo "  Loading $TOTAL_FILES LDIF files..."
-    for f in $(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | sort); do
-        FNAME=$(basename "$f")
-        ENTRIES=$(grep -c "^dn:" "$f" 2>/dev/null || echo 0)
-        echo -n "    $FNAME ($ENTRIES entries)..."
-        docker cp "$f" icao-local-pkd-icao-sim:/tmp/"$FNAME"
-        docker exec icao-local-pkd-icao-sim ldapadd -x -c -H ldap://localhost \
-            -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
-            -f /tmp/"$FNAME" > /dev/null 2>&1 || true
-        docker exec icao-local-pkd-icao-sim rm -f /tmp/"$FNAME"
-        echo " done"
-    done
+    # Load LDIF files with retry (large files may need multiple passes due to parent DN ordering)
+    TOTAL_FILES=$(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | wc -l)
+    MAX_PASSES=3
+    for pass in $(seq 1 $MAX_PASSES); do
+        echo "  Loading $TOTAL_FILES LDIF files (pass $pass/$MAX_PASSES)..."
+        for f in $(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | sort); do
+            FNAME=$(basename "$f")
+            if [ $pass -eq 1 ]; then
+                ENTRIES=$(grep -c "^dn:" "$f" 2>/dev/null || echo 0)
+                echo -n "    $FNAME ($ENTRIES entries)..."
+            else
+                echo -n "    $FNAME..."
+            fi
+            docker cp "$f" icao-local-pkd-icao-sim:/tmp/"$FNAME"
+            docker exec icao-local-pkd-icao-sim ldapadd -x -c -H ldap://localhost \
+                -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+                -f /tmp/"$FNAME" > /dev/null 2>&1 || true
+            docker exec icao-local-pkd-icao-sim rm -f /tmp/"$FNAME"
+            echo " done"
+        done
 
-    # Verify
-    TOTAL_ENTRIES=$(docker exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost \
-        -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
-        -b "dc=download,dc=pkd,dc=icao,dc=int" -s sub \
-        "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint)(objectClass=pkdMasterList))" dn 2>/dev/null \
-        | grep "numEntries" | grep -oE "[0-9]+" || echo "0")
-    echo -e "${GREEN}✓ ICAO PKD Simulation LDAP initialized ($TOTAL_ENTRIES entries from $TOTAL_FILES files)${NC}"
+        # Check if we have enough entries
+        TOTAL_ENTRIES=$(docker exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost \
+            -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+            -b "dc=download,dc=pkd,dc=icao,dc=int" -s sub \
+            "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint)(objectClass=pkdMasterList))" dn 2>/dev/null \
+            | grep "numEntries" | grep -oE "[0-9]+" || echo "0")
+        echo "  → $TOTAL_ENTRIES entries loaded"
+
+        # If >20000 entries, consider it complete (LDIF has ~23K cert entries)
+        if [ "$TOTAL_ENTRIES" -ge 20000 ] 2>/dev/null; then
+            break
+        fi
+        if [ $pass -lt $MAX_PASSES ]; then
+            echo -e "${YELLOW}  Retrying load (some entries may have missing parent DNs)...${NC}"
+        fi
+    done
+    echo -e "${GREEN}✓ ICAO PKD Simulation LDAP initialized ($TOTAL_ENTRIES entries, $MAX_PASSES passes max)${NC}"
 else
     echo -e "${YELLOW}[Step 7/7] Skipping ICAO sim data load (no LDIF files in $ICAO_LDIF_DIR)${NC}"
 fi
