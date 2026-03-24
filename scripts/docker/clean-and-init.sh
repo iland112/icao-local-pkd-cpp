@@ -44,7 +44,7 @@ echo ""
 # =============================================================================
 # Step 1: Stop and remove all containers
 # =============================================================================
-echo -e "${YELLOW}[Step 1/6] Stopping and removing all containers...${NC}"
+echo -e "${YELLOW}[Step 1/7] Stopping and removing all containers...${NC}"
 
 # First, remove any manually created containers that might conflict
 echo "  Removing any existing icao-local-pkd-* containers..."
@@ -59,7 +59,7 @@ echo ""
 # =============================================================================
 # Step 2: Remove all data (preserve SSL certificates)
 # =============================================================================
-echo -e "${YELLOW}[Step 2/6] Removing all data directories...${NC}"
+echo -e "${YELLOW}[Step 2/7] Removing all data directories...${NC}"
 if [ -d ".docker-data" ]; then
     # Preserve SSL certificates if they exist
     if [ -d ".docker-data/ssl" ] && [ -f ".docker-data/ssl/server.crt" ]; then
@@ -85,7 +85,7 @@ echo ""
 # =============================================================================
 # Step 3: Recreate data directories with proper permissions
 # =============================================================================
-echo -e "${YELLOW}[Step 3/6] Creating data directories with permissions...${NC}"
+echo -e "${YELLOW}[Step 3/7] Creating data directories with permissions...${NC}"
 # Create directories matching docker-compose.yaml volume paths
 mkdir -p .docker-data/postgres
 mkdir -p .docker-data/openldap1/data
@@ -158,7 +158,7 @@ echo ""
 # =============================================================================
 # Step 4: Start infrastructure services (Database, OpenLDAP)
 # =============================================================================
-echo -e "${YELLOW}[Step 4/6] Starting infrastructure services...${NC}"
+echo -e "${YELLOW}[Step 4/7] Starting infrastructure services...${NC}"
 
 # Start DB + LDAP (profile selects the correct database)
 docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d openldap1 openldap2
@@ -287,7 +287,7 @@ echo ""
 # =============================================================================
 # Step 5: Initialize LDAP DIT structure
 # =============================================================================
-echo -e "${YELLOW}[Step 5/6] Initializing LDAP DIT structure...${NC}"
+echo -e "${YELLOW}[Step 5/7] Initializing LDAP DIT structure...${NC}"
 
 # Start MMR setup containers
 docker compose -f docker/docker-compose.yaml up -d ldap-mmr-setup1 ldap-mmr-setup2
@@ -370,7 +370,7 @@ echo ""
 # =============================================================================
 # Step 6: Start application services
 # =============================================================================
-echo -e "${YELLOW}[Step 6/6] Starting application services...${NC}"
+echo -e "${YELLOW}[Step 6/7] Starting application services...${NC}"
 docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d
 
 # Wait for services to be healthy
@@ -392,6 +392,96 @@ for i in {1..60}; do
         break
     fi
 done
+echo ""
+
+# =============================================================================
+# Step 7: Initialize ICAO PKD Simulation LDAP
+# =============================================================================
+ICAO_LDIF_DIR="data/icao_ldif"
+if [ -d "$ICAO_LDIF_DIR" ] && ls "$ICAO_LDIF_DIR"/*.ldif > /dev/null 2>&1; then
+    echo -e "${YELLOW}[Step 7/7] Initializing ICAO PKD Simulation LDAP...${NC}"
+
+    echo -n "  Waiting for ICAO sim LDAP"
+    for i in {1..30}; do
+        if docker exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
+            echo ""
+            echo -e "${GREEN}✓ ICAO sim LDAP is ready${NC}"
+            break
+        fi
+        echo -n "."
+        sleep 1
+        if [ $i -eq 30 ]; then
+            echo ""
+            echo -e "${YELLOW}⚠ ICAO sim LDAP not ready, skipping data load${NC}"
+        fi
+    done
+
+    ICAO_ADMIN_PW="${ICAO_LDAP_ADMIN_PASSWORD:-icao_sim_password}"
+
+    # Create ICAO PKD DIT structure
+    echo "  Creating ICAO PKD DIT structure..."
+    DIT_FILE="/tmp/icao-dit-$$.ldif"
+    cat > "$DIT_FILE" << 'DITEOF'
+dn: dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: pkd
+o: ICAO PKD
+
+dn: dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: download
+o: PKD Download
+
+dn: dc=data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: data
+o: PKD Data
+
+dn: dc=nc-data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: nc-data
+o: PKD Non-Conformant Data
+DITEOF
+    docker cp "$DIT_FILE" icao-local-pkd-icao-sim:/tmp/icao-dit.ldif
+    docker exec icao-local-pkd-icao-sim ldapadd -x -H ldap://localhost \
+        -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+        -f /tmp/icao-dit.ldif > /dev/null 2>&1 || true
+    rm -f "$DIT_FILE"
+    echo -e "${GREEN}✓ ICAO PKD DIT structure created${NC}"
+
+    # Load LDIF files (sorted: 001=DSC, 002=ML, 003=NC)
+    TOTAL_FILES=$(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | wc -l)
+    echo "  Loading $TOTAL_FILES LDIF files..."
+    for f in $(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | sort); do
+        FNAME=$(basename "$f")
+        ENTRIES=$(grep -c "^dn:" "$f" 2>/dev/null || echo 0)
+        echo -n "    $FNAME ($ENTRIES entries)..."
+        docker cp "$f" icao-local-pkd-icao-sim:/tmp/"$FNAME"
+        docker exec icao-local-pkd-icao-sim ldapadd -x -c -H ldap://localhost \
+            -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+            -f /tmp/"$FNAME" > /dev/null 2>&1 || true
+        docker exec icao-local-pkd-icao-sim rm -f /tmp/"$FNAME"
+        echo " done"
+    done
+
+    # Verify
+    TOTAL_ENTRIES=$(docker exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost \
+        -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+        -b "dc=download,dc=pkd,dc=icao,dc=int" -s sub \
+        "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint)(objectClass=pkdMasterList))" dn 2>/dev/null \
+        | grep "numEntries" | grep -oE "[0-9]+" || echo "0")
+    echo -e "${GREEN}✓ ICAO PKD Simulation LDAP initialized ($TOTAL_ENTRIES entries from $TOTAL_FILES files)${NC}"
+else
+    echo -e "${YELLOW}[Step 7/7] Skipping ICAO sim data load (no LDIF files in $ICAO_LDIF_DIR)${NC}"
+fi
 echo ""
 
 # =============================================================================

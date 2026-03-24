@@ -53,7 +53,7 @@ LDAP_CONFIG_PW="${LDAP_CONFIG_PW:-config_test_123}"
 # =============================================================================
 # Step 1: Stop and remove all containers
 # =============================================================================
-echo -e "${YELLOW}[Step 1/7] Stopping and removing all containers...${NC}"
+echo -e "${YELLOW}[Step 1/8] Stopping and removing all containers...${NC}"
 
 # Remove any existing containers
 echo "  Removing any existing icao-local-pkd-* containers..."
@@ -68,7 +68,7 @@ echo ""
 # =============================================================================
 # Step 2: Remove all data
 # =============================================================================
-echo -e "${YELLOW}[Step 2/7] Removing all data directories...${NC}"
+echo -e "${YELLOW}[Step 2/8] Removing all data directories...${NC}"
 if [ -d ".docker-data" ]; then
     # Preserve SSL certificates
     if [ -d ".docker-data/ssl" ] && [ -f ".docker-data/ssl/server.crt" ]; then
@@ -93,7 +93,7 @@ echo ""
 # =============================================================================
 # Step 3: Recreate data directories with proper permissions
 # =============================================================================
-echo -e "${YELLOW}[Step 3/7] Creating data directories with permissions...${NC}"
+echo -e "${YELLOW}[Step 3/8] Creating data directories with permissions...${NC}"
 mkdir -p .docker-data/postgres
 mkdir -p .docker-data/openldap1/data .docker-data/openldap1/config
 mkdir -p .docker-data/openldap2/data .docker-data/openldap2/config
@@ -173,7 +173,7 @@ echo ""
 # =============================================================================
 # Step 4: Generate nginx config (Podman DNS)
 # =============================================================================
-echo -e "${YELLOW}[Step 4/7] Generating nginx config (Podman DNS)...${NC}"
+echo -e "${YELLOW}[Step 4/8] Generating nginx config (Podman DNS)...${NC}"
 
 # Podman 네트워크 생성
 NETWORK_NAME="docker_pkd-network"
@@ -191,7 +191,7 @@ echo ""
 # =============================================================================
 # Step 5: Start infrastructure services (Database + OpenLDAP)
 # =============================================================================
-echo -e "${YELLOW}[Step 5/7] Starting infrastructure services...${NC}"
+echo -e "${YELLOW}[Step 5/8] Starting infrastructure services...${NC}"
 
 # Start OpenLDAP
 $COMPOSE up -d --no-build openldap1 openldap2
@@ -319,7 +319,7 @@ echo ""
 # =============================================================================
 # Step 6: Initialize LDAP (MMR + DIT) — inline, no init containers
 # =============================================================================
-echo -e "${YELLOW}[Step 6/7] Initializing LDAP DIT structure...${NC}"
+echo -e "${YELLOW}[Step 6/8] Initializing LDAP DIT structure...${NC}"
 
 # --- MMR Setup on OpenLDAP1 ---
 echo "  Setting up MMR on openldap1 (Server ID: 1)..."
@@ -488,7 +488,7 @@ echo ""
 # =============================================================================
 # Step 7: Start application services
 # =============================================================================
-echo -e "${YELLOW}[Step 7/7] Starting application services...${NC}"
+echo -e "${YELLOW}[Step 7/8] Starting application services...${NC}"
 # Start only app services (infra already running from Step 5)
 $COMPOSE $PROFILE_FLAG up -d --no-build \
     pkd-management pa-service pkd-relay monitoring-service \
@@ -512,6 +512,93 @@ for i in {1..90}; do
         break
     fi
 done
+echo ""
+
+# =============================================================================
+# Step 8: Initialize ICAO PKD Simulation LDAP
+# =============================================================================
+ICAO_LDIF_DIR="data/icao_ldif"
+if [ -d "$ICAO_LDIF_DIR" ] && ls "$ICAO_LDIF_DIR"/*.ldif > /dev/null 2>&1; then
+    echo -e "${YELLOW}[Step 8/8] Initializing ICAO PKD Simulation LDAP...${NC}"
+
+    echo -n "  Waiting for ICAO sim LDAP"
+    for i in {1..30}; do
+        if podman exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
+            echo ""
+            echo -e "${GREEN}✓ ICAO sim LDAP is ready${NC}"
+            break
+        fi
+        echo -n "."
+        sleep 1
+        if [ $i -eq 30 ]; then
+            echo ""
+            echo -e "${YELLOW}⚠ ICAO sim LDAP not ready, skipping data load${NC}"
+        fi
+    done
+
+    ICAO_ADMIN_PW="${ICAO_LDAP_ADMIN_PASSWORD:-icao_sim_password}"
+
+    echo "  Creating ICAO PKD DIT structure..."
+    DIT_FILE="/tmp/icao-dit-$$.ldif"
+    cat > "$DIT_FILE" << 'DITEOF'
+dn: dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: pkd
+o: ICAO PKD
+
+dn: dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: download
+o: PKD Download
+
+dn: dc=data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: data
+o: PKD Data
+
+dn: dc=nc-data,dc=download,dc=pkd,dc=icao,dc=int
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+dc: nc-data
+o: PKD Non-Conformant Data
+DITEOF
+    podman cp "$DIT_FILE" icao-local-pkd-icao-sim:/tmp/icao-dit.ldif
+    podman exec icao-local-pkd-icao-sim ldapadd -x -H ldap://localhost \
+        -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+        -f /tmp/icao-dit.ldif > /dev/null 2>&1 || true
+    rm -f "$DIT_FILE"
+    echo -e "${GREEN}✓ ICAO PKD DIT structure created${NC}"
+
+    TOTAL_FILES=$(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | wc -l)
+    echo "  Loading $TOTAL_FILES LDIF files..."
+    for f in $(ls "$ICAO_LDIF_DIR"/*.ldif 2>/dev/null | sort); do
+        FNAME=$(basename "$f")
+        ENTRIES=$(grep -c "^dn:" "$f" 2>/dev/null || echo 0)
+        echo -n "    $FNAME ($ENTRIES entries)..."
+        podman cp "$f" icao-local-pkd-icao-sim:/tmp/"$FNAME"
+        podman exec icao-local-pkd-icao-sim ldapadd -x -c -H ldap://localhost \
+            -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+            -f /tmp/"$FNAME" > /dev/null 2>&1 || true
+        podman exec icao-local-pkd-icao-sim rm -f /tmp/"$FNAME"
+        echo " done"
+    done
+
+    TOTAL_ENTRIES=$(podman exec icao-local-pkd-icao-sim ldapsearch -x -H ldap://localhost \
+        -D "cn=admin,dc=icao,dc=int" -w "$ICAO_ADMIN_PW" \
+        -b "dc=download,dc=pkd,dc=icao,dc=int" -s sub \
+        "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint)(objectClass=pkdMasterList))" dn 2>/dev/null \
+        | grep "numEntries" | grep -oE "[0-9]+" || echo "0")
+    echo -e "${GREEN}✓ ICAO PKD Simulation LDAP initialized ($TOTAL_ENTRIES entries from $TOTAL_FILES files)${NC}"
+else
+    echo -e "${YELLOW}[Step 8/8] Skipping ICAO sim data load (no LDIF files in $ICAO_LDIF_DIR)${NC}"
+fi
 echo ""
 
 # =============================================================================
