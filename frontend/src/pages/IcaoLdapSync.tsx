@@ -28,6 +28,7 @@ export default function IcaoLdapSync() {
   const [settingsEnabled, setSettingsEnabled] = useState(false);
   const [settingsInterval, setSettingsInterval] = useState(60);
   const [selectedHistory, setSelectedHistory] = useState<IcaoLdapSyncHistoryItem | null>(null);
+  const [showSyncResult, setShowSyncResult] = useState(false);
   const [historyPage, setHistoryPage] = useState(0);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyStatusFilter, setHistoryStatusFilter] = useState('');
@@ -82,12 +83,11 @@ export default function IcaoLdapSync() {
           const p = data.data as IcaoLdapSyncProgress;
           setProgress(p);
           if (p.phase === 'COMPLETED') {
-            setTimeout(() => {
-              setProgress(null);
-              setSyncing(false);
-              fetchStatusRef.current();
-              fetchHistoryRef.current();
-            }, 2000);
+            setSyncing(false);
+            setProgress(null);
+            setShowSyncResult(true);
+            fetchStatusRef.current();
+            fetchHistoryRef.current();
           } else if (p.phase === 'FAILED') {
             // Keep progress visible with error message, allow retry
             setSyncing(false);
@@ -135,6 +135,7 @@ export default function IcaoLdapSync() {
   const handleSync = async () => {
     setSyncing(true);
     setError('');
+    setShowSyncResult(false);
     setProgress(null);
     try {
       await syncApi.triggerIcaoLdapSync();
@@ -510,6 +511,110 @@ export default function IcaoLdapSync() {
               <span className="text-xs text-gray-500">이미 저장된 인증서는 자동으로 건너뜁니다.</span>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Sync Result Summary (shown after sync completes) */}
+      {showSyncResult && status?.lastSync && (
+        <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg border border-teal-200 dark:border-teal-800 overflow-hidden">
+          {/* Header */}
+          <div className={`px-5 py-3 flex items-center justify-between ${
+            status.lastSync.status === 'COMPLETED'
+              ? 'bg-gradient-to-r from-teal-500 to-emerald-500'
+              : 'bg-gradient-to-r from-red-500 to-orange-500'
+          }`}>
+            <div className="flex items-center gap-2 text-white">
+              {status.lastSync.status === 'COMPLETED'
+                ? <CheckCircle className="w-5 h-5" />
+                : <XCircle className="w-5 h-5" />}
+              <h3 className="text-sm font-bold">
+                {status.lastSync.status === 'COMPLETED' ? '동기화 완료' : '동기화 실패'}
+              </h3>
+              <span className="text-xs opacity-80">
+                {(status.lastSync.durationMs / 1000).toFixed(0)}초 소요
+              </span>
+            </div>
+            <button onClick={() => setShowSyncResult(false)} className="text-white/70 hover:text-white">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-4">
+            {/* Summary stats */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="text-center p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+                <div className="text-xl font-bold text-blue-600">{status.lastSync.totalRemoteCount.toLocaleString()}</div>
+                <div className="text-[10px] text-gray-500 font-medium">ICAO PKD 전체</div>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20">
+                <div className="text-xl font-bold text-green-600">+{status.lastSync.newCertificates.toLocaleString()}</div>
+                <div className="text-[10px] text-gray-500 font-medium">신규 저장</div>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30">
+                <div className="text-xl font-bold text-gray-500">{status.lastSync.existingSkipped.toLocaleString()}</div>
+                <div className="text-[10px] text-gray-500 font-medium">기존 (Skip)</div>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20">
+                <div className="text-xl font-bold text-red-500">{status.lastSync.failedCount}</div>
+                <div className="text-[10px] text-gray-500 font-medium">실패</div>
+              </div>
+              <div className="text-center p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20">
+                <div className="text-xl font-bold text-purple-600">{status.lastSync.triggeredBy}</div>
+                <div className="text-[10px] text-gray-500 font-medium">트리거</div>
+              </div>
+            </div>
+
+            {/* Type breakdown from latest history */}
+            {history.length > 0 && history[0].typeStats && history[0].typeStats.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 mb-2">타입별 동기화 결과</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-700">
+                        <th className="px-3 py-2 text-left font-semibold">타입</th>
+                        <th className="px-3 py-2 text-center font-semibold">전체</th>
+                        <th className="px-3 py-2 text-center font-semibold text-green-600">신규</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-500">기존</th>
+                        <th className="px-3 py-2 text-center font-semibold text-red-500">실패</th>
+                        <th className="px-3 py-2 text-left font-semibold">진행률</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history[0].typeStats.map((ts, i) => {
+                        const total = ts.total || 1;
+                        const successRate = ((ts.new + ts.skipped) / total * 100).toFixed(0);
+                        return (
+                          <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
+                            <td className="px-3 py-2 font-semibold">{ts.type}</td>
+                            <td className="px-3 py-2 text-center font-mono">{ts.total.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-green-600">+{ts.new}</td>
+                            <td className="px-3 py-2 text-center text-gray-500">{ts.skipped.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-center text-red-500">{ts.failed}</td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${successRate}%` }} />
+                                </div>
+                                <span className="text-[10px] text-gray-400 w-8">{successRate}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Error message */}
+            {status.lastSync.errorMessage && (
+              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                <div className="text-xs text-red-600 dark:text-red-400">{status.lastSync.errorMessage}</div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
