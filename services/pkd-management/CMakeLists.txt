@@ -451,11 +451,34 @@ add_test(NAME test_asn1_parser COMMAND test_asn1_parser)
 
 # =============================================================================
 # LdifStructureService Tests (v2.28.0+)
-# DISABLED: LdifStructureRepository::getLdifStructure is not virtual,
-# cannot be mocked via inheritance. Needs interface extraction to enable.
 # =============================================================================
-# add_executable(test_ldif_structure_service ...)
-# add_test(NAME test_ldif_structure_service ...)
+add_executable(test_ldif_structure_service
+    tests/test_ldif_structure_service.cpp
+    src/services/ldif_structure_service.cpp
+    src/repositories/ldif_structure_repository.cpp
+    src/common/ldif_parser.cpp
+    src/repositories/upload_repository.cpp
+)
+
+target_include_directories(test_ldif_structure_service PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
+    ${PostgreSQL_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_ldif_structure_service PRIVATE
+    icao::database
+    icao-common
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_ldif_structure_service COMMAND test_ldif_structure_service)
 
 # =============================================================================
 # Doc 9303 Checklist Tests (v2.17.0)

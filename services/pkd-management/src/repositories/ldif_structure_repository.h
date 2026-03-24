@@ -52,7 +52,7 @@ public:
      */
     explicit LdifStructureRepository(UploadRepository* uploadRepo);
 
-    ~LdifStructureRepository() = default;
+    virtual ~LdifStructureRepository() = default;
 
     /**
      * @brief Get LDIF file structure
@@ -61,8 +61,14 @@ public:
      * @param maxEntries Maximum number of entries to parse (default: 100)
      * @return LdifStructureData with parsed structure
      * @throws std::runtime_error if upload not found, not LDIF, or parse error
+     *
+     * @note Virtual to allow mock-based unit testing of LdifStructureService
      */
-    LdifStructureData getLdifStructure(const std::string& uploadId, int maxEntries = 100);
+    virtual LdifStructureData getLdifStructure(const std::string& uploadId, int maxEntries = 100);
+
+protected:
+    /// @brief Default constructor for test subclasses (no UploadRepository needed)
+    LdifStructureRepository() : uploadRepository_(nullptr) {}
 
 private:
     UploadRepository* uploadRepository_;

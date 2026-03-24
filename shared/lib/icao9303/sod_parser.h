@@ -203,18 +203,21 @@ private:
      */
     std::optional<LdsSecurityObject> parseLdsSecurityObject(CMS_ContentInfo* cms);
 
+    // Algorithm OID mappings
+    static const std::map<std::string, std::string>& getHashAlgorithmNames();
+    static const std::map<std::string, std::string>& getSignatureAlgorithmNames();
+
+protected:
     /**
      * @brief Parse ASN.1 DER length from buffer
      * @param p Current position (updated on success)
      * @param end Buffer boundary
      * @param outLen Output length value
      * @return true on success
+     *
+     * @note Protected (not private) to allow unit testing via subclass
      */
     static bool parseAsn1Length(const unsigned char*& p, const unsigned char* end, size_t& outLen);
-
-    // Algorithm OID mappings
-    static const std::map<std::string, std::string>& getHashAlgorithmNames();
-    static const std::map<std::string, std::string>& getSignatureAlgorithmNames();
 };
 
 } // namespace icao

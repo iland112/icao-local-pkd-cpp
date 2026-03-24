@@ -36,12 +36,10 @@
 
 class MockLdifStructureRepository : public repositories::LdifStructureRepository {
 public:
-    // Build without touching UploadRepository by passing nullptr.
-    // LdifStructureRepository's constructor only stores the pointer; it does
-    // not dereference it during construction, so nullptr is safe for tests
-    // where we override getLdifStructure().
+    // Use protected default constructor — no UploadRepository dependency needed
+    // since getLdifStructure() is overridden and never touches uploadRepository_.
     MockLdifStructureRepository()
-        : repositories::LdifStructureRepository(nullptr) {}
+        : repositories::LdifStructureRepository() {}
 
     // ── Configuration ─────────────────────────────────────────────────────────
 
@@ -67,7 +65,7 @@ public:
     repositories::LdifStructureData getLdifStructure(
         const std::string& uploadId,
         int maxEntries = 100
-    ) {
+    ) override {
         ++callCount_;
         lastUploadId_   = uploadId;
         lastMaxEntries_ = maxEntries;
@@ -158,7 +156,7 @@ TEST(LdifStructureServiceConstructorTest, NullRepository_ThrowsInvalidArgument) 
 
 TEST(LdifStructureServiceConstructorTest, ValidRepository_DoesNotThrow) {
     MockLdifStructureRepository repo;
-    EXPECT_NO_THROW(services::LdifStructureService(&repo));
+    EXPECT_NO_THROW({ services::LdifStructureService svc(&repo); });
 }
 
 TEST(LdifStructureServiceConstructorTest, NullRepository_ExceptionMessage) {

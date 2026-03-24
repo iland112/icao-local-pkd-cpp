@@ -641,10 +641,8 @@ TEST_F(GetAlgorithmNameTest, Idempotency_UnknownOid) {
 }
 
 // ============================================================================
-// 5. parseAsn1Length — DISABLED: private static method, cannot access via subclass
-//    Requires friend declaration or making method protected to enable.
+// 5. parseAsn1Length — protected static, tested via subclass shim
 // ============================================================================
-#if 0  // parseAsn1Length is private — tests disabled until interface is exposed
 
 /**
  * ParseAsn1LengthShim exposes the static parseAsn1Length for unit testing.
@@ -747,7 +745,7 @@ TEST_F(ParseAsn1LengthTest, LongForm_AdditionalBytesExceedBuffer_ReturnsFalse) {
     EXPECT_FALSE(SodParserTestable::parseLength(p, buf + 2, outLen));
 }
 
-#endif  // parseAsn1Length disabled
+// parseAsn1Length tests end
 
 // ============================================================================
 // 6. SodParser::unwrapIcaoSod
