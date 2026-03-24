@@ -344,8 +344,10 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             currentProgress_.completedTypes = typeIndex;
         }
 
-        syncEntries("DSC", &IcaoLdapClient::searchDscCertificates);
+        // Order: CSCA(above) → CRL → DSC → DSC_NC
+        // CRL before DSC so Trust Chain validation can check revocation
         syncEntries("CRL", &IcaoLdapClient::searchCrls);
+        syncEntries("DSC", &IcaoLdapClient::searchDscCertificates);
         syncEntries("DSC_NC", &IcaoLdapClient::searchNcDscCertificates);
 
         client.disconnect();
@@ -448,12 +450,18 @@ IcaoLdapSyncService::EntryResult IcaoLdapSyncService::processEntry(const IcaoLda
 void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
                                                 const std::string& fingerprint,
                                                 X509* cert) {
-    if (!validationRepo_ || !cert) return;
+    if (!validationRepo_ || !cert) {
+        if (!validationRepo_) spdlog::debug("[IcaoLdapSync] validateAndSaveResult skipped: validationRepo is null");
+        return;
+    }
 
     try {
         // Lazy-init validation components
         initValidation();
-        if (!trustChainBuilder_ || !crlChecker_) return;
+        if (!trustChainBuilder_ || !crlChecker_) {
+            spdlog::warn("[IcaoLdapSync] validateAndSaveResult skipped: validation components not initialized");
+            return;
+        }
 
         std::string dbType = queryExecutor_->getDatabaseType();
 

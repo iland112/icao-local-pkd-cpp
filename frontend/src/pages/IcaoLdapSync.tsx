@@ -13,7 +13,7 @@ import {
   type IcaoLdapSyncProgress,
 } from '@/services/relayApi';
 
-const CERT_TYPES = ['CSCA', 'DSC', 'CRL', 'DSC_NC'] as const;
+const CERT_TYPES = ['CSCA', 'CRL', 'DSC', 'DSC_NC'] as const;
 
 export default function IcaoLdapSync() {
   const { t } = useTranslation(['sync', 'common']);
