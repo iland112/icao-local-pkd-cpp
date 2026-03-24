@@ -38,6 +38,9 @@ else()
 endif()
 add_subdirectory(${ICAO_SHARED_DIR} ${CMAKE_BINARY_DIR}/shared-libs)
 
+# JsonCpp (for test targets that link directly)
+find_package(jsoncpp CONFIG REQUIRED)
+
 # Drogon Web Framework
 find_package(Drogon CONFIG REQUIRED)
 
@@ -243,6 +246,309 @@ target_link_libraries(test_crl_validator PRIVATE
 
 # Register test with CTest
 add_test(NAME crl_validator_test COMMAND test_crl_validator)
+
+# =============================================================================
+# Auth Module Unit Tests (Sprint 3 - v2.28.0+)
+# =============================================================================
+
+# --- test_api_key_generator ---
+add_executable(test_api_key_generator
+    tests/auth/test_api_key_generator.cpp
+    src/auth/api_key_generator.cpp
+)
+
+target_include_directories(test_api_key_generator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_api_key_generator PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_api_key_generator COMMAND test_api_key_generator)
+
+# --- test_password_hash ---
+add_executable(test_password_hash
+    tests/auth/test_password_hash.cpp
+    src/auth/password_hash.cpp
+)
+
+target_include_directories(test_password_hash PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_password_hash PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_password_hash COMMAND test_password_hash)
+
+# --- test_personal_info_crypto ---
+add_executable(test_personal_info_crypto
+    tests/auth/test_personal_info_crypto.cpp
+    src/auth/personal_info_crypto.cpp
+)
+
+target_include_directories(test_personal_info_crypto PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_personal_info_crypto PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_personal_info_crypto COMMAND test_personal_info_crypto)
+
+# --- test_jwt_service ---
+add_executable(test_jwt_service
+    tests/auth/test_jwt_service.cpp
+    src/auth/jwt_service.cpp
+)
+
+target_include_directories(test_jwt_service PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_jwt_service PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_jwt_service COMMAND test_jwt_service)
+
+# =============================================================================
+# ApiRateLimiter Tests (v2.21.0)
+# =============================================================================
+add_executable(test_api_rate_limiter
+    tests/test_api_rate_limiter.cpp
+    src/middleware/api_rate_limiter.cpp
+)
+
+target_include_directories(test_api_rate_limiter PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_api_rate_limiter PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    spdlog::spdlog
+)
+
+add_test(NAME test_api_rate_limiter COMMAND test_api_rate_limiter)
+
+# =============================================================================
+# ProgressManager Tests (v2.28.0)
+# =============================================================================
+add_executable(test_progress_manager
+    tests/test_progress_manager.cpp
+    src/common/progress_manager.cpp
+    src/common/x509_metadata_extractor.cpp
+    src/common/certificate_utils.cpp
+    tests/stubs/service_container_stubs.cpp
+)
+
+target_include_directories(test_progress_manager PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
+)
+
+target_link_libraries(test_progress_manager PRIVATE
+    icao::database
+    icao::certificate-parser
+    icao::validation
+    icao-common
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_progress_manager COMMAND test_progress_manager)
+
+# =============================================================================
+# LcValidator Tests (v2.28.0+)
+# =============================================================================
+add_executable(test_lc_validator
+    tests/test_lc_validator.cpp
+    src/common/lc_validator.cpp
+    src/common/crl_validator.cpp
+    src/common/crl_parser.cpp
+    src/common/certificate_utils.cpp
+    src/common/x509_metadata_extractor.cpp
+    tests/stubs/g_services_stub.cpp
+)
+
+target_include_directories(test_lc_validator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
+    ${PostgreSQL_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_lc_validator PRIVATE
+    icao::database
+    icao::certificate-parser
+    icao::validation
+    icao-common
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    PostgreSQL::PostgreSQL
+    spdlog::spdlog
+)
+
+add_test(NAME test_lc_validator COMMAND test_lc_validator)
+
+# =============================================================================
+# ASN.1 Parser Tests (v2.28.0+)
+# =============================================================================
+add_executable(test_asn1_parser
+    tests/test_asn1_parser.cpp
+    src/common/asn1_parser.cpp
+)
+
+target_include_directories(test_asn1_parser PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+)
+
+target_link_libraries(test_asn1_parser PRIVATE
+    JsonCpp::JsonCpp
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_asn1_parser COMMAND test_asn1_parser)
+
+# =============================================================================
+# LdifStructureService Tests (v2.28.0+)
+# DISABLED: LdifStructureRepository::getLdifStructure is not virtual,
+# cannot be mocked via inheritance. Needs interface extraction to enable.
+# =============================================================================
+# add_executable(test_ldif_structure_service ...)
+# add_test(NAME test_ldif_structure_service ...)
+
+# =============================================================================
+# Doc 9303 Checklist Tests (v2.17.0)
+# doc9303_checklist.cpp depends on x509_metadata_extractor.cpp for key size
+# extraction; both are included here.  No DB/g_services dependency.
+# JsonCpp::JsonCpp is needed because doc9303_checklist.h includes <json/json.h>.
+# =============================================================================
+add_executable(test_doc9303_checklist
+    tests/test_doc9303_checklist.cpp
+    src/common/doc9303_checklist.cpp
+    src/common/x509_metadata_extractor.cpp
+)
+
+target_include_directories(test_doc9303_checklist PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_doc9303_checklist PRIVATE
+    JsonCpp::JsonCpp
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_doc9303_checklist COMMAND test_doc9303_checklist)
+
+# =============================================================================
+# X.509 Metadata Extractor Tests
+# Covers all functions in namespace x509:: (extractMetadata, getVersion,
+# extractHashAlgorithm, getPublicKey*, getKeyUsage, isCA, bytesToHex, etc.)
+# No DB/g_services dependency.
+# =============================================================================
+add_executable(test_x509_metadata_extractor
+    tests/test_x509_metadata_extractor.cpp
+    src/common/x509_metadata_extractor.cpp
+)
+
+target_include_directories(test_x509_metadata_extractor PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_x509_metadata_extractor PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+add_test(NAME test_x509_metadata_extractor COMMAND test_x509_metadata_extractor)
+
+# =============================================================================
+# Certificate Utils Tests (pure / stateless functions)
+# Tests only the stateless utilities (x509NameToString, extractCountryCode,
+# computeSha256Fingerprint, isLinkCertificate, etc.).  DB-dependent functions
+# (saveCertificateWithDuplicateCheck, trackCertificateDuplicate, etc.) are NOT
+# exercised — the test file defines g_services = nullptr as a null stub so
+# those code paths are never reached at runtime.
+# =============================================================================
+add_executable(test_certificate_utils
+    tests/test_certificate_utils.cpp
+    src/common/certificate_utils.cpp
+    src/common/x509_metadata_extractor.cpp
+    tests/stubs/service_container_stubs.cpp
+)
+
+target_include_directories(test_certificate_utils PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
+    ${PostgreSQL_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_certificate_utils PRIVATE
+    icao::database
+    icao::certificate-parser
+    icao::validation
+    icao-common
+    JsonCpp::JsonCpp
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    PostgreSQL::PostgreSQL
+    spdlog::spdlog
+)
+
+add_test(NAME test_certificate_utils COMMAND test_certificate_utils)
 
 # =============================================================================
 # Build Info

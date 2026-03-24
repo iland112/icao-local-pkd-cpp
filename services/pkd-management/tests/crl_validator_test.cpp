@@ -127,6 +127,17 @@ protected:
         // Sort revoked list
         X509_CRL_sort(crl);
 
+        // Sign the CRL (required for DER encoding in OpenSSL 3.0+)
+        EVP_PKEY* pkey = EVP_PKEY_new();
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        EVP_PKEY_keygen_init(ctx);
+        EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, 2048);
+        EVP_PKEY_keygen(ctx, &pkey);
+        EVP_PKEY_CTX_free(ctx);
+
+        X509_CRL_sign(crl, pkey, EVP_sha256());
+        EVP_PKEY_free(pkey);
+
         return crl;
     }
 };

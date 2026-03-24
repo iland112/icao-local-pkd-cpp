@@ -18,3 +18,13 @@ target_compile_features(${LIB_NAME} PUBLIC cxx_std_17)
 add_library(icao::config ALIAS ${LIB_NAME})
 
 message(STATUS "Configuration Management Library configured")
+
+# =============================================================================
+# Testing (Optional)
+# =============================================================================
+option(BUILD_CONFIG_TESTS "Build icao::config unit tests" OFF)
+
+if(BUILD_CONFIG_TESTS)
+    add_subdirectory(tests)
+    message(STATUS "icao::config unit tests enabled")
+endif()

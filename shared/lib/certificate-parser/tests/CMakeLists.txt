@@ -30,6 +30,7 @@ set(TEST_SOURCES
     test_file_detector.cpp
     test_cert_type_detector.cpp
     test_cert_validator.cpp
+    test_dl_parser.cpp
 )
 
 # Create test executable

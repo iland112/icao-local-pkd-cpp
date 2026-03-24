@@ -69,7 +69,7 @@ inline bool addExtension(X509* cert, int nid, const char* value, X509* issuer = 
     X509V3_set_ctx_nodb(&ctx);
     X509V3_set_ctx(&ctx, issuer ? issuer : cert, cert, nullptr, nullptr, 0);
 
-    X509_EXTENSION* ext = X509V3_EXT_nid_conf(nid, &ctx, value);
+    X509_EXTENSION* ext = X509V3_EXT_nconf(nullptr, &ctx, OBJ_nid2sn(nid), value);
     if (!ext) return false;
 
     X509_add_ext(cert, ext, -1);

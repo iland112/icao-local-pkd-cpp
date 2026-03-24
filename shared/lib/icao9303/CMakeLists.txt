@@ -110,8 +110,62 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/icao-icao9303
 )
 
+# =============================================================================
+# Testing (Optional)
+# =============================================================================
+option(BUILD_ICAO9303_TESTS "Build icao::icao9303 unit tests" OFF)
+
+if(BUILD_ICAO9303_TESTS)
+    enable_testing()
+
+    # jsoncpp is required by the parsers (normally linked by parent service)
+    find_package(jsoncpp CONFIG REQUIRED)
+
+    # Try find_package first (vcpkg), fallback to FetchContent
+    find_package(GTest QUIET)
+    if(NOT GTest_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG release-1.12.1
+        )
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+
+    set(ICAO9303_TEST_SOURCES
+        tests/test_sod_parser.cpp
+        tests/test_dg_parser.cpp
+    )
+
+    add_executable(icao_icao9303_tests ${ICAO9303_TEST_SOURCES})
+
+    target_include_directories(icao_icao9303_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/models
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+
+    target_link_libraries(icao_icao9303_tests PRIVATE
+        ${LIB_NAME}
+        JsonCpp::JsonCpp
+        GTest::gtest_main
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(icao_icao9303_tests)
+
+    message(STATUS "  - Unit tests: ENABLED (BUILD_ICAO9303_TESTS=ON)")
+endif()
+
 # Display configuration
 message(STATUS "ICAO 9303 Parser Library configured")
 message(STATUS "  - SOD Parser: ENABLED")
 message(STATUS "  - Data Group Parser: ENABLED")
 message(STATUS "  - MRZ Parser: ENABLED (via DG1)")
+if(BUILD_ICAO9303_TESTS)
+    message(STATUS "  - Tests: ENABLED")
+else()
+    message(STATUS "  - Tests: DISABLED (use -DBUILD_ICAO9303_TESTS=ON to enable)")
+endif()

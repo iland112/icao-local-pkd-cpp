@@ -113,3 +113,13 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/icao-database-config.cmake
     DESTINATION lib/cmake/icao-database
 )
+
+# =============================================================================
+# Testing (Optional)
+# =============================================================================
+option(BUILD_DATABASE_TESTS "Build icao::database unit tests" OFF)
+
+if(BUILD_DATABASE_TESTS)
+    add_subdirectory(tests)
+    message(STATUS "icao::database unit tests enabled")
+endif()
