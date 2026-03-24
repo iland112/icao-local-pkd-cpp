@@ -195,21 +195,47 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
             spdlog::info("[IcaoLdapSync] Processing {} {} entries...", entries.size(), typeName);
 
+            int consecutiveFailures = 0;
+            constexpr int MAX_CONSECUTIVE_FAILURES = 50;
+
             for (const auto& entry : entries) {
                 try {
-                    if (processEntry(entry)) {
+                    auto er = processEntry(entry);
+                    if (er == EntryResult::NEW) {
                         result.newCertificates++;
                         currentProgress_.currentTypeNew++;
                         currentProgress_.totalNew++;
-                    } else {
+                        consecutiveFailures = 0;
+                    } else if (er == EntryResult::SKIPPED) {
                         result.existingSkipped++;
                         currentProgress_.currentTypeSkipped++;
                         currentProgress_.totalSkipped++;
+                        consecutiveFailures = 0;
+                    } else {
+                        result.failedCount++;
+                        currentProgress_.totalFailed++;
+                        consecutiveFailures++;
                     }
                 } catch (const std::exception& e) {
                     result.failedCount++;
                     currentProgress_.totalFailed++;
+                    consecutiveFailures++;
                     spdlog::warn("[IcaoLdapSync] Failed to process {}: {}", entry.dn, e.what());
+                }
+
+                // Abort if too many consecutive failures (likely systemic error)
+                if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+                    std::string abortMsg = typeName + " 연속 " + std::to_string(MAX_CONSECUTIVE_FAILURES) +
+                        "건 실패 — 동기화 중단. 재시작하여 이어서 진행 가능합니다.";
+                    spdlog::error("[IcaoLdapSync] {}", abortMsg);
+                    result.errorMessage = abortMsg;
+                    result.status = "FAILED";
+                    currentProgress_.phase = "FAILED";
+                    currentProgress_.message = abortMsg;
+                    broadcastProgress(currentProgress_);
+                    saveSyncLog(result);
+                    syncRunning_ = false;
+                    return result;
                 }
 
                 currentProgress_.currentTypeProcessed++;
@@ -223,7 +249,10 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
                     currentProgress_.message = typeName + " " +
                         std::to_string(currentProgress_.currentTypeProcessed) + "/" +
                         std::to_string(currentProgress_.currentTypeTotal) + " 처리 완료 (신규: " +
-                        std::to_string(currentProgress_.currentTypeNew) + ")";
+                        std::to_string(currentProgress_.currentTypeNew) +
+                        (currentProgress_.totalFailed > 0
+                            ? ", 실패: " + std::to_string(currentProgress_.totalFailed)
+                            : "") + ")";
                     broadcastProgress(currentProgress_);
                 }
             }
@@ -351,14 +380,14 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
     return result;
 }
 
-bool IcaoLdapSyncService::processEntry(const IcaoLdapCertEntry& entry) {
-    if (entry.binaryData.empty()) return false;
+IcaoLdapSyncService::EntryResult IcaoLdapSyncService::processEntry(const IcaoLdapCertEntry& entry) {
+    if (entry.binaryData.empty()) return EntryResult::FAILED;
 
     auto fingerprint = computeFingerprint(entry.binaryData);
-    if (fingerprint.empty()) return false;
+    if (fingerprint.empty()) return EntryResult::FAILED;
 
     if (fingerprintExists(fingerprint)) {
-        return false;
+        return EntryResult::SKIPPED;
     }
 
     bool saved = false;
@@ -382,7 +411,7 @@ bool IcaoLdapSyncService::processEntry(const IcaoLdapCertEntry& entry) {
         }
     }
 
-    return saved;
+    return saved ? EntryResult::NEW : EntryResult::FAILED;
 }
 
 void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
@@ -635,15 +664,19 @@ bool IcaoLdapSyncService::saveCertificateToDb(const IcaoLdapCertEntry& entry,
                   "ON CONFLICT (fingerprint_sha256) DO NOTHING";
         }
 
-        queryExecutor_->executeQuery(sql, {
+        std::vector<std::string> params = {
             fingerprint, certType, entry.countryCode,
             std::string(subjectBuf), std::string(issuerBuf),
             hexStream.str(), std::string("ICAO_PKD_SYNC"),
             std::to_string(version), serialNumber, sigAlg,
             pubKeyAlg, std::to_string(pubKeySize),
-            notBefore, notAfter,
-            (dbType == "oracle" ? "" : (isSelfSigned ? "true" : "false"))
-        });
+            notBefore, notAfter
+        };
+        // PostgreSQL: $15 = is_self_signed (Oracle uses boolLiteral in SQL)
+        if (dbType != "oracle") {
+            params.push_back(isSelfSigned ? "true" : "false");
+        }
+        queryExecutor_->executeQuery(sql, params);
 
         X509_free(cert);
         return true;

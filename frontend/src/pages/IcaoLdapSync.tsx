@@ -78,13 +78,18 @@ export default function IcaoLdapSync() {
         if (data.type === 'ICAO_LDAP_SYNC_PROGRESS') {
           const p = data.data as IcaoLdapSyncProgress;
           setProgress(p);
-          if (p.phase === 'COMPLETED' || p.phase === 'FAILED') {
+          if (p.phase === 'COMPLETED') {
             setTimeout(() => {
               setProgress(null);
               setSyncing(false);
               fetchStatusRef.current();
               fetchHistoryRef.current();
             }, 2000);
+          } else if (p.phase === 'FAILED') {
+            // Keep progress visible with error message, allow retry
+            setSyncing(false);
+            fetchStatusRef.current();
+            fetchHistoryRef.current();
           }
         }
         if (data.type === 'ICAO_LDAP_SYNC_STARTED') {
@@ -483,9 +488,25 @@ export default function IcaoLdapSync() {
           </div>
 
           {/* Status message */}
-          <div className="mt-3 text-xs text-blue-600 dark:text-blue-400 bg-white/40 dark:bg-gray-800/40 rounded-lg p-2">
-            <Info className="w-3 h-3 inline mr-1" />{progress.message}
+          <div className={`mt-3 text-xs rounded-lg p-2 ${
+            progress.phase === 'FAILED'
+              ? 'text-red-600 dark:text-red-400 bg-red-50/60 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              : 'text-blue-600 dark:text-blue-400 bg-white/40 dark:bg-gray-800/40'
+          }`}>
+            {progress.phase === 'FAILED' ? <AlertTriangle className="w-3 h-3 inline mr-1" /> : <Info className="w-3 h-3 inline mr-1" />}
+            {progress.message}
           </div>
+
+          {/* Retry button on failure */}
+          {progress.phase === 'FAILED' && (
+            <div className="mt-2 flex items-center gap-3">
+              <button onClick={handleSync}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors">
+                <RefreshCw className="w-3.5 h-3.5" /> 동기화 재시작
+              </button>
+              <span className="text-xs text-gray-500">이미 저장된 인증서는 자동으로 건너뜁니다.</span>
+            </div>
+          )}
         </div>
       )}
 

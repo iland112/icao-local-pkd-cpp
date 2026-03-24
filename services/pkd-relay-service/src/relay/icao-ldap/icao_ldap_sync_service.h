@@ -80,9 +80,11 @@ public:
     int getSyncHistoryCount(const std::string& statusFilter = "") const;
 
 private:
+    /// Result of processing a single entry
+    enum class EntryResult { NEW, SKIPPED, FAILED };
+
     /// Process a single certificate entry from ICAO LDAP
-    /// Returns true if new (saved), false if existing (skipped)
-    bool processEntry(const IcaoLdapCertEntry& entry);
+    EntryResult processEntry(const IcaoLdapCertEntry& entry);
 
     /// Compute SHA-256 fingerprint from DER data
     std::string computeFingerprint(const std::vector<uint8_t>& derData) const;
