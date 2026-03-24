@@ -253,8 +253,8 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
                 currentProgress_.currentTypeProcessed++;
 
-                // Broadcast every 500 entries or on last entry (throttle to avoid SSE overload)
-                if (currentProgress_.currentTypeProcessed % 500 == 0 ||
+                // Broadcast every 200 entries or on last entry
+                if (currentProgress_.currentTypeProcessed % 200 == 0 ||
                     currentProgress_.currentTypeProcessed == currentProgress_.currentTypeTotal) {
                     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now() - result.startedAt).count();
@@ -369,6 +369,13 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
         spdlog::info("[IcaoLdapSync] Sync completed: new={}, skipped={}, failed={}, duration={}ms",
                     result.newCertificates, result.existingSkipped, result.failedCount, result.durationMs);
+
+        // Broadcast final progress COMPLETED (must come BEFORE the notification bell event)
+        currentProgress_.phase = "COMPLETED";
+        currentProgress_.elapsedMs = result.durationMs;
+        currentProgress_.message = "동기화 완료 — 신규 " + std::to_string(result.newCertificates) +
+            "건, " + std::to_string(result.durationMs / 1000) + "초 소요";
+        broadcastProgress(currentProgress_);
 
         // Notify: sync completed (shown in notification bell)
         notification::NotificationManager::getInstance().broadcast(
