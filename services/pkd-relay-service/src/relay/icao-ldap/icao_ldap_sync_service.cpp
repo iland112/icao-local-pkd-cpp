@@ -563,13 +563,20 @@ bool IcaoLdapSyncService::fingerprintExists(const std::string& fingerprint) cons
     if (!queryExecutor_) return false;
 
     try {
+        // Check certificate table
         auto result = queryExecutor_->executeQuery(
             "SELECT COUNT(*) AS cnt FROM certificate WHERE fingerprint_sha256 = $1",
             {fingerprint});
+        if (!result.empty() && common::db::scalarToInt(result[0]["cnt"]) > 0) {
+            return true;
+        }
 
-        if (!result.empty()) {
-            int count = common::db::scalarToInt(result[0]["cnt"]);
-            return count > 0;
+        // Check CRL table
+        auto crlResult = queryExecutor_->executeQuery(
+            "SELECT COUNT(*) AS cnt FROM crl WHERE fingerprint_sha256 = $1",
+            {fingerprint});
+        if (!crlResult.empty() && common::db::scalarToInt(crlResult[0]["cnt"]) > 0) {
+            return true;
         }
     } catch (const std::exception& e) {
         spdlog::warn("[IcaoLdapSync] fingerprintExists check failed: {}", e.what());
