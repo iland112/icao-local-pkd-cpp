@@ -365,7 +365,7 @@ export default function IcaoLdapSync() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.server')}</span><div className="font-mono text-sm">{testResult.serverInfo}</div></div>
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.responseTime')}</span><div className="font-semibold">{testResult.latencyMs}ms</div></div>
-                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount.toLocaleString()}</div></div>
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount >= 0 ? testResult.entryCount.toLocaleString() : <span className="text-gray-400">DIT 없음</span>}</div></div>
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.authMethod')}</span>
                   <div className="font-semibold flex items-center gap-1">
                     {testResult.tlsMode.includes('TLS') ? <Shield className="w-3.5 h-3.5 text-green-500" /> : <Zap className="w-3.5 h-3.5 text-yellow-500" />}
