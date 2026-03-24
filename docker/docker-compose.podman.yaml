@@ -30,6 +30,8 @@ services:
     container_name: icao-local-pkd-api-gateway
     ports:
       - "${HTTPS_PORT:-443}:443"
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ${NGINX_CONF:-../.docker-data/nginx/api-gateway.conf}:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
@@ -69,7 +71,7 @@ services:
     ports:
       - "13080:80"
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - ENABLE_EAC_MENU=false  # Production: hide EAC certificate menu
     depends_on:
       - pkd-management
@@ -100,7 +102,7 @@ services:
     image: docker-pkd-management:latest
     container_name: icao-local-pkd-management
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pkd-management
       - SERVER_PORT=8081
       - DB_TYPE=${DB_TYPE}
@@ -176,7 +178,7 @@ services:
     image: docker-pa-service:latest
     container_name: icao-local-pkd-pa-service
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pa-service
       - SERVER_PORT=8082
       - DB_TYPE=${DB_TYPE}
@@ -236,7 +238,7 @@ services:
     image: docker-pkd-relay:latest
     container_name: icao-local-pkd-relay
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
       - DB_TYPE=${DB_TYPE}
@@ -315,7 +317,7 @@ services:
     image: docker-monitoring-service:latest
     container_name: icao-local-pkd-monitoring
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=monitoring-service
       - SERVER_PORT=8084
       - THREAD_NUM=${THREAD_NUM:-16}
@@ -359,7 +361,7 @@ services:
     image: docker-ai-analysis:latest
     container_name: icao-local-pkd-ai-analysis
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=ai-analysis
       - SERVER_PORT=8085
       - DB_TYPE=${DB_TYPE}
@@ -410,7 +412,7 @@ services:
     environment:
       - ORACLE_PWD=${ORACLE_PASSWORD}
       - ORACLE_CHARACTERSET=AL32UTF8
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - oracle-data:/opt/oracle/oradata
       - ./db-oracle/init:/opt/oracle/scripts/startup:ro
@@ -447,7 +449,7 @@ services:
       - POSTGRES_USER=pkd
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=localpkd
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - PGTZ=Asia/Seoul
     volumes:
       - ../.docker-data/postgres:/var/lib/postgresql/data
@@ -488,6 +490,7 @@ services:
       - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/openldap1/data:/var/lib/ldap
       - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
@@ -525,6 +528,7 @@ services:
       - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/openldap2/data:/var/lib/ldap
       - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
@@ -570,6 +574,7 @@ services:
       - LDAP_TLS_KEY_FILENAME=ldap-server.key
       - LDAP_TLS_CA_CRT_FILENAME=ca.pem
       - LDAP_TLS_VERIFY_CLIENT=try
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/icao-pkd-ldap/data:/var/lib/ldap
       - ../.docker-data/icao-pkd-ldap/config:/etc/ldap/slapd.d
@@ -601,6 +606,7 @@ services:
     environment:
       - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v2.30.0"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v2.1.4"},{"url":"/api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.30.0"},{"url":"/api/docs/monitoring-service.yaml","name":"Monitoring Service API v1.2.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v2.30.0
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
     networks:
@@ -621,6 +627,8 @@ services:
       dockerfile: Dockerfile
     image: docker-docs:latest
     container_name: icao-local-pkd-docs
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
     ports:
       - "13090:80"
     networks:

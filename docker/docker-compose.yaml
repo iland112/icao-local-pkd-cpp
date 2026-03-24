@@ -32,6 +32,8 @@ services:
       - "${HTTP_PORT:-80}:80"
       - "${HTTPS_PORT:-443}:443"
       - "18080:8080"
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ${NGINX_CONF:-../nginx/api-gateway.conf}:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
@@ -74,7 +76,7 @@ services:
     ports:
       - "13080:80"
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - ENABLE_EAC_MENU=true   # Local/dev: show EAC certificate menu
     depends_on:
       - pkd-management
@@ -107,7 +109,7 @@ services:
     # ports:
     #   - "8081:8081"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pkd-management
       - SERVER_PORT=8081
       # Database Type Selection (Phase 4.4)
@@ -197,7 +199,7 @@ services:
     # ports:
     #   - "8082:8082"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pa-service
       - SERVER_PORT=8082
       # Database Type Selection (Phase 4.4)
@@ -265,7 +267,7 @@ services:
     # ports:
     #   - "8083:8083"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
       # Database Type Selection (Phase 5.2)
@@ -351,7 +353,7 @@ services:
     # ports:
     #   - "8084:8084"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=monitoring-service
       - SERVER_PORT=8084
       - THREAD_NUM=${THREAD_NUM:-4}
@@ -401,7 +403,7 @@ services:
     # ports:
     #   - "8085:8085"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=ai-analysis
       - SERVER_PORT=8085
       # Database Type Selection
@@ -456,7 +458,7 @@ services:
     # ports:
     #   - "8086:8086"  # Direct access (use API Gateway instead)
     environment:
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - SERVICE_NAME=eac-service
       - SERVER_PORT=8086
       - THREAD_NUM=4
@@ -506,7 +508,7 @@ services:
       - POSTGRES_USER=pkd
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
       - POSTGRES_DB=localpkd
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
       - PGTZ=Asia/Seoul
     volumes:
       - ../.docker-data/postgres:/var/lib/postgresql/data
@@ -538,7 +540,7 @@ services:
     environment:
       - ORACLE_PWD=${ORACLE_PASSWORD}          # From .env file (SYS/SYSTEM password)
       - ORACLE_CHARACTERSET=AL32UTF8           # UTF-8 encoding
-      - TZ=Asia/Seoul
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - oracle-data:/opt/oracle/oradata  # Named volume (auto-manages permissions)
       - ./db-oracle/init:/opt/oracle/scripts/startup:ro  # Initialization scripts
@@ -608,6 +610,7 @@ services:
       - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/openldap1/data:/var/lib/ldap
       - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
@@ -645,6 +648,7 @@ services:
       - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/openldap2/data:/var/lib/ldap
       - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
@@ -692,6 +696,7 @@ services:
       - LDAP_TLS_KEY_FILENAME=ldap-server.key
       - LDAP_TLS_CA_CRT_FILENAME=ca.pem
       - LDAP_TLS_VERIFY_CLIENT=try
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../.docker-data/icao-pkd-ldap/data:/var/lib/ldap
       - ../.docker-data/icao-pkd-ldap/config:/etc/ldap/slapd.d
@@ -854,6 +859,7 @@ services:
     environment:
       - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v2.30.0"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v2.1.4"},{"url":"/api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.30.0"},{"url":"/api/docs/monitoring-service.yaml","name":"Monitoring Service API v1.2.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v2.30.0
+      - TZ=${TZ:-Asia/Seoul}
     volumes:
       - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
     networks:
@@ -870,6 +876,8 @@ services:
       context: ../docs
       dockerfile: Dockerfile
     container_name: icao-local-pkd-docs
+    environment:
+      - TZ=${TZ:-Asia/Seoul}
     ports:
       - "13090:80"
     networks:
