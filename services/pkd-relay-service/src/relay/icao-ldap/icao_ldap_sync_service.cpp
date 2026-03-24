@@ -7,11 +7,55 @@
 #include <spdlog/spdlog.h>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
+#include <openssl/pem.h>
 #include <openssl/cms.h>
 #include <iomanip>
 #include <sstream>
 #include <chrono>
 #include <ldap.h>
+
+namespace {
+
+/// Read X.509 PEM file and extract subject, issuer, expiry
+struct CertInfo {
+    std::string subject;
+    std::string issuer;
+    std::string expiry;
+};
+
+CertInfo readCertInfo(const std::string& pemPath) {
+    CertInfo info;
+    FILE* fp = fopen(pemPath.c_str(), "r");
+    if (!fp) return info;
+
+    X509* cert = PEM_read_X509(fp, nullptr, nullptr, nullptr);
+    fclose(fp);
+    if (!cert) return info;
+
+    // Subject
+    char* subj = X509_NAME_oneline(X509_get_subject_name(cert), nullptr, 0);
+    if (subj) { info.subject = subj; OPENSSL_free(subj); }
+
+    // Issuer
+    char* iss = X509_NAME_oneline(X509_get_issuer_name(cert), nullptr, 0);
+    if (iss) { info.issuer = iss; OPENSSL_free(iss); }
+
+    // Expiry (NotAfter)
+    const ASN1_TIME* notAfter = X509_get0_notAfter(cert);
+    if (notAfter) {
+        struct tm tm = {};
+        if (ASN1_TIME_to_tm(notAfter, &tm)) {
+            char buf[32];
+            strftime(buf, sizeof(buf), "%Y-%m-%d", &tm);
+            info.expiry = buf;
+        }
+    }
+
+    X509_free(cert);
+    return info;
+}
+
+} // anonymous namespace
 
 #include "i_query_executor.h"
 #include "query_helpers.h"
@@ -1146,6 +1190,19 @@ IcaoLdapConnectionTestResult IcaoLdapSyncService::testConnection() {
         result.entryCount = clientPtr->getTotalEntryCount();
         result.serverInfo = config_.icaoLdapHost + ":" + std::to_string(config_.icaoLdapPort);
         result.success = true;
+
+        // Read TLS certificate info from files
+        if (config_.icaoLdapUseTls) {
+            auto clientCert = readCertInfo(config_.icaoLdapTlsCertFile);
+            result.clientCertSubject = clientCert.subject;
+            result.clientCertIssuer = clientCert.issuer;
+            result.clientCertExpiry = clientCert.expiry;
+
+            auto caCert = readCertInfo(config_.icaoLdapTlsCaCertFile);
+            result.serverCertSubject = caCert.subject;
+            result.serverCertIssuer = caCert.issuer;
+            result.serverCertExpiry = caCert.expiry;
+        }
 
         clientPtr->disconnect();
 

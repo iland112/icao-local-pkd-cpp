@@ -361,16 +361,39 @@ export default function IcaoLdapSync() {
             <button onClick={() => setTestResult(null)} className="ml-auto text-xs text-gray-400 hover:text-gray-600">{t('sync:icaoLdap.close')}</button>
           </div>
           {testResult.success ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-              <div><span className="text-gray-500 text-xs"> {t('sync:icaoLdap.server')}</span><div className="font-mono text-sm">{testResult.serverInfo}</div></div>
-              <div><span className="text-gray-500 text-xs"> {t('sync:icaoLdap.responseTime')}</span><div className="font-semibold">{testResult.latencyMs}ms</div></div>
-              <div><span className="text-gray-500 text-xs"> {t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount.toLocaleString()}</div></div>
-              <div><span className="text-gray-500 text-xs"> {t('sync:icaoLdap.authMethod')}</span>
-                <div className="font-semibold flex items-center gap-1">
-                  {testResult.tlsMode.includes('TLS') ? <Shield className="w-3.5 h-3.5 text-green-500" /> : <Zap className="w-3.5 h-3.5 text-yellow-500" />}
-                  {testResult.tlsMode.includes('TLS') ? 'TLS 상호 인증' : 'Simple Bind'}
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.server')}</span><div className="font-mono text-sm">{testResult.serverInfo}</div></div>
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.responseTime')}</span><div className="font-semibold">{testResult.latencyMs}ms</div></div>
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount.toLocaleString()}</div></div>
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.authMethod')}</span>
+                  <div className="font-semibold flex items-center gap-1">
+                    {testResult.tlsMode.includes('TLS') ? <Shield className="w-3.5 h-3.5 text-green-500" /> : <Zap className="w-3.5 h-3.5 text-yellow-500" />}
+                    {testResult.tlsMode.includes('TLS') ? 'TLS 상호 인증' : 'Simple Bind'}
+                  </div>
                 </div>
               </div>
+              {testResult.tlsCertInfo && (
+                <div className="border-t border-green-200 dark:border-green-800 pt-3">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1">
+                    <Shield className="w-3.5 h-3.5" /> TLS 인증서 정보
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    <div className="bg-white/60 dark:bg-gray-800/40 rounded-lg p-2.5 space-y-1">
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">클라이언트 인증서</p>
+                      <p><span className="text-gray-400">Subject:</span> <span className="font-mono">{testResult.tlsCertInfo.clientSubject}</span></p>
+                      <p><span className="text-gray-400">Issuer:</span> <span className="font-mono">{testResult.tlsCertInfo.clientIssuer}</span></p>
+                      <p><span className="text-gray-400">만료일:</span> <span className="font-semibold">{testResult.tlsCertInfo.clientExpiry}</span></p>
+                    </div>
+                    <div className="bg-white/60 dark:bg-gray-800/40 rounded-lg p-2.5 space-y-1">
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">CA 인증서</p>
+                      <p><span className="text-gray-400">Subject:</span> <span className="font-mono">{testResult.tlsCertInfo.caSubject}</span></p>
+                      <p><span className="text-gray-400">Issuer:</span> <span className="font-mono">{testResult.tlsCertInfo.caIssuer}</span></p>
+                      <p><span className="text-gray-400">만료일:</span> <span className="font-semibold">{testResult.tlsCertInfo.caExpiry}</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-sm text-red-600 dark:text-red-400">{testResult.errorMessage}</div>

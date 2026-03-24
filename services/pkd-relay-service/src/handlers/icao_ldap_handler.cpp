@@ -250,6 +250,17 @@ void IcaoLdapHandler::handleTestConnection(const drogon::HttpRequestPtr& req,
     if (!result.errorMessage.empty()) {
         json["errorMessage"] = result.errorMessage;
     }
+    // TLS certificate info
+    if (!result.clientCertSubject.empty()) {
+        Json::Value tlsCert;
+        tlsCert["clientSubject"] = result.clientCertSubject;
+        tlsCert["clientIssuer"] = result.clientCertIssuer;
+        tlsCert["clientExpiry"] = result.clientCertExpiry;
+        tlsCert["caSubject"] = result.serverCertSubject;
+        tlsCert["caIssuer"] = result.serverCertIssuer;
+        tlsCert["caExpiry"] = result.serverCertExpiry;
+        json["tlsCertInfo"] = tlsCert;
+    }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(json);
     callback(resp);

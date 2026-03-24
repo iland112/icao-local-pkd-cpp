@@ -85,6 +85,14 @@ struct IcaoLdapConnectionTestResult {
     std::string serverInfo;
     std::string tlsMode;          // "Simple Bind" or "TLS Mutual Auth (SASL EXTERNAL)"
     std::string errorMessage;
+
+    // TLS certificate info (populated on successful TLS connection)
+    std::string clientCertSubject;
+    std::string clientCertIssuer;
+    std::string clientCertExpiry;
+    std::string serverCertSubject;
+    std::string serverCertIssuer;
+    std::string serverCertExpiry;
 };
 
 /// ICAO LDAP sync configuration (runtime-modifiable)

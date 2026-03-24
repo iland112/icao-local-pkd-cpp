@@ -558,6 +558,15 @@ export interface IcaoLdapSyncConfig {
   tlsCaCertFile: string;
 }
 
+export interface IcaoLdapTlsCertInfo {
+  clientSubject: string;
+  clientIssuer: string;
+  clientExpiry: string;
+  caSubject: string;
+  caIssuer: string;
+  caExpiry: string;
+}
+
 export interface IcaoLdapConnectionTestResult {
   success: boolean;
   latencyMs: number;
@@ -565,6 +574,7 @@ export interface IcaoLdapConnectionTestResult {
   serverInfo: string;
   tlsMode: string;
   errorMessage?: string;
+  tlsCertInfo?: IcaoLdapTlsCertInfo;
 }
 
 export interface IcaoLdapSyncProgress {
