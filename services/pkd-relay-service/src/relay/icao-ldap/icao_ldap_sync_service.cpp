@@ -174,8 +174,22 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
         // Sync helper lambda with per-entry progress broadcast
         int typeIndex = 0;
+        bool syncAborted = false;
+
         auto syncEntries = [&](const std::string& typeName,
                                std::vector<IcaoLdapCertEntry> (IcaoLdapClient::*searchFn)(int)) {
+            if (syncAborted) return;
+
+            // Reconnect before each type (LDAP idle timeout prevention during long processing)
+            client.disconnect();
+            if (!client.connect()) {
+                spdlog::error("[IcaoLdapSync] Reconnect failed for {} search", typeName);
+                syncAborted = true;
+                result.status = "FAILED";
+                result.errorMessage = "LDAP reconnect failed before " + typeName + " search";
+                return;
+            }
+
             // Phase: searching
             currentProgress_.phase = "SEARCHING";
             currentProgress_.currentType = typeName;
@@ -233,15 +247,14 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
                     currentProgress_.phase = "FAILED";
                     currentProgress_.message = abortMsg;
                     broadcastProgress(currentProgress_);
-                    saveSyncLog(result);
-                    syncRunning_ = false;
-                    return result;
+                    syncAborted = true;
+                    return;
                 }
 
                 currentProgress_.currentTypeProcessed++;
 
-                // Broadcast every 50 entries or on last entry
-                if (currentProgress_.currentTypeProcessed % 50 == 0 ||
+                // Broadcast every 500 entries or on last entry (throttle to avoid SSE overload)
+                if (currentProgress_.currentTypeProcessed % 500 == 0 ||
                     currentProgress_.currentTypeProcessed == currentProgress_.currentTypeTotal) {
                     auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                         std::chrono::system_clock::now() - result.startedAt).count();
@@ -336,6 +349,17 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
         syncEntries("DSC_NC", &IcaoLdapClient::searchNcDscCertificates);
 
         client.disconnect();
+
+        if (syncAborted) {
+            // Already set result.status = "FAILED" in lambda
+            result.completedAt = std::chrono::system_clock::now();
+            result.durationMs = static_cast<int>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    result.completedAt - result.startedAt).count());
+            saveSyncLog(result);
+            syncRunning_ = false;
+            return result;
+        }
 
         result.status = "COMPLETED";
         result.completedAt = std::chrono::system_clock::now();
@@ -781,32 +805,72 @@ bool IcaoLdapSyncService::saveCrlToDb(const IcaoLdapCertEntry& entry,
     if (entry.binaryData.empty()) return false;  // Skip empty CRL data (ORA-24333 prevention)
 
     try {
+        // Parse CRL to extract metadata
+        std::string issuerDn, thisUpdate, nextUpdate, crlNumber;
+        {
+            const uint8_t* p = entry.binaryData.data();
+            X509_CRL* crl = d2i_X509_CRL(nullptr, &p, static_cast<long>(entry.binaryData.size()));
+            if (crl) {
+                char* iss = X509_NAME_oneline(X509_CRL_get_issuer(crl), nullptr, 0);
+                if (iss) { issuerDn = iss; OPENSSL_free(iss); }
+
+                auto asn1ToIso = [](const ASN1_TIME* t) -> std::string {
+                    if (!t) return "";
+                    struct tm tm = {};
+                    if (ASN1_TIME_to_tm(t, &tm)) {
+                        char buf[32];
+                        strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+                        return buf;
+                    }
+                    return "";
+                };
+                thisUpdate = asn1ToIso(X509_CRL_get0_lastUpdate(crl));
+                nextUpdate = asn1ToIso(X509_CRL_get0_nextUpdate(crl));
+
+                ASN1_INTEGER* crlNum = static_cast<ASN1_INTEGER*>(
+                    X509_CRL_get_ext_d2i(crl, NID_crl_number, nullptr, nullptr));
+                if (crlNum) {
+                    long num = ASN1_INTEGER_get(crlNum);
+                    crlNumber = std::to_string(num);
+                    ASN1_INTEGER_free(crlNum);
+                }
+
+                X509_CRL_free(crl);
+            }
+        }
+        if (issuerDn.empty()) issuerDn = "unknown";
+        if (thisUpdate.empty()) thisUpdate = "1970-01-01 00:00:00";
+
         std::ostringstream hexStream;
         for (auto b : entry.binaryData) {
             hexStream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(b);
         }
         std::string hexData = hexStream.str();
-        if (hexData.empty()) return false;  // Double-check
+        if (hexData.empty()) return false;
 
         std::string dbType = queryExecutor_->getDatabaseType();
 
         std::string sql;
         if (dbType == "oracle") {
-            sql = "INSERT INTO crl (id, fingerprint_sha256, country_code, crl_binary, "
-                  "source_type, stored_in_ldap, created_at) "
-                  "VALUES (SYS_GUID(), $1, $2, $3, $4, "
+            sql = "INSERT INTO crl (id, fingerprint_sha256, country_code, issuer_dn, "
+                  "this_update, next_update, crl_number, crl_binary, "
+                  "upload_id, stored_in_ldap, created_at) "
+                  "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, $8, "
                   + common::db::boolLiteral(dbType, false) + ", "
                   + common::db::currentTimestamp(dbType) + ")";
         } else {
-            sql = "INSERT INTO crl (id, fingerprint_sha256, country_code, crl_binary, "
-                  "source_type, stored_in_ldap, created_at) "
-                  "VALUES (gen_random_uuid(), $1, $2, decode($3, 'hex'), $4, "
+            sql = "INSERT INTO crl (id, fingerprint_sha256, country_code, issuer_dn, "
+                  "this_update, next_update, crl_number, crl_binary, "
+                  "upload_id, stored_in_ldap, created_at) "
+                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, decode($7, 'hex'), $8, "
                   "FALSE, NOW()) "
                   "ON CONFLICT (fingerprint_sha256) DO NOTHING";
         }
 
         queryExecutor_->executeQuery(sql, {
-            fingerprint, entry.countryCode, hexData, std::string("ICAO_PKD_SYNC")
+            fingerprint, entry.countryCode, issuerDn,
+            thisUpdate, nextUpdate, crlNumber, hexData,
+            std::string("ICAO_PKD_SYNC")
         });
         return true;
 
