@@ -41,7 +41,10 @@ export default function IcaoLdapSync() {
       if (res.data.running && !syncing) setSyncing(true);
       if (!res.data.running && syncing) {
         setSyncing(false);
-        setProgress(null);
+        // Keep progress visible if FAILED (user needs to see error + retry button)
+        if (progress && progress.phase !== 'FAILED') {
+          setProgress(null);
+        }
       }
     } catch { /* non-critical */ }
   }, [syncing, progress]);
@@ -97,7 +100,7 @@ export default function IcaoLdapSync() {
         }
         if (data.type === 'ICAO_LDAP_SYNC_COMPLETED' || data.type === 'ICAO_LDAP_SYNC_FAILED') {
           setSyncing(false);
-          setProgress(null);
+          // Don't clear progress here — let ICAO_LDAP_SYNC_PROGRESS (phase=COMPLETED/FAILED) handle it
           fetchStatusRef.current();
           fetchHistoryRef.current();
         }
@@ -143,7 +146,7 @@ export default function IcaoLdapSync() {
           if (!res.data.running) {
             clearInterval(pollInterval);
             setSyncing(false);
-            setProgress(null);
+            // Don't clear progress — SSE handler manages it
             fetchHistory();
           }
         } catch { /* ignore */ }
