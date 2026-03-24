@@ -28,7 +28,7 @@ describe('authApi.getStoredUser', () => {
       username: 'admin',
       email: 'admin@test.com',
       full_name: 'Admin User',
-      permissions: ['cert:read', 'upload:write'],
+      permissions: ['cert:read', 'upload:file'],
       is_admin: true,
     };
     localStorage.setItem('user', JSON.stringify(user));
@@ -88,7 +88,7 @@ describe('authApi.hasPermission', () => {
     }));
 
     expect(authApi.hasPermission('cert:read')).toBe(true);
-    expect(authApi.hasPermission('upload:write')).toBe(true);
+    expect(authApi.hasPermission('upload:file')).toBe(true);
     expect(authApi.hasPermission('any:permission')).toBe(true);
   });
 
@@ -102,7 +102,7 @@ describe('authApi.hasPermission', () => {
 
     expect(authApi.hasPermission('cert:read')).toBe(true);
     expect(authApi.hasPermission('pa:verify')).toBe(true);
-    expect(authApi.hasPermission('upload:write')).toBe(false);
+    expect(authApi.hasPermission('upload:file')).toBe(false);
   });
 
   it('should return true when user has "admin" permission string', () => {

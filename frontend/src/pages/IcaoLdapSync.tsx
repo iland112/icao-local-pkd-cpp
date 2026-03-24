@@ -146,7 +146,12 @@ export default function IcaoLdapSync() {
       // Auto-clear after 10 min max
       setTimeout(() => clearInterval(pollInterval), 600000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t('sync:icaoLdap.syncFailed', '동기화 트리거 실패'));
+      const detail = (err && typeof err === 'object' && 'response' in err)
+        ? (err as { response?: { data?: { error?: string; message?: string } } }).response?.data?.error
+          || (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+      const msg = detail || (err instanceof Error ? err.message : t('sync:icaoLdap.syncFailed', '동기화 트리거 실패'));
+      setError(msg);
       setSyncing(false);
     }
   };
@@ -157,8 +162,14 @@ export default function IcaoLdapSync() {
     try {
       const res = await syncApi.testIcaoLdapConnection();
       setTestResult(res.data);
-    } catch {
-      setTestResult({ success: false, latencyMs: 0, entryCount: 0, serverInfo: '', tlsMode: '', errorMessage: '연결 테스트 실패' });
+    } catch (err: unknown) {
+      const detail = (err && typeof err === 'object' && 'response' in err)
+        ? (err as { response?: { data?: { error?: string; message?: string; data?: { errorMessage?: string } } } }).response?.data?.data?.errorMessage
+          || (err as { response?: { data?: { error?: string; message?: string } } }).response?.data?.error
+          || (err as { response?: { data?: { message?: string } } }).response?.data?.message
+        : undefined;
+      const msg = detail || (err instanceof Error ? err.message : t('sync:icaoLdap.connectionFailed'));
+      setTestResult({ success: false, latencyMs: 0, entryCount: 0, serverInfo: '', tlsMode: '', errorMessage: msg });
     }
     setTesting(false);
   };

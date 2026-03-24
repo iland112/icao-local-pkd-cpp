@@ -509,7 +509,7 @@ void ServiceContainer::ensureAdminUser() {
             passwordHash,
             "admin@localhost",
             "System Administrator",
-            R"(["admin","upload:read","upload:write","cert:read","cert:export","pa:verify","pa:read","pa:stats","sync:read","report:read","ai:read","icao:read"])"
+            R"(["admin","upload:read","upload:file","upload:cert","cert:read","cert:export","pa:verify","pa:read","pa:stats","sync:read","report:read","ai:read","icao:read"])"
         };
 
         impl_->queryExecutor->executeCommand(insertQuery, params);

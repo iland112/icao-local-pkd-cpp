@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Mock i18n BEFORE importing permissions so the module-level i18n.t calls
@@ -32,8 +32,8 @@ describe('PERMISSION_GROUPS', () => {
     expect(PERMISSION_GROUPS.length).toBeGreaterThan(0);
   });
 
-  it('should have exactly 4 groups', () => {
-    expect(PERMISSION_GROUPS).toHaveLength(4);
+  it('should have exactly 5 groups', () => {
+    expect(PERMISSION_GROUPS).toHaveLength(5);
   });
 
   it('each group should have a label string', () => {
@@ -63,40 +63,46 @@ describe('PERMISSION_GROUPS', () => {
     });
   });
 
-  it('first group (certManagement) should contain icao:read', () => {
-    const first = PERMISSION_GROUPS[0];
-    const values = first.permissions.map(p => p.value);
+  it('first group (icaoIntegration) should contain icao:read, sync:read', () => {
+    const group = PERMISSION_GROUPS[0];
+    const values = group.permissions.map(p => p.value);
     expect(values).toContain('icao:read');
-  });
-
-  it('first group should contain upload:write, cert:read, cert:export, upload:read, sync:read', () => {
-    const first = PERMISSION_GROUPS[0];
-    const values = first.permissions.map(p => p.value);
-    expect(values).toContain('upload:write');
-    expect(values).toContain('cert:read');
-    expect(values).toContain('cert:export');
-    expect(values).toContain('upload:read');
     expect(values).toContain('sync:read');
   });
 
-  it('second group (forgeryDetection) should contain pa:verify and pa:read', () => {
-    const second = PERMISSION_GROUPS[1];
-    const values = second.permissions.map(p => p.value);
+  it('first group (icaoIntegration) should contain upload:file', () => {
+    const group = PERMISSION_GROUPS[0];
+    const values = group.permissions.map(p => p.value);
+    expect(values).toContain('upload:file');
+  });
+
+  it('second group (pkdManagement) should contain upload:cert, cert:read, cert:export, upload:read', () => {
+    const group = PERMISSION_GROUPS[1];
+    const values = group.permissions.map(p => p.value);
+    expect(values).toContain('upload:cert');
+    expect(values).toContain('cert:read');
+    expect(values).toContain('cert:export');
+    expect(values).toContain('upload:read');
+  });
+
+  it('third group (forgeryDetection) should contain pa:verify and pa:read', () => {
+    const group = PERMISSION_GROUPS[2];
+    const values = group.permissions.map(p => p.value);
     expect(values).toContain('pa:verify');
     expect(values).toContain('pa:read');
   });
 
-  it('third group (reportAnalysis) should contain report:read, pa:stats, ai:read', () => {
-    const third = PERMISSION_GROUPS[2];
-    const values = third.permissions.map(p => p.value);
+  it('fourth group (reportAnalysis) should contain report:read, pa:stats, ai:read', () => {
+    const group = PERMISSION_GROUPS[3];
+    const values = group.permissions.map(p => p.value);
     expect(values).toContain('report:read');
     expect(values).toContain('pa:stats');
     expect(values).toContain('ai:read');
   });
 
-  it('fourth group (systemAdmin) should contain api-client:manage', () => {
-    const fourth = PERMISSION_GROUPS[3];
-    const values = fourth.permissions.map(p => p.value);
+  it('fifth group (systemAdmin) should contain api-client:manage', () => {
+    const group = PERMISSION_GROUPS[4];
+    const values = group.permissions.map(p => p.value);
     expect(values).toContain('api-client:manage');
   });
 
@@ -119,11 +125,12 @@ describe('AVAILABLE_PERMISSIONS', () => {
     expect(AVAILABLE_PERMISSIONS).toHaveLength(totalFromGroups);
   });
 
-  it('should contain all 12 known permission values', () => {
+  it('should contain all 13 known permission values', () => {
     const values = AVAILABLE_PERMISSIONS.map(p => p.value);
     const expected = [
       'icao:read',
-      'upload:write',
+      'upload:file',
+      'upload:cert',
       'cert:read',
       'cert:export',
       'upload:read',
@@ -167,8 +174,12 @@ describe('getPermissionLabel', () => {
     expect(getPermissionLabel('icao:read')).toBe('[t:admin:userMgmt.perm.icaoRead]');
   });
 
-  it('should return the translated label for upload:write', () => {
-    expect(getPermissionLabel('upload:write')).toBe('[t:admin:userMgmt.perm.uploadWrite]');
+  it('should return the translated label for upload:file', () => {
+    expect(getPermissionLabel('upload:file')).toBe('[t:admin:userMgmt.perm.uploadFile]');
+  });
+
+  it('should return the translated label for upload:cert', () => {
+    expect(getPermissionLabel('upload:cert')).toBe('[t:admin:userMgmt.perm.uploadCert]');
   });
 
   it('should return the translated label for cert:export', () => {

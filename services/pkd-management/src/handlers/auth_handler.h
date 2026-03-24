@@ -71,7 +71,7 @@ private:
      *     "username": "admin",
      *     "email": "admin@example.com",
      *     "full_name": "System Administrator",
-     *     "permissions": ["admin", "upload:write", ...],
+     *     "permissions": ["admin", "upload:file", "upload:cert", ...],
      *     "is_admin": true
      *   }
      * }

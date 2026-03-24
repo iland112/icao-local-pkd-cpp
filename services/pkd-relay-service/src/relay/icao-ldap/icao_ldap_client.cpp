@@ -30,6 +30,7 @@ IcaoLdapClient::~IcaoLdapClient() {
 
 bool IcaoLdapClient::connect() {
     if (ldap_) disconnect();
+    lastError_.clear();
 
     if (tlsConfig_.enabled) {
         return connectTlsMutualAuth();
@@ -41,7 +42,8 @@ bool IcaoLdapClient::connectSimpleBind() {
     std::string uri = "ldap://" + host_ + ":" + std::to_string(port_);
     int rc = ldap_initialize(&ldap_, uri.c_str());
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] ldap_initialize failed: {}", ldap_err2string(rc));
+        lastError_ = std::string("LDAP initialize failed: ") + ldap_err2string(rc);
+        spdlog::error("[IcaoLdapClient] {}", lastError_);
         ldap_ = nullptr;
         return false;
     }
@@ -58,7 +60,8 @@ bool IcaoLdapClient::connectSimpleBind() {
 
     rc = ldap_sasl_bind_s(ldap_, bindDn_.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] Simple bind failed to {}: {}", uri, ldap_err2string(rc));
+        lastError_ = std::string("Simple Bind failed to ") + uri + ": " + ldap_err2string(rc);
+        spdlog::error("[IcaoLdapClient] {}", lastError_);
         ldap_unbind_ext_s(ldap_, nullptr, nullptr);
         ldap_ = nullptr;
         return false;
@@ -79,7 +82,8 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
 
     // Validate TLS config
     if (tlsConfig_.certFile.empty() || tlsConfig_.keyFile.empty()) {
-        spdlog::error("[IcaoLdapClient] TLS cert/key files not configured");
+        lastError_ = "TLS client cert/key files not configured";
+        spdlog::error("[IcaoLdapClient] {}", lastError_);
         return false;
     }
 
@@ -90,7 +94,8 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
     // Initialize LDAP connection
     rc = ldap_initialize(&ldap_, uri.c_str());
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("[IcaoLdapClient] ldap_initialize failed for {}: {}", uri, ldap_err2string(rc));
+        lastError_ = std::string("LDAP initialize failed for ") + uri + ": " + ldap_err2string(rc);
+        spdlog::error("[IcaoLdapClient] {}", lastError_);
         ldap_ = nullptr;
         return false;
     }
@@ -107,7 +112,8 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
         struct berval cred = {0, const_cast<char*>("")};
         rc = ldap_sasl_bind_s(ldap_, "", "EXTERNAL", &cred, nullptr, nullptr, nullptr);
         if (rc != LDAP_SUCCESS) {
-            spdlog::error("[IcaoLdapClient] SASL EXTERNAL bind failed to {}: {}", uri, ldap_err2string(rc));
+            lastError_ = std::string("SASL EXTERNAL bind failed to ") + uri + ": " + ldap_err2string(rc);
+            spdlog::error("[IcaoLdapClient] {}", lastError_);
             ldap_unbind_ext_s(ldap_, nullptr, nullptr);
             ldap_ = nullptr;
             return false;
@@ -120,7 +126,8 @@ bool IcaoLdapClient::connectTlsMutualAuth() {
         cred.bv_len = tlsConfig_.bindPassword.length();
         rc = ldap_sasl_bind_s(ldap_, tlsConfig_.bindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
         if (rc != LDAP_SUCCESS) {
-            spdlog::error("[IcaoLdapClient] Simple Bind over TLS failed to {}: {}", uri, ldap_err2string(rc));
+            lastError_ = std::string("Simple Bind over TLS failed to ") + uri + ": " + ldap_err2string(rc);
+            spdlog::error("[IcaoLdapClient] {}", lastError_);
             ldap_unbind_ext_s(ldap_, nullptr, nullptr);
             ldap_ = nullptr;
             return false;

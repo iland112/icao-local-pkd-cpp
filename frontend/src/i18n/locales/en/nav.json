@@ -2,7 +2,7 @@
   "home": "Home",
   "sections": {
     "icaoIntegration": "ICAO Integration",
-    "certManagement": "Certificate Management",
+    "certManagement": "PKD Management",
     "forgeryDetection": "Forgery Detection",
     "reportsAnalysis": "Reports & Analysis",
     "systemAdmin": "System Administration"

@@ -76,7 +76,7 @@ protected:
 
     const std::string kUserId      = "550e8400-e29b-41d4-a716-446655440000";
     const std::string kUsername    = "testuser";
-    const std::vector<std::string> kPerms = {"cert:read", "upload:write", "pa:verify"};
+    const std::vector<std::string> kPerms = {"cert:read", "upload:file", "pa:verify"};
 };
 
 // ===========================================================================
@@ -360,10 +360,10 @@ TEST_F(JwtServiceTest, Permissions_SinglePermission_RoundTrip) {
     EXPECT_EQ(claims->permissions[0], "cert:read");
 }
 
-TEST_F(JwtServiceTest, Permissions_AllTwelvePermissions_RoundTrip) {
+TEST_F(JwtServiceTest, Permissions_AllThirteenPermissions_RoundTrip) {
     std::vector<std::string> allPerms = {
         "cert:read", "cert:export", "pa:verify", "pa:read",
-        "pa:stats", "upload:read", "upload:write", "report:read",
+        "pa:stats", "upload:read", "upload:file", "upload:cert", "report:read",
         "ai:read", "sync:read", "icao:read", "api-client:manage"
     };
     auto token = svc.generateToken(kUserId, kUsername, allPerms, true);

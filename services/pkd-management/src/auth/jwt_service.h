@@ -50,7 +50,7 @@ public:
      *
      * @param userId User UUID from database
      * @param username Username
-     * @param permissions List of permissions (e.g., ["upload:write", "cert:read"])
+     * @param permissions List of permissions (e.g., ["upload:file", "upload:cert", "cert:read"])
      * @param isAdmin Admin flag
      * @return JWT token string
      */

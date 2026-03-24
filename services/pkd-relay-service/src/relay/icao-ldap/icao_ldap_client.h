@@ -58,6 +58,9 @@ public:
     /// Check if connected
     bool isConnected() const { return ldap_ != nullptr; }
 
+    /// Get the last connection error message (empty if no error)
+    const std::string& lastError() const { return lastError_; }
+
     /// Search for all DSC certificates under dc=data
     std::vector<IcaoLdapCertEntry> searchDscCertificates(int maxResults = 0);
 
@@ -106,6 +109,7 @@ private:
     std::string baseDn_;
     IcaoLdapTlsConfig tlsConfig_;
     LDAP* ldap_ = nullptr;
+    std::string lastError_;
 };
 
 } // namespace relay

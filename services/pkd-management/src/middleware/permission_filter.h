@@ -14,7 +14,8 @@ namespace middleware {
  *
  * Permission Format: "resource:action"
  * - upload:read   - View upload history
- * - upload:write  - Upload files
+ * - upload:file   - Upload ML/LDIF files (ICAO integration)
+ * - upload:cert   - Upload individual certificates (PKD management)
  * - cert:read     - Search and view certificates
  * - cert:export   - Export certificates
  * - pa:verify     - Verify Passive Authentication
@@ -25,7 +26,7 @@ namespace middleware {
  * Usage:
  *   app.registerHandler("/api/upload/ldif", handler)
  *      .addFilter(std::make_shared<PermissionFilter>(
- *          std::vector<std::string>{"upload:write"}));
+ *          std::vector<std::string>{"upload:file"}));
  */
 class PermissionFilter : public drogon::HttpFilterBase {
 public:

@@ -2,7 +2,7 @@
   "home": "Home",
   "sections": {
     "icaoIntegration": "ICAO 연계",
-    "certManagement": "인증서 관리",
+    "certManagement": "PKD 관리",
     "forgeryDetection": "위·변조 검사",
     "reportsAnalysis": "보고서 & 분석",
     "systemAdmin": "시스템 관리"

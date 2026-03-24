@@ -1130,8 +1130,9 @@ IcaoLdapConnectionTestResult IcaoLdapSyncService::testConnection() {
 
         if (!clientPtr->connect()) {
             result.success = false;
-            result.errorMessage = "Connection failed to " + config_.icaoLdapHost +
-                                 ":" + std::to_string(config_.icaoLdapPort);
+            result.errorMessage = clientPtr->lastError().empty()
+                ? ("Connection failed to " + config_.icaoLdapHost + ":" + std::to_string(config_.icaoLdapPort))
+                : clientPtr->lastError();
             auto elapsed = std::chrono::steady_clock::now() - start;
             result.latencyMs = static_cast<int>(
                 std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count());

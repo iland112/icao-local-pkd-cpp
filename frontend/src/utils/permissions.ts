@@ -15,14 +15,20 @@ export interface PermissionGroup {
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
-    label: 'admin:userMgmt.permGroup.certManagement',
+    label: 'admin:userMgmt.permGroup.icaoIntegration',
     permissions: [
       { value: 'icao:read', label: 'admin:userMgmt.perm.icaoRead', desc: 'admin:userMgmt.permDesc.icaoRead' },
-      { value: 'upload:write', label: 'admin:userMgmt.perm.uploadWrite', desc: 'admin:userMgmt.permDesc.uploadWrite' },
+      { value: 'upload:file', label: 'admin:userMgmt.perm.uploadFile', desc: 'admin:userMgmt.permDesc.uploadFile' },
+      { value: 'sync:read', label: 'admin:userMgmt.perm.syncRead', desc: 'admin:userMgmt.permDesc.syncRead' },
+    ],
+  },
+  {
+    label: 'admin:userMgmt.permGroup.pkdManagement',
+    permissions: [
+      { value: 'upload:cert', label: 'admin:userMgmt.perm.uploadCert', desc: 'admin:userMgmt.permDesc.uploadCert' },
       { value: 'cert:read', label: 'admin:userMgmt.perm.certRead', desc: 'admin:userMgmt.permDesc.certRead' },
       { value: 'cert:export', label: 'admin:userMgmt.perm.certExport', desc: 'admin:userMgmt.permDesc.certExport' },
       { value: 'upload:read', label: 'admin:userMgmt.perm.uploadRead', desc: 'admin:userMgmt.permDesc.uploadRead' },
-      { value: 'sync:read', label: 'admin:userMgmt.perm.syncRead', desc: 'admin:userMgmt.permDesc.syncRead' },
     ],
   },
   {

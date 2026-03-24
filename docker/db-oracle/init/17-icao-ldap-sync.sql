@@ -2,6 +2,8 @@
 -- ICAO PKD LDAP Sync Log Table - Oracle (v2.39.0)
 -- =============================================================================
 
+CONNECT pkd_user/pkd_password@XEPDB1;
+
 DECLARE
     v_exists NUMBER;
 BEGIN
