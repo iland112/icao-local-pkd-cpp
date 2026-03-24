@@ -468,18 +468,18 @@ TEST_F(DlParserTest, Parse_HasDlOidButMalformedCms_ReturnsFailure) {
 // This validates the error path for non-DL CMS structures.
 // ===========================================================================
 
-TEST_F(DlParserTest, DISABLED_Parse_ValidCmsSignedDataButNotDl_ReturnsFailure) {
-    // DISABLED: CMS_sign returns NULL in this test environment (OpenSSL 3.0 config issue)
+TEST_F(DlParserTest, Parse_ValidCmsSignedDataButNotDl_ReturnsFailure) {
     // Build a genuine CMS SignedData but without the DL OID
+    // Key must match the cert (pass same key to createSelfSignedCert)
     test_helpers::EvpPkeyPtr key(test_helpers::generateRsaKey(2048));
     ASSERT_NE(key.get(), nullptr);
 
-    test_helpers::X509Ptr cert(test_helpers::createSelfSignedCert("US", "Signer"));
+    test_helpers::X509Ptr cert(test_helpers::createSelfSignedCert("US", "Signer", 365, key.get()));
     ASSERT_NE(cert.get(), nullptr);
 
     const char* payload = "test data without DL OID";
     BIO* bio = BIO_new_mem_buf(payload, static_cast<int>(strlen(payload)));
-    CMS_ContentInfo* cms = CMS_sign(cert.get(), key.get(), nullptr, bio, 0);
+    CMS_ContentInfo* cms = CMS_sign(cert.get(), key.get(), nullptr, bio, CMS_BINARY | CMS_NOATTR);
     BIO_free(bio);
 
     ASSERT_NE(cms, nullptr);

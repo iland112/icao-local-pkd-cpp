@@ -9,7 +9,8 @@ RUN apt-get update && \
 
 # Install Python dependencies
 COPY services/ai-analysis/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir pytest
 
 # Copy application code
 COPY services/ai-analysis/app ./app

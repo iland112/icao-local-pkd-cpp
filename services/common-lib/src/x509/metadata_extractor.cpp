@@ -220,26 +220,18 @@ std::optional<std::string> getPublicKeyCurve(X509* cert) {
         return std::nullopt;
     }
 
-    EC_KEY* ec_key = EVP_PKEY_get1_EC_KEY(pkey);
-    if (!ec_key) {
+    // OpenSSL 3.0+: EVP_PKEY_get_group_name replaces deprecated EC_KEY API
+    char curve_buf[80] = {};
+    size_t curve_len = 0;
+    if (EVP_PKEY_get_group_name(pkey, curve_buf, sizeof(curve_buf), &curve_len) != 1 || curve_len == 0) {
         EVP_PKEY_free(pkey);
         return std::nullopt;
     }
 
-    const EC_GROUP* group = EC_KEY_get0_group(ec_key);
-    if (!group) {
-        EC_KEY_free(ec_key);
-        EVP_PKEY_free(pkey);
-        return std::nullopt;
-    }
-
-    int nid = EC_GROUP_get_curve_name(group);
-    const char* curve_name = OBJ_nid2sn(nid);
-
-    EC_KEY_free(ec_key);
+    const char* curve_name = curve_buf;
     EVP_PKEY_free(pkey);
 
-    if (!curve_name) {
+    if (!curve_name[0]) {
         return std::nullopt;
     }
 
