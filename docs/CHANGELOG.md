@@ -23,6 +23,13 @@
 - **Oracle init 수정**: `17-icao-ldap-sync.sql`에 `CONNECT pkd_user` 누락 수정
 - **컨테이너 타임존 통일**: 전체 14개 컨테이너 TZ를 `.env`에서 관리 (`${TZ:-Asia/Seoul}`)
   - api-gateway, openldap1/2, icao-sim, swagger, docs에 TZ 누락 수정
+- **ICAO LDAP 동기화 안정성 개선**
+  - `processEntry()` 반환값 `bool` → `EntryResult(NEW/SKIPPED/FAILED)` 3-state 변경 — DB 저장 실패가 정확히 카운트됨
+  - Oracle bind parameter 15 오류 수정 (Oracle 14개 / PostgreSQL 15개 파라미터 분리)
+  - 연속 50건 실패 시 동기화 자동 중단 (시스템 에러 무한 반복 방지)
+  - 재시작 시 fingerprint 기반 자동 resume (이미 저장된 인증서 자동 skip)
+  - SSE 프로그래스에 실패 건수 실시간 표시, FAILED 상태에서 "동기화 재시작" 버튼
+- **연결 테스트 TLS 인증서 정보 표시**: 클라이언트/CA 인증서 Subject, Issuer, 만료일
 - **빌드 개선**: `tsconfig.app.json`에서 테스트 파일 제외 (빌드 시 TS 에러 방지)
 - Docker/Podman compose 동기화 완료
 
