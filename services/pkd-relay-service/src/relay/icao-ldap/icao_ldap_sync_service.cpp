@@ -608,21 +608,21 @@ bool IcaoLdapSyncService::saveCertificateToDb(const IcaoLdapCertEntry& entry,
             }
         }
 
-        // Validity dates
+        // Validity dates (ISO 8601 format for Oracle TIMESTAMP compatibility)
         std::string notBefore, notAfter;
         {
-            auto asn1ToStr = [](const ASN1_TIME* t) -> std::string {
+            auto asn1ToIso = [](const ASN1_TIME* t) -> std::string {
                 if (!t) return "";
-                BIO* bio = BIO_new(BIO_s_mem());
-                if (!bio) return "";
-                ASN1_TIME_print(bio, t);
-                char buf[128] = {0};
-                BIO_read(bio, buf, sizeof(buf) - 1);
-                BIO_free(bio);
-                return buf;
+                struct tm tm = {};
+                if (ASN1_TIME_to_tm(t, &tm)) {
+                    char buf[32];
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+                    return buf;
+                }
+                return "";
             };
-            notBefore = asn1ToStr(X509_get0_notBefore(cert));
-            notAfter = asn1ToStr(X509_get0_notAfter(cert));
+            notBefore = asn1ToIso(X509_get0_notBefore(cert));
+            notAfter = asn1ToIso(X509_get0_notAfter(cert));
         }
 
         // Self-signed check
