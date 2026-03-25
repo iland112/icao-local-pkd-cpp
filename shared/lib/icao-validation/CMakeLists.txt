@@ -16,6 +16,7 @@ set(ICAO_VALIDATION_SOURCES
     src/algorithm_compliance.cpp
     src/trust_chain_builder.cpp
     src/crl_checker.cpp
+    src/icao_compliance.cpp
 )
 
 # Create static library
