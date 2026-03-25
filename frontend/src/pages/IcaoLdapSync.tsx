@@ -30,6 +30,7 @@ export default function IcaoLdapSync() {
   const [settingsInterval, setSettingsInterval] = useState(60);
   const [selectedHistory, setSelectedHistory] = useState<IcaoLdapSyncHistoryItem | null>(null);
   const [showSyncResult, setShowSyncResult] = useState(false);
+  const [detailTab, setDetailTab] = useState<'summary' | 'doc9303'>('summary');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [certStats, setCertStats] = useState<any>(null);
   const [historyPage, setHistoryPage] = useState(0);
@@ -804,7 +805,7 @@ export default function IcaoLdapSync() {
               </thead>
               <tbody>
                 {history.map((h, i) => (
-                  <tr key={i} onClick={() => setSelectedHistory(h)} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer">
+                  <tr key={i} onClick={() => { setSelectedHistory(h); setDetailTab('summary'); if (!certStats) uploadApi.getStatistics().then(r => setCertStats(r.data)).catch(() => {}); }} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer">
                     <td className="px-3 py-2 text-center text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{h.createdAt || '—'}</td>
                     <td className="px-3 py-2 text-center">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -824,7 +825,7 @@ export default function IcaoLdapSync() {
                     <td className="px-3 py-2 text-center text-red-500">{h.failedCount}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
                     <td className="px-3 py-2 text-center">
-                      <button onClick={(e) => { e.stopPropagation(); setSelectedHistory(h); }}
+                      <button onClick={(e) => { e.stopPropagation(); setSelectedHistory(h); setDetailTab('summary'); if (!certStats) uploadApi.getStatistics().then(r => setCertStats(r.data)).catch(() => {}); }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                         <Eye className="w-3 h-3" />
                       </button>
@@ -875,96 +876,211 @@ export default function IcaoLdapSync() {
       {/* Sync Detail Dialog */}
       {selectedHistory && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50" onClick={() => setSelectedHistory(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg mx-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-5 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-2">
-                {statusIcon(selectedHistory.status)}
-                <h2 className="text-lg font-semibold"> {t('sync:icaoLdap.detailTitle')}</h2>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-2xl mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div>
+                <div className="flex items-center gap-2">
+                  {statusIcon(selectedHistory.status)}
+                  <h2 className="text-base font-bold">{t('sync:icaoLdap.detailTitle')}</h2>
+                </div>
+                <p className="text-xs text-gray-400 mt-0.5">{selectedHistory.createdAt} · {selectedHistory.triggeredBy} · {(selectedHistory.durationMs / 1000).toFixed(0)}초</p>
               </div>
               <button onClick={() => setSelectedHistory(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                 <X className="w-5 h-5 text-gray-400" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
-              {/* Summary */}
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-500 dark:text-gray-400">{t('sync:icaoLdap.status')}</span>
-                  <div className={`font-semibold ${selectedHistory.status === 'COMPLETED' ? 'text-green-600' : 'text-red-500'}`}>{selectedHistory.status}</div></div>
-                <div><span className="text-gray-500 dark:text-gray-400">{t('common:label.type')}</span><div className="font-semibold">{selectedHistory.syncType}</div></div>
-                <div><span className="text-gray-500 dark:text-gray-400">{t('sync:icaoLdap.trigger')}</span><div className="font-semibold">{selectedHistory.triggeredBy}</div></div>
-                <div><span className="text-gray-500 dark:text-gray-400">{t('sync:icaoLdap.duration')}</span><div className="font-semibold">{(selectedHistory.durationMs / 1000).toFixed(1)}초</div></div>
-              </div>
-
-              {/* Totals */}
-              <div className="grid grid-cols-4 gap-2">
-                <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
-                  <div className="text-lg font-bold text-blue-600">{selectedHistory.totalRemoteCount.toLocaleString()}</div>
-                  <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
-                </div>
-                <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
-                  <div className="text-lg font-bold text-green-600">+{selectedHistory.newCertificates}</div>
-                  <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.newCount')}</div>
-                </div>
-                <div className="text-center bg-gray-50 dark:bg-gray-700/50 rounded-lg py-2">
-                  <div className="text-lg font-bold text-gray-500">{selectedHistory.existingSkipped.toLocaleString()}</div>
-                  <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.existingCount')}</div>
-                </div>
-                <div className="text-center bg-red-50 dark:bg-red-900/20 rounded-lg py-2">
-                  <div className="text-lg font-bold text-red-500">{selectedHistory.failedCount}</div>
-                  <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.failedCount')}</div>
-                </div>
-              </div>
-
-              {/* Type Breakdown */}
-              {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 flex items-center gap-1.5">
-                    <Database className="w-4 h-4 text-blue-500" /> {t('sync:icaoLdap.typeBreakdown')}
-                  </h3>
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400">
-                          <th className="px-3 py-2 text-left font-medium"> {t('sync:icaoLdap.certType')}</th>
-                          <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.total')}</th>
-                          <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.newCount')}</th>
-                          <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.existingCount')}</th>
-                          <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.failedCount')}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedHistory.typeStats.map((ts, i) => (
-                          <tr key={i} className="border-t border-gray-100 dark:border-gray-700/50">
-                            <td className="px-3 py-2 font-medium">
-                              <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                ts.type === 'ML→CSCA' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' :
-                                ts.type === 'DSC' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300' :
-                                ts.type === 'CRL' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300' :
-                                'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
-                              }`}>{ts.type}</span>
-                            </td>
-                            <td className="px-3 py-2 text-right font-mono">{ts.total.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right font-mono text-green-600">+{ts.new}</td>
-                            <td className="px-3 py-2 text-right font-mono text-gray-400">{ts.skipped.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Error message */}
-              {selectedHistory.errorMessage && selectedHistory.errorMessage.trim() && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
-                  <div className="text-xs text-red-600 dark:text-red-400">{selectedHistory.errorMessage}</div>
-                </div>
-              )}
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 dark:border-gray-700 px-5 flex-shrink-0">
+              {[
+                { key: 'summary' as const, label: '상세 정보' },
+                { key: 'doc9303' as const, label: 'Doc 9303 검사' },
+              ].map(tab => (
+                <button key={tab.key}
+                  onClick={() => setDetailTab(tab.key)}
+                  className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                    detailTab === tab.key
+                      ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                  }`}>
+                  {tab.label}
+                </button>
+              ))}
             </div>
 
-            <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700">
+                  {/* Tab Content */}
+                  <div className="overflow-y-auto flex-1 p-5 space-y-4">
+                    {detailTab === 'summary' && (
+                      <>
+                        {/* Totals */}
+                        <div className="grid grid-cols-4 gap-2">
+                          <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
+                            <div className="text-lg font-bold text-blue-600">{selectedHistory.totalRemoteCount.toLocaleString()}</div>
+                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
+                          </div>
+                          <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
+                            <div className="text-lg font-bold text-green-600">+{selectedHistory.newCertificates}</div>
+                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.newCount')}</div>
+                          </div>
+                          <div className="text-center bg-gray-50 dark:bg-gray-700/50 rounded-lg py-2">
+                            <div className="text-lg font-bold text-gray-500">{selectedHistory.existingSkipped.toLocaleString()}</div>
+                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.existingCount')}</div>
+                          </div>
+                          <div className="text-center bg-red-50 dark:bg-red-900/20 rounded-lg py-2">
+                            <div className="text-lg font-bold text-red-500">{selectedHistory.failedCount}</div>
+                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.failedCount')}</div>
+                          </div>
+                        </div>
+
+                        {/* Type Breakdown */}
+                        {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
+                          <div>
+                            <h3 className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1.5">
+                              <Database className="w-3.5 h-3.5" /> {t('sync:icaoLdap.typeBreakdown')}
+                            </h3>
+                            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="bg-gray-50 dark:bg-gray-700/50 text-gray-500">
+                                    <th className="px-3 py-2 text-left font-medium">{t('sync:icaoLdap.certType')}</th>
+                                    <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.total')}</th>
+                                    <th className="px-3 py-2 text-right font-medium text-green-600">{t('sync:icaoLdap.newCount')}</th>
+                                    <th className="px-3 py-2 text-right font-medium">{t('sync:icaoLdap.existingCount')}</th>
+                                    <th className="px-3 py-2 text-right font-medium text-red-500">{t('sync:icaoLdap.failedCount')}</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {selectedHistory.typeStats.map((ts, i) => (
+                                    <tr key={i} className="border-t border-gray-100 dark:border-gray-700/50">
+                                      <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                                        ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                        ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                        ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                        'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                      }`}>{ts.type}</span></td>
+                                      <td className="px-3 py-2 text-right font-mono">{ts.total.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right font-mono text-green-600">+{ts.new}</td>
+                                      <td className="px-3 py-2 text-right font-mono text-gray-400">{ts.skipped.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Trust Chain + Expiry (from certStats if available) */}
+                        {certStats?.validation && (
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
+                                <ShieldCheck className="w-3.5 h-3.5" /> {t('sync:icaoLdap.trustChainVerification')}
+                              </p>
+                              {(certStats.validation.validCount > 0 || certStats.validation.invalidCount > 0 || certStats.validation.pendingCount > 0) ? (
+                                <div className="space-y-1">
+                                  {[
+                                    { label: 'VALID', count: certStats.validation.validCount, color: 'text-green-600' },
+                                    { label: 'EXPIRED_VALID', count: certStats.validation.expiredValidCount, color: 'text-amber-600' },
+                                    { label: 'INVALID', count: certStats.validation.invalidCount, color: 'text-red-600' },
+                                    { label: 'PENDING', count: (certStats.validation.pendingCount || 0), color: 'text-yellow-600' },
+                                  ].filter(v => v.count > 0).map(v => (
+                                    <div key={v.label} className="flex justify-between text-xs">
+                                      <span className={v.color}>{v.label}</span>
+                                      <span className={`font-bold ${v.color}`}>{v.count?.toLocaleString()}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : <p className="text-xs text-gray-400 italic">{t('sync:icaoLdap.trustChainNoData')}</p>}
+                            </div>
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5" /> {t('sync:icaoLdap.expiryStatus')}
+                              </p>
+                              {(certStats.validation.certValidCount > 0 || certStats.validation.certExpiredCount > 0) ? (
+                                <div className="space-y-1">
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-green-600">{t('sync:icaoLdap.expiryValid')}</span>
+                                    <span className="font-bold text-green-600">{certStats.validation.certValidCount?.toLocaleString()}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                    <span className="text-red-600">{t('sync:icaoLdap.expiryExpired')}</span>
+                                    <span className="font-bold text-red-600">{certStats.validation.certExpiredCount?.toLocaleString()}</span>
+                                  </div>
+                                </div>
+                              ) : <p className="text-xs text-gray-400 italic">{t('sync:icaoLdap.trustChainNoData')}</p>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Error */}
+                        {selectedHistory.errorMessage && selectedHistory.errorMessage.trim() && (
+                          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                            <div className="text-xs text-red-600 dark:text-red-400">{selectedHistory.errorMessage}</div>
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    {detailTab === 'doc9303' && (
+                      <>
+                        {certStats?.validation?.icao && certStats.validation.icao.total > 0 ? (
+                          <div className="space-y-4">
+                            {/* Compliance summary */}
+                            <div className="grid grid-cols-3 gap-3">
+                              <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                                <div className="text-2xl font-bold text-green-600">{certStats.validation.icao.compliantCount}</div>
+                                <div className="text-xs text-gray-500">준수</div>
+                                <div className="text-[10px] text-green-500">
+                                  {((certStats.validation.icao.compliantCount / certStats.validation.icao.total) * 100).toFixed(0)}%
+                                </div>
+                              </div>
+                              <div className="text-center p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                                <div className="text-2xl font-bold text-amber-600">{certStats.validation.icao.warningCount}</div>
+                                <div className="text-xs text-gray-500">경고</div>
+                              </div>
+                              <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                                <div className="text-2xl font-bold text-red-600">{certStats.validation.icao.nonCompliantCount}</div>
+                                <div className="text-xs text-gray-500">미준수</div>
+                              </div>
+                            </div>
+
+                            {/* Category breakdown */}
+                            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">카테고리별 미준수/경고 상세</p>
+                              <div className="space-y-2">
+                                {[
+                                  { label: 'Key Usage', count: certStats.validation.icao.keyUsageFail, desc: 'keyCertSign, cRLSign, digitalSignature 등' },
+                                  { label: 'Algorithm', count: certStats.validation.icao.algorithmFail, desc: 'RSA/ECDSA + SHA-256/384/512' },
+                                  { label: 'Key Size', count: certStats.validation.icao.keySizeFail, desc: 'RSA ≥ 2048, ECDSA P-256/384/521' },
+                                  { label: '유효기간', count: certStats.validation.icao.validityPeriodFail, desc: 'CSCA ≤ 15년, DSC ≤ 3년' },
+                                  { label: '확장 필드', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
+                                ].map(c => (
+                                  <div key={c.label} className="flex items-center gap-3 text-xs">
+                                    <span className="w-20 font-medium text-gray-700 dark:text-gray-300">{c.label}</span>
+                                    <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                      <div className={`h-full rounded-full ${c.count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                                        style={{ width: `${Math.min(100, (c.count / (certStats.validation.icao.total || 1)) * 100 * 10)}%` }} />
+                                    </div>
+                                    <span className={`w-10 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total}건 검사)</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-center py-10 text-gray-400">
+                            <ShieldCheck className="w-10 h-10 mx-auto mb-2 opacity-30" />
+                            <p className="text-sm">Doc 9303 검사 데이터 없음</p>
+                            <p className="text-xs mt-1">전체 동기화 실행 후 확인 가능합니다.</p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+            <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
               <button onClick={() => setSelectedHistory(null)}
                 className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
                 {t('sync:icaoLdap.close')}
