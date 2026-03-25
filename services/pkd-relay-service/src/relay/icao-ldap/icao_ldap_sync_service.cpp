@@ -9,6 +9,7 @@
 #include <openssl/x509.h>
 #include <openssl/pem.h>
 #include <openssl/cms.h>
+#include <icao/validation/icao_compliance.h>
 #include <iomanip>
 #include <sstream>
 #include <chrono>
@@ -510,30 +511,140 @@ void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
             }
         }
 
-        // Save to validation_result table
-        bool trustChainValid = (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID");
+        // Step 4: ICAO Doc 9303 compliance check
+        auto icao = icao::validation::checkIcaoCompliance(cert, entry.certType);
 
-        // Extract subject/issuer from cert for validation_result
+        // Step 5: Check validity period (not_after vs now)
+        bool validityPeriodValid = true;
+        {
+            const ASN1_TIME* na = X509_get0_notAfter(cert);
+            if (na && X509_cmp_current_time(na) < 0) {
+                validityPeriodValid = false;
+            }
+        }
+
+        // Step 6: Check signature validity (self-verify for self-signed, otherwise skip)
+        bool signatureValid = (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID");
+
+        // Extract serial number
+        std::string serialNumber;
+        {
+            ASN1_INTEGER* serial = X509_get_serialNumber(cert);
+            if (serial) {
+                BIGNUM* bn = ASN1_INTEGER_to_BN(serial, nullptr);
+                if (bn) {
+                    char* hex = BN_bn2hex(bn);
+                    if (hex) { serialNumber = hex; OPENSSL_free(hex); }
+                    BN_free(bn);
+                }
+            }
+        }
+
+        // Extract sig algorithm
+        std::string sigAlgName;
+        {
+            const X509_ALGOR* algor = nullptr;
+            X509_get0_signature(nullptr, &algor, cert);
+            if (algor) {
+                int nid = OBJ_obj2nid(algor->algorithm);
+                sigAlgName = (nid != NID_undef) ? OBJ_nid2sn(nid) : "unknown";
+            }
+        }
+
+        // Expiry dates
+        std::string notBeforeStr, notAfterStr;
+        {
+            auto asn1ToIso = [](const ASN1_TIME* t) -> std::string {
+                if (!t) return "";
+                struct tm tm = {};
+                if (ASN1_TIME_to_tm(t, &tm)) {
+                    char buf[32];
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
+                    return buf;
+                }
+                return "";
+            };
+            notBeforeStr = asn1ToIso(X509_get0_notBefore(cert));
+            notAfterStr = asn1ToIso(X509_get0_notAfter(cert));
+        }
+
+        // CSCA subject DN (for trust chain)
+        std::string cscaSubjectDn, cscaSerial, cscaCountry;
+        if (cscaFound) {
+            try {
+                auto chainResult2 = trustChainBuilder_->build(cert);
+                cscaSubjectDn = chainResult2.cscaSubjectDn;
+            } catch (...) {}
+        }
+
+        // Extract subject/issuer from cert
+        bool trustChainValid2 = (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID");
         char vrSubject[512] = {0}, vrIssuer[512] = {0};
         X509_NAME_oneline(X509_get_subject_name(cert), vrSubject, sizeof(vrSubject));
         X509_NAME_oneline(X509_get_issuer_name(cert), vrIssuer, sizeof(vrIssuer));
 
+        // Revocation status
+        std::string revocationStatus = "NOT_CHECKED";
+        if (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID") {
+            revocationStatus = "NOT_REVOKED";
+        }
+        // Check CRL result for revocation
+        bool crlChecked = false;
+        try {
+            auto crlRes = crlChecker_->check(cert, entry.countryCode);
+            crlChecked = true;
+            if (crlRes.status == icao::validation::CrlCheckStatus::REVOKED) {
+                revocationStatus = "REVOKED";
+            }
+        } catch (...) {}
+
+        // Violations string
+        std::string violationsStr = icao.violationsString();
+
+        // Save to validation_result — full schema
         std::string sql;
         if (dbType == "oracle") {
             sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
-                  "certificate_type, country_code, subject_dn, issuer_dn, "
+                  "certificate_type, country_code, subject_dn, issuer_dn, serial_number, "
                   "validation_status, trust_chain_valid, trust_chain_message, csca_found, "
+                  "csca_subject_dn, "
+                  "signature_valid, signature_algorithm, "
+                  "validity_period_valid, not_before, not_after, "
+                  "revocation_status, crl_checked, "
+                  "icao_compliant, icao_compliance_level, icao_violations, "
+                  "icao_key_usage_compliant, icao_algorithm_compliant, "
+                  "icao_key_size_compliant, icao_validity_period_compliant, "
+                  "icao_extensions_compliant, "
                   "validation_timestamp) "
-                  "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, "
-                  + common::db::boolLiteral(dbType, trustChainValid) + ", $8, "
-                  + common::db::boolLiteral(dbType, cscaFound) + ", "
+                  "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, $8, "
+                  + common::db::boolLiteral(dbType, trustChainValid2) + ", $9, "
+                  + common::db::boolLiteral(dbType, cscaFound) + ", $10, "
+                  + common::db::boolLiteral(dbType, signatureValid) + ", $11, "
+                  + common::db::boolLiteral(dbType, validityPeriodValid) + ", $12, $13, "
+                  "$14, " + common::db::boolLiteral(dbType, crlChecked) + ", "
+                  + common::db::boolLiteral(dbType, icao.isCompliant) + ", $15, $16, "
+                  + common::db::boolLiteral(dbType, icao.keyUsageCompliant) + ", "
+                  + common::db::boolLiteral(dbType, icao.algorithmCompliant) + ", "
+                  + common::db::boolLiteral(dbType, icao.keySizeCompliant) + ", "
+                  + common::db::boolLiteral(dbType, icao.validityPeriodCompliant) + ", "
+                  + common::db::boolLiteral(dbType, icao.extensionsCompliant) + ", "
                   + common::db::currentTimestamp(dbType) + ")";
         } else {
             sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
-                  "certificate_type, country_code, subject_dn, issuer_dn, "
+                  "certificate_type, country_code, subject_dn, issuer_dn, serial_number, "
                   "validation_status, trust_chain_valid, trust_chain_message, csca_found, "
+                  "csca_subject_dn, "
+                  "signature_valid, signature_algorithm, "
+                  "validity_period_valid, not_before, not_after, "
+                  "revocation_status, crl_checked, "
+                  "icao_compliant, icao_compliance_level, icao_violations, "
+                  "icao_key_usage_compliant, icao_algorithm_compliant, "
+                  "icao_key_size_compliant, icao_validity_period_compliant, "
+                  "icao_extensions_compliant, "
                   "validation_timestamp) "
-                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) "
+                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, "
+                  "$9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, "
+                  "$20, $21, $22, $23, $24, $25, $26, $27, NOW()) "
                   "ON CONFLICT (certificate_id, upload_id) DO NOTHING";
         }
 
@@ -544,14 +655,41 @@ void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
             entry.countryCode,                        // $4 country_code
             std::string(vrSubject),                   // $5 subject_dn
             std::string(vrIssuer),                    // $6 issuer_dn
-            validationStatus,                         // $7 validation_status
+            serialNumber,                             // $7 serial_number
+            validationStatus,                         // $8 validation_status
         };
+
         if (dbType == "oracle") {
-            params.push_back(validationMessage);      // $8 trust_chain_message
+            // Oracle: booleans are boolLiterals in SQL, only string params here
+            params.push_back(validationMessage);      // $9 trust_chain_message
+            params.push_back(cscaSubjectDn);          // $10 csca_subject_dn
+            params.push_back(sigAlgName);             // $11 signature_algorithm
+            params.push_back(notBeforeStr);           // $12 not_before
+            params.push_back(notAfterStr);            // $13 not_after
+            params.push_back(revocationStatus);       // $14 revocation_status
+            params.push_back(icao.complianceLevel);   // $15 icao_compliance_level
+            params.push_back(violationsStr);          // $16 icao_violations
         } else {
-            params.push_back(trustChainValid ? "true" : "false"); // $8
-            params.push_back(validationMessage);      // $9
-            params.push_back(cscaFound ? "true" : "false"); // $10
+            // PostgreSQL: all params including booleans
+            params.push_back(trustChainValid2 ? "true" : "false"); // $9
+            params.push_back(validationMessage);      // $10
+            params.push_back(cscaFound ? "true" : "false"); // $11
+            params.push_back(cscaSubjectDn);          // $12
+            params.push_back(signatureValid ? "true" : "false"); // $13
+            params.push_back(sigAlgName);             // $14
+            params.push_back(validityPeriodValid ? "true" : "false"); // $15
+            params.push_back(notBeforeStr);           // $16
+            params.push_back(notAfterStr);            // $17
+            params.push_back(revocationStatus);       // $18
+            params.push_back(crlChecked ? "true" : "false"); // $19
+            params.push_back(icao.isCompliant ? "true" : "false"); // $20
+            params.push_back(icao.complianceLevel);   // $21
+            params.push_back(violationsStr);          // $22
+            params.push_back(icao.keyUsageCompliant ? "true" : "false"); // $23
+            params.push_back(icao.algorithmCompliant ? "true" : "false"); // $24
+            params.push_back(icao.keySizeCompliant ? "true" : "false"); // $25
+            params.push_back(icao.validityPeriodCompliant ? "true" : "false"); // $26
+            params.push_back(icao.extensionsCompliant ? "true" : "false"); // $27
         }
         queryExecutor_->executeQuery(sql, params);
 
