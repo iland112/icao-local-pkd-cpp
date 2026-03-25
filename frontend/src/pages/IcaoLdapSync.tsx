@@ -720,6 +720,47 @@ export default function IcaoLdapSync() {
                     })()}
                   </div>
                 </div>
+
+                {/* ICAO Doc 9303 준수 검사 결과 */}
+                {certStats.validation?.icao && certStats.validation.icao.total > 0 && (
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5" /> ICAO Doc 9303 준수 검사
+                      <span className="ml-auto text-gray-400 font-normal">{certStats.validation.icao.total}건 검사</span>
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 mb-3">
+                      <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                        <div className="text-lg font-bold text-green-600">{certStats.validation.icao.compliantCount}</div>
+                        <div className="text-[10px] text-gray-500">준수</div>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                        <div className="text-lg font-bold text-amber-600">{certStats.validation.icao.warningCount}</div>
+                        <div className="text-[10px] text-gray-500">경고</div>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                        <div className="text-lg font-bold text-red-600">{certStats.validation.icao.nonCompliantCount}</div>
+                        <div className="text-[10px] text-gray-500">미준수</div>
+                      </div>
+                    </div>
+                    {/* Category breakdown */}
+                    {(certStats.validation.icao.nonCompliantCount > 0 || certStats.validation.icao.warningCount > 0) && (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {[
+                          { label: 'Key Usage', count: certStats.validation.icao.keyUsageFail, color: 'text-red-600' },
+                          { label: 'Algorithm', count: certStats.validation.icao.algorithmFail, color: 'text-red-600' },
+                          { label: 'Key Size', count: certStats.validation.icao.keySizeFail, color: 'text-red-600' },
+                          { label: '유효기간', count: certStats.validation.icao.validityPeriodFail, color: 'text-amber-600' },
+                          { label: '확장 필드', count: certStats.validation.icao.extensionsFail, color: 'text-red-600' },
+                        ].filter(c => c.count > 0).map(c => (
+                          <div key={c.label} className="flex items-center justify-between text-xs bg-white dark:bg-gray-800 rounded px-2 py-1">
+                            <span className="text-gray-600 dark:text-gray-400">{c.label}</span>
+                            <span className={`font-bold ${c.color}`}>{c.count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

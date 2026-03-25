@@ -563,6 +563,45 @@ Json::Value UploadRepository::getStatisticsSummary()
             validation["certExpiredCount"] = common::db::getInt(expiryResult[0], "cert_expired", 0);
         }
 
+        // Get ICAO Doc 9303 compliance stats
+        std::string icaoQuery = (dbType == "oracle")
+            ? "SELECT "
+              "COALESCE(SUM(CASE WHEN icao_compliant = 1 THEN 1 ELSE 0 END), 0) as icao_compliant_count, "
+              "COALESCE(SUM(CASE WHEN icao_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_non_compliant_count, "
+              "COALESCE(SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END), 0) as icao_warning_count, "
+              "COALESCE(SUM(CASE WHEN icao_key_usage_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_key_usage_fail, "
+              "COALESCE(SUM(CASE WHEN icao_algorithm_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_algorithm_fail, "
+              "COALESCE(SUM(CASE WHEN icao_key_size_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_key_size_fail, "
+              "COALESCE(SUM(CASE WHEN icao_validity_period_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_validity_fail, "
+              "COALESCE(SUM(CASE WHEN icao_extensions_compliant = 0 THEN 1 ELSE 0 END), 0) as icao_extensions_fail, "
+              "COUNT(*) as icao_total "
+              "FROM validation_result WHERE icao_compliance_level IS NOT NULL"
+            : "SELECT "
+              "COALESCE(SUM(CASE WHEN icao_compliant = true THEN 1 ELSE 0 END), 0) as icao_compliant_count, "
+              "COALESCE(SUM(CASE WHEN icao_compliant = false THEN 1 ELSE 0 END), 0) as icao_non_compliant_count, "
+              "COALESCE(SUM(CASE WHEN icao_compliance_level = 'WARNING' THEN 1 ELSE 0 END), 0) as icao_warning_count, "
+              "COALESCE(SUM(CASE WHEN icao_key_usage_compliant = false THEN 1 ELSE 0 END), 0) as icao_key_usage_fail, "
+              "COALESCE(SUM(CASE WHEN icao_algorithm_compliant = false THEN 1 ELSE 0 END), 0) as icao_algorithm_fail, "
+              "COALESCE(SUM(CASE WHEN icao_key_size_compliant = false THEN 1 ELSE 0 END), 0) as icao_key_size_fail, "
+              "COALESCE(SUM(CASE WHEN icao_validity_period_compliant = false THEN 1 ELSE 0 END), 0) as icao_validity_fail, "
+              "COALESCE(SUM(CASE WHEN icao_extensions_compliant = false THEN 1 ELSE 0 END), 0) as icao_extensions_fail, "
+              "COUNT(*) as icao_total "
+              "FROM validation_result WHERE icao_compliance_level IS NOT NULL";
+        Json::Value icaoResult = queryExecutor_->executeQuery(icaoQuery);
+        Json::Value icaoStats;
+        if (!icaoResult.empty()) {
+            icaoStats["total"] = common::db::getInt(icaoResult[0], "icao_total", 0);
+            icaoStats["compliantCount"] = common::db::getInt(icaoResult[0], "icao_compliant_count", 0);
+            icaoStats["nonCompliantCount"] = common::db::getInt(icaoResult[0], "icao_non_compliant_count", 0);
+            icaoStats["warningCount"] = common::db::getInt(icaoResult[0], "icao_warning_count", 0);
+            icaoStats["keyUsageFail"] = common::db::getInt(icaoResult[0], "icao_key_usage_fail", 0);
+            icaoStats["algorithmFail"] = common::db::getInt(icaoResult[0], "icao_algorithm_fail", 0);
+            icaoStats["keySizeFail"] = common::db::getInt(icaoResult[0], "icao_key_size_fail", 0);
+            icaoStats["validityPeriodFail"] = common::db::getInt(icaoResult[0], "icao_validity_fail", 0);
+            icaoStats["extensionsFail"] = common::db::getInt(icaoResult[0], "icao_extensions_fail", 0);
+        }
+        validation["icao"] = icaoStats;
+
         // Get trust chain path distribution (GROUP BY trust_chain_message)
         std::string chainPathQuery;
         if (dbType == "oracle") {
