@@ -278,6 +278,26 @@ export const uploadHistoryApi = {
     }>('/upload/statistics/validation-reasons'),
 
   /**
+   * Get ICAO Doc 9303 non-compliant certificate list by category
+   */
+  getIcaoNonCompliant: (category: string, limit = 200) =>
+    pkdApi.get<{
+      category: string;
+      categoryLabel: string;
+      total: number;
+      items: Array<{
+        fingerprint: string;
+        certificateType: string;
+        country: string;
+        subjectDn: string;
+        violations: string;
+        complianceLevel: string;
+        notBefore: string;
+        notAfter: string;
+      }>;
+    }>(`/upload/statistics/icao-noncompliant?category=${category}&limit=${limit}`),
+
+  /**
    * Get country-level statistics
    * @param limit - Number of countries to return (sorted by certificate count)
    * @returns Top countries by certificate count

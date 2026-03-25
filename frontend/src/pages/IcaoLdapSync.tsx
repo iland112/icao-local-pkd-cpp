@@ -13,6 +13,7 @@ import {
   type IcaoLdapSyncProgress,
 } from '@/services/relayApi';
 import { uploadApi } from '@/services/api';
+import { uploadHistoryApi } from '@/services/pkdApi';
 
 const CERT_TYPES = ['CSCA', 'CRL', 'DSC', 'DSC_NC'] as const;
 
@@ -30,7 +31,10 @@ export default function IcaoLdapSync() {
   const [settingsInterval, setSettingsInterval] = useState(60);
   const [selectedHistory, setSelectedHistory] = useState<IcaoLdapSyncHistoryItem | null>(null);
   const [showSyncResult, setShowSyncResult] = useState(false);
-  const [detailTab, setDetailTab] = useState<'summary' | 'doc9303'>('summary');
+  const [detailTab, setDetailTab] = useState<'summary' | 'doc9303' | 'duplicates'>('summary');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [ncDetail, setNcDetail] = useState<any>(null);
+  const [ncLoading, setNcLoading] = useState(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [certStats, setCertStats] = useState<any>(null);
   const [historyPage, setHistoryPage] = useState(0);
@@ -896,6 +900,7 @@ export default function IcaoLdapSync() {
               {[
                 { key: 'summary' as const, label: '상세 정보' },
                 { key: 'doc9303' as const, label: 'Doc 9303 검사' },
+                ...(selectedHistory.existingSkipped > 0 ? [{ key: 'duplicates' as const, label: `중복 인증서 ${selectedHistory.existingSkipped.toLocaleString()}` }] : []),
               ].map(tab => (
                 <button key={tab.key}
                   onClick={() => setDetailTab(tab.key)}
@@ -1048,23 +1053,36 @@ export default function IcaoLdapSync() {
 
                             {/* Category breakdown */}
                             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">카테고리별 미준수/경고 상세</p>
+                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">카테고리별 미준수/경고 상세 <span className="font-normal text-gray-400">(클릭하여 인증서 목록 확인)</span></p>
                               <div className="space-y-2">
                                 {[
-                                  { label: 'Key Usage', count: certStats.validation.icao.keyUsageFail, desc: 'keyCertSign, cRLSign, digitalSignature 등' },
-                                  { label: 'Algorithm', count: certStats.validation.icao.algorithmFail, desc: 'RSA/ECDSA + SHA-256/384/512' },
-                                  { label: 'Key Size', count: certStats.validation.icao.keySizeFail, desc: 'RSA ≥ 2048, ECDSA P-256/384/521' },
-                                  { label: '유효기간', count: certStats.validation.icao.validityPeriodFail, desc: 'CSCA ≤ 15년, DSC ≤ 3년' },
-                                  { label: '확장 필드', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
+                                  { label: 'Key Usage', apiKey: 'keyUsage', count: certStats.validation.icao.keyUsageFail, desc: 'keyCertSign, cRLSign, digitalSignature 등' },
+                                  { label: 'Algorithm', apiKey: 'algorithm', count: certStats.validation.icao.algorithmFail, desc: 'RSA/ECDSA + SHA-256/384/512' },
+                                  { label: 'Key Size', apiKey: 'keySize', count: certStats.validation.icao.keySizeFail, desc: 'RSA ≥ 2048, ECDSA P-256/384/521' },
+                                  { label: '유효기간', apiKey: 'validityPeriod', count: certStats.validation.icao.validityPeriodFail, desc: 'CSCA ≤ 15년, DSC ≤ 3년' },
+                                  { label: '확장 필드', apiKey: 'extensions', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
                                 ].map(c => (
-                                  <div key={c.label} className="flex items-center gap-3 text-xs">
-                                    <span className="w-20 font-medium text-gray-700 dark:text-gray-300">{c.label}</span>
+                                  <button key={c.label} disabled={c.count === 0}
+                                    onClick={async () => {
+                                      if (c.count === 0) return;
+                                      setNcLoading(true);
+                                      try {
+                                        const res = await uploadHistoryApi.getIcaoNonCompliant(c.apiKey);
+                                        setNcDetail(res.data);
+                                      } catch { setNcDetail(null); }
+                                      setNcLoading(false);
+                                    }}
+                                    className={`w-full flex items-center gap-3 text-xs rounded-lg px-2 py-1.5 transition-colors ${
+                                      c.count > 0 ? 'hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-50 cursor-default'
+                                    }`}>
+                                    <span className="w-20 text-left font-medium text-gray-700 dark:text-gray-300">{c.label}</span>
                                     <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
                                       <div className={`h-full rounded-full ${c.count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
                                         style={{ width: `${Math.min(100, (c.count / (certStats.validation.icao.total || 1)) * 100 * 10)}%` }} />
                                     </div>
-                                    <span className={`w-10 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}</span>
-                                  </div>
+                                    <span className={`w-12 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}건</span>
+                                    {c.count > 0 && <ChevronRight className="w-3 h-3 text-gray-400" />}
+                                  </button>
                                 ))}
                               </div>
                               <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total}건 검사)</p>
@@ -1079,6 +1097,58 @@ export default function IcaoLdapSync() {
                         )}
                       </>
                     )}
+
+                    {detailTab === 'duplicates' && selectedHistory.existingSkipped > 0 && (
+                      <div className="space-y-4">
+                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Info className="w-4 h-4 text-amber-600" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                              이미 DB에 존재하는 인증서는 fingerprint(SHA-256) 기반으로 자동 건너뜁니다.
+                            </p>
+                          </div>
+                          <p className="text-xs text-amber-600 dark:text-amber-500">
+                            동기화 시 {selectedHistory.existingSkipped.toLocaleString()}건의 인증서가 기존 데이터와 중복되어 Skip 처리되었습니다.
+                          </p>
+                        </div>
+
+                        {/* Per-type skip breakdown */}
+                        {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
+                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">타입별 중복(Skip) 현황</p>
+                            <div className="space-y-2">
+                              {selectedHistory.typeStats.filter(ts => ts.skipped > 0).map((ts, i) => {
+                                const total = ts.total || 1;
+                                const skipPct = (ts.skipped / total * 100).toFixed(0);
+                                return (
+                                  <div key={i} className="flex items-center gap-3 text-xs">
+                                    <span className={`w-20 px-1.5 py-0.5 rounded text-center font-semibold ${
+                                      ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                      ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                      ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                    }`}>{ts.type}</span>
+                                    <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${skipPct}%` }} />
+                                    </div>
+                                    <span className="w-24 text-right text-gray-500">
+                                      <span className="font-bold text-amber-600">{ts.skipped.toLocaleString()}</span>
+                                      <span className="text-gray-400">/{ts.total.toLocaleString()}</span>
+                                    </span>
+                                    <span className="w-10 text-right text-gray-400">{skipPct}%</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="text-center p-4">
+                          <div className="text-3xl font-bold text-amber-600">{selectedHistory.existingSkipped.toLocaleString()}</div>
+                          <div className="text-xs text-gray-500 mt-1">총 중복 인증서 (Skip)</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
             <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
               <button onClick={() => setSelectedHistory(null)}
@@ -1087,6 +1157,80 @@ export default function IcaoLdapSync() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* ICAO Non-Compliant Certificate List Dialog */}
+      {ncDetail && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" onClick={() => setNcDetail(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                  ICAO Doc 9303 미준수 상세
+                </h2>
+                <p className="text-xs text-gray-400 mt-0.5">총 {ncDetail.total}건의 미준수 항목이 감지되었습니다</p>
+              </div>
+              <button onClick={() => setNcDetail(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Category header */}
+            <div className="px-5 py-3 bg-red-50 dark:bg-red-900/10 border-b border-red-200 dark:border-red-800 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-red-700 dark:text-red-400">{ncDetail.categoryLabel}</span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">{ncDetail.total}건</span>
+              </div>
+            </div>
+
+            {/* Certificate list */}
+            <div className="overflow-y-auto flex-1 p-0">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">국가</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">유형</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">Subject</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-500">유효기간</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ncDetail.items?.map((item: { fingerprint: string; country: string; certificateType: string; subjectDn: string; violations: string; notBefore: string; notAfter: string }, i: number) => (
+                    <tr key={i} className="border-t border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-3 py-2 font-semibold">{item.country}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          item.certificateType === 'CSCA' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                          item.certificateType === 'DSC' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
+                          'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>{item.certificateType}</span>
+                      </td>
+                      <td className="px-3 py-2 max-w-xs truncate text-gray-600 dark:text-gray-400" title={item.subjectDn}>{item.subjectDn}</td>
+                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                        {item.violations?.split('|').map((v: string, vi: number) => (
+                          <div key={vi} className="text-[10px] text-red-500">{v}</div>
+                        ))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
+              <button onClick={() => setNcDetail(null)}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                {t('sync:icaoLdap.close')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {ncLoading && (
+        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30">
+          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
         </div>
       )}
     </div>

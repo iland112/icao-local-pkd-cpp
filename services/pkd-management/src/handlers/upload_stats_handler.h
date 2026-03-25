@@ -111,6 +111,10 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
+    void handleGetIcaoNonCompliant(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
     /**
      * @brief GET /api/upload/history
      *

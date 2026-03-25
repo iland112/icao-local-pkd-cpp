@@ -99,6 +99,16 @@ void UploadStatsHandler::registerRoutes(drogon::HttpAppFramework& app) {
         {drogon::Get}
     );
 
+    // GET /api/upload/statistics/icao-noncompliant?category=keyUsage|algorithm|keySize|validityPeriod|extensions
+    app.registerHandler(
+        "/api/upload/statistics/icao-noncompliant",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handleGetIcaoNonCompliant(req, std::move(callback));
+        },
+        {drogon::Get}
+    );
+
     // GET /api/upload/history
     app.registerHandler(
         "/api/upload/history",
@@ -707,6 +717,96 @@ void UploadStatsHandler::handleProgressStatus(
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
     callback(resp);
+}
+
+// -----------------------------------------------------------------------------
+// GET /api/upload/statistics/icao-noncompliant?category=keyUsage|algorithm|keySize|validityPeriod|extensions&limit=200
+// -----------------------------------------------------------------------------
+
+void UploadStatsHandler::handleGetIcaoNonCompliant(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+
+    spdlog::info("GET /api/upload/statistics/icao-noncompliant");
+
+    try {
+        std::string category = req->getParameter("category");
+        int limit = 200;
+        if (auto l = req->getParameter("limit"); !l.empty()) {
+            limit = common::handler::safeStoi(l, 200, 1, 1000);
+        }
+
+        if (category.empty()) {
+            Json::Value err;
+            err["error"] = "category parameter required (keyUsage|algorithm|keySize|validityPeriod|extensions)";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        // Map category to DB column
+        std::string dbColumn;
+        std::string categoryLabel;
+        if (category == "keyUsage") { dbColumn = "icao_key_usage_compliant"; categoryLabel = "Key Usage"; }
+        else if (category == "algorithm") { dbColumn = "icao_algorithm_compliant"; categoryLabel = "Algorithm"; }
+        else if (category == "keySize") { dbColumn = "icao_key_size_compliant"; categoryLabel = "Key Size"; }
+        else if (category == "validityPeriod") { dbColumn = "icao_validity_period_compliant"; categoryLabel = "유효기간"; }
+        else if (category == "extensions") { dbColumn = "icao_extensions_compliant"; categoryLabel = "확장 필드"; }
+        else {
+            Json::Value err;
+            err["error"] = "Unknown category: " + category;
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string boolFalse = (dbType == "oracle") ? "0" : "false";
+
+        std::string sql =
+            "SELECT vr.certificate_id, vr.certificate_type, vr.country_code, "
+            "vr.subject_dn, vr.icao_violations, vr.icao_compliance_level, "
+            "vr.not_before, vr.not_after "
+            "FROM validation_result vr "
+            "WHERE vr." + dbColumn + " = " + boolFalse + " "
+            "ORDER BY vr.country_code, vr.certificate_type";
+
+        if (dbType == "oracle") {
+            sql += " FETCH FIRST " + std::to_string(limit) + " ROWS ONLY";
+        } else {
+            sql += " LIMIT " + std::to_string(limit);
+        }
+
+        auto rows = queryExecutor_->executeQuery(sql);
+
+        Json::Value result;
+        result["category"] = category;
+        result["categoryLabel"] = categoryLabel;
+        result["total"] = static_cast<int>(rows.size());
+
+        Json::Value items = Json::arrayValue;
+        for (const auto& row : rows) {
+            Json::Value item;
+            item["fingerprint"] = row.get("certificate_id", "").asString();
+            item["certificateType"] = row.get("certificate_type", "").asString();
+            item["country"] = row.get("country_code", "").asString();
+            item["subjectDn"] = row.get("subject_dn", "").asString();
+            item["violations"] = row.get("icao_violations", "").asString();
+            item["complianceLevel"] = row.get("icao_compliance_level", "").asString();
+            item["notBefore"] = row.get("not_before", "").asString();
+            item["notAfter"] = row.get("not_after", "").asString();
+            items.append(item);
+        }
+        result["items"] = items;
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        callback(common::handler::internalError("UploadStatsHandler::icaoNonCompliant", e));
+    }
 }
 
 } // namespace handlers
