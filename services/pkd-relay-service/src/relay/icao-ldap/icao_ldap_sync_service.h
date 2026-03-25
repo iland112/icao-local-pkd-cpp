@@ -19,6 +19,7 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <unordered_set>
 #include <functional>
 
 // Forward declare OpenSSL X509 type
@@ -138,6 +139,31 @@ private:
 
     /// Broadcast current progress via SSE
     void broadcastProgress(const IcaoLdapSyncProgress& progress);
+
+    // --- Performance optimization ---
+
+    /// P1: Load all fingerprints into memory at sync start
+    void loadFingerprintCache();
+    std::unordered_set<std::string> fingerprintCache_;
+
+    /// P0: Batch duplicate INSERT buffer
+    struct DuplicateEntry {
+        std::string certId;
+        std::string uploadId;
+        std::string sourceType;
+        std::string countryCode;
+    };
+    std::vector<DuplicateEntry> duplicateBatch_;
+    void flushDuplicateBatch();
+
+    /// P3: Batch validation result buffer
+    struct ValidationEntry {
+        std::string fingerprint;
+        IcaoLdapCertEntry entry;
+        std::vector<uint8_t> derData;
+    };
+    std::vector<ValidationEntry> validationBatch_;
+    void flushValidationBatch();
 
     std::atomic<bool> syncRunning_{false};
     mutable std::mutex resultMutex_;

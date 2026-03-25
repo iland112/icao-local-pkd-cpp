@@ -173,6 +173,9 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
         currentProgress_.totalRemoteCount = result.totalRemoteCount;
         spdlog::info("[IcaoLdapSync] Total entries in ICAO PKD: {}", result.totalRemoteCount);
 
+        // P1: Load fingerprint cache for O(1) duplicate check
+        loadFingerprintCache();
+
         // Sync helper lambda with per-entry progress broadcast
         int typeIndex = 0;
         bool syncAborted = false;
@@ -351,6 +354,11 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
         syncEntries("DSC", &IcaoLdapClient::searchDscCertificates);
         syncEntries("DSC_NC", &IcaoLdapClient::searchNcDscCertificates);
 
+        // Flush remaining batches
+        flushDuplicateBatch();
+        flushValidationBatch();
+        fingerprintCache_.clear(); // Free memory
+
         client.disconnect();
 
         if (syncAborted) {
@@ -421,28 +429,41 @@ IcaoLdapSyncService::EntryResult IcaoLdapSyncService::processEntry(const IcaoLda
     if (fingerprint.empty()) return EntryResult::FAILED;
 
     if (fingerprintExists(fingerprint)) {
-        // Record duplicate for tracking
-        saveDuplicateRecord(entry, fingerprint);
+        // P0: Batch duplicate recording (flush every 500)
+        // Look up certificate ID for duplicate tracking
+        try {
+            std::string idQuery = (entry.certType == "CRL")
+                ? "SELECT id FROM crl WHERE fingerprint_sha256 = $1"
+                : "SELECT id FROM certificate WHERE fingerprint_sha256 = $1";
+            auto idResult = queryExecutor_->executeQuery(idQuery, {fingerprint});
+            if (!idResult.empty()) {
+                std::string certId = idResult[0].get("id", "").asString();
+                if (!certId.empty()) {
+                    duplicateBatch_.push_back({certId, "ICAO_PKD_SYNC", "ICAO_PKD_SYNC", entry.countryCode});
+                    if (duplicateBatch_.size() >= 500) flushDuplicateBatch();
+                }
+            }
+        } catch (...) {}
         return EntryResult::SKIPPED;
     }
 
     bool saved = false;
     if (entry.certType == "CRL") {
         saved = saveCrlToDb(entry, fingerprint);
-        if (saved) saveCrlToLocalLdap(entry, fingerprint);
+        if (saved) {
+            saveCrlToLocalLdap(entry, fingerprint);
+            fingerprintCache_.insert(fingerprint); // Update cache
+        }
     } else {
         saved = saveCertificateToDb(entry, fingerprint);
         if (saved) {
             saveCertificateToLocalLdap(entry, fingerprint);
+            fingerprintCache_.insert(fingerprint); // Update cache
 
-            // Trust Chain validation for DSC certificates
+            // P3: Queue validation for batch processing (DSC/DSC_NC only)
             if (entry.certType == "DSC" || entry.certType == "DSC_NC") {
-                const uint8_t* p = entry.binaryData.data();
-                X509* cert = d2i_X509(nullptr, &p, static_cast<long>(entry.binaryData.size()));
-                if (cert) {
-                    validateAndSaveResult(entry, fingerprint, cert);
-                    X509_free(cert);
-                }
+                validationBatch_.push_back({fingerprint, entry, entry.binaryData});
+                if (validationBatch_.size() >= 100) flushValidationBatch();
             }
         }
     }
@@ -750,6 +771,83 @@ void IcaoLdapSyncService::saveDuplicateRecord(const IcaoLdapCertEntry& entry,
     }
 }
 
+// =============================================================================
+// P1: Fingerprint cache — load all fingerprints at sync start
+// =============================================================================
+
+void IcaoLdapSyncService::loadFingerprintCache() {
+    fingerprintCache_.clear();
+    if (!queryExecutor_) return;
+
+    try {
+        auto certResult = queryExecutor_->executeQuery(
+            "SELECT fingerprint_sha256 FROM certificate");
+        for (const auto& row : certResult) {
+            fingerprintCache_.insert(row.get("fingerprint_sha256", "").asString());
+        }
+
+        auto crlResult = queryExecutor_->executeQuery(
+            "SELECT fingerprint_sha256 FROM crl");
+        for (const auto& row : crlResult) {
+            fingerprintCache_.insert(row.get("fingerprint_sha256", "").asString());
+        }
+
+        spdlog::info("[IcaoLdapSync] Fingerprint cache loaded: {} entries", fingerprintCache_.size());
+    } catch (const std::exception& e) {
+        spdlog::error("[IcaoLdapSync] Failed to load fingerprint cache: {}", e.what());
+    }
+}
+
+// =============================================================================
+// P0: Batch duplicate INSERT
+// =============================================================================
+
+void IcaoLdapSyncService::flushDuplicateBatch() {
+    if (duplicateBatch_.empty() || !queryExecutor_) return;
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        for (const auto& dup : duplicateBatch_) {
+            std::string sql;
+            if (dbType == "oracle") {
+                sql = "INSERT INTO certificate_duplicates "
+                      "(id, certificate_id, upload_id, source_type, source_country, detected_at) "
+                      "VALUES (SEQ_CERT_DUPLICATES.NEXTVAL, $1, $2, $3, $4, "
+                      + common::db::currentTimestamp(dbType) + ")";
+            } else {
+                sql = "INSERT INTO certificate_duplicates "
+                      "(certificate_id, upload_id, source_type, source_country, detected_at) "
+                      "VALUES ($1, $2, $3, $4, NOW()) "
+                      "ON CONFLICT DO NOTHING";
+            }
+            queryExecutor_->executeQuery(sql, {
+                dup.certId, dup.uploadId, dup.sourceType, dup.countryCode
+            });
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[IcaoLdapSync] flushDuplicateBatch failed: {}", e.what());
+    }
+    duplicateBatch_.clear();
+}
+
+// =============================================================================
+// P3: Batch validation result flush
+// =============================================================================
+
+void IcaoLdapSyncService::flushValidationBatch() {
+    if (validationBatch_.empty()) return;
+
+    for (auto& ve : validationBatch_) {
+        const uint8_t* p = ve.derData.data();
+        X509* cert = d2i_X509(nullptr, &p, static_cast<long>(ve.derData.size()));
+        if (cert) {
+            validateAndSaveResult(ve.entry, ve.fingerprint, cert);
+            X509_free(cert);
+        }
+    }
+    validationBatch_.clear();
+}
+
 std::string IcaoLdapSyncService::computeFingerprint(const std::vector<uint8_t>& derData) const {
     unsigned char hash[EVP_MAX_MD_SIZE];
     unsigned int hashLen = 0;
@@ -774,24 +872,23 @@ std::string IcaoLdapSyncService::computeFingerprint(const std::vector<uint8_t>& 
 }
 
 bool IcaoLdapSyncService::fingerprintExists(const std::string& fingerprint) const {
-    if (!queryExecutor_) return false;
+    // P1: Use in-memory cache (loaded at sync start) — O(1) lookup, 0 DB queries
+    if (!fingerprintCache_.empty()) {
+        return fingerprintCache_.count(fingerprint) > 0;
+    }
 
+    // Fallback: DB query (only if cache not loaded)
+    if (!queryExecutor_) return false;
     try {
-        // Check certificate table
         auto result = queryExecutor_->executeQuery(
             "SELECT COUNT(*) AS cnt FROM certificate WHERE fingerprint_sha256 = $1",
             {fingerprint});
-        if (!result.empty() && common::db::scalarToInt(result[0]["cnt"]) > 0) {
-            return true;
-        }
+        if (!result.empty() && common::db::scalarToInt(result[0]["cnt"]) > 0) return true;
 
-        // Check CRL table
         auto crlResult = queryExecutor_->executeQuery(
             "SELECT COUNT(*) AS cnt FROM crl WHERE fingerprint_sha256 = $1",
             {fingerprint});
-        if (!crlResult.empty() && common::db::scalarToInt(crlResult[0]["cnt"]) > 0) {
-            return true;
-        }
+        if (!crlResult.empty() && common::db::scalarToInt(crlResult[0]["cnt"]) > 0) return true;
     } catch (const std::exception& e) {
         spdlog::warn("[IcaoLdapSync] fingerprintExists check failed: {}", e.what());
     }
