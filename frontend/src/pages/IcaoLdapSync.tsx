@@ -13,7 +13,7 @@ import {
   type IcaoLdapSyncProgress,
 } from '@/services/relayApi';
 import { uploadApi } from '@/services/api';
-import { uploadHistoryApi } from '@/services/pkdApi';
+import { IcaoViolationDetailDialog } from '@/components/IcaoViolationDetailDialog';
 
 const CERT_TYPES = ['CSCA', 'CRL', 'DSC', 'DSC_NC'] as const;
 
@@ -32,9 +32,8 @@ export default function IcaoLdapSync() {
   const [selectedHistory, setSelectedHistory] = useState<IcaoLdapSyncHistoryItem | null>(null);
   const [showSyncResult, setShowSyncResult] = useState(false);
   const [detailTab, setDetailTab] = useState<'summary' | 'doc9303' | 'duplicates'>('summary');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [ncDetail, setNcDetail] = useState<any>(null);
-  const [ncLoading, setNcLoading] = useState(false);
+  const [ncDialogOpen, setNcDialogOpen] = useState(false);
+  const [ncInitialCategory, setNcInitialCategory] = useState<string | undefined>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [certStats, setCertStats] = useState<any>(null);
   const [historyPage, setHistoryPage] = useState(0);
@@ -1063,14 +1062,10 @@ export default function IcaoLdapSync() {
                                   { label: '확장 필드', apiKey: 'extensions', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
                                 ].map(c => (
                                   <button key={c.label} disabled={c.count === 0}
-                                    onClick={async () => {
+                                    onClick={() => {
                                       if (c.count === 0) return;
-                                      setNcLoading(true);
-                                      try {
-                                        const res = await uploadHistoryApi.getIcaoNonCompliant(c.apiKey);
-                                        setNcDetail(res.data);
-                                      } catch { setNcDetail(null); }
-                                      setNcLoading(false);
+                                      setNcInitialCategory(c.apiKey);
+                                      setNcDialogOpen(true);
                                     }}
                                     className={`w-full flex items-center gap-3 text-xs rounded-lg px-2 py-1.5 transition-colors ${
                                       c.count > 0 ? 'hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-50 cursor-default'
@@ -1159,79 +1154,22 @@ export default function IcaoLdapSync() {
           </div>
         </div>
       )}
-      {/* ICAO Non-Compliant Certificate List Dialog */}
-      {ncDetail && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" onClick={() => setNcDetail(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-3xl mx-4 max-h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <div>
-                <h2 className="text-base font-bold flex items-center gap-2">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                  ICAO Doc 9303 미준수 상세
-                </h2>
-                <p className="text-xs text-gray-400 mt-0.5">총 {ncDetail.total}건의 미준수 항목이 감지되었습니다</p>
-              </div>
-              <button onClick={() => setNcDetail(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
-                <X className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-
-            {/* Category header */}
-            <div className="px-5 py-3 bg-red-50 dark:bg-red-900/10 border-b border-red-200 dark:border-red-800 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold text-red-700 dark:text-red-400">{ncDetail.categoryLabel}</span>
-                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">{ncDetail.total}건</span>
-              </div>
-            </div>
-
-            {/* Certificate list */}
-            <div className="overflow-y-auto flex-1 p-0">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-gray-50 dark:bg-gray-700">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">국가</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">유형</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">Subject</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-500">유효기간</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ncDetail.items?.map((item: { fingerprint: string; country: string; certificateType: string; subjectDn: string; violations: string; notBefore: string; notAfter: string }, i: number) => (
-                    <tr key={i} className="border-t border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-3 py-2 font-semibold">{item.country}</td>
-                      <td className="px-3 py-2">
-                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          item.certificateType === 'CSCA' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                          item.certificateType === 'DSC' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' :
-                          'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>{item.certificateType}</span>
-                      </td>
-                      <td className="px-3 py-2 max-w-xs truncate text-gray-600 dark:text-gray-400" title={item.subjectDn}>{item.subjectDn}</td>
-                      <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
-                        {item.violations?.split('|').map((v: string, vi: number) => (
-                          <div key={vi} className="text-[10px] text-red-500">{v}</div>
-                        ))}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="flex justify-end p-4 border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
-              <button onClick={() => setNcDetail(null)}
-                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                {t('sync:icaoLdap.close')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {ncLoading && (
-        <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/30">
-          <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
-        </div>
+      {/* ICAO Non-Compliant Detail Dialog (reuse existing component) */}
+      {certStats?.validation?.icao && (
+        <IcaoViolationDetailDialog
+          open={ncDialogOpen}
+          onClose={() => setNcDialogOpen(false)}
+          uploadId="ICAO_PKD_SYNC"
+          violations={{
+            ...(certStats.validation.icao.keyUsageFail > 0 ? { keyUsage: certStats.validation.icao.keyUsageFail } : {}),
+            ...(certStats.validation.icao.algorithmFail > 0 ? { algorithm: certStats.validation.icao.algorithmFail } : {}),
+            ...(certStats.validation.icao.keySizeFail > 0 ? { keySize: certStats.validation.icao.keySizeFail } : {}),
+            ...(certStats.validation.icao.validityPeriodFail > 0 ? { validityPeriod: certStats.validation.icao.validityPeriodFail } : {}),
+            ...(certStats.validation.icao.extensionsFail > 0 ? { extensions: certStats.validation.icao.extensionsFail } : {}),
+          }}
+          totalNonCompliantCount={certStats.validation.icao.nonCompliantCount + certStats.validation.icao.warningCount}
+          initialCategory={ncInitialCategory}
+        />
       )}
     </div>
   );
