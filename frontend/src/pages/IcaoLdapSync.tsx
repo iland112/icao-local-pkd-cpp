@@ -622,88 +622,117 @@ export default function IcaoLdapSync() {
 
             {/* Certificate Statistics (from /api/upload/statistics) */}
             {certStats && (
-              <div className="space-y-4 border-t border-gray-200 dark:border-gray-700 pt-4">
-                {/* Certificate Type Distribution */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">인증서 타입 분포</p>
-                  <div className="flex flex-wrap gap-2">
+              <div className="space-y-4">
+                {/* Section: 인증서 타입 분포 */}
+                <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                  <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5" /> 인증서 타입 분포
+                    <span className="ml-auto text-gray-400 font-normal">{certStats.totalCertificates?.toLocaleString()}건 · {certStats.countriesCount}개국</span>
+                  </p>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {[
-                      { label: 'CSCA (Self-Signed)', count: certStats.cscaBreakdown?.selfSigned, color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' },
-                      { label: 'CSCA (Link Cert)', count: certStats.cscaBreakdown?.linkCertificates, color: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300' },
-                      { label: 'MLSC', count: certStats.mlscCount, color: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300' },
-                      { label: 'DSC', count: certStats.dscCount, color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' },
-                      { label: 'CRL', count: certStats.crlCount, color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300' },
-                      { label: 'DSC_NC', count: certStats.dscNcCount, color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300' },
+                      { label: 'CSCA', sub: 'Self-Signed', count: certStats.cscaBreakdown?.selfSigned, color: 'border-blue-400 bg-blue-50 dark:bg-blue-900/20' },
+                      { label: 'CSCA', sub: 'Link Cert', count: certStats.cscaBreakdown?.linkCertificates, color: 'border-indigo-400 bg-indigo-50 dark:bg-indigo-900/20' },
+                      { label: 'MLSC', sub: '', count: certStats.mlscCount, color: 'border-cyan-400 bg-cyan-50 dark:bg-cyan-900/20' },
+                      { label: 'DSC', sub: '', count: certStats.dscCount, color: 'border-green-400 bg-green-50 dark:bg-green-900/20' },
+                      { label: 'CRL', sub: '', count: certStats.crlCount, color: 'border-orange-400 bg-orange-50 dark:bg-orange-900/20' },
+                      { label: 'DSC_NC', sub: '', count: certStats.dscNcCount, color: 'border-red-400 bg-red-50 dark:bg-red-900/20' },
                     ].filter(t => t.count > 0).map(t => (
-                      <span key={t.label} className={`px-2.5 py-1 rounded-full text-xs font-semibold ${t.color}`}>
-                        {t.count?.toLocaleString()} {t.label}
-                      </span>
+                      <div key={t.label + t.sub} className={`text-center p-2 rounded-lg border-l-3 border ${t.color}`}>
+                        <div className="text-sm font-bold">{t.count?.toLocaleString()}</div>
+                        <div className="text-[10px] text-gray-500">{t.label}</div>
+                        {t.sub && <div className="text-[9px] text-gray-400">{t.sub}</div>}
+                      </div>
                     ))}
-                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                      {certStats.countriesCount}개국
-                    </span>
                   </div>
                 </div>
 
-                {/* Trust Chain & Validation */}
-                {certStats.validation && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Trust Chain 검증</p>
-                      <div className="space-y-1.5">
+                {/* Section: Trust Chain 검증 + 유효기간 상태 */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Trust Chain */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5" /> Trust Chain 검증
+                    </p>
+                    {certStats.validation && (certStats.validation.validCount > 0 || certStats.validation.invalidCount > 0 || certStats.validation.pendingCount > 0) ? (
+                      <div className="space-y-2">
                         {[
-                          { label: 'VALID', count: certStats.validation.validCount, color: 'text-green-600' },
-                          { label: 'EXPIRED (유효)', count: certStats.validation.expiredValidCount, color: 'text-amber-600' },
-                          { label: 'INVALID', count: certStats.validation.invalidCount, color: 'text-red-600' },
-                          { label: 'PENDING', count: certStats.validation.pendingCount, color: 'text-gray-400' },
-                          { label: 'CSCA 미발견', count: certStats.validation.cscaNotFoundCount, color: 'text-yellow-600' },
-                        ].filter(v => v.count > 0).map(v => (
-                          <div key={v.label} className="flex items-center justify-between text-xs">
-                            <span className="text-gray-600 dark:text-gray-400">{v.label}</span>
-                            <span className={`font-bold ${v.color}`}>{v.count?.toLocaleString()}</span>
+                          { label: 'VALID', count: certStats.validation.validCount, color: 'text-green-600', bg: 'bg-green-500' },
+                          { label: 'EXPIRED_VALID', count: certStats.validation.expiredValidCount, color: 'text-amber-600', bg: 'bg-amber-500' },
+                          { label: 'INVALID', count: certStats.validation.invalidCount, color: 'text-red-600', bg: 'bg-red-500' },
+                          { label: 'PENDING', count: certStats.validation.pendingCount, color: 'text-gray-400', bg: 'bg-gray-400' },
+                        ].filter(v => v.count > 0).map(v => {
+                          const total = (certStats.validation.validCount || 0) + (certStats.validation.expiredValidCount || 0) +
+                                       (certStats.validation.invalidCount || 0) + (certStats.validation.pendingCount || 0) || 1;
+                          const pct = (v.count / total * 100).toFixed(0);
+                          return (
+                            <div key={v.label}>
+                              <div className="flex items-center justify-between text-xs mb-0.5">
+                                <span className={`font-semibold ${v.color}`}>{v.label}</span>
+                                <span className={`font-bold ${v.color}`}>{v.count?.toLocaleString()}</span>
+                              </div>
+                              <div className="h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                <div className={`h-full ${v.bg} rounded-full`} style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {certStats.validation.cscaNotFoundCount > 0 && (
+                          <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-200 dark:border-gray-600">
+                            <span className="text-yellow-600 font-medium">CSCA 미발견</span>
+                            <span className="font-bold text-yellow-600">{certStats.validation.cscaNotFoundCount?.toLocaleString()}</span>
                           </div>
-                        ))}
-                        {certStats.validation.validCount === 0 && certStats.validation.pendingCount === 0 && (
-                          <p className="text-xs text-gray-400 italic">검증 데이터 없음 (재동기화 필요)</p>
                         )}
                       </div>
-                    </div>
-
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">유효기간 상태</p>
-                      <div className="space-y-1.5">
-                        {(() => {
-                          const total = certStats.totalCertificates || 1;
-                          const expired = certStats.validation.expiredCount || 0;
-                          const valid = total - expired;
-                          const validPct = (valid / total * 100).toFixed(0);
-                          return (
-                            <>
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">유효</span>
-                                <span className="font-bold text-green-600">{valid.toLocaleString()}</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">만료</span>
-                                <span className="font-bold text-red-600">{expired.toLocaleString()}</span>
-                              </div>
-                              <div className="flex items-center justify-between text-xs">
-                                <span className="text-gray-600 dark:text-gray-400">폐기</span>
-                                <span className="font-bold text-orange-600">{(certStats.validation.revokedCount || 0).toLocaleString()}</span>
-                              </div>
-                              <div className="mt-1.5">
-                                <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-                                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${validPct}%` }} />
-                                </div>
-                                <p className="text-[10px] text-gray-400 mt-0.5 text-right">{validPct}% 유효</p>
-                              </div>
-                            </>
-                          );
-                        })()}
-                      </div>
-                    </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">검증 데이터 없음 — 전체 동기화 후 확인 가능</p>
+                    )}
                   </div>
-                )}
+
+                  {/* 유효기간 상태 */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                    <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" /> 유효기간 · 폐기 상태
+                    </p>
+                    {(() => {
+                      const v = certStats.validation || {};
+                      const validChain = v.validCount || 0;
+                      const expiredValid = v.expiredValidCount || 0;
+                      const revoked = v.revokedCount || 0;
+                      const hasData = validChain > 0 || expiredValid > 0;
+                      if (!hasData) return <p className="text-xs text-gray-400 italic">검증 데이터 없음 — 전체 동기화 후 확인 가능</p>;
+                      const total = validChain + expiredValid || 1;
+                      return (
+                        <div className="space-y-2">
+                          <div>
+                            <div className="flex items-center justify-between text-xs mb-0.5">
+                              <span className="font-semibold text-green-600">유효 (Trust Chain Valid)</span>
+                              <span className="font-bold text-green-600">{validChain.toLocaleString()}</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500 rounded-full" style={{ width: `${(validChain / total * 100).toFixed(0)}%` }} />
+                            </div>
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between text-xs mb-0.5">
+                              <span className="font-semibold text-amber-600">만료 (Expired but Valid)</span>
+                              <span className="font-bold text-amber-600">{expiredValid.toLocaleString()}</span>
+                            </div>
+                            <div className="h-1.5 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                              <div className="h-full bg-amber-500 rounded-full" style={{ width: `${(expiredValid / total * 100).toFixed(0)}%` }} />
+                            </div>
+                          </div>
+                          {revoked > 0 && (
+                            <div className="flex items-center justify-between text-xs pt-1 border-t border-gray-200 dark:border-gray-600">
+                              <span className="text-orange-600 font-medium">폐기 (Revoked)</span>
+                              <span className="font-bold text-orange-600">{revoked.toLocaleString()}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
             )}
           </div>
