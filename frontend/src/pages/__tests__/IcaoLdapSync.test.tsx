@@ -32,6 +32,27 @@ const mockTestIcaoLdapConnection = vi.fn();
 const mockGetIcaoLdapConfig = vi.fn();
 const mockUpdateIcaoLdapConfig = vi.fn();
 
+vi.mock('@/services/api', () => ({
+  uploadApi: {
+    getStatistics: vi.fn().mockResolvedValue({ data: {} }),
+  },
+}));
+
+vi.mock('@/services/pkdApi', () => ({
+  uploadHistoryApi: {
+    getIssues: vi.fn().mockResolvedValue({ data: { duplicates: [], totalDuplicates: 0 } }),
+    getIcaoNonCompliant: vi.fn().mockResolvedValue({ data: { items: [], total: 0 } }),
+  },
+}));
+
+vi.mock('@/components/IcaoViolationDetailDialog', () => ({
+  IcaoViolationDetailDialog: () => null,
+}));
+
+vi.mock('@/components/DuplicateCertificatesTree', () => ({
+  DuplicateCertificatesTree: () => null,
+}));
+
 vi.mock('@/services/relayApi', () => ({
   syncApi: {
     getIcaoLdapSyncStatus: (...args: unknown[]) => mockGetIcaoLdapSyncStatus(...args),
