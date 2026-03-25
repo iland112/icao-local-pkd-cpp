@@ -451,7 +451,7 @@ void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
                                                 const std::string& fingerprint,
                                                 X509* cert) {
     if (!validationRepo_ || !cert) {
-        if (!validationRepo_) spdlog::debug("[IcaoLdapSync] validateAndSaveResult skipped: validationRepo is null");
+        if (!validationRepo_) spdlog::warn("[IcaoLdapSync] validateAndSaveResult skipped: validationRepo is null (first call only)");
         return;
     }
 
@@ -511,33 +511,47 @@ void IcaoLdapSyncService::validateAndSaveResult(const IcaoLdapCertEntry& entry,
         }
 
         // Save to validation_result table
+        bool trustChainValid = (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID");
+
+        // Extract subject/issuer from cert for validation_result
+        char vrSubject[512] = {0}, vrIssuer[512] = {0};
+        X509_NAME_oneline(X509_get_subject_name(cert), vrSubject, sizeof(vrSubject));
+        X509_NAME_oneline(X509_get_issuer_name(cert), vrIssuer, sizeof(vrIssuer));
+
         std::string sql;
         if (dbType == "oracle") {
             sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
-                  "validation_status, trust_chain_message, csca_found, "
-                  "trust_chain_path, created_at) "
-                  "VALUES (SYS_GUID(), $1, $2, $3, $4, "
-                  + common::db::boolLiteral(dbType, cscaFound) + ", $5, "
+                  "certificate_type, country_code, subject_dn, issuer_dn, "
+                  "validation_status, trust_chain_valid, trust_chain_message, csca_found, "
+                  "validation_timestamp) "
+                  "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, "
+                  + common::db::boolLiteral(dbType, trustChainValid) + ", $8, "
+                  + common::db::boolLiteral(dbType, cscaFound) + ", "
                   + common::db::currentTimestamp(dbType) + ")";
         } else {
             sql = "INSERT INTO validation_result (id, certificate_id, upload_id, "
-                  "validation_status, trust_chain_message, csca_found, "
-                  "trust_chain_path, created_at) "
-                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW()) "
+                  "certificate_type, country_code, subject_dn, issuer_dn, "
+                  "validation_status, trust_chain_valid, trust_chain_message, csca_found, "
+                  "validation_timestamp) "
+                  "VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW()) "
                   "ON CONFLICT (certificate_id, upload_id) DO NOTHING";
         }
 
         std::vector<std::string> params = {
-            fingerprint,                              // certificate_id
-            std::string("ICAO_PKD_SYNC"),            // upload_id (marker)
-            validationStatus,
-            validationMessage,
-            trustChainPath.empty() ? validationStatus : trustChainPath
+            fingerprint,                              // $1 certificate_id
+            std::string("ICAO_PKD_SYNC"),            // $2 upload_id
+            entry.certType,                           // $3 certificate_type
+            entry.countryCode,                        // $4 country_code
+            std::string(vrSubject),                   // $5 subject_dn
+            std::string(vrIssuer),                    // $6 issuer_dn
+            validationStatus,                         // $7 validation_status
         };
-        // PostgreSQL: $5=csca_found bool, $6=trust_chain_path (Oracle uses boolLiteral in SQL)
-        if (dbType != "oracle") {
-            // Insert csca_found before trust_chain_path
-            params.insert(params.begin() + 4, cscaFound ? "true" : "false");
+        if (dbType == "oracle") {
+            params.push_back(validationMessage);      // $8 trust_chain_message
+        } else {
+            params.push_back(trustChainValid ? "true" : "false"); // $8
+            params.push_back(validationMessage);      // $9
+            params.push_back(cscaFound ? "true" : "false"); // $10
         }
         queryExecutor_->executeQuery(sql, params);
 
