@@ -43,13 +43,16 @@
 
 ## ICAO PKD LDAP 동기화 파이프라인
 
-ML → CSCA 추출 → DSC → CRL → DSC_NC (5단계)
+ML→CSCA → **CRL** → DSC(Trust Chain+CRL+Doc9303) → DSC_NC (4단계)
 - `IcaoLdapClient`: Simple Bind / TLS + SASL EXTERNAL 이중 모드, `lastError()` 상세 에러 메시지
-- fingerprint 중복 체크 → X.509 메타데이터 22개 추출 → Trust Chain 검증 → DB/LDAP 저장
+- fingerprint 캐시(`unordered_set`) → X.509 메타데이터 22개 추출 → Trust Chain+CRL+ICAO 검증 → DB/LDAP 저장
 - Master List CMS SignedData에서 CSCA/MLSC 추출 (ICAO PKD DIT에 o=csca 없음)
 - `processEntry()` → `EntryResult(NEW/SKIPPED/FAILED)` 3-state — 실패 정확 카운트
+- `validateAndSaveResult`: Trust Chain + CRL 폐기 + ICAO Doc 9303 검사 → validation_result 28개 컬럼
 - 연속 50건 실패 시 자동 중단, 재시작 시 fingerprint 기반 자동 resume
+- **성능**: fingerprint 캐시 + duplicate 배치(500건) + validation 배치(100건) → 전체 skip 2.9분
 - 연결 테스트: TLS 인증서 정보(Subject/Issuer/만료일) 반환
+- 중복 인증서: `certificate_duplicates` 테이블에 기록 (배치 flush)
 
 ## 코드 구조
 

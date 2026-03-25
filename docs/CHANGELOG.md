@@ -1,7 +1,7 @@
 # ICAO Local PKD - Changelog
 
 **Current Version**: v2.40.0
-**Last Updated**: 2026-03-24
+**Last Updated**: 2026-03-25
 
 이 파일은 루트 CLAUDE.md에서 분리된 전체 버전 이력입니다.
 
@@ -9,7 +9,7 @@
 
 ## Version History
 
-### v2.40.0 (2026-03-24) - 권한 구조 5그룹 개편 + ICAO LDAP TLS Private CA 통합
+### v2.40.0 (2026-03-25) - 권한 구조 개편 + ICAO LDAP 동기화 전면 개선 + 성능 10x
 
 - **권한 그룹 5그룹 개편** (4→5): ICAO 연계, PKD 관리, 위·변조 검사, 보고서 & 분석, 시스템 관리
   - "인증서 관리" → "PKD 관리" 리네이밍 (사이드바 + 권한 설정)
@@ -30,8 +30,36 @@
   - 재시작 시 fingerprint 기반 자동 resume (이미 저장된 인증서 자동 skip)
   - SSE 프로그래스에 실패 건수 실시간 표시, FAILED 상태에서 "동기화 재시작" 버튼
 - **연결 테스트 TLS 인증서 정보 표시**: 클라이언트/CA 인증서 Subject, Issuer, 만료일
+- **ICAO LDAP 동기화 파이프라인 전면 개선**
+  - 동기화 순서 변경: CSCA → **CRL** → DSC → DSC_NC (CRL을 DSC 전에 로드하여 Trust Chain+CRL 검사 가능)
+  - Oracle TIMESTAMP 호환: `ASN1_TIME_print` → ISO 8601 형식 변환
+  - CRL 저장: `issuer_dn`, `this_update`, `next_update`, `crl_number` 메타데이터 추출
+  - `fingerprintExists()`: certificate + CRL 테이블 모두 체크
+  - LDAP idle timeout 방지: 타입별 disconnect/reconnect
+  - SSE 프로그래스 COMPLETED를 노티피케이션 전에 브로드캐스트
+  - healthcheck retries 3 → 10 (장시간 동기화 중 재시작 방지)
+- **ICAO Doc 9303 준수 검사 통합**
+  - `icao::validation::checkIcaoCompliance()` shared lib으로 이동 (PKD Management + PKD Relay 공유)
+  - 6개 검사: Key Usage, Algorithm, Key Size, Validity Period, DN Format, Extensions
+  - `validateAndSaveResult`: validation_result 28개 컬럼 채우기 (Trust Chain + ICAO + 유효기간 + 폐기)
+  - 통계 API: `validation.icao` (compliant/nonCompliant/warning + 카테고리별 실패 수)
+  - 통계 API: `validation.certValidCount/certExpiredCount` (certificate.not_after 기반 정확한 만료 수)
+- **동기화 결과 상세 UI**
+  - 동기화 완료 시 결과 요약 카드 (통계 + 타입별 테이블 + Trust Chain + 유효기간 + ICAO Doc 9303)
+  - 동기화 상세 다이얼로그: 3탭 구조 (상세 정보 / Doc 9303 검사 / 중복 인증서)
+  - Doc 9303 카테고리 클릭 → `IcaoViolationDetailDialog` 재사용 (미준수 인증서 목록)
+  - 중복 인증서 탭: `DuplicateCertificatesTree` 재사용 (국가별 트리뷰)
+  - API: `GET /api/upload/statistics/icao-noncompliant?category=keyUsage|algorithm|...`
+- **동기화 중복 인증서 기록**: skip 시 `certificate_duplicates` 테이블에 기록
+- **동기화 성능 10x 개선** (29분 → 2.9분)
+  - P1: fingerprint 캐시 — `unordered_set`에 전체 23,905건 로드, DB 쿼리 0회
+  - P0: duplicate 배치 INSERT — 500건씩 flush
+  - P3: validation 배치 처리 — 100건씩 flush
+- **clean-and-init**: ICAO sim LDAP 자동 초기화 (DIT 생성 + LDIF 데이터 로드 + 재시도)
 - **빌드 개선**: `tsconfig.app.json`에서 테스트 파일 제외 (빌드 시 TS 에러 방지)
+- **i18n**: 동기화 결과 섹션 ko/en 번역 키 26개 추가
 - Docker/Podman compose 동기화 완료
+- 30+ 커밋, ~80 파일 변경
 
 ### v2.39.0 (2026-03-22) - ICAO PKD LDAP 자동 동기화 + CSR 기반 TLS 인증서 발급
 

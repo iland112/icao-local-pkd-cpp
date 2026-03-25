@@ -2412,6 +2412,59 @@ paths:
         '200':
           description: Revalidation started
 
+  /api/upload/statistics/icao-noncompliant:
+    get:
+      tags: [Upload Management]
+      summary: Get ICAO Doc 9303 non-compliant certificates by category
+      operationId: getIcaoNonCompliant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [keyUsage, algorithm, keySize, validityPeriod, extensions]
+          description: ICAO compliance check category
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 200
+          description: Maximum results
+      responses:
+        '200':
+          description: Non-compliant certificate list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  category:
+                    type: string
+                  categoryLabel:
+                    type: string
+                  total:
+                    type: integer
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        fingerprint:
+                          type: string
+                        certificateType:
+                          type: string
+                        country:
+                          type: string
+                        subjectDn:
+                          type: string
+                        violations:
+                          type: string
+                        complianceLevel:
+                          type: string
+
 components:
   securitySchemes:
     bearerAuth:

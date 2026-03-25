@@ -17,7 +17,8 @@
 - `GET /api/upload/detail/{id}` — 업로드 상세
 - `POST /api/upload/{id}/retry` — 실패 업로드 재시도 (FAILED only, resume mode)
 - `DELETE /api/upload/{id}` — 업로드 삭제
-- `GET /api/upload/statistics` — 업로드 통계
+- `GET /api/upload/statistics` — 업로드 통계 (validation.icao, certValidCount/certExpiredCount 포함)
+- `GET /api/upload/statistics/icao-noncompliant?category=keyUsage|algorithm|keySize|validityPeriod|extensions` — ICAO 미준수 인증서 목록
 - `GET /api/upload/countries` — 국가 통계
 - `GET /api/upload/countries/detailed` — 국가별 상세
 - `GET /api/upload/changes` — 최근 변경
