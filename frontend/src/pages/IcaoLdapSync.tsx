@@ -905,7 +905,8 @@ export default function IcaoLdapSync() {
                 { key: 'doc9303' as const, label: 'Doc 9303 검사' },
                 ...(selectedHistory.existingSkipped > 0 ? [{
                   key: 'duplicates' as const,
-                  label: `중복 인증서 ${selectedHistory.existingSkipped.toLocaleString()}`
+                  label: '중복 인증서',
+                  badge: selectedHistory.existingSkipped,
                 }] : []),
               ].map(tab => (
                 <button key={tab.key}
@@ -924,6 +925,11 @@ export default function IcaoLdapSync() {
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}>
                   {tab.label}
+                  {'badge' in tab && tab.badge != null && (
+                    <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                      {(tab.badge as number).toLocaleString()}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
