@@ -106,6 +106,9 @@ private:
     /// Returns number of new CSCAs extracted and saved
     int processMasterListEntry(const IcaoLdapCertEntry& mlEntry);
 
+    /// Record duplicate certificate (already exists in DB)
+    void saveDuplicateRecord(const IcaoLdapCertEntry& entry, const std::string& fingerprint);
+
     /// Save CRL to local DB
     bool saveCrlToDb(const IcaoLdapCertEntry& entry, const std::string& fingerprint);
 

@@ -14,6 +14,8 @@ import {
 } from '@/services/relayApi';
 import { uploadApi } from '@/services/api';
 import { IcaoViolationDetailDialog } from '@/components/IcaoViolationDetailDialog';
+import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
+import { uploadHistoryApi } from '@/services/pkdApi';
 
 const CERT_TYPES = ['CSCA', 'CRL', 'DSC', 'DSC_NC'] as const;
 
@@ -34,6 +36,8 @@ export default function IcaoLdapSync() {
   const [detailTab, setDetailTab] = useState<'summary' | 'doc9303' | 'duplicates'>('summary');
   const [ncDialogOpen, setNcDialogOpen] = useState(false);
   const [ncInitialCategory, setNcInitialCategory] = useState<string | undefined>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [duplicates, setDuplicates] = useState<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [certStats, setCertStats] = useState<any>(null);
   const [historyPage, setHistoryPage] = useState(0);
@@ -899,10 +903,21 @@ export default function IcaoLdapSync() {
               {[
                 { key: 'summary' as const, label: '상세 정보' },
                 { key: 'doc9303' as const, label: 'Doc 9303 검사' },
-                ...(selectedHistory.existingSkipped > 0 ? [{ key: 'duplicates' as const, label: `중복 인증서 ${selectedHistory.existingSkipped.toLocaleString()}` }] : []),
+                ...(selectedHistory.existingSkipped > 0 ? [{
+                  key: 'duplicates' as const,
+                  label: `중복 인증서 ${selectedHistory.existingSkipped.toLocaleString()}`
+                }] : []),
               ].map(tab => (
                 <button key={tab.key}
-                  onClick={() => setDetailTab(tab.key)}
+                  onClick={() => {
+                    setDetailTab(tab.key);
+                    if (tab.key === 'duplicates' && duplicates.length === 0) {
+                      uploadHistoryApi.getIssues('ICAO_PKD_SYNC').then(r => {
+                        const d = r.data;
+                        setDuplicates(Array.isArray(d) ? d : (d as { duplicates?: unknown[] })?.duplicates || []);
+                      }).catch(() => {});
+                    }
+                  }}
                   className={`px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
                     detailTab === tab.key
                       ? 'border-blue-500 text-blue-600 dark:text-blue-400'
@@ -1095,53 +1110,54 @@ export default function IcaoLdapSync() {
 
                     {detailTab === 'duplicates' && selectedHistory.existingSkipped > 0 && (
                       <div className="space-y-4">
-                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                          <div className="flex items-center gap-2 mb-2">
-                            <Info className="w-4 h-4 text-amber-600" />
-                            <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                              이미 DB에 존재하는 인증서는 fingerprint(SHA-256) 기반으로 자동 건너뜁니다.
-                            </p>
-                          </div>
-                          <p className="text-xs text-amber-600 dark:text-amber-500">
-                            동기화 시 {selectedHistory.existingSkipped.toLocaleString()}건의 인증서가 기존 데이터와 중복되어 Skip 처리되었습니다.
-                          </p>
-                        </div>
-
-                        {/* Per-type skip breakdown */}
-                        {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
-                          <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-                            <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">타입별 중복(Skip) 현황</p>
-                            <div className="space-y-2">
-                              {selectedHistory.typeStats.filter(ts => ts.skipped > 0).map((ts, i) => {
-                                const total = ts.total || 1;
-                                const skipPct = (ts.skipped / total * 100).toFixed(0);
-                                return (
-                                  <div key={i} className="flex items-center gap-3 text-xs">
-                                    <span className={`w-20 px-1.5 py-0.5 rounded text-center font-semibold ${
-                                      ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
-                                      ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
-                                      ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
-                                      'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
-                                    }`}>{ts.type}</span>
-                                    <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-                                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${skipPct}%` }} />
-                                    </div>
-                                    <span className="w-24 text-right text-gray-500">
-                                      <span className="font-bold text-amber-600">{ts.skipped.toLocaleString()}</span>
-                                      <span className="text-gray-400">/{ts.total.toLocaleString()}</span>
-                                    </span>
-                                    <span className="w-10 text-right text-gray-400">{skipPct}%</span>
-                                  </div>
-                                );
-                              })}
+                        {duplicates.length > 0 ? (
+                          <DuplicateCertificatesTree duplicates={duplicates} />
+                        ) : (
+                          <>
+                            <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
+                              <div className="flex items-center gap-2 mb-2">
+                                <Info className="w-4 h-4 text-amber-600" />
+                                <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                                  동기화 시 {selectedHistory.existingSkipped.toLocaleString()}건의 인증서가 기존 데이터와 중복되어 Skip 처리되었습니다.
+                                </p>
+                              </div>
+                              <p className="text-xs text-amber-600 dark:text-amber-500">
+                                중복 상세 데이터를 불러오는 중이거나, 전체 동기화 후 확인 가능합니다.
+                              </p>
                             </div>
-                          </div>
-                        )}
 
-                        <div className="text-center p-4">
-                          <div className="text-3xl font-bold text-amber-600">{selectedHistory.existingSkipped.toLocaleString()}</div>
-                          <div className="text-xs text-gray-500 mt-1">총 중복 인증서 (Skip)</div>
-                        </div>
+                            {/* Per-type skip breakdown */}
+                            {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
+                              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+                                <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">타입별 중복(Skip) 현황</p>
+                                <div className="space-y-2">
+                                  {selectedHistory.typeStats.filter(ts => ts.skipped > 0).map((ts, i) => {
+                                    const total = ts.total || 1;
+                                    const skipPct = (ts.skipped / total * 100).toFixed(0);
+                                    return (
+                                      <div key={i} className="flex items-center gap-3 text-xs">
+                                        <span className={`w-20 px-1.5 py-0.5 rounded text-center font-semibold ${
+                                          ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                          ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                          ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+                                          'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                        }`}>{ts.type}</span>
+                                        <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+                                          <div className="h-full bg-amber-400 rounded-full" style={{ width: `${skipPct}%` }} />
+                                        </div>
+                                        <span className="w-24 text-right text-gray-500">
+                                          <span className="font-bold text-amber-600">{ts.skipped.toLocaleString()}</span>
+                                          <span className="text-gray-400">/{ts.total.toLocaleString()}</span>
+                                        </span>
+                                        <span className="w-10 text-right text-gray-400">{skipPct}%</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
