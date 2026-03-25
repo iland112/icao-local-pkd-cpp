@@ -547,6 +547,22 @@ Json::Value UploadRepository::getStatisticsSummary()
             validation["revokedCount"] = common::db::getInt(validationResult[0], "revoked_count", 0);
         }
 
+        // Get certificate expiry stats from certificate.not_after (actual expiry, not validation_result)
+        std::string expiryQuery = (dbType == "oracle")
+            ? "SELECT "
+              "COALESCE(SUM(CASE WHEN not_after >= SYSTIMESTAMP THEN 1 ELSE 0 END), 0) as cert_valid, "
+              "COALESCE(SUM(CASE WHEN not_after < SYSTIMESTAMP THEN 1 ELSE 0 END), 0) as cert_expired "
+              "FROM certificate WHERE not_after IS NOT NULL"
+            : "SELECT "
+              "COALESCE(SUM(CASE WHEN not_after >= NOW() THEN 1 ELSE 0 END), 0) as cert_valid, "
+              "COALESCE(SUM(CASE WHEN not_after < NOW() THEN 1 ELSE 0 END), 0) as cert_expired "
+              "FROM certificate WHERE not_after IS NOT NULL";
+        Json::Value expiryResult = queryExecutor_->executeQuery(expiryQuery);
+        if (!expiryResult.empty()) {
+            validation["certValidCount"] = common::db::getInt(expiryResult[0], "cert_valid", 0);
+            validation["certExpiredCount"] = common::db::getInt(expiryResult[0], "cert_expired", 0);
+        }
+
         // Get trust chain path distribution (GROUP BY trust_chain_message)
         std::string chainPathQuery;
         if (dbType == "oracle") {
