@@ -710,59 +710,43 @@ void IcaoLdapSyncService::saveDuplicateRecord(const IcaoLdapCertEntry& entry,
     if (!queryExecutor_) return;
 
     try {
-        // Parse cert to get subject/issuer/serial (lightweight, no validation)
-        std::string subjectDn, issuerDn, serialNumber;
-        if (entry.certType != "CRL" && !entry.binaryData.empty()) {
-            const uint8_t* p = entry.binaryData.data();
-            X509* cert = d2i_X509(nullptr, &p, static_cast<long>(entry.binaryData.size()));
-            if (cert) {
-                char buf[512] = {0};
-                X509_NAME_oneline(X509_get_subject_name(cert), buf, sizeof(buf));
-                subjectDn = buf;
-                X509_NAME_oneline(X509_get_issuer_name(cert), buf, sizeof(buf));
-                issuerDn = buf;
-                ASN1_INTEGER* serial = X509_get_serialNumber(cert);
-                if (serial) {
-                    BIGNUM* bn = ASN1_INTEGER_to_BN(serial, nullptr);
-                    if (bn) {
-                        char* hex = BN_bn2hex(bn);
-                        if (hex) { serialNumber = hex; OPENSSL_free(hex); }
-                        BN_free(bn);
-                    }
-                }
-                X509_free(cert);
-            }
-        }
-
         std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Look up certificate.id from fingerprint (certificate_duplicates uses certificate.id as FK)
+        std::string certIdQuery = (entry.certType == "CRL")
+            ? "SELECT id FROM crl WHERE fingerprint_sha256 = $1"
+            : "SELECT id FROM certificate WHERE fingerprint_sha256 = $1";
+
+        auto idResult = queryExecutor_->executeQuery(certIdQuery, {fingerprint});
+        if (idResult.empty()) return;
+        std::string certId = idResult[0].get("id", "").asString();
+        if (certId.empty()) return;
+
+        // Insert into certificate_duplicates (same table as upload issues API)
         std::string sql;
         if (dbType == "oracle") {
-            sql = "INSERT INTO duplicate_certificate "
-                  "(id, upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
-                  "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
-                  "VALUES (SYS_GUID(), $1, $2, $3, $4, $5, $6, $7, $8, 1, "
-                  + common::db::currentTimestamp(dbType) + ")";
+            sql = "INSERT INTO certificate_duplicates "
+                  "(id, certificate_id, upload_id, source_type, source_country, detected_at) "
+                  "VALUES (SEQ_CERT_DUPLICATES.NEXTVAL, $1, $2, $3, $4, " + common::db::currentTimestamp(dbType) + ")";
         } else {
-            sql = "INSERT INTO duplicate_certificate "
-                  "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
-                  "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
-                  "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, NOW()) "
-                  "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) DO NOTHING";
+            sql = "INSERT INTO certificate_duplicates "
+                  "(certificate_id, upload_id, source_type, source_country, detected_at) "
+                  "VALUES ($1, $2, $3, $4, NOW()) "
+                  "ON CONFLICT DO NOTHING";
         }
 
         queryExecutor_->executeQuery(sql, {
-            std::string("ICAO_PKD_SYNC"),   // upload_id
-            std::string("EXISTING"),        // first_upload_id (already in DB)
-            fingerprint,
-            entry.certType,
-            subjectDn,
-            issuerDn,
-            entry.countryCode,
-            serialNumber
+            certId,
+            std::string("ICAO_PKD_SYNC"),
+            std::string("ICAO_PKD_SYNC"),
+            entry.countryCode
         });
     } catch (const std::exception& e) {
-        // Non-fatal: duplicate tracking is best-effort
-        spdlog::debug("[IcaoLdapSync] saveDuplicateRecord failed: {}", e.what());
+        // Non-fatal but log for debugging
+        static int dupErrorCount = 0;
+        if (dupErrorCount++ < 3) {
+            spdlog::warn("[IcaoLdapSync] saveDuplicateRecord failed: {}", e.what());
+        }
     }
 }
 
