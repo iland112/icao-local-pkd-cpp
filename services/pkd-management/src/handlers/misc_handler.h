@@ -101,19 +101,7 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
-    /**
-     * @brief GET /api/pa/statistics - PA statistics (mock response)
-     */
-    void handlePaStatistics(
-        const drogon::HttpRequestPtr& req,
-        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
-
-    /**
-     * @brief POST /api/pa/verify - PA verification (mock response)
-     */
-    void handlePaVerify(
-        const drogon::HttpRequestPtr& req,
-        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+    // PA mock endpoints removed — PA Service (port 8082) handles these
 
     /**
      * @brief GET /api/ldap/health - LDAP health check (for frontend Dashboard)
@@ -122,12 +110,6 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
-    /**
-     * @brief GET /api/pa/history - PA history (mock response)
-     */
-    void handlePaHistory(
-        const drogon::HttpRequestPtr& req,
-        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
     /**
      * @brief GET / - Root info endpoint

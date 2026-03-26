@@ -92,25 +92,7 @@ void MiscHandler::registerRoutes(drogon::HttpAppFramework& app) {
         {drogon::Post, drogon::Get}
     );
 
-    // GET /api/pa/statistics
-    app.registerHandler(
-        "/api/pa/statistics",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handlePaStatistics(req, std::move(callback));
-        },
-        {drogon::Get}
-    );
-
-    // POST /api/pa/verify
-    app.registerHandler(
-        "/api/pa/verify",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handlePaVerify(req, std::move(callback));
-        },
-        {drogon::Post}
-    );
+    // PA mock endpoints removed — PA Service (port 8082) handles /api/pa/*
 
     // GET /api/ldap/health
     app.registerHandler(
@@ -118,16 +100,6 @@ void MiscHandler::registerRoutes(drogon::HttpAppFramework& app) {
         [this](const drogon::HttpRequestPtr& req,
                std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             handleLdapHealth(req, std::move(callback));
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/pa/history
-    app.registerHandler(
-        "/api/pa/history",
-        [this](const drogon::HttpRequestPtr& req,
-               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            handlePaHistory(req, std::move(callback));
         },
         {drogon::Get}
     );
@@ -287,91 +259,6 @@ void MiscHandler::handleRevalidate(
     }
 }
 
-void MiscHandler::handlePaStatistics(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-
-    spdlog::info("GET /api/pa/statistics");
-
-    // Return PAStatisticsOverview format matching frontend expectations
-    Json::Value result;
-    result["totalVerifications"] = 0;
-    result["validCount"] = 0;
-    result["invalidCount"] = 0;
-    result["errorCount"] = 0;
-    result["averageProcessingTimeMs"] = 0;
-    result["countriesVerified"] = 0;
-
-    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-    callback(resp);
-}
-
-void MiscHandler::handlePaVerify(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-
-    spdlog::info("POST /api/pa/verify - Passive Authentication verification");
-
-    // Mock response for PA verification
-    Json::Value result;
-    result["success"] = true;
-
-    Json::Value data;
-    data["id"] = "pa-" + std::to_string(std::time(nullptr));
-    data["status"] = "VALID";
-    data["overallValid"] = true;
-    data["verifiedAt"] = trantor::Date::now().toFormattedString(false);
-    data["processingTimeMs"] = 150;
-
-    // Step results
-    Json::Value sodParsing;
-    sodParsing["step"] = "SOD_PARSING";
-    sodParsing["status"] = "SUCCESS";
-    sodParsing["message"] = "SOD 파싱 완료";
-    data["sodParsing"] = sodParsing;
-
-    Json::Value dscExtraction;
-    dscExtraction["step"] = "DSC_EXTRACTION";
-    dscExtraction["status"] = "SUCCESS";
-    dscExtraction["message"] = "DSC 인증서 추출 완료";
-    data["dscExtraction"] = dscExtraction;
-
-    Json::Value cscaLookup;
-    cscaLookup["step"] = "CSCA_LOOKUP";
-    cscaLookup["status"] = "SUCCESS";
-    cscaLookup["message"] = "CSCA 인증서 조회 완료";
-    data["cscaLookup"] = cscaLookup;
-
-    Json::Value trustChainValidation;
-    trustChainValidation["step"] = "TRUST_CHAIN_VALIDATION";
-    trustChainValidation["status"] = "SUCCESS";
-    trustChainValidation["message"] = "Trust Chain 검증 완료";
-    data["trustChainValidation"] = trustChainValidation;
-
-    Json::Value sodSignatureValidation;
-    sodSignatureValidation["step"] = "SOD_SIGNATURE_VALIDATION";
-    sodSignatureValidation["status"] = "SUCCESS";
-    sodSignatureValidation["message"] = "SOD 서명 검증 완료";
-    data["sodSignatureValidation"] = sodSignatureValidation;
-
-    Json::Value dataGroupHashValidation;
-    dataGroupHashValidation["step"] = "DATA_GROUP_HASH_VALIDATION";
-    dataGroupHashValidation["status"] = "SUCCESS";
-    dataGroupHashValidation["message"] = "Data Group 해시 검증 완료";
-    data["dataGroupHashValidation"] = dataGroupHashValidation;
-
-    Json::Value crlCheck;
-    crlCheck["step"] = "CRL_CHECK";
-    crlCheck["status"] = "SUCCESS";
-    crlCheck["message"] = "CRL 확인 완료 - 인증서 유효";
-    data["crlCheck"] = crlCheck;
-
-    result["data"] = data;
-
-    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-    resp->setStatusCode(drogon::k200OK);
-    callback(resp);
-}
 
 void MiscHandler::handleLdapHealth(
     const drogon::HttpRequestPtr& req,
@@ -386,35 +273,6 @@ void MiscHandler::handleLdapHealth(
     callback(resp);
 }
 
-void MiscHandler::handlePaHistory(
-    const drogon::HttpRequestPtr& req,
-    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-
-    spdlog::info("GET /api/pa/history");
-
-    // Get query parameters
-    int page = 0;
-    int size = 20;
-    if (auto p = req->getParameter("page"); !p.empty()) {
-        page = std::stoi(p);
-    }
-    if (auto s = req->getParameter("size"); !s.empty()) {
-        size = std::stoi(s);
-    }
-
-    // Return PageResponse format matching frontend expectations
-    Json::Value result;
-    result["content"] = Json::Value(Json::arrayValue);
-    result["page"] = page;
-    result["size"] = size;
-    result["totalElements"] = 0;
-    result["totalPages"] = 0;
-    result["first"] = true;
-    result["last"] = true;
-
-    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-    callback(resp);
-}
 
 void MiscHandler::handleRoot(
     const drogon::HttpRequestPtr& req,
@@ -485,23 +343,6 @@ void MiscHandler::handleApiInfo(
     uploadStats["description"] = "Get upload statistics";
     endpoints.append(uploadStats);
 
-    Json::Value paVerify;
-    paVerify["method"] = "POST";
-    paVerify["path"] = "/api/pa/verify";
-    paVerify["description"] = "Perform Passive Authentication";
-    endpoints.append(paVerify);
-
-    Json::Value paHistory;
-    paHistory["method"] = "GET";
-    paHistory["path"] = "/api/pa/history";
-    paHistory["description"] = "Get PA verification history";
-    endpoints.append(paHistory);
-
-    Json::Value paStats;
-    paStats["method"] = "GET";
-    paStats["path"] = "/api/pa/statistics";
-    paStats["description"] = "Get PA verification statistics";
-    endpoints.append(paStats);
 
     result["endpoints"] = endpoints;
 
@@ -625,36 +466,6 @@ paths:
       responses:
         '200':
           description: Revalidation result
-  /api/pa/verify:
-    post:
-      tags: [PA]
-      summary: Verify Passive Authentication
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sod:
-                  type: string
-                dataGroups:
-                  type: object
-      responses:
-        '200':
-          description: Verification result
-  /api/pa/statistics:
-    get:
-      tags: [PA]
-      summary: Get PA statistics
-      responses:
-        '200':
-          description: PA stats
-  /api/pa/history:
-    get:
-      tags: [PA]
-      summary: Get PA history
-      responses:
-        '200':
           description: PA history
   /api/progress/stream/{uploadId}:
     get:
