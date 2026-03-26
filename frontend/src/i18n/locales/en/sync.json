@@ -281,6 +281,11 @@
     "doc9303ClickHint": "Click to view certificate list",
     "doc9303Checked": "checked",
     "doc9303NoData": "No Doc 9303 data",
-    "doc9303NoDataHint": "Available after full sync."
+    "doc9303NoDataHint": "Available after full sync.",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed",
+    "statusRunning": "Running",
+    "triggerManual": "Manual",
+    "triggerScheduled": "Auto"
   }
 }

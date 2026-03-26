@@ -204,6 +204,23 @@ export default function IcaoLdapSync() {
     } catch { setError(t('sync:icaoLdap.saveFailed', '설정 저장 실패')); }
   };
 
+  const statusLabel = (s: string) => {
+    switch (s) {
+      case 'COMPLETED': return t('sync:icaoLdap.statusCompleted');
+      case 'FAILED': return t('sync:icaoLdap.statusFailed');
+      case 'RUNNING': return t('sync:icaoLdap.statusRunning');
+      default: return s;
+    }
+  };
+
+  const triggerLabel = (s: string) => {
+    switch (s) {
+      case 'MANUAL': return t('sync:icaoLdap.triggerManual');
+      case 'SCHEDULED': return t('sync:icaoLdap.triggerScheduled');
+      default: return s;
+    }
+  };
+
   const statusIcon = (s: string) => {
     switch (s) {
       case 'COMPLETED': return <CheckCircle className="w-4 h-4 text-green-500" />;
@@ -340,7 +357,7 @@ export default function IcaoLdapSync() {
               {status.lastSync ? (
                 <>
                   <p className={`text-xl font-bold flex items-center gap-1 ${status.lastSync.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
-                    {statusIcon(status.lastSync.status)} {status.lastSync.status}
+                    {statusIcon(status.lastSync.status)} {statusLabel(status.lastSync.status)}
                   </p>
                   <p className="text-xs text-gray-400">{(status.lastSync.durationMs / 1000).toFixed(1)}{t('sync:icaoLdap.secondsSuffix')}</p>
                 </>
@@ -572,7 +589,7 @@ export default function IcaoLdapSync() {
                 <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.failedCol')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20">
-                <div className="text-xl font-bold text-purple-600">{status.lastSync.triggeredBy}</div>
+                <div className="text-xl font-bold text-purple-600">{triggerLabel(status.lastSync.triggeredBy)}</div>
                 <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.trigger')}</div>
               </div>
             </div>
@@ -788,9 +805,9 @@ export default function IcaoLdapSync() {
               onChange={(e) => { setHistoryStatusFilter(e.target.value); setHistoryPage(0); }}
               className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
               <option value=""> {t('sync:icaoLdap.allStatus')}</option>
-              <option value="COMPLETED">COMPLETED</option>
-              <option value="FAILED">FAILED</option>
-              <option value="RUNNING">RUNNING</option>
+              <option value="COMPLETED">{t('sync:icaoLdap.statusCompleted')}</option>
+              <option value="FAILED">{t('sync:icaoLdap.statusFailed')}</option>
+              <option value="RUNNING">{t('sync:icaoLdap.statusRunning')}</option>
             </select>
           </div>
         </div>
@@ -819,12 +836,12 @@ export default function IcaoLdapSync() {
                         h.status === 'COMPLETED' ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' :
                         h.status === 'FAILED' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' :
                         'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400'
-                      }`}>{statusIcon(h.status)} {h.status}</span>
+                      }`}>{statusIcon(h.status)} {statusLabel(h.status)}</span>
                     </td>
                     <td className="px-3 py-2 text-center">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         h.triggeredBy === 'MANUAL' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
-                      }`}>{h.triggeredBy}</span>
+                      }`}>{triggerLabel(h.triggeredBy)}</span>
                     </td>
                     <td className="px-3 py-2 text-center font-mono">{h.totalRemoteCount.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates.toLocaleString()}</td>

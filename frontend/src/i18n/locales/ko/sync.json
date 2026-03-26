@@ -281,6 +281,11 @@
     "doc9303ClickHint": "클릭하여 인증서 목록 확인",
     "doc9303Checked": "건 검사",
     "doc9303NoData": "Doc 9303 검사 데이터 없음",
-    "doc9303NoDataHint": "전체 동기화 실행 후 확인 가능합니다."
+    "doc9303NoDataHint": "전체 동기화 실행 후 확인 가능합니다.",
+    "statusCompleted": "완료",
+    "statusFailed": "실패",
+    "statusRunning": "실행 중",
+    "triggerManual": "수동",
+    "triggerScheduled": "자동"
   }
 }
