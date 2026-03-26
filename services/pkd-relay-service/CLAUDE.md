@@ -53,6 +53,8 @@ ML→CSCA → **CRL** → DSC(Trust Chain+CRL+Doc9303) → DSC_NC (4단계)
 - **성능**: fingerprint 캐시 + duplicate 배치(500건) + validation 배치(100건) → 전체 skip 2.9분
 - 연결 테스트: TLS 인증서 정보(Subject/Issuer/만료일) 반환
 - 중복 인증서: `certificate_duplicates` 테이블에 기록 (배치 flush)
+- Trust Chain: `dnMatchFallback` 제거 → 서명 실패=INVALID, CSCA 없음=PENDING 정확 분류
+- `getLastSyncResult()`: 서비스 재시작 시 DB에서 최신 이력 로드 (메모리 fallback)
 
 ## 코드 구조
 

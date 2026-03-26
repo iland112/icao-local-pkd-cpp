@@ -1,7 +1,7 @@
 # ICAO Local PKD - Changelog
 
 **Current Version**: v2.40.0
-**Last Updated**: 2026-03-25
+**Last Updated**: 2026-03-26
 
 이 파일은 루트 CLAUDE.md에서 분리된 전체 버전 이력입니다.
 
@@ -57,9 +57,15 @@
   - P3: validation 배치 처리 — 100건씩 flush
 - **clean-and-init**: ICAO sim LDAP 자동 초기화 (DIT 생성 + LDIF 데이터 로드 + 재시도)
 - **빌드 개선**: `tsconfig.app.json`에서 테스트 파일 제외 (빌드 시 TS 에러 방지)
-- **i18n**: 동기화 결과 섹션 ko/en 번역 키 26개 추가
-- Docker/Podman compose 동기화 완료
-- 30+ 커밋, ~80 파일 변경
+- **Trust Chain 검증 로직 수정**: `dnMatchFallback` 제거 — CSCA 없는 국가(CN/GB/US)가 잘못 INVALID로 분류되던 버그 수정 → PENDING으로 정확 분류
+- **전체 프론트엔드 숫자 포맷 통일**: 10개 파일 `toLocaleString()` 일괄 적용 (null safety 포함)
+- **마지막 동기화 카드 DB fallback**: 서비스 재시작 후에도 `icao_ldap_sync_log`에서 최신 이력 로드
+- **i18n 전면 적용**: 동기화 결과/상세 다이얼로그/Trust Chain/상태 배지/트리거 — ko/en 70+ 키
+  - Trust Chain 용어 통일: VALID→유효 인증서, EXPIRED_VALID→기한 만료 인증서, INVALID→서명 검증 실패 인증서, PENDING→CSCA 미확인
+  - 상태 배지: COMPLETED→완료, FAILED→실패, MANUAL→수동, SCHEDULED→자동
+- **ML→CSCA 행 단위 명확화**: 전체 "25 ML" / 신규 "+870 CSCA" (단위 레이블 표시)
+- Docker/Podman compose 동기화 완료 (ADMIN_INITIAL_PASSWORD 환경변수 추가)
+- 40+ 커밋, ~90 파일 변경
 
 ### v2.39.0 (2026-03-22) - ICAO PKD LDAP 자동 동기화 + CSR 기반 TLS 인증서 발급
 
