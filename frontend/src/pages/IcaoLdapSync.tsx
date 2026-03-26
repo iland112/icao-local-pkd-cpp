@@ -324,7 +324,7 @@ export default function IcaoLdapSync() {
             </div>
             <div>
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium"> {t('sync:icaoLdap.syncCycle')}</p>
-              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{status.syncIntervalMinutes}분</p>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400">{status.syncIntervalMinutes}{t('sync:icaoLdap.minuteSuffix')}</p>
               <p className="text-xs text-gray-400">{status.running ? t('sync:icaoLdap.running') : t('sync:icaoLdap.waiting')}</p>
             </div>
           </div>
@@ -342,7 +342,7 @@ export default function IcaoLdapSync() {
                   <p className={`text-xl font-bold flex items-center gap-1 ${status.lastSync.status === 'COMPLETED' ? 'text-green-600 dark:text-green-400' : 'text-red-500'}`}>
                     {statusIcon(status.lastSync.status)} {status.lastSync.status}
                   </p>
-                  <p className="text-xs text-gray-400">{(status.lastSync.durationMs / 1000).toFixed(1)}초 소요</p>
+                  <p className="text-xs text-gray-400">{(status.lastSync.durationMs / 1000).toFixed(1)}{t('sync:icaoLdap.secondsSuffix')}</p>
                 </>
               ) : (
                 <p className="text-xl font-bold text-gray-400">—</p>
@@ -362,7 +362,7 @@ export default function IcaoLdapSync() {
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-sm font-bold">{status.lastSync.totalRemoteCount.toLocaleString()}</span>
                   <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates}</span>
-                  {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()} 실패</span>}
+                  {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()} {t('sync:icaoLdap.failSuffix')}</span>}
                 </div>
               ) : (
                 <p className="text-xl font-bold text-gray-400">—</p>
@@ -387,31 +387,31 @@ export default function IcaoLdapSync() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.server')}</span><div className="font-mono text-sm">{testResult.serverInfo}</div></div>
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.responseTime')}</span><div className="font-semibold">{testResult.latencyMs}ms</div></div>
-                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount >= 0 ? testResult.entryCount.toLocaleString() : <span className="text-gray-400">DIT 없음</span>}</div></div>
+                <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.certCount')}</span><div className="font-semibold">{testResult.entryCount >= 0 ? testResult.entryCount.toLocaleString() : <span className="text-gray-400">{t('sync:icaoLdap.ditEmpty')}</span>}</div></div>
                 <div><span className="text-gray-500 text-xs">{t('sync:icaoLdap.authMethod')}</span>
                   <div className="font-semibold flex items-center gap-1">
                     {testResult.tlsMode.includes('TLS') ? <Shield className="w-3.5 h-3.5 text-green-500" /> : <Zap className="w-3.5 h-3.5 text-yellow-500" />}
-                    {testResult.tlsMode.includes('TLS') ? 'TLS 상호 인증' : 'Simple Bind'}
+                    {testResult.tlsMode.includes('TLS') ? t('sync:icaoLdap.tlsMutual') : 'Simple Bind'}
                   </div>
                 </div>
               </div>
               {testResult.tlsCertInfo && (
                 <div className="border-t border-green-200 dark:border-green-800 pt-3">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2 flex items-center gap-1">
-                    <Shield className="w-3.5 h-3.5" /> TLS 인증서 정보
+                    <Shield className="w-3.5 h-3.5" /> {t('sync:icaoLdap.tlsCertTitle')}
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div className="bg-white/60 dark:bg-gray-800/40 rounded-lg p-2.5 space-y-1">
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">클라이언트 인증서</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">{t('sync:icaoLdap.clientCert')}</p>
                       <p><span className="text-gray-400">Subject:</span> <span className="font-mono">{testResult.tlsCertInfo.clientSubject}</span></p>
                       <p><span className="text-gray-400">Issuer:</span> <span className="font-mono">{testResult.tlsCertInfo.clientIssuer}</span></p>
-                      <p><span className="text-gray-400">만료일:</span> <span className="font-semibold">{testResult.tlsCertInfo.clientExpiry}</span></p>
+                      <p><span className="text-gray-400">{t('sync:icaoLdap.expiryDate')}:</span> <span className="font-semibold">{testResult.tlsCertInfo.clientExpiry}</span></p>
                     </div>
                     <div className="bg-white/60 dark:bg-gray-800/40 rounded-lg p-2.5 space-y-1">
-                      <p className="font-semibold text-gray-700 dark:text-gray-300">CA 인증서</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">{t('sync:icaoLdap.caCert')}</p>
                       <p><span className="text-gray-400">Subject:</span> <span className="font-mono">{testResult.tlsCertInfo.caSubject}</span></p>
                       <p><span className="text-gray-400">Issuer:</span> <span className="font-mono">{testResult.tlsCertInfo.caIssuer}</span></p>
-                      <p><span className="text-gray-400">만료일:</span> <span className="font-semibold">{testResult.tlsCertInfo.caExpiry}</span></p>
+                      <p><span className="text-gray-400">{t('sync:icaoLdap.expiryDate')}:</span> <span className="font-semibold">{testResult.tlsCertInfo.caExpiry}</span></p>
                     </div>
                   </div>
                 </div>
@@ -431,14 +431,14 @@ export default function IcaoLdapSync() {
               <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
               <h3 className="text-sm font-semibold text-blue-700 dark:text-blue-300"> {t('sync:icaoLdap.syncInProgress')}</h3>
             </div>
-            <span className="text-xs text-blue-500 font-mono">{(progress.elapsedMs / 1000).toFixed(1)}초 경과</span>
+            <span className="text-xs text-blue-500 font-mono">{(progress.elapsedMs / 1000).toFixed(1)}{t('sync:icaoLdap.secondsElapsed')}</span>
           </div>
 
           {/* Overall progress bar */}
           <div className="mb-4">
             <div className="flex justify-between text-xs mb-1">
               <span className="text-gray-600 dark:text-gray-400"> {t('sync:icaoLdap.overallProgress')}</span>
-              <span className="font-semibold">{overallPercent}% — {progress.completedTypes.toLocaleString()}/{progress.totalTypes.toLocaleString()} 타입 완료</span>
+              <span className="font-semibold">{overallPercent}% — {progress.completedTypes.toLocaleString()}/{progress.totalTypes.toLocaleString()} {t('sync:icaoLdap.typeCompleteOf')}</span>
             </div>
             <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallPercent}%` }} />
@@ -449,7 +449,7 @@ export default function IcaoLdapSync() {
           {progress.currentType && progress.phase === 'PROCESSING' && (
             <div className="mb-4">
               <div className="flex justify-between text-xs mb-1">
-                <span className="font-medium">{progress.currentType} 처리 중</span>
+                <span className="font-medium">{progress.currentType} {t('sync:icaoLdap.processingType')}</span>
                 <span className="font-mono">{progress.currentTypeProcessed.toLocaleString()} / {progress.currentTypeTotal.toLocaleString()} ({progressPercent}%)</span>
               </div>
               <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
@@ -519,9 +519,9 @@ export default function IcaoLdapSync() {
             <div className="mt-2 flex items-center gap-3">
               <button onClick={handleSync}
                 className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg bg-blue-500 hover:bg-blue-600 text-white transition-colors">
-                <RefreshCw className="w-3.5 h-3.5" /> 동기화 재시작
+                <RefreshCw className="w-3.5 h-3.5" /> {t('sync:icaoLdap.syncRetry')}
               </button>
-              <span className="text-xs text-gray-500">이미 저장된 인증서는 자동으로 건너뜁니다.</span>
+              <span className="text-xs text-gray-500">{t('sync:icaoLdap.syncRetryHint')}</span>
             </div>
           )}
         </div>
@@ -541,10 +541,10 @@ export default function IcaoLdapSync() {
                 ? <CheckCircle className="w-5 h-5" />
                 : <XCircle className="w-5 h-5" />}
               <h3 className="text-sm font-bold">
-                {status.lastSync.status === 'COMPLETED' ? '동기화 완료' : '동기화 실패'}
+                {status.lastSync.status === 'COMPLETED' ? t('sync:icaoLdap.resultComplete') : t('sync:icaoLdap.resultFail')}
               </h3>
               <span className="text-xs opacity-80">
-                {(status.lastSync.durationMs / 1000).toFixed(0)}초 소요
+                {(status.lastSync.durationMs / 1000).toFixed(0)}{t('sync:icaoLdap.secondsSuffix')}
               </span>
             </div>
             <button onClick={() => setShowSyncResult(false)} className="text-white/70 hover:text-white">
@@ -557,40 +557,40 @@ export default function IcaoLdapSync() {
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="text-center p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20">
                 <div className="text-xl font-bold text-blue-600">{status.lastSync.totalRemoteCount.toLocaleString()}</div>
-                <div className="text-[10px] text-gray-500 font-medium">ICAO PKD 전체</div>
+                <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.icaoPkdTotal')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20">
                 <div className="text-xl font-bold text-green-600">+{status.lastSync.newCertificates.toLocaleString()}</div>
-                <div className="text-[10px] text-gray-500 font-medium">신규 저장</div>
+                <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.newSaved')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-gray-50 dark:bg-gray-700/30">
                 <div className="text-xl font-bold text-gray-500">{status.lastSync.existingSkipped.toLocaleString()}</div>
-                <div className="text-[10px] text-gray-500 font-medium">기존 (Skip)</div>
+                <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.existingSkip')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20">
                 <div className="text-xl font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()}</div>
-                <div className="text-[10px] text-gray-500 font-medium">실패</div>
+                <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.failedCol')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20">
                 <div className="text-xl font-bold text-purple-600">{status.lastSync.triggeredBy}</div>
-                <div className="text-[10px] text-gray-500 font-medium">트리거</div>
+                <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.trigger')}</div>
               </div>
             </div>
 
             {/* Type breakdown from latest history */}
             {history.length > 0 && history[0].typeStats && history[0].typeStats.length > 0 && (
               <div>
-                <p className="text-xs font-semibold text-gray-500 mb-2">타입별 동기화 결과</p>
+                <p className="text-xs font-semibold text-gray-500 mb-2">{t('sync:icaoLdap.typeResult')}</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="bg-gray-50 dark:bg-gray-700">
-                        <th className="px-3 py-2 text-left font-semibold">타입</th>
-                        <th className="px-3 py-2 text-center font-semibold">전체</th>
-                        <th className="px-3 py-2 text-center font-semibold text-green-600">신규</th>
-                        <th className="px-3 py-2 text-center font-semibold text-gray-500">기존</th>
-                        <th className="px-3 py-2 text-center font-semibold text-red-500">실패</th>
-                        <th className="px-3 py-2 text-left font-semibold">진행률</th>
+                        <th className="px-3 py-2 text-left font-semibold">{t('sync:icaoLdap.typeCol')}</th>
+                        <th className="px-3 py-2 text-center font-semibold">{t('sync:icaoLdap.totalCol')}</th>
+                        <th className="px-3 py-2 text-center font-semibold text-green-600">{t('sync:icaoLdap.newCol')}</th>
+                        <th className="px-3 py-2 text-center font-semibold text-gray-500">{t('sync:icaoLdap.existingCol')}</th>
+                        <th className="px-3 py-2 text-center font-semibold text-red-500">{t('sync:icaoLdap.failedCol')}</th>
+                        <th className="px-3 py-2 text-left font-semibold">{t('sync:icaoLdap.progressCol')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -733,21 +733,21 @@ export default function IcaoLdapSync() {
                 {certStats.validation?.icao && certStats.validation.icao.total > 0 && (
                   <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
                     <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
-                      <ShieldCheck className="w-3.5 h-3.5" /> ICAO Doc 9303 준수 검사
-                      <span className="ml-auto text-gray-400 font-normal">{certStats.validation.icao.total.toLocaleString()}건 검사</span>
+                      <ShieldCheck className="w-3.5 h-3.5" /> {t('sync:icaoLdap.doc9303Title')}
+                      <span className="ml-auto text-gray-400 font-normal">{certStats.validation.icao.total.toLocaleString()}{t('sync:icaoLdap.doc9303Checked')}</span>
                     </p>
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                         <div className="text-lg font-bold text-green-600">{certStats.validation.icao.compliantCount.toLocaleString()}</div>
-                        <div className="text-[10px] text-gray-500">준수</div>
+                        <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.doc9303Compliant')}</div>
                       </div>
                       <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                         <div className="text-lg font-bold text-amber-600">{certStats.validation.icao.warningCount.toLocaleString()}</div>
-                        <div className="text-[10px] text-gray-500">경고</div>
+                        <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.doc9303Warning')}</div>
                       </div>
                       <div className="text-center p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                         <div className="text-lg font-bold text-red-600">{certStats.validation.icao.nonCompliantCount.toLocaleString()}</div>
-                        <div className="text-[10px] text-gray-500">미준수</div>
+                        <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.doc9303NonCompliant')}</div>
                       </div>
                     </div>
                     {/* Category breakdown */}
@@ -757,8 +757,8 @@ export default function IcaoLdapSync() {
                           { label: 'Key Usage', count: certStats.validation.icao.keyUsageFail, color: 'text-red-600' },
                           { label: 'Algorithm', count: certStats.validation.icao.algorithmFail, color: 'text-red-600' },
                           { label: 'Key Size', count: certStats.validation.icao.keySizeFail, color: 'text-red-600' },
-                          { label: '유효기간', count: certStats.validation.icao.validityPeriodFail, color: 'text-amber-600' },
-                          { label: '확장 필드', count: certStats.validation.icao.extensionsFail, color: 'text-red-600' },
+                          { label: t('sync:icaoLdap.expiryStatus'), count: certStats.validation.icao.validityPeriodFail, color: 'text-amber-600' },
+                          { label: t('common:label.extensions', '확장 필드'), count: certStats.validation.icao.extensionsFail, color: 'text-red-600' },
                         ].filter(c => c.count > 0).map(c => (
                           <div key={c.label} className="flex items-center justify-between text-xs bg-white dark:bg-gray-800 rounded px-2 py-1">
                             <span className="text-gray-600 dark:text-gray-400">{c.label}</span>
@@ -781,7 +781,7 @@ export default function IcaoLdapSync() {
           <div className="flex items-center gap-2">
             <History className="w-4 h-4 text-gray-500" />
             <h3 className="text-sm font-semibold"> {t('sync:icaoLdap.syncHistory')}</h3>
-            <span className="text-xs text-gray-400">{historyTotal}건</span>
+            <span className="text-xs text-gray-400">{historyTotal}{t('sync:icaoLdap.certCountSuffix')}</span>
           </div>
           <div className="flex items-center gap-2">
             <select value={historyStatusFilter}
@@ -851,7 +851,7 @@ export default function IcaoLdapSync() {
         {historyTotal > historyPageSize && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700">
             <span className="text-xs text-gray-500 dark:text-gray-400">
-              총 {historyTotal}건
+              총 {historyTotal}{t('sync:icaoLdap.certCountSuffix')}
             </span>
             <div className="flex items-center gap-2">
               <button onClick={() => setHistoryPage(p => Math.max(0, p - 1))} disabled={historyPage === 0}
@@ -891,7 +891,7 @@ export default function IcaoLdapSync() {
                   {statusIcon(selectedHistory.status)}
                   <h2 className="text-base font-bold">{t('sync:icaoLdap.detailTitle')}</h2>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{selectedHistory.createdAt} · {selectedHistory.triggeredBy} · {(selectedHistory.durationMs / 1000).toFixed(0)}초</p>
+                <p className="text-xs text-gray-400 mt-0.5">{selectedHistory.createdAt} · {selectedHistory.triggeredBy} · {(selectedHistory.durationMs / 1000).toFixed(0)}{t('sync:icaoLdap.secondsSuffix')}</p>
               </div>
               <button onClick={() => setSelectedHistory(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                 <X className="w-5 h-5 text-gray-400" />
@@ -902,10 +902,10 @@ export default function IcaoLdapSync() {
             <div className="flex border-b border-gray-200 dark:border-gray-700 px-5 flex-shrink-0">
               {[
                 { key: 'summary' as const, label: '상세 정보' },
-                { key: 'doc9303' as const, label: 'Doc 9303 검사' },
+                { key: 'doc9303' as const, label: t('sync:icaoLdap.doc9303Title') },
                 ...(selectedHistory.existingSkipped > 0 ? [{
                   key: 'duplicates' as const,
-                  label: '중복 인증서',
+                  label: t('sync:icaoLdap.dupTabTitle'),
                   badge: selectedHistory.existingSkipped,
                 }] : []),
               ].map(tab => (
@@ -1056,31 +1056,31 @@ export default function IcaoLdapSync() {
                             <div className="grid grid-cols-3 gap-3">
                               <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                                 <div className="text-2xl font-bold text-green-600">{certStats.validation.icao.compliantCount.toLocaleString()}</div>
-                                <div className="text-xs text-gray-500">준수</div>
+                                <div className="text-xs text-gray-500">{t('sync:icaoLdap.doc9303Compliant')}</div>
                                 <div className="text-[10px] text-green-500">
                                   {((certStats.validation.icao.compliantCount / certStats.validation.icao.total) * 100).toFixed(0)}%
                                 </div>
                               </div>
                               <div className="text-center p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                                 <div className="text-2xl font-bold text-amber-600">{certStats.validation.icao.warningCount.toLocaleString()}</div>
-                                <div className="text-xs text-gray-500">경고</div>
+                                <div className="text-xs text-gray-500">{t('sync:icaoLdap.doc9303Warning')}</div>
                               </div>
                               <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                                 <div className="text-2xl font-bold text-red-600">{certStats.validation.icao.nonCompliantCount.toLocaleString()}</div>
-                                <div className="text-xs text-gray-500">미준수</div>
+                                <div className="text-xs text-gray-500">{t('sync:icaoLdap.doc9303NonCompliant')}</div>
                               </div>
                             </div>
 
                             {/* Category breakdown */}
                             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">카테고리별 미준수/경고 상세 <span className="font-normal text-gray-400">(클릭하여 인증서 목록 확인)</span></p>
+                              <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">{t('sync:icaoLdap.doc9303CategoryDetail')} <span className="font-normal text-gray-400">({t('sync:icaoLdap.doc9303ClickHint')})</span></p>
                               <div className="space-y-2">
                                 {[
                                   { label: 'Key Usage', apiKey: 'keyUsage', count: certStats.validation.icao.keyUsageFail, desc: 'keyCertSign, cRLSign, digitalSignature 등' },
                                   { label: 'Algorithm', apiKey: 'algorithm', count: certStats.validation.icao.algorithmFail, desc: 'RSA/ECDSA + SHA-256/384/512' },
                                   { label: 'Key Size', apiKey: 'keySize', count: certStats.validation.icao.keySizeFail, desc: 'RSA ≥ 2048, ECDSA P-256/384/521' },
-                                  { label: '유효기간', apiKey: 'validityPeriod', count: certStats.validation.icao.validityPeriodFail, desc: 'CSCA ≤ 15년, DSC ≤ 3년' },
-                                  { label: '확장 필드', apiKey: 'extensions', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
+                                  { label: t('sync:icaoLdap.expiryStatus'), apiKey: 'validityPeriod', count: certStats.validation.icao.validityPeriodFail, desc: 'CSCA ≤ 15년, DSC ≤ 3년' },
+                                  { label: t('common:label.extensions', '확장 필드'), apiKey: 'extensions', count: certStats.validation.icao.extensionsFail, desc: 'Basic Constraints, Key Usage 확장' },
                                 ].map(c => (
                                   <button key={c.label} disabled={c.count === 0}
                                     onClick={() => {
@@ -1096,19 +1096,19 @@ export default function IcaoLdapSync() {
                                       <div className={`h-full rounded-full ${c.count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
                                         style={{ width: `${Math.min(100, (c.count / (certStats.validation.icao.total || 1)) * 100 * 10)}%` }} />
                                     </div>
-                                    <span className={`w-12 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}건</span>
+                                    <span className={`w-12 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}{t('sync:icaoLdap.certCountSuffix')}</span>
                                     {c.count > 0 && <ChevronRight className="w-3 h-3 text-gray-400" />}
                                   </button>
                                 ))}
                               </div>
-                              <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total.toLocaleString()}건 검사)</p>
+                              <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total.toLocaleString()}{t('sync:icaoLdap.doc9303Checked')})</p>
                             </div>
                           </div>
                         ) : (
                           <div className="text-center py-10 text-gray-400">
                             <ShieldCheck className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                            <p className="text-sm">Doc 9303 검사 데이터 없음</p>
-                            <p className="text-xs mt-1">전체 동기화 실행 후 확인 가능합니다.</p>
+                            <p className="text-sm">{t('sync:icaoLdap.doc9303NoData')}</p>
+                            <p className="text-xs mt-1">{t('sync:icaoLdap.doc9303NoDataHint')}</p>
                           </div>
                         )}
                       </>
@@ -1124,18 +1124,18 @@ export default function IcaoLdapSync() {
                               <div className="flex items-center gap-2 mb-2">
                                 <Info className="w-4 h-4 text-amber-600" />
                                 <p className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                                  동기화 시 {selectedHistory.existingSkipped.toLocaleString()}건의 인증서가 기존 데이터와 중복되어 Skip 처리되었습니다.
+                                  {t('sync:icaoLdap.dupSkipMsg', '').replace('{{count}}', selectedHistory.existingSkipped.toLocaleString())}
                                 </p>
                               </div>
                               <p className="text-xs text-amber-600 dark:text-amber-500">
-                                중복 상세 데이터를 불러오는 중이거나, 전체 동기화 후 확인 가능합니다.
+                                {t('sync:icaoLdap.dupLoadingHint')}
                               </p>
                             </div>
 
                             {/* Per-type skip breakdown */}
                             {selectedHistory.typeStats && selectedHistory.typeStats.length > 0 && (
                               <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-                                <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">타입별 중복(Skip) 현황</p>
+                                <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-3">{t('sync:icaoLdap.dupTypeBreakdown')}</p>
                                 <div className="space-y-2">
                                   {selectedHistory.typeStats.filter(ts => ts.skipped > 0).map((ts, i) => {
                                     const total = ts.total || 1;
