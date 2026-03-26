@@ -282,7 +282,7 @@ export default function CrlReport() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common:label.countryCount')}</p>
-              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{summary.countryCount}</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{(summary.countryCount ?? 0).toLocaleString()}</p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('report:crl.totalCountries')}</p>
             </div>
             <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/30">

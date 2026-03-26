@@ -346,7 +346,7 @@ export function PADashboard() {
                     <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
                       {t('pa:dashboard.todayCount')}
                     </h3>
-                    <div className="text-3xl font-bold text-amber-500">{derivedStats.todayCount}</div>
+                    <div className="text-3xl font-bold text-amber-500">{(derivedStats.todayCount ?? 0).toLocaleString()}</div>
                     <p className="text-xs mt-1 text-gray-400">{t('pa:dashboard.lastVerification', { time: derivedStats.lastVerification })}</p>
                   </div>
                   <div className="flex-shrink-0 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">

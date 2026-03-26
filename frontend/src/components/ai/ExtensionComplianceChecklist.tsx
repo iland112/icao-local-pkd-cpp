@@ -188,7 +188,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
                         {sev}
                       </span>
                     </div>
-                    <div className="text-center text-sm">{violationCount}</div>
+                    <div className="text-center text-sm">{(violationCount ?? 0).toLocaleString()}</div>
                     <div className="text-center text-sm font-medium">
                       {(a.structural_score * 100).toFixed(0)}
                     </div>

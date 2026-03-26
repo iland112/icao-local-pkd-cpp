@@ -362,7 +362,7 @@ export default function IcaoLdapSync() {
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-sm font-bold">{status.lastSync.totalRemoteCount.toLocaleString()}</span>
                   <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates}</span>
-                  {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount} 실패</span>}
+                  {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()} 실패</span>}
                 </div>
               ) : (
                 <p className="text-xl font-bold text-gray-400">—</p>
@@ -438,7 +438,7 @@ export default function IcaoLdapSync() {
           <div className="mb-4">
             <div className="flex justify-between text-xs mb-1">
               <span className="text-gray-600 dark:text-gray-400"> {t('sync:icaoLdap.overallProgress')}</span>
-              <span className="font-semibold">{overallPercent}% — {progress.completedTypes}/{progress.totalTypes} 타입 완료</span>
+              <span className="font-semibold">{overallPercent}% — {progress.completedTypes.toLocaleString()}/{progress.totalTypes.toLocaleString()} 타입 완료</span>
             </div>
             <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
               <div className="h-full bg-blue-500 rounded-full transition-all duration-300 ease-out" style={{ width: `${overallPercent}%` }} />
@@ -456,7 +456,7 @@ export default function IcaoLdapSync() {
                 <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${progressPercent}%` }} />
               </div>
               <div className="flex gap-4 mt-1 text-[11px]">
-                <span className="text-green-600 dark:text-green-400"> {t('sync:icaoLdap.newCount')}: +{progress.currentTypeNew}</span>
+                <span className="text-green-600 dark:text-green-400"> {t('sync:icaoLdap.newCount')}: +{progress.currentTypeNew.toLocaleString()}</span>
                 <span className="text-gray-500"> {t('sync:icaoLdap.existingCount')}:{progress.currentTypeSkipped.toLocaleString()}</span>
               </div>
             </div>
@@ -469,7 +469,7 @@ export default function IcaoLdapSync() {
               <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
             </div>
             <div className="text-center bg-white/60 dark:bg-gray-800/60 rounded-lg py-2">
-              <div className="text-lg font-bold text-green-600">+{progress.totalNew}</div>
+              <div className="text-lg font-bold text-green-600">+{progress.totalNew.toLocaleString()}</div>
               <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.newCount')}</div>
             </div>
             <div className="text-center bg-white/60 dark:bg-gray-800/60 rounded-lg py-2">
@@ -477,7 +477,7 @@ export default function IcaoLdapSync() {
               <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.existingCount')}</div>
             </div>
             <div className="text-center bg-white/60 dark:bg-gray-800/60 rounded-lg py-2">
-              <div className="text-lg font-bold text-red-500">{progress.totalFailed}</div>
+              <div className="text-lg font-bold text-red-500">{progress.totalFailed.toLocaleString()}</div>
               <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.failedCount')}</div>
             </div>
           </div>
@@ -568,7 +568,7 @@ export default function IcaoLdapSync() {
                 <div className="text-[10px] text-gray-500 font-medium">기존 (Skip)</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20">
-                <div className="text-xl font-bold text-red-500">{status.lastSync.failedCount}</div>
+                <div className="text-xl font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()}</div>
                 <div className="text-[10px] text-gray-500 font-medium">실패</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-purple-50 dark:bg-purple-900/20">
@@ -601,9 +601,9 @@ export default function IcaoLdapSync() {
                           <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
                             <td className="px-3 py-2 font-semibold">{ts.type}</td>
                             <td className="px-3 py-2 text-center font-mono">{ts.total.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-center font-semibold text-green-600">+{ts.new}</td>
+                            <td className="px-3 py-2 text-center font-semibold text-green-600">+{ts.new.toLocaleString()}</td>
                             <td className="px-3 py-2 text-center text-gray-500">{ts.skipped.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-center text-red-500">{ts.failed}</td>
+                            <td className="px-3 py-2 text-center text-red-500">{ts.failed.toLocaleString()}</td>
                             <td className="px-3 py-2">
                               <div className="flex items-center gap-2">
                                 <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
@@ -734,19 +734,19 @@ export default function IcaoLdapSync() {
                   <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
                     <p className="text-xs font-bold text-gray-600 dark:text-gray-300 mb-2 flex items-center gap-1">
                       <ShieldCheck className="w-3.5 h-3.5" /> ICAO Doc 9303 준수 검사
-                      <span className="ml-auto text-gray-400 font-normal">{certStats.validation.icao.total}건 검사</span>
+                      <span className="ml-auto text-gray-400 font-normal">{certStats.validation.icao.total.toLocaleString()}건 검사</span>
                     </p>
                     <div className="grid grid-cols-3 gap-2 mb-3">
                       <div className="text-center p-2 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                        <div className="text-lg font-bold text-green-600">{certStats.validation.icao.compliantCount}</div>
+                        <div className="text-lg font-bold text-green-600">{certStats.validation.icao.compliantCount.toLocaleString()}</div>
                         <div className="text-[10px] text-gray-500">준수</div>
                       </div>
                       <div className="text-center p-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                        <div className="text-lg font-bold text-amber-600">{certStats.validation.icao.warningCount}</div>
+                        <div className="text-lg font-bold text-amber-600">{certStats.validation.icao.warningCount.toLocaleString()}</div>
                         <div className="text-[10px] text-gray-500">경고</div>
                       </div>
                       <div className="text-center p-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                        <div className="text-lg font-bold text-red-600">{certStats.validation.icao.nonCompliantCount}</div>
+                        <div className="text-lg font-bold text-red-600">{certStats.validation.icao.nonCompliantCount.toLocaleString()}</div>
                         <div className="text-[10px] text-gray-500">미준수</div>
                       </div>
                     </div>
@@ -829,7 +829,7 @@ export default function IcaoLdapSync() {
                     <td className="px-3 py-2 text-center font-mono">{h.totalRemoteCount.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{h.existingSkipped.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-center text-red-500">{h.failedCount}</td>
+                    <td className="px-3 py-2 text-center text-red-500">{h.failedCount.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>
                     <td className="px-3 py-2 text-center">
                       <button onClick={(e) => { e.stopPropagation(); setSelectedHistory(h); setDetailTab('summary'); if (!certStats) uploadApi.getStatistics().then(r => setCertStats(r.data)).catch(() => {}); }}
@@ -945,7 +945,7 @@ export default function IcaoLdapSync() {
                             <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
                           </div>
                           <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
-                            <div className="text-lg font-bold text-green-600">+{selectedHistory.newCertificates}</div>
+                            <div className="text-lg font-bold text-green-600">+{selectedHistory.newCertificates.toLocaleString()}</div>
                             <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.newCount')}</div>
                           </div>
                           <div className="text-center bg-gray-50 dark:bg-gray-700/50 rounded-lg py-2">
@@ -953,7 +953,7 @@ export default function IcaoLdapSync() {
                             <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.existingCount')}</div>
                           </div>
                           <div className="text-center bg-red-50 dark:bg-red-900/20 rounded-lg py-2">
-                            <div className="text-lg font-bold text-red-500">{selectedHistory.failedCount}</div>
+                            <div className="text-lg font-bold text-red-500">{selectedHistory.failedCount.toLocaleString()}</div>
                             <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.failedCount')}</div>
                           </div>
                         </div>
@@ -985,9 +985,9 @@ export default function IcaoLdapSync() {
                                         'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                                       }`}>{ts.type}</span></td>
                                       <td className="px-3 py-2 text-right font-mono">{ts.total.toLocaleString()}</td>
-                                      <td className="px-3 py-2 text-right font-mono text-green-600">+{ts.new}</td>
+                                      <td className="px-3 py-2 text-right font-mono text-green-600">+{ts.new.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right font-mono text-gray-400">{ts.skipped.toLocaleString()}</td>
-                                      <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed}</td>
+                                      <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed.toLocaleString()}</td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1055,18 +1055,18 @@ export default function IcaoLdapSync() {
                             {/* Compliance summary */}
                             <div className="grid grid-cols-3 gap-3">
                               <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                                <div className="text-2xl font-bold text-green-600">{certStats.validation.icao.compliantCount}</div>
+                                <div className="text-2xl font-bold text-green-600">{certStats.validation.icao.compliantCount.toLocaleString()}</div>
                                 <div className="text-xs text-gray-500">준수</div>
                                 <div className="text-[10px] text-green-500">
                                   {((certStats.validation.icao.compliantCount / certStats.validation.icao.total) * 100).toFixed(0)}%
                                 </div>
                               </div>
                               <div className="text-center p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                                <div className="text-2xl font-bold text-amber-600">{certStats.validation.icao.warningCount}</div>
+                                <div className="text-2xl font-bold text-amber-600">{certStats.validation.icao.warningCount.toLocaleString()}</div>
                                 <div className="text-xs text-gray-500">경고</div>
                               </div>
                               <div className="text-center p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                                <div className="text-2xl font-bold text-red-600">{certStats.validation.icao.nonCompliantCount}</div>
+                                <div className="text-2xl font-bold text-red-600">{certStats.validation.icao.nonCompliantCount.toLocaleString()}</div>
                                 <div className="text-xs text-gray-500">미준수</div>
                               </div>
                             </div>
@@ -1101,7 +1101,7 @@ export default function IcaoLdapSync() {
                                   </button>
                                 ))}
                               </div>
-                              <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total}건 검사)</p>
+                              <p className="text-[10px] text-gray-400 mt-3">ICAO Doc 9303 Part 12 기반 ({certStats.validation.icao.total.toLocaleString()}건 검사)</p>
                             </div>
                           </div>
                         ) : (

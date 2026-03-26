@@ -707,11 +707,11 @@ export default function CertificateUpload() {
               <div>
                 <p className="text-sm font-semibold text-green-800 dark:text-green-300">{ t('upload:statistics.totalProcessed') }</p>
                 <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-green-700 dark:text-green-400">
-                  {uploadResult.cscaCount ? <span><GlossaryTerm term="CSCA" className="text-green-700 dark:text-green-400" /> {uploadResult.cscaCount}</span> : null}
-                  {uploadResult.dscCount ? <span><GlossaryTerm term="DSC" className="text-green-700 dark:text-green-400" /> {uploadResult.dscCount}</span> : null}
-                  {uploadResult.dscNcCount ? <span><GlossaryTerm term="DSC_NC" className="text-green-700 dark:text-green-400" /> {uploadResult.dscNcCount}</span> : null}
-                  {uploadResult.mlscCount ? <span><GlossaryTerm term="MLSC" className="text-green-700 dark:text-green-400" /> {uploadResult.mlscCount}</span> : null}
-                  {uploadResult.crlCount ? <span><GlossaryTerm term="CRL" className="text-green-700 dark:text-green-400" /> {uploadResult.crlCount}</span> : null}
+                  {uploadResult.cscaCount ? <span><GlossaryTerm term="CSCA" className="text-green-700 dark:text-green-400" /> {(uploadResult.cscaCount ?? 0).toLocaleString()}</span> : null}
+                  {uploadResult.dscCount ? <span><GlossaryTerm term="DSC" className="text-green-700 dark:text-green-400" /> {(uploadResult.dscCount ?? 0).toLocaleString()}</span> : null}
+                  {uploadResult.dscNcCount ? <span><GlossaryTerm term="DSC_NC" className="text-green-700 dark:text-green-400" /> {(uploadResult.dscNcCount ?? 0).toLocaleString()}</span> : null}
+                  {uploadResult.mlscCount ? <span><GlossaryTerm term="MLSC" className="text-green-700 dark:text-green-400" /> {(uploadResult.mlscCount ?? 0).toLocaleString()}</span> : null}
+                  {uploadResult.crlCount ? <span><GlossaryTerm term="CRL" className="text-green-700 dark:text-green-400" /> {(uploadResult.crlCount ?? 0).toLocaleString()}</span> : null}
                 </div>
                 {uploadId && <p className="mt-0.5 text-xs text-gray-400">ID: {uploadId}</p>}
               </div>
@@ -862,7 +862,7 @@ export default function CertificateUpload() {
                       <Shield className="w-3.5 h-3.5 text-blue-500" />
                       <GlossaryTerm term="CSCA" className="text-xs text-blue-600 dark:text-blue-400 font-medium" />
                     </div>
-                    <span className="text-lg font-bold text-blue-700 dark:text-blue-300">{uploadResult.cscaCount}</span>
+                    <span className="text-lg font-bold text-blue-700 dark:text-blue-300">{(uploadResult.cscaCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
                 {uploadResult.dscCount > 0 && (
@@ -871,7 +871,7 @@ export default function CertificateUpload() {
                       <Shield className="w-3.5 h-3.5 text-green-500" />
                       <GlossaryTerm term="DSC" className="text-xs text-green-600 dark:text-green-400 font-medium" />
                     </div>
-                    <span className="text-lg font-bold text-green-700 dark:text-green-300">{uploadResult.dscCount}</span>
+                    <span className="text-lg font-bold text-green-700 dark:text-green-300">{(uploadResult.dscCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
                 {uploadResult.dscNcCount > 0 && (
@@ -880,7 +880,7 @@ export default function CertificateUpload() {
                       <Shield className="w-3.5 h-3.5 text-orange-500" />
                       <GlossaryTerm term="DSC_NC" className="text-xs text-orange-600 dark:text-orange-400 font-medium" />
                     </div>
-                    <span className="text-lg font-bold text-orange-700 dark:text-orange-300">{uploadResult.dscNcCount}</span>
+                    <span className="text-lg font-bold text-orange-700 dark:text-orange-300">{(uploadResult.dscNcCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
                 {uploadResult.mlscCount > 0 && (
@@ -889,7 +889,7 @@ export default function CertificateUpload() {
                       <Key className="w-3.5 h-3.5 text-teal-500" />
                       <GlossaryTerm term="MLSC" className="text-xs text-teal-600 dark:text-teal-400 font-medium" />
                     </div>
-                    <span className="text-lg font-bold text-teal-700 dark:text-teal-300">{uploadResult.mlscCount}</span>
+                    <span className="text-lg font-bold text-teal-700 dark:text-teal-300">{(uploadResult.mlscCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
                 {uploadResult.crlCount > 0 && (
@@ -898,7 +898,7 @@ export default function CertificateUpload() {
                       <Globe className="w-3.5 h-3.5 text-purple-500" />
                       <GlossaryTerm term="CRL" className="text-xs text-purple-600 dark:text-purple-400 font-medium" />
                     </div>
-                    <span className="text-lg font-bold text-purple-700 dark:text-purple-300">{uploadResult.crlCount}</span>
+                    <span className="text-lg font-bold text-purple-700 dark:text-purple-300">{(uploadResult.crlCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
               </div>

@@ -267,8 +267,8 @@ export function ClientPATable() {
                     {!item.mrzNationality && !item.mrzDocumentType && <span className="text-gray-300 dark:text-gray-600">—</span>}
                   </td>
                   <td className="px-3 py-2 text-center text-xs">
-                    <span className="text-blue-600">{item.cscaCount} CSCA</span>
-                    {item.crlCount > 0 && <span className="ml-1 text-amber-600">{item.crlCount} CRL</span>}
+                    <span className="text-blue-600">{(item.cscaCount ?? 0).toLocaleString()} CSCA</span>
+                    {item.crlCount > 0 && <span className="ml-1 text-amber-600">{(item.crlCount ?? 0).toLocaleString()} CRL</span>}
                   </td>
                   <td className="px-3 py-2 text-center">
                     <span className={cn('px-2 py-0.5 text-xs font-medium rounded-full',

@@ -334,7 +334,7 @@ export function UploadDetailModal({
               <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 text-center">
                   <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                    {upload.cscaCount}
+                    {(upload.cscaCount ?? 0).toLocaleString()}
                   </p>
                   <GlossaryTerm term="CSCA" className="text-xs text-purple-700 dark:text-purple-300 justify-center" />
                 </div>
@@ -358,7 +358,7 @@ export function UploadDetailModal({
                 </div>
                 <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 text-center">
                   <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
-                    {upload.crlCount}
+                    {(upload.crlCount ?? 0).toLocaleString()}
                   </p>
                   <GlossaryTerm term="CRL" className="text-xs text-amber-700 dark:text-amber-300 justify-center" />
                 </div>
@@ -612,31 +612,31 @@ export function UploadDetailModal({
                 <div className="flex flex-wrap gap-1.5 justify-center">
                   {(upload.cscaCount || 0) > 0 && (
                     <div className="bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded px-3 py-1.5 text-center">
-                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{upload.cscaCount}</span>
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">{(upload.cscaCount ?? 0).toLocaleString()}</span>
                       <span className="text-xs text-blue-700 dark:text-blue-300 ml-1">CSCA</span>
                     </div>
                   )}
                   {(upload.mlscCount || 0) > 0 && (
                     <div className="bg-white dark:bg-gray-800 border border-purple-200 dark:border-purple-800 rounded px-3 py-1.5 text-center">
-                      <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{upload.mlscCount}</span>
+                      <span className="text-sm font-bold text-purple-600 dark:text-purple-400">{(upload.mlscCount ?? 0).toLocaleString()}</span>
                       <span className="text-xs text-purple-700 dark:text-purple-300 ml-1">MLSC</span>
                     </div>
                   )}
                   {(upload.dscCount || 0) > 0 && (
                     <div className="bg-white dark:bg-gray-800 border border-green-200 dark:border-green-800 rounded px-3 py-1.5 text-center">
-                      <span className="text-sm font-bold text-green-600 dark:text-green-400">{upload.dscCount}</span>
+                      <span className="text-sm font-bold text-green-600 dark:text-green-400">{(upload.dscCount ?? 0).toLocaleString()}</span>
                       <span className="text-xs text-green-700 dark:text-green-300 ml-1">DSC</span>
                     </div>
                   )}
                   {(upload.dscNcCount || 0) > 0 && (
                     <div className="bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-800 rounded px-3 py-1.5 text-center">
-                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{upload.dscNcCount}</span>
+                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{(upload.dscNcCount ?? 0).toLocaleString()}</span>
                       <span className="text-xs text-orange-700 dark:text-orange-300 ml-1">DSC_NC</span>
                     </div>
                   )}
                   {(upload.crlCount || 0) > 0 && (
                     <div className="bg-white dark:bg-gray-800 border border-amber-200 dark:border-amber-800 rounded px-3 py-1.5 text-center">
-                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{upload.crlCount}</span>
+                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400">{(upload.crlCount ?? 0).toLocaleString()}</span>
                       <span className="text-xs text-amber-700 dark:text-amber-300 ml-1">CRL</span>
                     </div>
                   )}

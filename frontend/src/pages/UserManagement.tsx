@@ -281,11 +281,11 @@ export function UserManagement() {
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-indigo-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.adminUsers')}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminCount}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{(adminCount ?? 0).toLocaleString()}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4 border-l-4 border-green-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">{t('admin:userManagement.activeUsers')}</p>
-          <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeCount}</p>
+          <p className="text-2xl font-bold text-gray-900 dark:text-white">{(activeCount ?? 0).toLocaleString()}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-4">
           <label htmlFor="user-search" className="text-sm text-gray-500 dark:text-gray-400 mb-2 block">{t('common:button.search')}</label>

@@ -329,7 +329,7 @@ export default function IcaoLdapSyncCard() {
               <div><span className="text-gray-500 dark:text-gray-400">기존</span>
                 <div className="font-semibold">{status.lastSync.existingSkipped.toLocaleString()}</div></div>
               <div><span className="text-red-500">실패</span>
-                <div className="font-semibold text-red-500">{status.lastSync.failedCount}</div></div>
+                <div className="font-semibold text-red-500">{status.lastSync.failedCount.toLocaleString()}</div></div>
             </div>
             {status.lastSync.errorMessage && (
               <div className="mt-2 text-[11px] text-red-500 truncate">{status.lastSync.errorMessage}</div>
