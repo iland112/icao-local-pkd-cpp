@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.40.0
-**Last Updated**: 2026-03-24
+**Current Version**: v2.41.0
+**Last Updated**: 2026-03-26
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -222,6 +222,7 @@ scripts/
 
 최근 변경 사항은 [docs/CHANGELOG.md](docs/CHANGELOG.md) 참조.
 
+- **v2.41.0** (2026-03-26) — 서비스 기능 재배치 (Sync↔Upload 교차 이동, -18,174줄 dead code 제거)
 - **v2.40.0** (2026-03-24) — 권한 구조 5그룹 개편 + ICAO LDAP TLS Private CA 통합
 - **v2.39.0** (2026-03-22) — ICAO PKD LDAP 자동 동기화 + CSR 기반 TLS 인증서 발급
 - **v2.38.0** (2026-03-21) — Client PA Trust Materials API + 업로드 중복 표시 개선

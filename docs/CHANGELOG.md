@@ -1,6 +1,6 @@
 # ICAO Local PKD - Changelog
 
-**Current Version**: v2.40.0
+**Current Version**: v2.41.0
 **Last Updated**: 2026-03-26
 
 이 파일은 루트 CLAUDE.md에서 분리된 전체 버전 이력입니다.
@@ -8,6 +8,27 @@
 ---
 
 ## Version History
+
+### v2.41.0 (2026-03-26) - 서비스 기능 재배치 (Sync↔Upload 교차 이동)
+
+- **서비스 역할 재정의**
+  - pkd-management: **로컬 PKD 운영/관리** (DB↔LDAP Sync, 개별 인증서 등록, 검색, 인증)
+  - pkd-relay: **외부 ICAO PKD 연계** (LDIF/ML 임포트, ICAO LDAP 동기화, 버전 감지)
+- **Sync/Reconciliation → pkd-management 이동** (35개 파일)
+  - SyncHandler, ReconciliationHandler, NotificationHandler (SSE)
+  - SyncService, ReconciliationService, ValidationService (3-step revalidation)
+  - SyncScheduler, ReconciliationEngine, LdapOperations
+- **Upload/ICAO → pkd-relay 이동** (65+ 파일)
+  - UploadHandler (LDIF/ML), UploadStatsHandler, IcaoHandler
+  - UploadServiceContainer (upload 모듈 전용 서비스 로케이터)
+  - processing_strategy, ldif_processor, masterlist_processor, progress_manager
+- **nginx 라우팅 교체**
+  - `/api/upload/*`, `/api/progress/*`, `/api/icao/*` → pkd-relay
+  - `/api/sync/*` → pkd-management (단, `/api/sync/icao-ldap/*`은 relay 유지)
+- **Dead code 제거 (-18,174줄)**
+  - management UploadHandler 2,340줄 → 280줄 (cert upload 2개 라우트만 유지)
+  - relay ServiceContainer 267줄 → 133줄
+- **개별 인증서 업로드** (PEM/DER/P7B/DL/CRL)는 pkd-management에 유지
 
 ### v2.40.0 (2026-03-25) - 권한 구조 개편 + ICAO LDAP 동기화 전면 개선 + 성능 10x
 
