@@ -109,25 +109,22 @@ TrustChainResult TrustChainBuilder::build(X509* leafCert, int maxDepth) {
         }
         visitedDns.insert(currentIssuerDn);
 
-        // Find issuer in CSCA list by signature verification (key rollover)
+        // Find issuer in CSCA list by signature verification (key rollover support)
+        // Try ALL CSCAs with matching DN — multiple key versions may exist
         X509* issuer = nullptr;
-        X509* dnMatchFallback = nullptr;
+        bool dnMatched = false;
 
         for (X509* csca : allCscas) {
             std::string cscaSubjectDn = getSubjectDn(csca);
             if (strcasecmp(currentIssuerDn.c_str(), cscaSubjectDn.c_str()) == 0) {
+                dnMatched = true;
                 // DN matches — verify signature to confirm correct key pair
                 if (verifyCertificateSignature(current, csca)) {
                     issuer = csca;
                     break;
-                } else {
-                    if (!dnMatchFallback) dnMatchFallback = csca;
                 }
+                // DN matched but signature failed — try next CSCA version (key rollover)
             }
-        }
-
-        if (!issuer && dnMatchFallback) {
-            issuer = dnMatchFallback;
         }
 
         if (!issuer) {
@@ -139,20 +136,22 @@ TrustChainResult TrustChainBuilder::build(X509* leafCert, int maxDepth) {
                     allCscas.push_back(csca);  // Track for cleanup
                     break;
                 } else {
-                    // Not the right one, but keep for potential DN match
-                    if (!dnMatchFallback) dnMatchFallback = csca;
+                    dnMatched = true;  // DN matched even if signature failed
                     allCscas.push_back(csca);
                 }
-            }
-            if (!issuer && dnMatchFallback) {
-                issuer = dnMatchFallback;
             }
         }
 
         if (!issuer) {
-            result.message = "Chain broken: Issuer not found at depth " +
-                             std::to_string(depth) + " (issuer: " +
-                             currentIssuerDn.substr(0, 80) + ")";
+            if (dnMatched) {
+                // CSCA found by DN but ALL signature verifications failed
+                // = key rollover mismatch or corrupted certificate
+                result.message = "Signature verification failed at depth " + std::to_string(depth);
+                result.cscaSubjectDn = currentIssuerDn;  // Record the CSCA DN for reference
+            } else {
+                // No CSCA with matching DN at all
+                result.message = "No CSCA found for issuer: " + currentIssuerDn.substr(0, 80);
+            }
             break;
         }
 
