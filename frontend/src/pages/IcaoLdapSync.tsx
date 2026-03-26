@@ -908,7 +908,7 @@ export default function IcaoLdapSync() {
                   {statusIcon(selectedHistory.status)}
                   <h2 className="text-base font-bold">{t('sync:icaoLdap.detailTitle')}</h2>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">{selectedHistory.createdAt} · {selectedHistory.triggeredBy} · {(selectedHistory.durationMs / 1000).toFixed(0)}{t('sync:icaoLdap.secondsSuffix')}</p>
+                <p className="text-xs text-gray-400 mt-0.5">{selectedHistory.createdAt} · {triggerLabel(selectedHistory.triggeredBy)} · {(selectedHistory.durationMs / 1000).toFixed(0)}{t('sync:icaoLdap.secondsSuffix')}</p>
               </div>
               <button onClick={() => setSelectedHistory(null)} className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                 <X className="w-5 h-5 text-gray-400" />
@@ -1023,10 +1023,10 @@ export default function IcaoLdapSync() {
                               {(certStats.validation.validCount > 0 || certStats.validation.invalidCount > 0 || certStats.validation.pendingCount > 0) ? (
                                 <div className="space-y-1">
                                   {[
-                                    { label: 'VALID', count: certStats.validation.validCount, color: 'text-green-600' },
-                                    { label: 'EXPIRED_VALID', count: certStats.validation.expiredValidCount, color: 'text-amber-600' },
-                                    { label: 'INVALID', count: certStats.validation.invalidCount, color: 'text-red-600' },
-                                    { label: 'PENDING', count: (certStats.validation.pendingCount || 0), color: 'text-yellow-600' },
+                                    { label: t('sync:icaoLdap.trustChainValid'), count: certStats.validation.validCount, color: 'text-green-600' },
+                                    { label: t('sync:icaoLdap.trustChainExpiredValid'), count: certStats.validation.expiredValidCount, color: 'text-amber-600' },
+                                    { label: t('sync:icaoLdap.trustChainInvalid'), count: certStats.validation.invalidCount, color: 'text-red-600' },
+                                    { label: t('sync:icaoLdap.trustChainPending'), count: (certStats.validation.pendingCount || 0), color: 'text-yellow-600' },
                                   ].filter(v => v.count > 0).map(v => (
                                     <div key={v.label} className="flex justify-between text-xs">
                                       <span className={v.color}>{v.label}</span>
