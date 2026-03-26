@@ -617,8 +617,12 @@ export default function IcaoLdapSync() {
                         return (
                           <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
                             <td className="px-3 py-2 font-semibold">{ts.type}</td>
-                            <td className="px-3 py-2 text-center font-mono">{ts.total.toLocaleString()}</td>
-                            <td className="px-3 py-2 text-center font-semibold text-green-600">+{ts.new.toLocaleString()}</td>
+                            <td className="px-3 py-2 text-center font-mono">
+                              {ts.total.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">ML</span>}
+                            </td>
+                            <td className="px-3 py-2 text-center font-semibold text-green-600">
+                              +{ts.new.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">CSCA</span>}
+                            </td>
                             <td className="px-3 py-2 text-center text-gray-500">{ts.skipped.toLocaleString()}</td>
                             <td className="px-3 py-2 text-center text-red-500">{ts.failed.toLocaleString()}</td>
                             <td className="px-3 py-2">
@@ -1001,8 +1005,12 @@ export default function IcaoLdapSync() {
                                         ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                         'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                                       }`}>{ts.type}</span></td>
-                                      <td className="px-3 py-2 text-right font-mono">{ts.total.toLocaleString()}</td>
-                                      <td className="px-3 py-2 text-right font-mono text-green-600">+{ts.new.toLocaleString()}</td>
+                                      <td className="px-3 py-2 text-right font-mono">
+                                        {ts.total.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">ML</span>}
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-mono text-green-600">
+                                        +{ts.new.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">CSCA</span>}
+                                      </td>
                                       <td className="px-3 py-2 text-right font-mono text-gray-400">{ts.skipped.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed.toLocaleString()}</td>
                                     </tr>
