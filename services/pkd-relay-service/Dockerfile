@@ -17,6 +17,8 @@ COPY services/pkd-relay-service/CMakeLists.txt ./
 COPY services/pkd-relay-service/src/ ./src/
 # Copy shared libraries (required by CMakeLists.txt add_subdirectory)
 COPY shared/ ./shared/
+# Copy common-lib (required by upload module)
+COPY services/common-lib/ ./common-lib/
 
 ARG ENABLE_ORACLE=ON
 RUN cmake -B build -S . \

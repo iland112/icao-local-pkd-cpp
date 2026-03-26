@@ -71,70 +71,48 @@ find_package(libzip CONFIG REQUIRED)
 # =============================================================================
 add_executable(${PROJECT_NAME}
     src/main.cpp
-    src/processing_strategy.cpp
-    src/ldif_processor.cpp
 
-    # Common Utilities (NEW - v2.0.0)
-    src/common/main_utils.cpp         # Utility functions (crypto, file validation, X.509 helpers)
+    # Common Utilities
+    src/common/main_utils.cpp
     src/common/certificate_utils.cpp
-    src/common/masterlist_processor.cpp
     src/common/x509_metadata_extractor.cpp
-    src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
-    src/common/asn1_parser.cpp       # ASN.1/TLV parser for Master List structure
-    src/common/ldif_parser.cpp       # v2.2.2: LDIF structure parser for visualization
-    src/common/doc9303_checklist.cpp  # v2.17.0: Doc 9303 compliance checklist
-    # Database connection pool now provided by shared icao::database library
-
-    # Sprint 2: Link Certificate Validation (NEW)
+    src/common/doc9303_checklist.cpp
     src/common/crl_validator.cpp
     src/common/crl_parser.cpp
     src/common/lc_validator.cpp
 
-    # Clean Architecture Layers (Existing)
+    # Repositories
     src/repositories/ldap_certificate_repository.cpp
-    src/services/certificate_service.cpp
-
-    # Repository Layer - main.cpp refactoring (v2.1.3 Phase 1.5)
     src/repositories/upload_repository.cpp
     src/repositories/certificate_repository.cpp
     src/repositories/validation_repository.cpp
     src/repositories/audit_repository.cpp
+    src/repositories/user_repository.cpp
+    src/repositories/auth_audit_repository.cpp
+    src/repositories/crl_repository.cpp
+    src/repositories/deviation_list_repository.cpp
 
-    src/repositories/ldif_structure_repository.cpp  # v2.2.2: LDIF structure visualization
-    src/repositories/user_repository.cpp  # Phase 5.4: AuthHandler migration
-    src/repositories/auth_audit_repository.cpp  # Phase 5.4: AuthHandler migration
-    src/repositories/crl_repository.cpp  # Phase 6.4: CRL operations
-    src/repositories/deviation_list_repository.cpp  # DL deviation data storage
-
-    # Service Layer - main.cpp refactoring (v2.1.3)
+    # Services
+    src/services/certificate_service.cpp
     src/services/upload_service.cpp
     src/services/validation_service.cpp
     src/services/audit_service.cpp
+    src/services/ldap_storage_service.cpp
+    src/services/csr_service.cpp
 
-    # Provider Adapters (v2.11.0: icao::validation library integration)
+    # Provider Adapters
     src/adapters/db_csca_provider.cpp
     src/adapters/db_crl_provider.cpp
-    src/adapters/ldap_csca_provider.cpp   # v2.31.0: LDAP real-time PA Lookup
-    src/adapters/ldap_crl_provider.cpp    # v2.31.0: LDAP real-time PA Lookup
+    src/adapters/ldap_csca_provider.cpp
+    src/adapters/ldap_crl_provider.cpp
 
-    src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
-    src/services/ldap_storage_service.cpp   # v2.13.0: LDAP storage operations
-
-    # ICAO Auto Sync Module (NEW - v1.7.0)
-    src/infrastructure/http/http_client.cpp
-    src/utils/html_parser.cpp
-    src/repositories/icao_version_repository.cpp
-    src/services/icao_sync_service.cpp
-    src/handlers/icao_handler.cpp
-
-    # Authentication Module (NEW - Phase 3)
+    # Authentication Module
     src/auth/password_hash.cpp
     src/auth/jwt_service.cpp
     src/middleware/auth_middleware.cpp
     src/middleware/permission_filter.cpp
     src/handlers/auth_handler.cpp
     src/handlers/upload_handler.cpp
-    src/handlers/upload_stats_handler.cpp
     src/handlers/certificate_handler.cpp
     src/handlers/misc_handler.cpp
     src/repositories/code_master_repository.cpp
@@ -161,9 +139,31 @@ add_executable(${PROJECT_NAME}
 
     # Infrastructure
     src/infrastructure/service_container.cpp
+
+    # Sync Module (moved from pkd-relay — DB-LDAP sync, reconciliation, revalidation)
+    src/sync/repositories/sync_status_repository.cpp
+    src/sync/repositories/certificate_repository.cpp
+    src/sync/repositories/crl_repository.cpp
+    src/sync/repositories/reconciliation_repository.cpp
+    src/sync/repositories/validation_repository.cpp
+    src/sync/services/sync_service.cpp
+    src/sync/services/reconciliation_service.cpp
+    src/sync/services/validation_service.cpp
+    src/sync/engine/reconciliation_engine.cpp
+    src/sync/engine/ldap_operations.cpp
+    src/sync/adapters/relay_csca_provider.cpp
+    src/sync/adapters/relay_crl_provider.cpp
+    src/sync/infrastructure/sync_scheduler.cpp
+    src/sync/infrastructure/relay_operations.cpp
+    src/sync/common/notification_manager.cpp
+    src/sync/handlers/sync_handler.cpp
+    src/sync/handlers/reconciliation_handler.cpp
+    src/sync/handlers/notification_handler.cpp
+    src/sync/domain/models/validation_result.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
     ${ICAO_COMMON_DIR}/include
@@ -356,37 +356,7 @@ target_link_libraries(test_api_rate_limiter PRIVATE
 
 add_test(NAME test_api_rate_limiter COMMAND test_api_rate_limiter)
 
-# =============================================================================
-# ProgressManager Tests (v2.28.0)
-# =============================================================================
-add_executable(test_progress_manager
-    tests/test_progress_manager.cpp
-    src/common/progress_manager.cpp
-    src/common/x509_metadata_extractor.cpp
-    src/common/certificate_utils.cpp
-    tests/stubs/service_container_stubs.cpp
-)
-
-target_include_directories(test_progress_manager PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
-    ${ICAO_COMMON_DIR}/include
-)
-
-target_link_libraries(test_progress_manager PRIVATE
-    icao::database
-    icao::certificate-parser
-    icao::validation
-    icao-common
-    GTest::gtest
-    GTest::gtest_main
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    spdlog::spdlog
-)
-
-add_test(NAME test_progress_manager COMMAND test_progress_manager)
+# ProgressManager tests removed — moved to pkd-relay (v2.41.0)
 
 # =============================================================================
 # LcValidator Tests (v2.28.0+)
@@ -424,61 +394,7 @@ target_link_libraries(test_lc_validator PRIVATE
 
 add_test(NAME test_lc_validator COMMAND test_lc_validator)
 
-# =============================================================================
-# ASN.1 Parser Tests (v2.28.0+)
-# =============================================================================
-add_executable(test_asn1_parser
-    tests/test_asn1_parser.cpp
-    src/common/asn1_parser.cpp
-)
-
-target_include_directories(test_asn1_parser PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
-)
-
-target_link_libraries(test_asn1_parser PRIVATE
-    JsonCpp::JsonCpp
-    GTest::gtest
-    GTest::gtest_main
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    spdlog::spdlog
-)
-
-add_test(NAME test_asn1_parser COMMAND test_asn1_parser)
-
-# =============================================================================
-# LdifStructureService Tests (v2.28.0+)
-# =============================================================================
-add_executable(test_ldif_structure_service
-    tests/test_ldif_structure_service.cpp
-    src/services/ldif_structure_service.cpp
-    src/repositories/ldif_structure_repository.cpp
-    src/common/ldif_parser.cpp
-    src/repositories/upload_repository.cpp
-)
-
-target_include_directories(test_ldif_structure_service PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
-    ${ICAO_COMMON_DIR}/include
-    ${PostgreSQL_INCLUDE_DIRS}
-)
-
-target_link_libraries(test_ldif_structure_service PRIVATE
-    icao::database
-    icao-common
-    GTest::gtest
-    GTest::gtest_main
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    spdlog::spdlog
-)
-
-add_test(NAME test_ldif_structure_service COMMAND test_ldif_structure_service)
+# ASN.1 Parser / LdifStructureService tests removed — moved to pkd-relay (v2.41.0)
 
 # =============================================================================
 # Doc 9303 Checklist Tests (v2.17.0)

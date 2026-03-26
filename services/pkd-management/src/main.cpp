@@ -23,9 +23,6 @@
 #include <sstream>
 #include <iomanip>
 
-// PostgreSQL header for checkDatabase()
-#include <libpq-fe.h>
-
 // OpenLDAP header for checkLdap()
 #include <ldap.h>
 
@@ -35,7 +32,7 @@
 
 // Project headers
 #include <icao/audit/audit_log.h>
-#include "common/progress_manager.h"
+// progress_manager removed — moved to pkd-relay (v2.41.0)
 
 // Infrastructure
 #include "infrastructure/service_container.h"
@@ -44,14 +41,23 @@
 // Handler includes for route registration
 #include "handlers/auth_handler.h"
 #include "handlers/upload_handler.h"
-#include "handlers/upload_stats_handler.h"
 #include "handlers/certificate_handler.h"
 #include "handlers/misc_handler.h"
-#include "handlers/icao_handler.h"
 #include "handlers/code_master_handler.h"
 #include "handlers/api_client_handler.h"
 #include "handlers/api_client_request_handler.h"
 #include "handlers/csr_handler.h"
+
+// Sync module (moved from pkd-relay)
+#include "i_query_executor.h"
+#include "sync/handlers/sync_handler.h"
+#include "sync/handlers/reconciliation_handler.h"
+#include "sync/handlers/notification_handler.h"
+#include "sync/services/validation_service.h"
+#include "sync/common/config.h"
+#include "sync/infrastructure/sync_scheduler.h"
+#include "sync/infrastructure/relay_operations.h"
+#include "sync/common/notification_manager.h"
 
 // Authentication middleware
 #include "middleware/auth_middleware.h"
@@ -59,10 +65,16 @@
 // Services (for route registration)
 #include "services/audit_service.h"
 #include "services/validation_service.h"
-#include "services/icao_sync_service.h"
+// icao_sync_service removed — moved to pkd-relay (v2.41.0)
 
 // Global service container (accessed by processing functions and route handlers)
 infrastructure::ServiceContainer* g_services = nullptr;
+
+// Sync module globals (moved from pkd-relay)
+common::IQueryExecutor* g_queryExecutor = nullptr;  // For Config::loadFromDatabase() compatibility
+std::unique_ptr<handlers::SyncHandler> g_syncHandler;
+std::unique_ptr<handlers::ReconciliationHandler> g_reconciliationHandler;
+std::unique_ptr<handlers::NotificationHandler> g_notificationHandler;
 
 namespace {
 
@@ -231,10 +243,7 @@ void registerRoutes() {
         g_services->uploadHandler()->registerRoutes(app);
     }
 
-    // --- Upload Stats Routes (extracted to UploadStatsHandler) ---
-    if (g_services && g_services->uploadStatsHandler()) {
-        g_services->uploadStatsHandler()->registerRoutes(app);
-    }
+    // Upload Stats moved to pkd-relay (v2.41.0)
 
     // --- Certificate Routes (extracted to CertificateHandler) ---
     if (g_services && g_services->certificateHandler()) {
@@ -271,11 +280,80 @@ void registerRoutes() {
         g_services->csrHandler()->registerRoutes(app);
     }
 
-    // --- ICAO Routes ---
-    if (g_services && g_services->icaoHandler()) {
-        g_services->icaoHandler()->registerRoutes(app);
+    // ICAO Routes moved to pkd-relay (v2.41.0)
+
+    // --- Sync Routes (moved from pkd-relay) ---
+    if (g_syncHandler) {
+        app.registerHandler("/api/sync/status",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleSyncStatus(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/history",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleSyncHistory(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/check",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleSyncCheck(req, std::move(cb));
+            }, {drogon::Post});
+        app.registerHandler("/api/sync/discrepancies",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleDiscrepancies(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/config",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleSyncConfig(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/config",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleUpdateSyncConfig(req, std::move(cb));
+            }, {drogon::Put});
+        app.registerHandler("/api/sync/stats",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleSyncStats(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/revalidate",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleRevalidate(req, std::move(cb));
+            }, {drogon::Post});
+        app.registerHandler("/api/sync/revalidation-history",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleRevalidationHistory(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/trigger-daily",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_syncHandler->handleTriggerDailySync(req, std::move(cb));
+            }, {drogon::Post});
+        spdlog::info("Sync routes registered (10 endpoints)");
     }
 
+    if (g_reconciliationHandler) {
+        app.registerHandler("/api/sync/reconcile",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_reconciliationHandler->handleReconcile(req, std::move(cb));
+            }, {drogon::Post});
+        app.registerHandler("/api/sync/reconcile/history",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_reconciliationHandler->handleReconciliationHistory(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/reconcile/{id}",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_reconciliationHandler->handleReconciliationDetails(req, std::move(cb));
+            }, {drogon::Get});
+        app.registerHandler("/api/sync/reconcile/stats",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_reconciliationHandler->handleReconciliationStats(req, std::move(cb));
+            }, {drogon::Get});
+        spdlog::info("Reconciliation routes registered (4 endpoints)");
+    }
+
+    if (g_notificationHandler) {
+        app.registerHandler("/api/sync/notifications/stream",
+            [](const drogon::HttpRequestPtr& req, std::function<void(const drogon::HttpResponsePtr&)>&& cb) {
+                g_notificationHandler->handleStream(req, std::move(cb));
+            }, {drogon::Get});
+        spdlog::info("Notification SSE stream registered");
+    }
 
     // --- Internal Metrics (monitoring service only) ---
     app.registerHandler("/internal/metrics",
@@ -407,61 +485,56 @@ int main(int argc, char* argv[]) {
             {drogon::Options}
         );
 
+        // Create sync handler instances (moved from pkd-relay)
+        g_queryExecutor = g_services->queryExecutor();
+        if (g_services->syncService()) {
+            g_syncHandler = std::make_unique<handlers::SyncHandler>(
+                g_services->syncService(),
+                g_services->syncValidationService(),
+                g_services->queryExecutor(),
+                g_services->ldapPool(),
+                g_services->syncConfig(),
+                *g_services->syncScheduler());
+
+            g_reconciliationHandler = std::make_unique<handlers::ReconciliationHandler>(
+                g_services->reconciliationService(),
+                g_services->queryExecutor(),
+                g_services->ldapPool(),
+                g_services->syncConfig(),
+                g_services->syncStatusRepository());
+
+            g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
+
+            // Start SSE heartbeat for sync notifications
+            icao::relay::notification::NotificationManager::getInstance().startHeartbeat();
+
+            // Configure and start sync scheduler
+            auto& syncCfg = g_services->syncConfig();
+            g_services->syncScheduler()->configure(
+                syncCfg.dailySyncEnabled, syncCfg.dailySyncHour,
+                syncCfg.dailySyncMinute, syncCfg.revalidateCertsOnSync,
+                syncCfg.autoReconcile);
+
+            g_services->syncScheduler()->setSyncCheckFn([&]() {
+                auto result = infrastructure::performSyncCheck(
+                    g_services->queryExecutor(),
+                    g_services->ldapPool(),
+                    g_services->syncConfig(),
+                    g_services->syncStatusRepository());
+            });
+
+            g_services->syncScheduler()->setRevalidateFn([&]() {
+                g_services->syncValidationService()->revalidateAll();
+            });
+
+            g_services->syncScheduler()->start();
+            spdlog::info("Sync module handlers and scheduler initialized");
+        }
+
         // Register routes
         registerRoutes();
 
-        // ICAO Auto Version Check Scheduler
-        if (appConfig.icaoSchedulerEnabled) {
-            spdlog::info("[IcaoScheduler] Setting up daily version check at {:02d}:00",
-                        appConfig.icaoCheckScheduleHour);
-
-            // Calculate seconds until next target hour
-            auto now = std::chrono::system_clock::now();
-            auto time_t_now = std::chrono::system_clock::to_time_t(now);
-            struct tm tm_now;
-            localtime_r(&time_t_now, &tm_now);
-
-            int currentSeconds = tm_now.tm_hour * 3600 + tm_now.tm_min * 60 + tm_now.tm_sec;
-            int targetSeconds = appConfig.icaoCheckScheduleHour * 3600;
-            int delaySeconds = targetSeconds - currentSeconds;
-            if (delaySeconds <= 0) {
-                delaySeconds += 86400;  // Next day
-            }
-
-            spdlog::info("[IcaoScheduler] First check scheduled in {} seconds ({:.1f} hours)",
-                        delaySeconds, delaySeconds / 3600.0);
-
-            // Capture raw pointer - ServiceContainer outlives all timers
-            auto* scheduledIcaoSvc = g_services->icaoSyncService();
-
-            app.getLoop()->runAfter(static_cast<double>(delaySeconds), [scheduledIcaoSvc, &app]() {
-                spdlog::info("[IcaoScheduler] Running scheduled ICAO version check");
-                try {
-                    auto result = scheduledIcaoSvc->checkForUpdates();
-                    spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
-                                result.message, result.newVersionCount);
-                } catch (const std::exception& e) {
-                    spdlog::error("[IcaoScheduler] Exception during scheduled check: {}", e.what());
-                }
-
-                // Register recurring 24-hour timer
-                app.getLoop()->runEvery(86400.0, [scheduledIcaoSvc]() {
-                    spdlog::info("[IcaoScheduler] Running daily ICAO version check");
-                    try {
-                        auto result = scheduledIcaoSvc->checkForUpdates();
-                        spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
-                                    result.message, result.newVersionCount);
-                    } catch (const std::exception& e) {
-                        spdlog::error("[IcaoScheduler] Exception during daily check: {}", e.what());
-                    }
-                });
-            });
-
-            spdlog::info("[IcaoScheduler] Scheduler enabled (daily at {:02d}:00)",
-                        appConfig.icaoCheckScheduleHour);
-        } else {
-            spdlog::info("[IcaoScheduler] Scheduler disabled (ICAO_SCHEDULER_ENABLED=false)");
-        }
+        // ICAO Version Check Scheduler moved to pkd-relay (v2.41.0)
 
         spdlog::info("Server starting on http://0.0.0.0:{}", appConfig.serverPort);
         spdlog::info("Press Ctrl+C to stop the server");

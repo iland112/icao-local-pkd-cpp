@@ -28,22 +28,21 @@
 #include "infrastructure/service_container.h"
 #include "db_connection_interface.h"
 #include "ldap_connection_pool.h"
-#include "infrastructure/sync_scheduler.h"
-#include "infrastructure/relay_operations.h"
-#include "services/validation_service.h"
 
 // Handlers
 #include "handlers/health_handler.h"
-#include "handlers/sync_handler.h"
-#include "handlers/reconciliation_handler.h"
-#include "handlers/notification_handler.h"
 #include "handlers/icao_ldap_handler.h"
+
+// Upload module (moved from pkd-management)
+#include "upload/upload_services.h"
+#include "upload/handlers/upload_handler.h"
+#include "upload/handlers/upload_stats_handler.h"
+#include "upload/handlers/icao_handler.h"
+#include "upload/common/upload_config.h"
+#include "upload/common/progress_manager.h"
 
 // Notification
 #include "common/notification_manager.h"
-
-// Reconciliation engine (for scheduler daily sync callback)
-#include "relay/sync/reconciliation_engine.h"
 
 using namespace drogon;
 using namespace icao::relay;
@@ -53,14 +52,16 @@ Config g_config;
 common::IQueryExecutor* g_queryExecutor = nullptr;  // For Config::loadFromDatabase() compatibility
 
 std::unique_ptr<infrastructure::ServiceContainer> g_services;
-infrastructure::SyncScheduler g_scheduler;
 
 // Handler instances (must outlive Drogon server)
 std::unique_ptr<handlers::HealthHandler> g_healthHandler;
-std::unique_ptr<handlers::SyncHandler> g_syncHandler;
-std::unique_ptr<handlers::ReconciliationHandler> g_reconciliationHandler;
-std::unique_ptr<handlers::NotificationHandler> g_notificationHandler;
 std::unique_ptr<icao::relay::IcaoLdapHandler> g_icaoLdapHandler;
+
+// Upload module (moved from pkd-management)
+std::unique_ptr<infrastructure::UploadServiceContainer> g_uploadSC;
+std::unique_ptr<handlers::UploadHandler> g_uploadHandler;
+std::unique_ptr<handlers::UploadStatsHandler> g_uploadStatsHandler;
+std::unique_ptr<handlers::IcaoHandler> g_icaoHandler;
 
 // --- Logging Setup ---
 void setupLogging() {
@@ -100,84 +101,19 @@ void registerRoutes() {
             g_healthHandler->handle(req, std::move(cb));
         }, {Get});
 
-    // Sync endpoints
-    app().registerHandler("/api/sync/status",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleSyncStatus(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/history",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleSyncHistory(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/check",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleSyncCheck(req, std::move(cb));
-        }, {Post});
-
-    app().registerHandler("/api/sync/discrepancies",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleDiscrepancies(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/config",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleSyncConfig(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/config",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleUpdateSyncConfig(req, std::move(cb));
-        }, {Put});
-
-    app().registerHandler("/api/sync/stats",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleSyncStats(req, std::move(cb));
-        }, {Get});
-
-    // Reconciliation endpoints
-    app().registerHandler("/api/sync/reconcile",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_reconciliationHandler->handleReconcile(req, std::move(cb));
-        }, {Post});
-
-    app().registerHandler("/api/sync/reconcile/history",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_reconciliationHandler->handleReconciliationHistory(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/reconcile/{id}",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_reconciliationHandler->handleReconciliationDetails(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/reconcile/stats",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_reconciliationHandler->handleReconciliationStats(req, std::move(cb));
-        }, {Get});
-
-    // Re-validation endpoints
-    app().registerHandler("/api/sync/revalidate",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleRevalidate(req, std::move(cb));
-        }, {Post});
-
-    app().registerHandler("/api/sync/revalidation-history",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleRevalidationHistory(req, std::move(cb));
-        }, {Get});
-
-    app().registerHandler("/api/sync/trigger-daily",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_syncHandler->handleTriggerDailySync(req, std::move(cb));
-        }, {Post});
-
-    // Notification SSE stream
-    app().registerHandler("/api/sync/notifications/stream",
-        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
-            g_notificationHandler->handleStream(req, std::move(cb));
-        }, {Get});
+    // --- Upload Routes (moved from pkd-management) ---
+    if (g_uploadHandler) {
+        g_uploadHandler->registerRoutes(app());
+        spdlog::info("Upload handler routes registered");
+    }
+    if (g_uploadStatsHandler) {
+        g_uploadStatsHandler->registerRoutes(app());
+        spdlog::info("Upload stats handler routes registered");
+    }
+    if (g_icaoHandler) {
+        g_icaoHandler->registerRoutes(app());
+        spdlog::info("ICAO version handler routes registered");
+    }
 
     // OpenAPI specification endpoint
     app().registerHandler("/api/openapi.yaml",
@@ -406,31 +342,11 @@ int main() {
     spdlog::info("Loading configuration from database...");
     g_config.loadFromDatabase();
 
-    spdlog::info("Daily sync: {} at {}", g_config.dailySyncEnabled ? "enabled" : "disabled",
-                 infrastructure::formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute));
-    spdlog::info("Certificate re-validation on sync: {}", g_config.revalidateCertsOnSync ? "enabled" : "disabled");
-    spdlog::info("Auto reconcile: {}", g_config.autoReconcile ? "enabled" : "disabled");
+    // Note: Daily sync/reconciliation/revalidation scheduler moved to pkd-management (v2.41.0)
 
     // Create handler instances
     g_healthHandler = std::make_unique<handlers::HealthHandler>(
         g_services->queryExecutor());
-
-    g_syncHandler = std::make_unique<handlers::SyncHandler>(
-        g_services->syncService(),
-        g_services->validationService(),
-        g_services->queryExecutor(),
-        g_services->ldapPool(),
-        g_config,
-        g_scheduler);
-
-    g_reconciliationHandler = std::make_unique<handlers::ReconciliationHandler>(
-        g_services->reconciliationService(),
-        g_services->queryExecutor(),
-        g_services->ldapPool(),
-        g_config,
-        g_services->syncStatusRepository());
-
-    g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
 
     // ICAO LDAP Sync Handler (optional)
     if (g_services->icaoLdapSyncService()) {
@@ -440,96 +356,47 @@ int main() {
         spdlog::info("ICAO LDAP sync endpoints registered");
     }
 
+    // --- Upload Module Initialization (moved from pkd-management) ---
+    try {
+        g_uploadSC = std::make_unique<infrastructure::UploadServiceContainer>();
+        if (g_uploadSC->initialize(g_services->queryExecutor(), g_services->ldapPool(), g_config.ldapBaseDn)) {
+            // Set the global pointer for upload code
+            g_uploadServices = g_uploadSC.get();
+
+            // Create upload handlers
+            handlers::UploadHandler::LdapConfig ldapCfg;
+            ldapCfg.writeHost = g_config.ldapWriteHost;
+            ldapCfg.writePort = g_config.ldapWritePort;
+            ldapCfg.bindDn = g_config.ldapBindDn;
+            ldapCfg.bindPassword = g_config.ldapBindPassword;
+            ldapCfg.baseDn = g_config.ldapBaseDn;
+
+            g_uploadHandler = std::make_unique<handlers::UploadHandler>(
+                g_uploadSC->uploadService(),
+                g_uploadSC->validationService(),
+                g_uploadSC->ldifStructureService(),
+                g_uploadSC->uploadRepository(),
+                g_uploadSC->certificateRepository(),
+                g_uploadSC->crlRepository(),
+                g_uploadSC->validationRepository(),
+                g_uploadSC->queryExecutor(),
+                ldapCfg);
+
+            g_uploadStatsHandler = std::make_unique<handlers::UploadStatsHandler>(
+                g_uploadSC->uploadService(),
+                g_uploadSC->uploadRepository(),
+                g_uploadSC->certificateRepository(),
+                g_uploadSC->validationRepository(),
+                g_uploadSC->queryExecutor());
+
+            spdlog::info("Upload module initialized");
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("Upload module initialization failed: {} (non-fatal)", e.what());
+    }
+
     // Register HTTP routes
     registerRoutes();
-
-    // Start SSE heartbeat thread (30s interval to prevent HTTP/2 connection timeout)
-    notification::NotificationManager::getInstance().startHeartbeat();
-
-    // Configure and start scheduler
-    g_scheduler.configure(g_config.dailySyncEnabled, g_config.dailySyncHour,
-                          g_config.dailySyncMinute, g_config.revalidateCertsOnSync,
-                          g_config.autoReconcile);
-
-    // Set scheduler callbacks
-    g_scheduler.setSyncCheckFn([&]() {
-        auto result = infrastructure::performSyncCheck(
-            g_services->queryExecutor(),
-            g_services->ldapPool(),
-            g_config,
-            g_services->syncStatusRepository());
-
-        // Broadcast notification
-        Json::Value data;
-        data["totalDiscrepancy"] = result.totalDiscrepancy;
-        data["status"] = result.status;
-        data["checkDurationMs"] = result.checkDurationMs;
-        notification::NotificationManager::getInstance().broadcast(
-            "SYNC_CHECK_COMPLETE",
-            "DB-LDAP \ub3d9\uae30\ud654 \uac80\uc0ac \uc644\ub8cc",
-            "\uBD88\uc77c\uce58 " + std::to_string(result.totalDiscrepancy) + "\uac74",
-            data);
-    });
-
-    g_scheduler.setRevalidateFn([&]() {
-        Json::Value revalResult = g_services->validationService()->revalidateAll();
-        if (revalResult.get("success", false).asBool()) {
-            spdlog::info("[Daily] Re-validation completed successfully");
-        } else {
-            spdlog::warn("[Daily] Re-validation had issues: {}",
-                        revalResult.get("error", "unknown").asString());
-        }
-
-        // Broadcast notification
-        notification::NotificationManager::getInstance().broadcast(
-            "REVALIDATION_COMPLETE",
-            "\uc778\uc99d\uc11c \uc7ac\uac80\uc99d \uc644\ub8cc",
-            std::to_string(revalResult.get("totalProcessed", 0).asInt()) + "\uac74 \ucc98\ub9ac\ub428",
-            revalResult);
-    });
-
-    g_scheduler.setReconcileFn([&](int syncStatusId) {
-        // Only reconcile if there are discrepancies
-        auto latestResult = infrastructure::performSyncCheck(
-            g_services->queryExecutor(),
-            g_services->ldapPool(),
-            g_config,
-            g_services->syncStatusRepository());
-
-        if (latestResult.totalDiscrepancy > 0) {
-            spdlog::info("[Daily] Auto reconcile triggered (discrepancy: {})",
-                        latestResult.totalDiscrepancy);
-            ReconciliationEngine engine(g_config, g_services->ldapPool(),
-                                       g_services->queryExecutor());
-            ReconciliationResult reconResult = engine.performReconciliation(
-                false, "DAILY_SYNC", syncStatusId);
-
-            if (reconResult.success) {
-                spdlog::info("[Daily] Auto reconcile completed: {} processed, {} succeeded, {} failed",
-                           reconResult.totalProcessed, reconResult.successCount,
-                           reconResult.failedCount);
-            } else {
-                spdlog::error("[Daily] Auto reconcile failed: {}", reconResult.errorMessage);
-            }
-
-            // Broadcast notification
-            Json::Value data;
-            data["totalProcessed"] = reconResult.totalProcessed;
-            data["successCount"] = reconResult.successCount;
-            data["failedCount"] = reconResult.failedCount;
-            data["success"] = reconResult.success;
-            notification::NotificationManager::getInstance().broadcast(
-                "RECONCILE_COMPLETE",
-                "Reconciliation \uc644\ub8cc",
-                std::to_string(reconResult.totalProcessed) + "\uac74 \ucc98\ub9ac, " +
-                std::to_string(reconResult.failedCount) + "\uac74 \uc2e4\ud328",
-                data);
-        } else {
-            spdlog::info("[Daily] No discrepancies detected, skipping auto reconcile");
-        }
-    });
-
-    g_scheduler.start();
 
     // Start HTTP server
     int threadNum = 4;
@@ -542,11 +409,12 @@ int main() {
         .run();
 
     // Cleanup
-    g_scheduler.stop();
     g_healthHandler.reset();
-    g_syncHandler.reset();
-    g_reconciliationHandler.reset();
-    g_notificationHandler.reset();
+    g_uploadHandler.reset();
+    g_uploadStatsHandler.reset();
+    g_icaoHandler.reset();
+    g_uploadSC.reset();
+    g_uploadServices = nullptr;
     g_queryExecutor = nullptr;
     g_services->shutdown();
     g_services.reset();

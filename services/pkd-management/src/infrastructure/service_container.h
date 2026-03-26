@@ -14,6 +14,7 @@
 #include <memory>
 
 struct AppConfig;
+namespace icao { namespace relay { struct Config; } }
 
 // Forward declarations - Infrastructure
 namespace common {
@@ -22,18 +23,29 @@ namespace common {
     class LdapConnectionPool;
 }
 
+// Forward declarations - Sync module (moved from pkd-relay)
+namespace icao::relay::repositories {
+    class SyncStatusRepository;
+    class ReconciliationRepository;
+}
+namespace icao::relay::services {
+    class SyncService;
+    class ReconciliationService;
+    class ValidationService;  // Revalidation pipeline
+}
+namespace icao::relay::notification { class NotificationManager; }
+
+namespace infrastructure { class SyncScheduler; }
+
 // Forward declarations - Repositories
 namespace repositories {
     class UploadRepository;
     class CertificateRepository;
     class ValidationRepository;
     class AuditRepository;
-    class LdifStructureRepository;
     class UserRepository;
     class AuthAuditRepository;
     class CrlRepository;
-    class DeviationListRepository;
-    class IcaoVersionRepository;
     class LdapCertificateRepository;
     class CodeMasterRepository;
     class ApiClientRepository;
@@ -47,19 +59,15 @@ namespace services {
     class UploadService;
     class ValidationService;
     class AuditService;
-    class LdifStructureService;
     class CertificateService;
-    class IcaoSyncService;
     class LdapStorageService;
     class CsrService;
 }
 
 // Forward declarations - Handlers
 namespace handlers {
-    class IcaoHandler;
     class AuthHandler;
     class UploadHandler;
-    class UploadStatsHandler;
     class CertificateHandler;
     class CodeMasterHandler;
     class ApiClientHandler;
@@ -123,11 +131,9 @@ public:
     repositories::CertificateRepository* certificateRepository() const;
     repositories::ValidationRepository* validationRepository() const;
     repositories::AuditRepository* auditRepository() const;
-    repositories::LdifStructureRepository* ldifStructureRepository() const;
     repositories::UserRepository* userRepository() const;
     repositories::AuthAuditRepository* authAuditRepository() const;
     repositories::CrlRepository* crlRepository() const;
-    repositories::DeviationListRepository* deviationListRepository() const;
     repositories::CodeMasterRepository* codeMasterRepository() const;
     repositories::ApiClientRepository* apiClientRepository() const;
     repositories::ApiClientRequestRepository* apiClientRequestRepository() const;
@@ -138,22 +144,27 @@ public:
     services::UploadService* uploadService() const;
     services::ValidationService* validationService() const;
     services::AuditService* auditService() const;
-    services::LdifStructureService* ldifStructureService() const;
     services::CertificateService* certificateService() const;
-    services::IcaoSyncService* icaoSyncService() const;
     services::LdapStorageService* ldapStorageService() const;
     services::CsrService* csrService() const;
 
     // --- Handler Accessors ---
-    handlers::IcaoHandler* icaoHandler() const;
     handlers::AuthHandler* authHandler() const;
     handlers::UploadHandler* uploadHandler() const;
-    handlers::UploadStatsHandler* uploadStatsHandler() const;
     handlers::CertificateHandler* certificateHandler() const;
     handlers::CodeMasterHandler* codeMasterHandler() const;
     handlers::ApiClientHandler* apiClientHandler() const;
     handlers::ApiClientRequestHandler* apiClientRequestHandler() const;
     handlers::CsrHandler* csrHandler() const;
+
+    // --- Sync Module Accessors (moved from pkd-relay) ---
+    icao::relay::repositories::SyncStatusRepository* syncStatusRepository() const;
+    icao::relay::repositories::ReconciliationRepository* reconciliationRepository() const;
+    icao::relay::services::SyncService* syncService() const;
+    icao::relay::services::ReconciliationService* reconciliationService() const;
+    icao::relay::services::ValidationService* syncValidationService() const;  // 3-step revalidation
+    icao::relay::Config& syncConfig();
+    infrastructure::SyncScheduler* syncScheduler() const;
 
 private:
     struct Impl;

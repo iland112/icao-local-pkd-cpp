@@ -1,0 +1,457 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <set>
+#include <optional>
+#include <unordered_map>
+#include <json/json.h>
+#include "i_query_executor.h"
+#include <openssl/x509.h>
+#include "upload/common/x509_metadata_extractor.h"
+
+/**
+ * @file certificate_repository.h
+ * @brief Certificate Repository - Database Access Layer for certificate table
+ *
+ * Handles all database operations related to certificates (CSCA, DSC, DSC_NC, MLSC, Link Certs).
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
+ *
+ * @date 2026-02-04
+ */
+
+namespace repositories {
+
+/**
+ * @brief Cached fingerprint info for duplicate detection
+ * Used by fingerprint pre-cache to avoid per-entry SELECT queries.
+ */
+struct CachedFingerprintInfo {
+    std::string id;
+    std::string firstUploadId;
+};
+
+/**
+ * @brief Certificate Search Filter
+ */
+struct CertificateSearchFilter {
+    std::optional<std::string> fingerprint;
+    std::optional<std::string> subjectDn;
+    std::optional<std::string> issuerDn;
+    std::optional<std::string> countryCode;
+    std::optional<std::string> certificateType;  // "CSCA", "DSC", "DSC_NC", "MLSC"
+    std::optional<std::string> sourceType;        // "PA_EXTRACTED", "ML_PARSED", etc.
+    std::optional<std::string> validityStatus;    // "VALID", "EXPIRED", "NOT_YET_VALID"
+    std::optional<std::string> searchTerm;        // Search in subject_dn, serial_number, fingerprint_sha256
+    int limit = 100;
+    int offset = 0;
+};
+
+/**
+ * @brief Repository for certificate table
+ *
+ * Handles database operations for certificate CRUD and search.
+ * Database-agnostic design using IQueryExecutor.
+ */
+class CertificateRepository {
+public:
+    /**
+     * @brief Constructor
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
+    explicit CertificateRepository(common::IQueryExecutor* queryExecutor);
+    ~CertificateRepository() = default;
+
+    /// @name Search Operations
+    /// @{
+
+    /**
+     * @brief Search certificates with filters
+     * @param filter Search filter
+     * @return JSON array of certificates
+     */
+    Json::Value search(const CertificateSearchFilter& filter);
+
+    /**
+     * @brief Find certificate by fingerprint (SHA-256)
+     * @param fingerprint 64-character hex string
+     * @return JSON object if found, null otherwise
+     */
+    Json::Value findByFingerprint(const std::string& fingerprint);
+
+    /// @}
+
+    /// @name Certificate Counts
+    /// @{
+
+    /**
+     * @brief Count certificates by type
+     * @param certType "CSCA", "DSC", "DSC_NC", "MLSC"
+     * @return Count
+     */
+    int countByType(const std::string& certType);
+
+    /**
+     * @brief Count total certificates
+     * @return Total count
+     */
+    int countAll();
+
+    /**
+     * @brief Count certificates by country
+     * @param countryCode Country code
+     * @return Count
+     */
+    int countByCountry(const std::string& countryCode);
+
+    /// @}
+
+    /// @name LDAP Storage Tracking
+    /// @{
+
+    /**
+     * @brief Mark certificate as stored in LDAP
+     * @param fingerprint Certificate fingerprint
+     * @return true if updated successfully
+     */
+    bool markStoredInLdap(const std::string& fingerprint);
+
+    /// @}
+
+    /// @name Duplicate Certificate Tracking
+    /// @{
+
+    /**
+     * @brief Find the upload_id of the first upload that introduced this certificate
+     * @param fingerprint SHA-256 fingerprint of the certificate
+     * @return Upload ID string if found, empty string otherwise
+     */
+    std::string findFirstUploadIdByFingerprint(const std::string& fingerprint);
+
+    /**
+     * @brief Save duplicate certificate record to duplicate_certificate table
+     * @param uploadId Current upload ID that detected this duplicate
+     * @param firstUploadId Upload ID that first introduced this certificate
+     * @param fingerprint SHA-256 fingerprint of the certificate
+     * @param certType Certificate type (CSCA, DSC, DSC_NC, MLSC, CRL)
+     * @param subjectDn Subject DN
+     * @param issuerDn Issuer DN
+     * @param countryCode Country code (optional)
+     * @param serialNumber Serial number (optional)
+     * @return true if saved successfully, false otherwise
+     */
+    bool saveDuplicate(const std::string& uploadId,
+                      const std::string& firstUploadId,
+                      const std::string& fingerprint,
+                      const std::string& certType,
+                      const std::string& subjectDn,
+                      const std::string& issuerDn,
+                      const std::string& countryCode = "",
+                      const std::string& serialNumber = "");
+
+    /// @}
+
+    /// @name X509 Certificate Retrieval
+    /// @{
+
+    /**
+     * @brief Find CSCA certificate by issuer DN
+     * Used for DSC trust chain validation.
+     * Uses normalized DN comparison to handle format variations.
+     *
+     * @param issuerDn Issuer DN from DSC certificate
+     * @return X509* certificate if found, nullptr otherwise
+     * @note Caller must free the returned X509* using X509_free()
+     */
+    X509* findCscaByIssuerDn(const std::string& issuerDn);
+
+    /**
+     * @brief Find ALL CSCA certificates matching subject DN
+     * Returns all CSCAs including link certificates for trust chain building.
+     * Uses normalized DN comparison to handle format variations.
+     *
+     * @param subjectDn Subject DN to match
+     * @return Vector of X509* certificates (may be empty)
+     * @note Caller must free all X509* in the vector using X509_free()
+     */
+    std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn);
+
+    /**
+     * @brief Bulk load all CSCA certificates (for in-memory cache)
+     *
+     * Fetches all CSCA certificate data in a single query for preloading
+     * into DbCscaProvider cache. Avoids repeated per-DSC queries during
+     * LDIF upload processing (~845 CSCAs loaded once instead of ~30K queries).
+     *
+     * @return Vector of (subjectDn, DER bytes) pairs
+     */
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> findAllCscas();
+
+    /**
+     * @brief Find DSC certificates that need re-validation
+     * Retrieves DSC/DSC_NC certificates with CSCA_NOT_FOUND error for re-validation.
+     *
+     * @param limit Maximum number of certificates to retrieve
+     * @return JSON array with certificate info (id, issuer_dn, certificate_data, fingerprint_sha256)
+     *
+     * Response format:
+     * [
+     *   {
+     *     "id": "uuid",
+     *     "issuerDn": "...",
+     *     "certificateData": "\\x308...",  // PostgreSQL bytea hex format
+     *     "fingerprint": "abc123..."
+     *   },
+     *   ...
+     * ]
+     */
+    Json::Value findDscForRevalidation(int limit);
+
+    /**
+     * @brief Find PENDING DSC certificates for specific countries
+     *
+     * Used for auto re-validation when new CSCAs are uploaded.
+     * Retrieves DSC/DSC_NC certificates with PENDING status for the given country codes.
+     *
+     * @param countryCodes Set of country codes to filter by
+     * @param limit Maximum number of certificates to retrieve
+     * @return JSON array with certificate info (id, issuerDn, certificateData, fingerprint)
+     */
+    Json::Value findPendingDscByCountries(const std::set<std::string>& countryCodes, int limit);
+
+    /**
+     * @brief Find DSC certificate with binary data by fingerprint
+     *
+     * Returns certificate metadata and hex-encoded certificate_data for
+     * real-time LDAP-based trust chain validation in PA Lookup.
+     *
+     * @param fingerprint SHA-256 fingerprint (64-char hex)
+     * @return JSON object with id, subject_dn, issuer_dn, country_code,
+     *         certificate_type, fingerprint_sha256, certificate_data, serial_number,
+     *         not_before, not_after. Null if not found.
+     */
+    Json::Value findDscWithBinaryByFingerprint(const std::string& fingerprint);
+
+    /**
+     * @brief Find DSC certificate with binary data by subject DN
+     *
+     * Case-insensitive subject DN matching. Returns first DSC/DSC_NC match.
+     *
+     * @param subjectDn Subject DN to search
+     * @return JSON object with certificate metadata + binary. Null if not found.
+     */
+    Json::Value findDscWithBinaryBySubjectDn(const std::string& subjectDn);
+
+    /// @}
+
+    /// @name Certificate Insert and Duplicate Tracking
+    /// @{
+
+    /**
+     * @brief Save certificate with automatic duplicate detection
+     *
+     * Checks if certificate already exists (by type + fingerprint).
+     * If exists: returns existing ID with isDuplicate=true
+     * If new: inserts certificate with full X.509 metadata
+     *
+     * @param uploadId Upload UUID that contains this certificate
+     * @param certType Certificate type (CSCA, DSC, DSC_NC, MLSC)
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @param subjectDn Subject Distinguished Name
+     * @param issuerDn Issuer Distinguished Name
+     * @param serialNumber Serial number (hex string)
+     * @param fingerprint SHA-256 fingerprint (hex string, 64 chars)
+     * @param notBefore Validity start date (ISO 8601 format)
+     * @param notAfter Validity end date (ISO 8601 format)
+     * @param certData Certificate data (DER encoded bytes)
+     * @param validationStatus Validation status (UNKNOWN, VALID, INVALID, PENDING)
+     * @param validationMessage Validation error message (optional)
+     * @return pair<certificateId, isDuplicate> - UUID and duplicate flag
+     *
+     * @note Extracts 15 X.509 metadata fields automatically
+     * @note Database-agnostic (works with PostgreSQL and Oracle)
+     */
+    std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
+        const std::string& uploadId,
+        const std::string& certType,
+        const std::string& countryCode,
+        const std::string& subjectDn,
+        const std::string& issuerDn,
+        const std::string& serialNumber,
+        const std::string& fingerprint,
+        const std::string& notBefore,
+        const std::string& notAfter,
+        const std::vector<uint8_t>& certData,
+        const std::string& validationStatus = "UNKNOWN",
+        const std::string& validationMessage = "",
+        const x509::CertificateMetadata* preExtractedMetadata = nullptr,
+        const std::string& sourceType = "FILE_UPLOAD"
+    );
+
+    /**
+     * @brief Track certificate duplicate source
+     *
+     * Records duplicate certificate detection in certificate_duplicates table.
+     * Allows tracking all uploads that contain the same certificate.
+     *
+     * @param certificateId Certificate UUID from certificate table
+     * @param uploadId Upload UUID that detected this duplicate
+     * @param sourceType Source type (ML_FILE, LDIF_001, LDIF_002, LDIF_003)
+     * @param sourceCountry Country code from source (optional)
+     * @param sourceEntryDn LDIF entry DN (optional)
+     * @param sourceFileName Original filename (optional)
+     * @return true if tracked successfully, false on error
+     */
+    bool trackCertificateDuplicate(
+        const std::string& certificateId,
+        const std::string& uploadId,
+        const std::string& sourceType,
+        const std::string& sourceCountry = "",
+        const std::string& sourceEntryDn = "",
+        const std::string& sourceFileName = ""
+    );
+
+    /**
+     * @brief Increment duplicate count for existing certificate
+     *
+     * Updates certificate.duplicate_count, last_seen_upload_id, last_seen_at
+     * Called when the same certificate is encountered in another upload.
+     *
+     * @param certificateId Certificate UUID
+     * @param uploadId Upload UUID that re-encountered this certificate
+     * @return true if updated successfully, false on error
+     */
+    bool incrementDuplicateCount(
+        const std::string& certificateId,
+        const std::string& uploadId
+    );
+
+    /**
+     * @brief Update LDAP storage status for certificate
+     *
+     * Marks certificate as stored in LDAP with the LDAP DN.
+     * Called after successful LDAP add operation.
+     *
+     * @param certificateId Certificate UUID
+     * @param ldapDn LDAP DN where certificate was stored
+     * @return true if updated successfully, false on error
+     */
+    bool updateCertificateLdapStatus(
+        const std::string& certificateId,
+        const std::string& ldapDn
+    );
+
+    /**
+     * @brief Count LDAP-stored vs total certificates for an upload
+     * @param uploadId Upload UUID
+     * @param outTotal Total certificate count (output)
+     * @param outInLdap Count stored in LDAP (output)
+     */
+    void countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap);
+
+    /**
+     * @brief Get distinct country codes from certificates
+     * @return JSON array of country code strings
+     */
+    Json::Value getDistinctCountries();
+
+    /**
+     * @brief Find all certificates stored in LDAP for bulk export
+     *
+     * Returns certificate_type, country_code, subject_dn, serial_number,
+     * fingerprint_sha256, and certificate_data (hex-encoded) for all
+     * certificates with stored_in_ldap = TRUE.
+     *
+     * @return JSON array of certificate rows
+     */
+    Json::Value findAllForExport();
+
+    /// @}
+
+    /// @name Link Certificate Operations
+    /// @{
+
+    /**
+     * @brief Search link certificates with filters
+     * @return JSON object with search results
+     */
+    Json::Value searchLinkCertificates(const std::string& countryFilter,
+                                        const std::string& validFilter,
+                                        int limit, int offset);
+
+    /**
+     * @brief Find link certificate by ID
+     * @return JSON object with link certificate details, or null
+     */
+    Json::Value findLinkCertificateById(const std::string& id);
+
+    /**
+     * @brief Parse certificate data from hex-encoded bytea format to X509*
+     * @param hexData Hex-encoded certificate data (e.g., "\\x3082...")
+     * @return X509* certificate, or nullptr on failure
+     * @note Caller must free the returned X509* using X509_free()
+     * @note Handles double-encoded BYTEA (legacy data stored as text)
+     */
+    X509* parseCertificateDataFromHex(const std::string& hexData);
+
+    /// @}
+
+    /// @name Fingerprint Pre-Cache (v2.26.0)
+    /// @{
+
+    /**
+     * @brief Preload all existing certificate fingerprints into memory cache
+     *
+     * Bulk-loads fingerprint_sha256, id, first_upload_id from certificate table
+     * into an in-memory unordered_map. Replaces ~30K per-entry SELECT queries
+     * with O(1) hash lookups during LDIF processing.
+     *
+     * @note Safe to call multiple times (reloads on each call)
+     * @note Memory: ~5MB for ~31K certificates
+     */
+    void preloadExistingFingerprints();
+
+    /**
+     * @brief Add a newly inserted certificate to the fingerprint cache
+     * @param fingerprint SHA-256 fingerprint (64-char hex)
+     * @param id Certificate UUID
+     * @param firstUploadId First upload ID
+     */
+    void addToFingerprintCache(const std::string& fingerprint,
+                               const std::string& id,
+                               const std::string& firstUploadId);
+
+    /**
+     * @brief Check if fingerprint exists in pre-loaded cache
+     *
+     * Used by parseCertificateEntry to skip entire processing for already-processed
+     * certificates during resume mode (FAILED retry).
+     *
+     * @param fingerprint SHA-256 fingerprint to check
+     * @return true if fingerprint is in cache (certificate already processed)
+     */
+    bool isFingerprintCached(const std::string& fingerprint) const;
+
+    /**
+     * @brief Get cached fingerprint info (id, firstUploadId)
+     * @return optional CachedFingerprintInfo if found in cache
+     */
+    std::optional<CachedFingerprintInfo> getCachedFingerprintInfo(const std::string& fingerprint) const;
+
+    /// @}
+
+private:
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
+
+    // Fingerprint pre-cache: fingerprint → {id, firstUploadId}
+    std::unordered_map<std::string, CachedFingerprintInfo> fingerprintCache_;
+    bool fingerprintCacheLoaded_ = false;
+
+    // DN normalization helpers (for CSCA lookup)
+    std::string extractDnAttribute(const std::string& dn, const std::string& attr);
+    std::string normalizeDnForComparison(const std::string& dn);
+    std::string escapeSingleQuotes(const std::string& str);
+};
+
+} // namespace repositories

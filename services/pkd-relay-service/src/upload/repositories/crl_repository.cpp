@@ -1,0 +1,392 @@
+/** @file crl_repository.cpp
+ *  @brief CrlRepository implementation
+ */
+
+#include "crl_repository.h"
+#include "query_helpers.h"
+#include <spdlog/spdlog.h>
+#include <sstream>
+#include <iomanip>
+#include <random>
+#include <stdexcept>
+
+namespace repositories {
+
+CrlRepository::CrlRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CrlRepository: queryExecutor cannot be nullptr");
+    }
+    spdlog::debug("[CrlRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
+}
+
+std::string CrlRepository::save(const std::string& uploadId,
+                                 const std::string& countryCode,
+                                 const std::string& issuerDn,
+                                 const std::string& thisUpdate,
+                                 const std::string& nextUpdate,
+                                 const std::string& crlNumber,
+                                 const std::string& fingerprint,
+                                 const std::vector<uint8_t>& crlBinary) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Duplicate check: if CRL with same fingerprint exists, update upload_id
+        {
+            auto checkResult = queryExecutor_->executeQuery(
+                "SELECT id, upload_id FROM crl WHERE fingerprint_sha256 = $1",
+                {fingerprint});
+            if (!checkResult.empty()) {
+                std::string existingId = checkResult[0]["id"].asString();
+                std::string existingUploadId = checkResult[0]["upload_id"].asString();
+                if (existingUploadId != uploadId) {
+                    queryExecutor_->executeCommand(
+                        "UPDATE crl SET upload_id = $1 WHERE id = $2",
+                        {uploadId, existingId});
+                    spdlog::debug("[CrlRepository] CRL duplicate — upload_id updated to {} (fingerprint: {}...)",
+                                  uploadId.substr(0, 8), fingerprint.substr(0, 16));
+                } else {
+                    spdlog::debug("[CrlRepository] CRL duplicate skipped (fingerprint: {}...)",
+                                  fingerprint.substr(0, 16));
+                }
+                return existingId;
+            }
+        }
+
+        // Generate UUID (C++ for all DB types)
+        std::string crlId = generateUuid();
+
+        // Convert binary CRL to hex string
+        // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
+        std::ostringstream hexStream;
+        hexStream << common::db::hexPrefix(dbType);
+        for (size_t i = 0; i < crlBinary.size(); i++) {
+            hexStream << std::hex << std::setw(2) << std::setfill('0')
+                     << static_cast<int>(crlBinary[i]);
+        }
+        std::string crlDataHex = hexStream.str();
+
+        // Database-specific INSERT query
+        std::string query;
+        std::vector<std::string> params;
+
+        if (dbType == "oracle") {
+            // Oracle schema columns: country_code, crl_binary, fingerprint_sha256
+            query =
+                "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
+                "this_update, next_update, crl_number, fingerprint_sha256, "
+                "crl_binary) VALUES ("
+                "$1, $2, $3, $4, "
+                "TO_TIMESTAMP($5, 'YYYY-MM-DD HH24:MI:SS'), "
+                "CASE WHEN $6 IS NULL OR $6 = '' THEN NULL ELSE TO_TIMESTAMP($6, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "$7, $8, $9)";
+
+            // Strip timezone suffix (+00) from date strings for Oracle TO_TIMESTAMP
+            auto stripTz = [](const std::string& ts) -> std::string {
+                if (ts.empty()) return "";
+                std::string result = ts.length() > 19 ? ts.substr(0, 19) : ts;
+                if (result.length() > 10 && result[10] == 'T') result[10] = ' ';
+                return result;
+            };
+
+            params = {
+                crlId, uploadId, countryCode, issuerDn,
+                stripTz(thisUpdate),
+                nextUpdate.empty() ? "" : stripTz(nextUpdate),
+                crlNumber, fingerprint, crlDataHex
+            };
+        } else {
+            // PostgreSQL schema: country_code, fingerprint_sha256, crl_binary, validation_status
+            query =
+                "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
+                "this_update, next_update, crl_number, fingerprint_sha256, "
+                "crl_binary, validation_status, created_at) VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', NOW()) "
+                "ON CONFLICT DO NOTHING";
+
+            params = {
+                crlId, uploadId, countryCode, issuerDn,
+                thisUpdate,
+                nextUpdate.empty() ? "" : nextUpdate,
+                crlNumber, fingerprint, crlDataHex
+            };
+        }
+
+        queryExecutor_->executeCommand(query, params);
+        return crlId;
+    } catch (const std::exception& e) {
+        std::string errMsg = e.what();
+        // ORA-00001 or PostgreSQL 23505: unique constraint violation — race condition duplicate
+        bool isUniqueViolation = errMsg.find("ORA-00001") != std::string::npos ||
+                                 errMsg.find("23505") != std::string::npos;
+        if (isUniqueViolation) {
+            spdlog::debug("[CrlRepository] Concurrent duplicate detected, re-querying: fingerprint={}...",
+                         fingerprint.substr(0, 16));
+            try {
+                auto reResult = queryExecutor_->executeQuery(
+                    "SELECT id FROM crl WHERE fingerprint_sha256 = $1", {fingerprint});
+                if (!reResult.empty()) {
+                    return reResult[0]["id"].asString();
+                }
+            } catch (...) {}
+        }
+        spdlog::error("[CrlRepository] save failed: {}", errMsg);
+        return "";
+    }
+}
+
+void CrlRepository::saveRevokedCertificate(const std::string& crlId,
+                                            const std::string& serialNumber,
+                                            const std::string& revocationDate,
+                                            const std::string& reason) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // revoked_certificate table only exists in PostgreSQL schema
+        if (dbType == "oracle") {
+            spdlog::debug("[CrlRepository] saveRevokedCertificate skipped - table not available in Oracle schema");
+            return;
+        }
+
+        std::string id = generateUuid();
+        std::string query =
+            "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
+            "revocation_date, revocation_reason, created_at) VALUES ("
+            "$1, $2, $3, $4, $5, NOW()) "
+            "ON CONFLICT (crl_id, serial_number) DO NOTHING";
+
+        std::vector<std::string> params = {
+            id, crlId, serialNumber, revocationDate, reason
+        };
+
+        queryExecutor_->executeCommand(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] saveRevokedCertificate failed: {}", e.what());
+    }
+}
+
+void CrlRepository::updateLdapStatus(const std::string& crlId, const std::string& ldapDn) {
+    if (ldapDn.empty()) return;
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedFlag = common::db::boolLiteral(dbType, true);
+
+        std::string query;
+        if (dbType == "oracle") {
+            // Oracle CRL table has no stored_at column
+            query = "UPDATE crl SET "
+                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + " "
+                    "WHERE id = $2";
+        } else {
+            query = "UPDATE crl SET "
+                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + ", stored_at = NOW() "
+                    "WHERE id = $2";
+        }
+
+        queryExecutor_->executeCommand(query, {ldapDn, crlId});
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] updateLdapStatus failed: {}", e.what());
+    }
+}
+
+std::string CrlRepository::generateUuid() {
+    static std::random_device rd;
+    static std::mt19937_64 gen(rd());
+    static std::uniform_int_distribution<uint64_t> dis;
+
+    uint64_t ab = dis(gen);
+    uint64_t cd = dis(gen);
+
+    ab = (ab & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+    cd = (cd & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+    std::ostringstream ss;
+    ss << std::hex << std::setfill('0');
+    ss << std::setw(8) << (ab >> 32) << '-';
+    ss << std::setw(4) << ((ab >> 16) & 0xFFFF) << '-';
+    ss << std::setw(4) << (ab & 0xFFFF) << '-';
+    ss << std::setw(4) << (cd >> 48) << '-';
+    ss << std::setw(12) << (cd & 0x0000FFFFFFFFFFFFULL);
+
+    return ss.str();
+}
+
+// --- CRL Lookup by Country ---
+
+Json::Value CrlRepository::findByCountryCode(const std::string& countryCode) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedFlag = common::db::boolLiteral(dbType, true);
+
+        // Get the most recent CRL for the country (by this_update descending)
+        // Oracle: DBMS_LOB.SUBSTR extracts RAW from BLOB, RAWTOHEX converts to VARCHAR2 hex
+        // (LOB locator reads truncated data due to OCI SQLT_LBI insertion)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string query =
+            "SELECT " + crlBinExpr + ", this_update, next_update "
+            "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
+            "ORDER BY this_update DESC" + common::db::limitClause(dbType, 1);
+
+        Json::Value results = queryExecutor_->executeQuery(query, {countryCode});
+        if (results.isArray() && results.size() > 0) {
+            return results[0];
+        }
+        return Json::nullValue;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findByCountryCode failed for {}: {}", countryCode, e.what());
+        return Json::nullValue;
+    }
+}
+
+// --- Bulk Export (All LDAP-stored CRLs) ---
+
+Json::Value CrlRepository::findAllForExport() {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string storedFlag = common::db::boolLiteral(dbType, true);
+
+    // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+    // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+    std::string crlBinExpr = (dbType == "oracle")
+        ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+        : "crl_binary";
+    std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
+    std::string query =
+        "SELECT country_code, " + issuerDnExpr + ", " + crlBinExpr + ", fingerprint_sha256 "
+        "FROM crl WHERE stored_in_ldap = " + storedFlag + " "
+        "ORDER BY country_code";
+
+    return queryExecutor_->executeQuery(query);
+}
+
+
+// --- Find All CRLs (Paginated, Filtered) ---
+
+Json::Value CrlRepository::findAll(const std::string& countryFilter,
+                                    const std::string& statusFilter,
+                                    int limit,
+                                    int offset) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string tsNow = common::db::currentTimestamp(dbType);
+
+        // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+        // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
+        std::string query = "SELECT id, country_code, " + issuerDnExpr + ", this_update, next_update, "
+                            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, " + crlBinExpr + " "
+                            "FROM crl";
+
+        std::vector<std::string> params;
+        std::vector<std::string> conditions;
+        int paramIdx = 1;
+
+        if (!countryFilter.empty()) {
+            conditions.push_back("country_code = $" + std::to_string(paramIdx));
+            params.push_back(countryFilter);
+            paramIdx++;
+        }
+
+        if (statusFilter == "valid") {
+            conditions.push_back("next_update >= " + tsNow);
+        } else if (statusFilter == "expired") {
+            conditions.push_back("(next_update < " + tsNow + " OR next_update IS NULL)");
+        }
+
+        if (!conditions.empty()) {
+            query += " WHERE ";
+            for (size_t i = 0; i < conditions.size(); i++) {
+                if (i > 0) query += " AND ";
+                query += conditions[i];
+            }
+        }
+
+        query += " ORDER BY country_code ASC, this_update DESC";
+        query += common::db::paginationClause(dbType, limit, offset);
+
+        return queryExecutor_->executeQuery(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findAll failed: {}", e.what());
+        return Json::Value(Json::arrayValue);
+    }
+}
+
+// --- Count All CRLs (Filtered) ---
+
+int CrlRepository::countAll(const std::string& countryFilter,
+                             const std::string& statusFilter) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string tsNow = common::db::currentTimestamp(dbType);
+
+        std::string query = "SELECT COUNT(*) AS cnt FROM crl";
+
+        std::vector<std::string> params;
+        std::vector<std::string> conditions;
+        int paramIdx = 1;
+
+        if (!countryFilter.empty()) {
+            conditions.push_back("country_code = $" + std::to_string(paramIdx));
+            params.push_back(countryFilter);
+            paramIdx++;
+        }
+
+        if (statusFilter == "valid") {
+            conditions.push_back("next_update >= " + tsNow);
+        } else if (statusFilter == "expired") {
+            conditions.push_back("(next_update < " + tsNow + " OR next_update IS NULL)");
+        }
+
+        if (!conditions.empty()) {
+            query += " WHERE ";
+            for (size_t i = 0; i < conditions.size(); i++) {
+                if (i > 0) query += " AND ";
+                query += conditions[i];
+            }
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+        if (result.isArray() && result.size() > 0) {
+            return common::db::scalarToInt(result[0]["cnt"]);
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] countAll failed: {}", e.what());
+        return 0;
+    }
+}
+
+// --- Find CRL by ID ---
+
+Json::Value CrlRepository::findById(const std::string& crlId) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+        // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
+        std::string query =
+            "SELECT id, country_code, " + issuerDnExpr + ", this_update, next_update, "
+            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, " + crlBinExpr + " "
+            "FROM crl WHERE id = $1";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, {crlId});
+        if (rows.isArray() && rows.size() > 0) {
+            return rows[0];
+        }
+        return Json::nullValue;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findById failed for {}: {}", crlId, e.what());
+        return Json::nullValue;
+    }
+}
+
+} // namespace repositories

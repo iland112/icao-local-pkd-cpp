@@ -22,12 +22,9 @@
 #include "../repositories/certificate_repository.h"
 #include "../repositories/validation_repository.h"
 #include "../repositories/audit_repository.h"
-#include "../repositories/ldif_structure_repository.h"
 #include "../repositories/user_repository.h"
 #include "../repositories/auth_audit_repository.h"
 #include "../repositories/crl_repository.h"
-#include "../repositories/deviation_list_repository.h"
-#include "../repositories/icao_version_repository.h"
 #include "../repositories/ldap_certificate_repository.h"
 #include "../repositories/code_master_repository.h"
 #include "../repositories/api_client_repository.h"
@@ -39,9 +36,7 @@
 #include "../services/upload_service.h"
 #include "../services/validation_service.h"
 #include "../services/audit_service.h"
-#include "../services/ldif_structure_service.h"
 #include "../services/certificate_service.h"
-#include "../services/icao_sync_service.h"
 #include "../services/ldap_storage_service.h"
 #include "../services/csr_service.h"
 
@@ -50,10 +45,8 @@
 #include "../adapters/ldap_crl_provider.h"
 
 // Handlers
-#include "../handlers/icao_handler.h"
 #include "../handlers/auth_handler.h"
 #include "../handlers/upload_handler.h"
-#include "../handlers/upload_stats_handler.h"
 #include "../handlers/certificate_handler.h"
 #include "../handlers/code_master_handler.h"
 #include "../handlers/api_client_handler.h"
@@ -66,8 +59,17 @@
 // Password hashing (admin user initialization)
 #include "../auth/password_hash.h"
 
-// HTTP infrastructure
-#include "../infrastructure/http/http_client.h"
+// Sync module (moved from pkd-relay)
+#include "../sync/repositories/sync_status_repository.h"
+#include "../sync/repositories/certificate_repository.h"
+#include "../sync/repositories/crl_repository.h"
+#include "../sync/repositories/reconciliation_repository.h"
+#include "../sync/repositories/validation_repository.h"
+#include "../sync/services/sync_service.h"
+#include "../sync/services/reconciliation_service.h"
+#include "../sync/services/validation_service.h"
+#include "../sync/common/config.h"
+#include "../sync/infrastructure/sync_scheduler.h"
 
 #include <spdlog/spdlog.h>
 
@@ -84,12 +86,9 @@ struct ServiceContainer::Impl {
     std::shared_ptr<repositories::CertificateRepository> certificateRepository;
     std::shared_ptr<repositories::ValidationRepository> validationRepository;
     std::shared_ptr<repositories::AuditRepository> auditRepository;
-    std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;
     std::shared_ptr<repositories::UserRepository> userRepository;
     std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
     std::shared_ptr<repositories::CrlRepository> crlRepository;
-    std::shared_ptr<repositories::DeviationListRepository> deviationListRepository;
-    std::shared_ptr<repositories::IcaoVersionRepository> icaoVersionRepository;
     std::shared_ptr<repositories::LdapCertificateRepository> ldapCertificateRepository;
     std::shared_ptr<repositories::CodeMasterRepository> codeMasterRepository;
     std::shared_ptr<repositories::ApiClientRepository> apiClientRepository;
@@ -105,22 +104,30 @@ struct ServiceContainer::Impl {
     std::shared_ptr<services::UploadService> uploadService;
     std::shared_ptr<services::ValidationService> validationService;
     std::shared_ptr<services::AuditService> auditService;
-    std::shared_ptr<services::LdifStructureService> ldifStructureService;
     std::shared_ptr<services::CertificateService> certificateService;
-    std::shared_ptr<services::IcaoSyncService> icaoSyncService;
     std::shared_ptr<services::LdapStorageService> ldapStorageService;
     std::shared_ptr<services::CsrService> csrService;
 
     // Handlers
-    std::shared_ptr<handlers::IcaoHandler> icaoHandler;
     std::shared_ptr<handlers::AuthHandler> authHandler;
     std::shared_ptr<handlers::UploadHandler> uploadHandler;
-    std::shared_ptr<handlers::UploadStatsHandler> uploadStatsHandler;
     std::shared_ptr<handlers::CertificateHandler> certificateHandler;
     std::shared_ptr<handlers::CodeMasterHandler> codeMasterHandler;
     std::shared_ptr<handlers::ApiClientHandler> apiClientHandler;
     std::shared_ptr<handlers::ApiClientRequestHandler> apiClientRequestHandler;
     std::shared_ptr<handlers::CsrHandler> csrHandler;
+
+    // Sync module (moved from pkd-relay)
+    std::unique_ptr<icao::relay::Config> syncConfig;
+    std::shared_ptr<icao::relay::repositories::SyncStatusRepository> syncStatusRepo;
+    std::shared_ptr<icao::relay::repositories::CertificateRepository> syncCertificateRepo;
+    std::shared_ptr<icao::relay::repositories::CrlRepository> syncCrlRepo;
+    std::shared_ptr<icao::relay::repositories::ReconciliationRepository> syncReconciliationRepo;
+    std::shared_ptr<icao::relay::repositories::ValidationRepository> syncValidationRepo;
+    std::shared_ptr<icao::relay::services::SyncService> syncService;
+    std::shared_ptr<icao::relay::services::ReconciliationService> reconciliationService;
+    std::shared_ptr<icao::relay::services::ValidationService> syncValidationService;
+    std::unique_ptr<infrastructure::SyncScheduler> syncScheduler;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -138,15 +145,11 @@ void ServiceContainer::shutdown() {
     impl_->apiClientHandler.reset();
     impl_->codeMasterHandler.reset();
     impl_->certificateHandler.reset();
-    impl_->uploadStatsHandler.reset();
     impl_->uploadHandler.reset();
     impl_->authHandler.reset();
-    impl_->icaoHandler.reset();
 
     impl_->csrService.reset();
     impl_->ldapStorageService.reset();
-    impl_->icaoSyncService.reset();
-    impl_->ldifStructureService.reset();
     impl_->auditService.reset();
     impl_->validationService.reset();
     impl_->uploadService.reset();
@@ -162,16 +165,25 @@ void ServiceContainer::shutdown() {
     impl_->apiClientRepository.reset();
     impl_->codeMasterRepository.reset();
     impl_->ldapCertificateRepository.reset();
-    impl_->icaoVersionRepository.reset();
-    impl_->deviationListRepository.reset();
     impl_->crlRepository.reset();
     impl_->authAuditRepository.reset();
     impl_->userRepository.reset();
-    impl_->ldifStructureRepository.reset();
     impl_->auditRepository.reset();
     impl_->validationRepository.reset();
     impl_->certificateRepository.reset();
     impl_->uploadRepository.reset();
+
+    // Sync module
+    impl_->syncScheduler.reset();
+    impl_->syncValidationService.reset();
+    impl_->reconciliationService.reset();
+    impl_->syncService.reset();
+    impl_->syncValidationRepo.reset();
+    impl_->syncReconciliationRepo.reset();
+    impl_->syncCrlRepo.reset();
+    impl_->syncCertificateRepo.reset();
+    impl_->syncStatusRepo.reset();
+    impl_->syncConfig.reset();
 
     impl_->queryExecutor.reset();
     impl_->ldapPool.reset();
@@ -268,9 +280,6 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->userRepository = std::make_shared<repositories::UserRepository>(impl_->queryExecutor.get());
     impl_->authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(impl_->queryExecutor.get());
     impl_->crlRepository = std::make_shared<repositories::CrlRepository>(impl_->queryExecutor.get());
-    impl_->deviationListRepository = std::make_shared<repositories::DeviationListRepository>(impl_->queryExecutor.get());
-    impl_->ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(impl_->uploadRepository.get());
-    impl_->icaoVersionRepository = std::make_shared<repositories::IcaoVersionRepository>(impl_->queryExecutor.get());
     impl_->codeMasterRepository = std::make_shared<repositories::CodeMasterRepository>(impl_->queryExecutor.get());
     impl_->apiClientRepository = std::make_shared<repositories::ApiClientRepository>(impl_->queryExecutor.get());
     impl_->apiClientRequestRepository = std::make_shared<repositories::ApiClientRequestRepository>(impl_->queryExecutor.get());
@@ -282,31 +291,13 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->ldapStorageService = std::make_shared<services::LdapStorageService>(config);
     spdlog::info("LDAP Storage Service initialized");
 
-    // --- Phase 5: ICAO Sync Module ---
-    spdlog::info("Initializing ICAO Auto Sync module...");
-
-    auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
-
-    services::IcaoSyncService::Config icaoConfig;
-    icaoConfig.icaoPortalUrl = config.icaoPortalUrl;
-    icaoConfig.notificationEmail = config.notificationEmail;
-    icaoConfig.autoNotify = config.icaoAutoNotify;
-    icaoConfig.httpTimeoutSeconds = config.icaoHttpTimeout;
-
-    impl_->icaoSyncService = std::make_shared<services::IcaoSyncService>(
-        impl_->icaoVersionRepository, httpClient, icaoConfig
-    );
-
-    impl_->icaoHandler = std::make_shared<handlers::IcaoHandler>(impl_->icaoSyncService);
-    spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
-                config.icaoPortalUrl, config.icaoAutoNotify ? "enabled" : "disabled");
+    // ICAO Sync Module moved to pkd-relay (v2.41.0)
 
     // --- Phase 6: Business Logic Services ---
     impl_->uploadService = std::make_shared<services::UploadService>(
         impl_->uploadRepository.get(),
         impl_->certificateRepository.get(),
-        impl_->ldapPool.get(),
-        impl_->deviationListRepository.get()
+        impl_->ldapPool.get()
     );
 
     // Create LDAP provider adapters for real-time PA Lookup validation
@@ -328,9 +319,7 @@ bool ServiceContainer::initialize(const AppConfig& config) {
         impl_->auditRepository.get()
     );
 
-    impl_->ldifStructureService = std::make_shared<services::LdifStructureService>(
-        impl_->ldifStructureRepository.get()
-    );
+    // LdifStructureService moved to pkd-relay (v2.41.0)
 
     impl_->csrService = std::make_shared<services::CsrService>(
         impl_->csrRepository.get(),
@@ -346,35 +335,11 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     );
     spdlog::info("Authentication handler initialized");
 
-    handlers::UploadHandler::LdapConfig ldapCfg;
-    ldapCfg.writeHost = config.ldapWriteHost;
-    ldapCfg.writePort = config.ldapWritePort;
-    ldapCfg.bindDn = config.ldapBindDn;
-    ldapCfg.bindPassword = config.ldapBindPassword;
-    ldapCfg.baseDn = config.ldapBaseDn;
-    ldapCfg.trustAnchorPath = config.trustAnchorPath;
-
     impl_->uploadHandler = std::make_shared<handlers::UploadHandler>(
         impl_->uploadService.get(),
-        impl_->validationService.get(),
-        impl_->ldifStructureService.get(),
-        impl_->uploadRepository.get(),
-        impl_->certificateRepository.get(),
-        impl_->crlRepository.get(),
-        impl_->validationRepository.get(),
-        impl_->queryExecutor.get(),
-        ldapCfg
-    );
-    spdlog::info("Upload handler initialized (10 endpoints)");
-
-    impl_->uploadStatsHandler = std::make_shared<handlers::UploadStatsHandler>(
-        impl_->uploadService.get(),
-        impl_->uploadRepository.get(),
-        impl_->certificateRepository.get(),
-        impl_->validationRepository.get(),
         impl_->queryExecutor.get()
     );
-    spdlog::info("Upload Stats handler initialized (11 endpoints)");
+    spdlog::info("Upload handler initialized (2 certificate upload endpoints)");
 
     impl_->certificateHandler = std::make_shared<handlers::CertificateHandler>(
         impl_->certificateService.get(),
@@ -413,7 +378,55 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     );
     spdlog::info("CSR handler initialized (6 endpoints)");
 
-    // --- Phase 8: Ensure admin user exists ---
+    // --- Phase 8: Sync Module (moved from pkd-relay) ---
+    try {
+        impl_->syncConfig = std::make_unique<icao::relay::Config>();
+        // Populate sync config from shared LDAP/DB environment
+        impl_->syncConfig->ldapWriteHost = config.ldapWriteHost;
+        impl_->syncConfig->ldapWritePort = config.ldapWritePort;
+        impl_->syncConfig->ldapBindDn = config.ldapBindDn;
+        impl_->syncConfig->ldapBindPassword = config.ldapBindPassword;
+        impl_->syncConfig->ldapBaseDn = config.ldapBaseDn;
+        impl_->syncConfig->ldapDataContainer = config.ldapDataContainer;
+        impl_->syncConfig->ldapNcDataContainer = config.ldapNcDataContainer;
+        // Load sync-specific settings from env
+        if (auto e = std::getenv("AUTO_RECONCILE")) impl_->syncConfig->autoReconcile = (std::string(e) == "true");
+        if (auto e = std::getenv("MAX_RECONCILE_BATCH_SIZE")) impl_->syncConfig->maxReconcileBatchSize = std::stoi(e);
+        if (auto e = std::getenv("DAILY_SYNC_ENABLED")) impl_->syncConfig->dailySyncEnabled = (std::string(e) == "true");
+        if (auto e = std::getenv("DAILY_SYNC_HOUR")) impl_->syncConfig->dailySyncHour = std::stoi(e);
+        if (auto e = std::getenv("DAILY_SYNC_MINUTE")) impl_->syncConfig->dailySyncMinute = std::stoi(e);
+        if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) impl_->syncConfig->revalidateCertsOnSync = (std::string(e) == "true");
+
+        // Sync repositories (use same queryExecutor as main service)
+        impl_->syncStatusRepo = std::make_shared<icao::relay::repositories::SyncStatusRepository>(
+            impl_->queryExecutor.get());
+        impl_->syncCertificateRepo = std::make_shared<icao::relay::repositories::CertificateRepository>(
+            impl_->queryExecutor.get());
+        impl_->syncCrlRepo = std::make_shared<icao::relay::repositories::CrlRepository>(
+            impl_->queryExecutor.get());
+        impl_->syncReconciliationRepo = std::make_shared<icao::relay::repositories::ReconciliationRepository>(
+            impl_->queryExecutor.get());
+        impl_->syncValidationRepo = std::make_shared<icao::relay::repositories::ValidationRepository>(
+            impl_->queryExecutor.get());
+
+        // Sync services
+        impl_->syncService = std::make_shared<icao::relay::services::SyncService>(
+            impl_->syncStatusRepo, impl_->syncCertificateRepo, impl_->syncCrlRepo);
+        impl_->reconciliationService = std::make_shared<icao::relay::services::ReconciliationService>(
+            impl_->syncReconciliationRepo, impl_->syncCertificateRepo, impl_->syncCrlRepo);
+        impl_->syncValidationService = std::make_shared<icao::relay::services::ValidationService>(
+            impl_->syncValidationRepo.get(), impl_->syncCertificateRepo.get(), impl_->syncCrlRepo.get());
+
+        // Sync scheduler
+        impl_->syncScheduler = std::make_unique<infrastructure::SyncScheduler>();
+
+        spdlog::info("Sync module initialized (autoReconcile={}, dailySync={})",
+                     impl_->syncConfig->autoReconcile, impl_->syncConfig->dailySyncEnabled);
+    } catch (const std::exception& e) {
+        spdlog::warn("Sync module initialization failed: {} (non-fatal)", e.what());
+    }
+
+    // --- Phase 9: Ensure admin user exists ---
     ensureAdminUser();
 
     spdlog::info("ServiceContainer initialization complete");
@@ -430,11 +443,9 @@ repositories::UploadRepository* ServiceContainer::uploadRepository() const { ret
 repositories::CertificateRepository* ServiceContainer::certificateRepository() const { return impl_->certificateRepository.get(); }
 repositories::ValidationRepository* ServiceContainer::validationRepository() const { return impl_->validationRepository.get(); }
 repositories::AuditRepository* ServiceContainer::auditRepository() const { return impl_->auditRepository.get(); }
-repositories::LdifStructureRepository* ServiceContainer::ldifStructureRepository() const { return impl_->ldifStructureRepository.get(); }
 repositories::UserRepository* ServiceContainer::userRepository() const { return impl_->userRepository.get(); }
 repositories::AuthAuditRepository* ServiceContainer::authAuditRepository() const { return impl_->authAuditRepository.get(); }
 repositories::CrlRepository* ServiceContainer::crlRepository() const { return impl_->crlRepository.get(); }
-repositories::DeviationListRepository* ServiceContainer::deviationListRepository() const { return impl_->deviationListRepository.get(); }
 repositories::CodeMasterRepository* ServiceContainer::codeMasterRepository() const { return impl_->codeMasterRepository.get(); }
 repositories::ApiClientRepository* ServiceContainer::apiClientRepository() const { return impl_->apiClientRepository.get(); }
 repositories::ApiClientRequestRepository* ServiceContainer::apiClientRequestRepository() const { return impl_->apiClientRequestRepository.get(); }
@@ -445,24 +456,29 @@ repositories::CsrRepository* ServiceContainer::csrRepository() const { return im
 services::UploadService* ServiceContainer::uploadService() const { return impl_->uploadService.get(); }
 services::ValidationService* ServiceContainer::validationService() const { return impl_->validationService.get(); }
 services::AuditService* ServiceContainer::auditService() const { return impl_->auditService.get(); }
-services::LdifStructureService* ServiceContainer::ldifStructureService() const { return impl_->ldifStructureService.get(); }
 services::CertificateService* ServiceContainer::certificateService() const { return impl_->certificateService.get(); }
-services::IcaoSyncService* ServiceContainer::icaoSyncService() const { return impl_->icaoSyncService.get(); }
 services::LdapStorageService* ServiceContainer::ldapStorageService() const { return impl_->ldapStorageService.get(); }
 services::CsrService* ServiceContainer::csrService() const { return impl_->csrService.get(); }
 
 // --- Handler Accessors ---
-handlers::IcaoHandler* ServiceContainer::icaoHandler() const { return impl_->icaoHandler.get(); }
 handlers::AuthHandler* ServiceContainer::authHandler() const { return impl_->authHandler.get(); }
 handlers::UploadHandler* ServiceContainer::uploadHandler() const { return impl_->uploadHandler.get(); }
-handlers::UploadStatsHandler* ServiceContainer::uploadStatsHandler() const { return impl_->uploadStatsHandler.get(); }
 handlers::CertificateHandler* ServiceContainer::certificateHandler() const { return impl_->certificateHandler.get(); }
 handlers::CodeMasterHandler* ServiceContainer::codeMasterHandler() const { return impl_->codeMasterHandler.get(); }
 handlers::ApiClientHandler* ServiceContainer::apiClientHandler() const { return impl_->apiClientHandler.get(); }
 handlers::ApiClientRequestHandler* ServiceContainer::apiClientRequestHandler() const { return impl_->apiClientRequestHandler.get(); }
 handlers::CsrHandler* ServiceContainer::csrHandler() const { return impl_->csrHandler.get(); }
 
-// --- Admin User Initialization (Phase 8) ---
+// --- Sync Module Accessors ---
+icao::relay::repositories::SyncStatusRepository* ServiceContainer::syncStatusRepository() const { return impl_->syncStatusRepo.get(); }
+icao::relay::repositories::ReconciliationRepository* ServiceContainer::reconciliationRepository() const { return impl_->syncReconciliationRepo.get(); }
+icao::relay::services::SyncService* ServiceContainer::syncService() const { return impl_->syncService.get(); }
+icao::relay::services::ReconciliationService* ServiceContainer::reconciliationService() const { return impl_->reconciliationService.get(); }
+icao::relay::services::ValidationService* ServiceContainer::syncValidationService() const { return impl_->syncValidationService.get(); }
+icao::relay::Config& ServiceContainer::syncConfig() { return *impl_->syncConfig; }
+infrastructure::SyncScheduler* ServiceContainer::syncScheduler() const { return impl_->syncScheduler.get(); }
+
+// --- Admin User Initialization ---
 
 void ServiceContainer::ensureAdminUser() {
     try {

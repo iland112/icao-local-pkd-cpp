@@ -2,30 +2,28 @@
 
 **Port**: 8081 (via API Gateway :8080/api)
 **Language**: C++20, Drogon Framework
-**Role**: 인증서 업로드, 검색, ICAO 동기화, 인증, API 클라이언트 관리
+**Role**: 로컬 PKD 운영/관리 — 인증서 검색, DB↔LDAP 동기화, 인증, API 클라이언트 관리
 
 ---
 
 ## API Endpoints
 
-### Upload Management
-- `POST /api/upload/ldif` — LDIF 업로드
-- `POST /api/upload/masterlist` — Master List 업로드
+### Individual Certificate Upload (로컬 PKD 직접 등록)
 - `POST /api/upload/certificate` — 개별 인증서 업로드 (PEM, DER, P7B, DL, CRL)
 - `POST /api/upload/certificate/preview` — 미리보기 (파싱만, 저장 안함)
-- `GET /api/upload/history` — 업로드 이력 (paginated)
-- `GET /api/upload/detail/{id}` — 업로드 상세
-- `POST /api/upload/{id}/retry` — 실패 업로드 재시도 (FAILED only, resume mode)
-- `DELETE /api/upload/{id}` — 업로드 삭제
-- `GET /api/upload/statistics` — 업로드 통계 (validation.icao, certValidCount/certExpiredCount 포함)
-- `GET /api/upload/statistics/icao-noncompliant?category=keyUsage|algorithm|keySize|validityPeriod|extensions` — ICAO 미준수 인증서 목록
-- `GET /api/upload/countries` — 국가 통계
-- `GET /api/upload/countries/detailed` — 국가별 상세
-- `GET /api/upload/changes` — 최근 변경
-- `GET /api/upload/{id}/validations` — Trust Chain 검증 결과
-- `GET /api/upload/{id}/issues` — 중복 인증서
-- `GET /api/upload/{id}/ldif-structure` — LDIF/ASN.1 구조
-- `GET /api/progress/{id}` — SSE 진행 상황 스트림
+
+> **Note**: LDIF/Master List 업로드, 업로드 이력/통계, ICAO 버전 감지는 pkd-relay로 이동 (v2.41.0)
+
+### DB↔LDAP Sync & Reconciliation (pkd-relay에서 이동)
+- `GET /api/sync/status` — DB-LDAP 동기화 상태
+- `GET /api/sync/stats` — 동기화 통계
+- `POST /api/sync/check` — 수동 동기화 체크
+- `POST /api/sync/revalidate` — DSC 만료 상태 재검증
+- `POST /api/sync/reconcile` — Reconciliation 실행
+- `GET /api/sync/reconcile/history` — Reconciliation 이력
+- `GET /api/sync/reconcile/{id}` — Reconciliation 상세
+- `GET /api/sync/reconcile/stats` — Reconciliation 통계
+- `GET /api/sync/notifications/stream` — SSE 실시간 알림 스트림
 
 ### Certificate Search & Validation
 - `GET /api/certificates/search` — 인증서 검색 (country/type/status 필터)

@@ -1,0 +1,1719 @@
+/** @file certificate_repository.cpp
+ *  @brief CertificateRepository implementation
+ */
+
+#include "certificate_repository.h"
+#include "upload/common/x509_metadata_extractor.h"
+#include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <sstream>
+#include <algorithm>
+#include <cstring>
+#include <iomanip>
+#include <random>
+#include <openssl/x509.h>
+#include <openssl/err.h>
+#include <unordered_map>
+#include "query_helpers.h"
+
+namespace repositories {
+
+/** @brief Thread-local UUID v4 generator */
+static std::string generateUuid() {
+    static thread_local std::random_device rd;
+    static thread_local std::mt19937_64 gen(rd());
+    static thread_local std::uniform_int_distribution<uint64_t> dis;
+
+    uint64_t ab = dis(gen);
+    uint64_t cd = dis(gen);
+
+    ab = (ab & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+    cd = (cd & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+    std::ostringstream ss;
+    ss << std::hex << std::setfill('0');
+    ss << std::setw(8) << (ab >> 32) << '-';
+    ss << std::setw(4) << ((ab >> 16) & 0xFFFF) << '-';
+    ss << std::setw(4) << (ab & 0xFFFF) << '-';
+    ss << std::setw(4) << (cd >> 48) << '-';
+    ss << std::setw(12) << (cd & 0x0000FFFFFFFFFFFFULL);
+
+    return ss.str();
+}
+
+/**
+ * @brief Convert certificate date to Oracle-safe ISO 8601 format (no timezone suffix)
+ *
+ * Handles two input formats:
+ *   1. ASN1_TIME_print: "Jan 15 10:30:00 2024 GMT" -> "2024-01-15 10:30:00"
+ *   2. ISO with TZ:     "2024-04-15 15:00:00+00"   -> "2024-04-15 15:00:00"
+ *
+ * Oracle TO_TIMESTAMP expects exactly 'YYYY-MM-DD HH24:MI:SS' (19 chars).
+ */
+static std::string convertDateToIso(const std::string& opensslDate) {
+    if (opensslDate.empty()) return "";
+
+    // Check if already in ISO-like format (starts with digit: "2024-...")
+    if (!opensslDate.empty() && std::isdigit(opensslDate[0])) {
+        // Already ISO format, just strip timezone suffix (+00, +00:00, Z, etc.)
+        std::string result = opensslDate;
+        // Find the position after "YYYY-MM-DD HH:MI:SS" (19 chars)
+        if (result.length() > 19) {
+            result = result.substr(0, 19);
+        }
+        // Replace T separator with space for Oracle TO_TIMESTAMP compatibility
+        if (result.length() > 10 && result[10] == 'T') {
+            result[10] = ' ';
+        }
+        return result;
+    }
+
+    // ASN1_TIME_print format: "Jan 15 10:30:00 2024 GMT"
+    static const std::unordered_map<std::string, std::string> months = {
+        {"Jan", "01"}, {"Feb", "02"}, {"Mar", "03"}, {"Apr", "04"},
+        {"May", "05"}, {"Jun", "06"}, {"Jul", "07"}, {"Aug", "08"},
+        {"Sep", "09"}, {"Oct", "10"}, {"Nov", "11"}, {"Dec", "12"}
+    };
+
+    std::istringstream iss(opensslDate);
+    std::string month, day, time, year;
+    iss >> month >> day >> time >> year;
+
+    auto it = months.find(month);
+    if (it == months.end()) {
+        // Unknown format — truncate to 19 chars as safety measure
+        return opensslDate.length() > 19 ? opensslDate.substr(0, 19) : opensslDate;
+    }
+
+    if (day.length() == 1) day = "0" + day;
+
+    // Truncate time to HH:MI:SS (strip any fractional seconds)
+    if (time.length() > 8) {
+        time = time.substr(0, 8);
+    }
+
+    return year + "-" + it->second + "-" + day + " " + time;
+}
+
+CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CertificateRepository: queryExecutor cannot be nullptr");
+    }
+    spdlog::debug("[CertificateRepository] Initialized with database type: {}",
+        queryExecutor_->getDatabaseType());
+}
+
+// --- Search Operations ---
+
+Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
+{
+    spdlog::debug("[CertificateRepository] Searching certificates (DB-based)");
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::vector<std::string> params;
+        int paramIdx = 1;
+
+        // Build dynamic WHERE clause
+        std::ostringstream where;
+        if (filter.countryCode.has_value() && !filter.countryCode->empty()) {
+            where << " AND country_code = $" << paramIdx++;
+            params.push_back(*filter.countryCode);
+        }
+        if (filter.certificateType.has_value() && !filter.certificateType->empty()) {
+            where << " AND certificate_type = $" << paramIdx++;
+            params.push_back(*filter.certificateType);
+        }
+        if (filter.sourceType.has_value() && !filter.sourceType->empty()) {
+            where << " AND source_type = $" << paramIdx++;
+            params.push_back(*filter.sourceType);
+        }
+        if (filter.validityStatus.has_value() && !filter.validityStatus->empty()) {
+            const auto& vs = *filter.validityStatus;
+            std::string now = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+            if (vs == "VALID") {
+                where << " AND not_before <= " << now << " AND not_after >= " << now;
+            } else if (vs == "EXPIRED" || vs == "EXPIRED_VALID") {
+                where << " AND not_after < " << now;
+            } else if (vs == "NOT_YET_VALID") {
+                where << " AND not_before > " << now;
+            }
+        }
+        if (filter.searchTerm.has_value() && !filter.searchTerm->empty()) {
+            std::string term = "%" + *filter.searchTerm + "%";
+            std::string p = "$" + std::to_string(paramIdx);
+            where << " AND (" << common::db::ilikeCond(dbType, "subject_dn", p)
+                   << " OR " << common::db::ilikeCond(dbType, "serial_number", p)
+                   << " OR " << common::db::ilikeCond(dbType, "fingerprint_sha256", p) << ")";
+            paramIdx++;
+            params.push_back(term);
+        }
+
+        std::string whereStr = where.str();
+
+        // Count query
+        std::string countSql = "SELECT COUNT(*) FROM certificate WHERE 1=1" + whereStr;
+        Json::Value countResult = queryExecutor_->executeScalar(countSql, params);
+        int total = common::db::scalarToInt(countResult);
+
+        // Data query
+        std::ostringstream dataSql;
+        dataSql << "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
+                << "serial_number, fingerprint_sha256, not_before, not_after, "
+                << "validation_status, source_type, stored_in_ldap, "
+                << "is_self_signed, version, signature_algorithm, "
+                << "public_key_algorithm, public_key_size "
+                << "FROM certificate WHERE 1=1" << whereStr
+                << " ORDER BY created_at DESC";
+
+        dataSql << common::db::paginationClause(dbType, filter.limit, filter.offset);
+
+        Json::Value rows = queryExecutor_->executeQuery(dataSql.str(), params);
+
+        // Build response
+        Json::Value response;
+        response["success"] = true;
+        response["total"] = total;
+        response["limit"] = filter.limit;
+        response["offset"] = filter.offset;
+
+        Json::Value certificates(Json::arrayValue);
+        for (const auto& row : rows) {
+            Json::Value cert;
+            cert["dn"] = "";
+            cert["cn"] = row.get("subject_dn", "").asString();
+            cert["sn"] = row.get("serial_number", "").asString();
+            cert["country"] = row.get("country_code", "").asString();
+            cert["type"] = row.get("certificate_type", "").asString();
+            cert["subjectDn"] = row.get("subject_dn", "").asString();
+            cert["issuerDn"] = row.get("issuer_dn", "").asString();
+            cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
+            cert["validFrom"] = row.get("not_before", "").asString();
+            cert["validTo"] = row.get("not_after", "").asString();
+            cert["sourceType"] = row.get("source_type", "").asString();
+
+            // Parse DN components from subject_dn and issuer_dn
+            // Supports both formats: /C=KR/O=Gov/CN=Name and CN=Name,O=Gov,C=KR
+            auto parseDnComponents = [](const std::string& dn) -> Json::Value {
+                Json::Value components;
+                if (dn.empty()) return components;
+
+                char delim = '/';
+                std::string input = dn;
+                if (!dn.empty() && dn[0] == '/') {
+                    // Slash-separated: /C=KR/O=Government/OU=MOFA/CN=Name
+                    delim = '/';
+                    input = dn.substr(1); // skip leading /
+                } else {
+                    // Comma-separated: CN=Name,OU=bsi,O=bund,C=DE
+                    delim = ',';
+                }
+
+                std::istringstream ss(input);
+                std::string token;
+                while (std::getline(ss, token, delim)) {
+                    // Trim whitespace
+                    size_t start = token.find_first_not_of(" ");
+                    if (start == std::string::npos) continue;
+                    token = token.substr(start);
+
+                    auto eqPos = token.find('=');
+                    if (eqPos == std::string::npos) continue;
+                    std::string key = token.substr(0, eqPos);
+                    std::string val = token.substr(eqPos + 1);
+                    if (key == "CN") components["commonName"] = val;
+                    else if (key == "O") components["organization"] = val;
+                    else if (key == "OU") components["organizationalUnit"] = val;
+                    else if (key == "C") components["country"] = val;
+                    else if (key == "SERIALNUMBER" || key == "serialNumber") components["serialNumber"] = val;
+                }
+                return components;
+            };
+            cert["subjectDnComponents"] = parseDnComponents(row.get("subject_dn", "").asString());
+            cert["issuerDnComponents"] = parseDnComponents(row.get("issuer_dn", "").asString());
+
+            // Validity based on certificate dates (not_before / not_after)
+            {
+                std::string nb = row.get("not_before", "").asString();
+                std::string na = row.get("not_after", "").asString();
+                auto now = std::chrono::system_clock::now();
+                auto parseTs = [](const std::string& s) -> std::chrono::system_clock::time_point {
+                    std::tm tm{};
+                    // Handle ISO "2026-03-07T..." and PG "2026-03-07 ..." formats
+                    if (s.size() >= 19) {
+                        tm.tm_year = std::stoi(s.substr(0, 4)) - 1900;
+                        tm.tm_mon  = std::stoi(s.substr(5, 2)) - 1;
+                        tm.tm_mday = std::stoi(s.substr(8, 2));
+                        tm.tm_hour = std::stoi(s.substr(11, 2));
+                        tm.tm_min  = std::stoi(s.substr(14, 2));
+                        tm.tm_sec  = std::stoi(s.substr(17, 2));
+                        return std::chrono::system_clock::from_time_t(timegm(&tm));
+                    }
+                    return std::chrono::system_clock::time_point{};
+                };
+                try {
+                    auto tBefore = parseTs(nb);
+                    auto tAfter  = parseTs(na);
+                    if (now < tBefore) cert["validity"] = "NOT_YET_VALID";
+                    else if (now > tAfter) cert["validity"] = "EXPIRED";
+                    else cert["validity"] = "VALID";
+                } catch (...) {
+                    cert["validity"] = "UNKNOWN";
+                }
+            }
+
+            // Boolean fields
+            std::string selfSigned = row.get("is_self_signed", "").asString();
+            cert["isSelfSigned"] = (selfSigned == "t" || selfSigned == "true" || selfSigned == "1");
+
+            // Metadata
+            if (!row.get("version", Json::nullValue).isNull()) {
+                std::string ver = row.get("version", "").asString();
+                try { cert["version"] = std::stoi(ver); } catch (...) { cert["version"] = 0; }
+            }
+            if (!row.get("signature_algorithm", Json::nullValue).isNull())
+                cert["signatureAlgorithm"] = row["signature_algorithm"].asString();
+            if (!row.get("public_key_algorithm", Json::nullValue).isNull())
+                cert["publicKeyAlgorithm"] = row["public_key_algorithm"].asString();
+            if (!row.get("public_key_size", Json::nullValue).isNull()) {
+                std::string pks = row.get("public_key_size", "").asString();
+                try { cert["publicKeySize"] = std::stoi(pks); } catch (...) { /* non-critical: use default */ }
+            }
+
+            certificates.append(cert);
+        }
+        response["certificates"] = certificates;
+
+        // Validity statistics based on certificate dates (not validation_status)
+        std::string now = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+        std::string statsSql =
+            "SELECT "
+            "SUM(CASE WHEN not_before <= " + now + " AND not_after >= " + now + " THEN 1 ELSE 0 END) as valid_cnt, "
+            "SUM(CASE WHEN not_after < " + now + " THEN 1 ELSE 0 END) as expired_cnt, "
+            "SUM(CASE WHEN not_before > " + now + " THEN 1 ELSE 0 END) as not_yet_valid_cnt "
+            "FROM certificate WHERE 1=1" + whereStr;
+        Json::Value statsRow = queryExecutor_->executeQuery(statsSql, params);
+
+        int valid = 0, expired = 0, notYetValid = 0;
+        if (statsRow.isArray() && statsRow.size() > 0) {
+            valid = common::db::getInt(statsRow[0], "valid_cnt");
+            expired = common::db::getInt(statsRow[0], "expired_cnt");
+            notYetValid = common::db::getInt(statsRow[0], "not_yet_valid_cnt");
+        }
+
+        int unknown = total - valid - expired - notYetValid;
+        if (unknown < 0) unknown = 0;
+
+        Json::Value stats;
+        stats["total"] = total;
+        stats["valid"] = valid;
+        stats["expired"] = expired;
+        stats["notYetValid"] = notYetValid;
+        stats["unknown"] = unknown;
+        response["stats"] = stats;
+
+        spdlog::info("[CertificateRepository] DB search returned {} / {} results",
+            rows.size(), total);
+        return response;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] search failed: {}", e.what());
+        Json::Value error;
+        error["success"] = false;
+        error["error"] = e.what();
+        return error;
+    }
+}
+
+Json::Value CertificateRepository::findByFingerprint(const std::string& fingerprint)
+{
+    spdlog::debug("[CertificateRepository] Finding by fingerprint: {}...",
+        fingerprint.substr(0, 16));
+
+    try {
+        const char* query =
+            "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
+            "fingerprint_sha256, serial_number, not_before, not_after, "
+            "stored_in_ldap, created_at "
+            "FROM certificate WHERE fingerprint_sha256 = $1";
+
+        std::vector<std::string> params = {fingerprint};
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        if (result.empty()) {
+            return Json::nullValue;
+        }
+
+        return result[0];
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Find by fingerprint failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
+// --- Certificate Counts ---
+
+int CertificateRepository::countByType(const std::string& certType)
+{
+    spdlog::debug("[CertificateRepository] Counting by type: {}", certType);
+
+    try {
+        const char* query = "SELECT COUNT(*) FROM certificate WHERE certificate_type = $1";
+        std::vector<std::string> params = {certType};
+
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Count by type failed: {}", e.what());
+        return 0;
+    }
+}
+
+int CertificateRepository::countAll()
+{
+    spdlog::debug("[CertificateRepository] Counting all certificates");
+
+    try {
+        const char* query = "SELECT COUNT(*) FROM certificate";
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Count all failed: {}", e.what());
+        return 0;
+    }
+}
+
+int CertificateRepository::countByCountry(const std::string& countryCode)
+{
+    spdlog::debug("[CertificateRepository] Counting by country: {}", countryCode);
+
+    try {
+        const char* query = "SELECT COUNT(*) FROM certificate WHERE country_code = $1";
+        std::vector<std::string> params = {countryCode};
+
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Count by country failed: {}", e.what());
+        return 0;
+    }
+}
+
+// --- LDAP Storage Tracking ---
+
+bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
+{
+    spdlog::debug("[CertificateRepository] Marking stored in LDAP: {}...",
+        fingerprint.substr(0, 16));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+        std::string query =
+            "UPDATE certificate SET stored_in_ldap = " + trueVal + " WHERE fingerprint_sha256 = $1";
+        std::vector<std::string> params = {fingerprint};
+
+        queryExecutor_->executeCommand(query, params);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Mark stored in LDAP failed: {}", e.what());
+        return false;
+    }
+}
+
+// --- X509 Certificate Retrieval (for Validation) ---
+
+X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
+{
+    if (issuerDn.empty()) {
+        spdlog::warn("[CertificateRepository] findCscaByIssuerDn: empty issuer DN");
+        return nullptr;
+    }
+
+    spdlog::debug("[CertificateRepository] Finding CSCA by issuer DN: {}...",
+        issuerDn.substr(0, 80));
+
+    try {
+        // Extract key DN components for robust matching across formats
+        std::string cn = extractDnAttribute(issuerDn, "CN");
+        std::string country = extractDnAttribute(issuerDn, "C");
+        std::string org = extractDnAttribute(issuerDn, "O");
+
+        // Build parameterized query using component-based matching
+        std::string query = "SELECT certificate_data, subject_dn FROM certificate "
+                           "WHERE certificate_type = 'CSCA'";
+        std::vector<std::string> params;
+        int paramIdx = 1;
+
+        if (!cn.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%cn=" + cn + "%");
+        }
+        if (!country.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%c=" + country + "%");
+        }
+        if (!org.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%o=" + org + "%");
+        }
+        std::string dbType = queryExecutor_->getDatabaseType();
+        query += " " + common::db::limitClause(dbType, 20);  // Fetch candidates for post-filtering
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        // Post-filter: find exact DN match using normalized comparison
+        std::string targetNormalized = normalizeDnForComparison(issuerDn);
+        int matchedRow = -1;
+
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            std::string dbSubjectDn = result[i].get("subject_dn", "").asString();
+            if (!dbSubjectDn.empty()) {
+                std::string dbNormalized = normalizeDnForComparison(dbSubjectDn);
+                if (dbNormalized == targetNormalized) {
+                    matchedRow = static_cast<int>(i);
+                    spdlog::debug("[CertificateRepository] Found matching CSCA at row {}", i);
+                    break;
+                }
+            }
+        }
+
+        if (matchedRow < 0) {
+            spdlog::warn("[CertificateRepository] CSCA not found for issuer DN: {}",
+                issuerDn.substr(0, 80));
+            return nullptr;
+        }
+
+        // Parse binary certificate data from hex-encoded string
+        std::string certDataHex = result[matchedRow].get("certificate_data", "").asString();
+        X509* cert = parseCertificateDataFromHex(certDataHex);
+
+        if (cert) {
+            spdlog::debug("[CertificateRepository] Successfully parsed CSCA X509 certificate");
+        }
+
+        return cert;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findCscaByIssuerDn failed: {}", e.what());
+        return nullptr;
+    }
+}
+
+std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::string& subjectDn)
+{
+    std::vector<X509*> result;
+
+    if (subjectDn.empty()) {
+        spdlog::warn("[CertificateRepository] findAllCscasBySubjectDn: empty subject DN");
+        return result;
+    }
+
+    spdlog::debug("[CertificateRepository] Finding all CSCAs by subject DN: {}...",
+        subjectDn.substr(0, 80));
+
+    try {
+        // Extract key DN components for robust matching
+        std::string cn = extractDnAttribute(subjectDn, "CN");
+        std::string country = extractDnAttribute(subjectDn, "C");
+        std::string org = extractDnAttribute(subjectDn, "O");
+
+        // Build parameterized query using component-based matching
+        // ORDER BY created_at DESC: prefer newest CSCA first (most likely to match current DSCs)
+        std::string query = "SELECT certificate_data, subject_dn FROM certificate "
+                           "WHERE certificate_type = 'CSCA'";
+        std::vector<std::string> params;
+        int paramIdx = 1;
+
+        if (!cn.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%cn=" + cn + "%");
+        }
+        if (!country.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%c=" + country + "%");
+        }
+        if (!org.empty()) {
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%o=" + org + "%");
+        }
+
+        query += " ORDER BY created_at DESC";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, params);
+
+        // Post-filter: match using normalized DN comparison
+        std::string targetNormalized = normalizeDnForComparison(subjectDn);
+
+        for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+            std::string dbSubjectDn = rows[i].get("subject_dn", "").asString();
+            if (!dbSubjectDn.empty()) {
+                std::string dbNormalized = normalizeDnForComparison(dbSubjectDn);
+                if (dbNormalized == targetNormalized) {
+                    std::string certDataHex = rows[i].get("certificate_data", "").asString();
+                    X509* cert = parseCertificateDataFromHex(certDataHex);
+                    if (cert) {
+                        result.push_back(cert);
+                        spdlog::debug("[CertificateRepository] Added CSCA {} to result", i);
+                    }
+                }
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Found {} CSCA(s) matching subject DN", result.size());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findAllCscasBySubjectDn failed: {}", e.what());
+        // Clean up any certificates already allocated
+        for (X509* cert : result) {
+            X509_free(cert);
+        }
+        return std::vector<X509*>();
+    }
+}
+
+std::vector<std::pair<std::string, std::vector<uint8_t>>> CertificateRepository::findAllCscas()
+{
+    spdlog::info("[CertificateRepository] Bulk loading all CSCA certificates for cache");
+
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> result;
+
+    try {
+        std::string query = "SELECT subject_dn, certificate_data FROM certificate "
+                           "WHERE certificate_type = 'CSCA'";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, {});
+
+        // Helper: decode hex string (with \x prefix) to bytes
+        auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
+            std::vector<uint8_t> bytes;
+            bytes.reserve((hex.size() - start) / 2);
+            for (size_t i = start; i + 1 < hex.size(); i += 2) {
+                char h[3] = {hex[i], hex[i + 1], 0};
+                bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+            }
+            return bytes;
+        };
+
+        for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+            std::string subjectDn = rows[i].get("subject_dn", "").asString();
+            std::string certDataHex = rows[i].get("certificate_data", "").asString();
+
+            if (subjectDn.empty() || certDataHex.empty()) continue;
+
+            // Parse hex to DER bytes (same logic as parseCertificateDataFromHex)
+            std::vector<uint8_t> derBytes;
+            if (certDataHex.size() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
+                derBytes = decodeHex(certDataHex, 2);
+                // Handle double-encoded BYTEA
+                if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+                    std::string innerHex(derBytes.begin(), derBytes.end());
+                    derBytes = decodeHex(innerHex, 2);
+                }
+            } else if (!certDataHex.empty() && static_cast<unsigned char>(certDataHex[0]) == 0x30) {
+                derBytes.assign(certDataHex.begin(), certDataHex.end());
+            }
+
+            if (!derBytes.empty()) {
+                result.emplace_back(subjectDn, std::move(derBytes));
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Loaded {} CSCA certificates", result.size());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findAllCscas failed: {}", e.what());
+        return result;
+    }
+}
+
+Json::Value CertificateRepository::findDscForRevalidation(int limit)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC certificates for re-validation (limit: {})", limit);
+
+    try {
+        // Query DSC/DSC_NC certificates where CSCA was not found (failed validation)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+        std::string query =
+            "SELECT c.id, c.issuer_dn, c.certificate_data, c.fingerprint_sha256 "
+            "FROM certificate c "
+            "JOIN validation_result vr ON c.id = vr.certificate_id "
+            "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
+            "AND vr.csca_found = " + falseVal + " "
+            "AND vr.validation_status IN ('INVALID', 'PENDING') "
+            "ORDER BY c.not_after DESC " +
+            common::db::limitClause(dbType, limit);
+
+        Json::Value result = queryExecutor_->executeQuery(query);
+
+        // Transform field names to match expected format (camelCase)
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            // Field names are already in the correct format from query executor
+            // Just ensure certificateData field exists
+            if (!result[i].isMember("certificateData") && result[i].isMember("certificate_data")) {
+                result[i]["certificateData"] = result[i]["certificate_data"];
+                result[i].removeMember("certificate_data");
+            }
+            if (!result[i].isMember("issuerDn") && result[i].isMember("issuer_dn")) {
+                result[i]["issuerDn"] = result[i]["issuer_dn"];
+                result[i].removeMember("issuer_dn");
+            }
+            if (!result[i].isMember("fingerprint") && result[i].isMember("fingerprint_sha256")) {
+                result[i]["fingerprint"] = result[i]["fingerprint_sha256"];
+                result[i].removeMember("fingerprint_sha256");
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Found {} DSC(s) for re-validation", result.size());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscForRevalidation failed: {}", e.what());
+        return Json::arrayValue;
+    }
+}
+
+Json::Value CertificateRepository::findPendingDscByCountries(const std::set<std::string>& countryCodes, int limit)
+{
+    spdlog::debug("[CertificateRepository] Finding PENDING DSCs for {} countries (limit: {})",
+                  countryCodes.size(), limit);
+
+    if (countryCodes.empty()) {
+        return Json::arrayValue;
+    }
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+
+        // Build IN clause for country codes
+        std::string inClause;
+        std::vector<std::string> params;
+        int paramIdx = 1;
+        for (const auto& cc : countryCodes) {
+            if (!inClause.empty()) inClause += ", ";
+            inClause += "$" + std::to_string(paramIdx++);
+            params.push_back(cc);
+        }
+
+        // Oracle: BLOB→hex conversion to avoid LOB truncation
+        std::string certDataExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(c.certificate_data, DBMS_LOB.GETLENGTH(c.certificate_data), 1))"
+            : "c.certificate_data";
+
+        std::string query =
+            "SELECT c.id, c.issuer_dn, " + certDataExpr + " AS certificate_data, c.fingerprint_sha256 "
+            "FROM certificate c "
+            "JOIN validation_result vr ON c.id = vr.certificate_id "
+            "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
+            "AND vr.validation_status = 'PENDING' "
+            "AND vr.csca_found = " + falseVal + " "
+            "AND c.country_code IN (" + inClause + ") "
+            "ORDER BY c.not_after DESC " +
+            common::db::limitClause(dbType, limit);
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        // Transform field names to camelCase (same pattern as findDscForRevalidation)
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            if (!result[i].isMember("certificateData") && result[i].isMember("certificate_data")) {
+                result[i]["certificateData"] = result[i]["certificate_data"];
+                result[i].removeMember("certificate_data");
+            }
+            if (!result[i].isMember("issuerDn") && result[i].isMember("issuer_dn")) {
+                result[i]["issuerDn"] = result[i]["issuer_dn"];
+                result[i].removeMember("issuer_dn");
+            }
+            if (!result[i].isMember("fingerprint") && result[i].isMember("fingerprint_sha256")) {
+                result[i]["fingerprint"] = result[i]["fingerprint_sha256"];
+                result[i].removeMember("fingerprint_sha256");
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Found {} PENDING DSC(s) for countries: {}",
+                     result.size(), [&]() {
+                         std::string s;
+                         for (const auto& cc : countryCodes) {
+                             if (!s.empty()) s += ",";
+                             s += cc;
+                         }
+                         return s;
+                     }());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findPendingDscByCountries failed: {}", e.what());
+        return Json::arrayValue;
+    }
+}
+
+Json::Value CertificateRepository::findDscWithBinaryByFingerprint(const std::string& fingerprint)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC with binary by fingerprint: {}", fingerprint.substr(0, 16));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Oracle: BLOB must be read via RAWTOHEX(DBMS_LOB.SUBSTR) to avoid LOB truncation
+        // PostgreSQL: certificate_data stored as hex text, no special handling needed
+        std::string certDataCol = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(certificate_data, DBMS_LOB.GETLENGTH(certificate_data), 1)) as certificate_data"
+            : "certificate_data";
+
+        std::string query =
+            "SELECT id, TO_CHAR(subject_dn) as subject_dn, TO_CHAR(issuer_dn) as issuer_dn, "
+            "country_code, certificate_type, "
+            "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+            "FROM certificate "
+            "WHERE fingerprint_sha256 = $1 "
+            "AND certificate_type IN ('DSC', 'DSC_NC') " +
+            common::db::limitClause(dbType, 1);
+
+        // PostgreSQL: TO_CHAR not needed, fix query
+        if (dbType == "postgres") {
+            query =
+                "SELECT id, subject_dn, issuer_dn, country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE fingerprint_sha256 = $1 "
+                "AND certificate_type IN ('DSC', 'DSC_NC') " +
+                common::db::limitClause(dbType, 1);
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, {fingerprint});
+
+        if (result.empty()) {
+            spdlog::debug("[CertificateRepository] No DSC found for fingerprint: {}", fingerprint.substr(0, 16));
+            return Json::nullValue;
+        }
+
+        return result[0];
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscWithBinaryByFingerprint failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
+Json::Value CertificateRepository::findDscWithBinaryBySubjectDn(const std::string& subjectDn)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC with binary by subject DN: {}", subjectDn.substr(0, 60));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string caseInsensitive = (dbType == "postgres")
+            ? "LOWER(subject_dn) = LOWER($1)"
+            : "UPPER(subject_dn) = UPPER($1)";
+
+        // Oracle: BLOB must be read via RAWTOHEX(DBMS_LOB.SUBSTR) to avoid LOB truncation
+        std::string certDataCol = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(certificate_data, DBMS_LOB.GETLENGTH(certificate_data), 1)) as certificate_data"
+            : "certificate_data";
+
+        std::string query;
+        if (dbType == "oracle") {
+            query =
+                "SELECT id, TO_CHAR(subject_dn) as subject_dn, TO_CHAR(issuer_dn) as issuer_dn, "
+                "country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE " + caseInsensitive + " "
+                "AND certificate_type IN ('DSC', 'DSC_NC') "
+                "ORDER BY created_at DESC " +
+                common::db::limitClause(dbType, 1);
+        } else {
+            query =
+                "SELECT id, subject_dn, issuer_dn, country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE " + caseInsensitive + " "
+                "AND certificate_type IN ('DSC', 'DSC_NC') "
+                "ORDER BY created_at DESC " +
+                common::db::limitClause(dbType, 1);
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, {subjectDn});
+
+        if (result.empty()) {
+            spdlog::debug("[CertificateRepository] No DSC found for subject DN: {}", subjectDn.substr(0, 60));
+            return Json::nullValue;
+        }
+
+        return result[0];
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscWithBinaryBySubjectDn failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
+// --- Private Helper Methods ---
+
+// --- DN Normalization Helpers ---
+
+std::string CertificateRepository::extractDnAttribute(const std::string& dn, const std::string& attr)
+{
+    std::string searchKey = attr + "=";
+    std::string dnLower = dn;
+    for (char& c : dnLower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    std::string keyLower = searchKey;
+    for (char& c : keyLower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    size_t pos = 0;
+    while ((pos = dnLower.find(keyLower, pos)) != std::string::npos) {
+        // Verify it's at a boundary (start of string, after / or ,)
+        if (pos == 0 || dnLower[pos - 1] == '/' || dnLower[pos - 1] == ',') {
+            size_t valStart = pos + keyLower.size();
+            size_t valEnd = dn.find_first_of("/,", valStart);
+            if (valEnd == std::string::npos) {
+                valEnd = dn.size();
+            }
+            std::string val = dn.substr(valStart, valEnd - valStart);
+
+            // Trim and lowercase
+            size_t s = val.find_first_not_of(" \t");
+            size_t e = val.find_last_not_of(" \t");
+            if (s != std::string::npos) {
+                val = val.substr(s, e - s + 1);
+                for (char& c : val) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                return val;
+            }
+        }
+        pos++;
+    }
+    return "";
+}
+
+std::string CertificateRepository::normalizeDnForComparison(const std::string& dn)
+{
+    if (dn.empty()) return dn;
+
+    std::vector<std::string> parts;
+
+    if (dn[0] == '/') {
+        // OpenSSL slash-separated format: /C=Z/O=Y/CN=X
+        std::istringstream stream(dn);
+        std::string segment;
+        while (std::getline(stream, segment, '/')) {
+            if (!segment.empty()) {
+                std::string lower;
+                for (char c : segment) {
+                    lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) {
+                    parts.push_back(lower.substr(s));
+                }
+            }
+        }
+    } else {
+        // RFC 2253 comma-separated format: CN=X,O=Y,C=Z
+        std::string current;
+        bool inQuotes = false;
+        for (size_t i = 0; i < dn.size(); i++) {
+            char c = dn[i];
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                current += c;
+            } else if (c == ',' && !inQuotes) {
+                std::string lower;
+                for (char ch : current) {
+                    lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                }
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) {
+                    parts.push_back(lower.substr(s));
+                }
+                current.clear();
+            } else if (c == '\\' && i + 1 < dn.size()) {
+                current += c;
+                current += dn[++i];
+            } else {
+                current += c;
+            }
+        }
+        if (!current.empty()) {
+            std::string lower;
+            for (char ch : current) {
+                lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            size_t s = lower.find_first_not_of(" \t");
+            if (s != std::string::npos) {
+                parts.push_back(lower.substr(s));
+            }
+        }
+    }
+
+    // Sort components for order-independent comparison
+    std::sort(parts.begin(), parts.end());
+
+    // Join with pipe separator
+    std::string result;
+    for (size_t i = 0; i < parts.size(); i++) {
+        if (i > 0) result += "|";
+        result += parts[i];
+    }
+    return result;
+}
+
+std::string CertificateRepository::escapeSingleQuotes(const std::string& str)
+{
+    std::string escaped = str;
+    size_t pos = 0;
+    while ((pos = escaped.find("'", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "''");
+        pos += 2;
+    }
+    return escaped;
+}
+
+X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexData)
+{
+    if (hexData.empty()) {
+        spdlog::warn("[CertificateRepository] Empty certificate data");
+        return nullptr;
+    }
+
+    // Helper: decode hex string (with \x prefix) to bytes
+    auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
+        std::vector<uint8_t> bytes;
+        bytes.reserve((hex.size() - start) / 2);
+        for (size_t i = start; i + 1 < hex.size(); i += 2) {
+            char h[3] = {hex[i], hex[i + 1], 0};
+            bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+        }
+        return bytes;
+    };
+
+    // Parse bytea hex format (PostgreSQL escape format: \x...)
+    std::vector<uint8_t> derBytes;
+    if (hexData.size() > 2 && hexData[0] == '\\' && hexData[1] == 'x') {
+        // First hex decode
+        derBytes = decodeHex(hexData, 2);
+
+        // Handle double-encoded BYTEA: if the decoded bytes start with \x (0x5C 0x78)
+        // followed by ASCII hex digits, it means the data was stored as a hex text string
+        // rather than raw binary. Decode again.
+        if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+            std::string innerHex(derBytes.begin(), derBytes.end());
+            derBytes = decodeHex(innerHex, 2);
+            spdlog::debug("[CertificateRepository] Double-encoded BYTEA detected, decoded twice");
+        }
+    } else if (hexData.size() >= 2 && std::isxdigit(static_cast<unsigned char>(hexData[0]))
+               && std::isxdigit(static_cast<unsigned char>(hexData[1]))) {
+        // Plain hex string (Oracle RAWTOHEX output, e.g., "308203A5...")
+        derBytes = decodeHex(hexData, 0);
+    } else {
+        // Might be raw binary (starts with 0x30 for DER SEQUENCE)
+        if (!hexData.empty() && static_cast<unsigned char>(hexData[0]) == 0x30) {
+            derBytes.assign(hexData.begin(), hexData.end());
+        }
+    }
+
+    if (derBytes.empty()) {
+        spdlog::warn("[CertificateRepository] Failed to parse certificate binary data");
+        return nullptr;
+    }
+
+    const uint8_t* data = derBytes.data();
+    X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+    if (!cert) {
+        unsigned long err = ERR_get_error();
+        char errBuf[256];
+        ERR_error_string_n(err, errBuf, sizeof(errBuf));
+        spdlog::error("[CertificateRepository] d2i_X509 failed: {}", errBuf);
+        return nullptr;
+    }
+
+    return cert;
+}
+
+// --- Duplicate Certificate Tracking ---
+
+std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
+            "SELECT upload_id FROM certificate "
+            "WHERE fingerprint_sha256 = $1 "
+            "ORDER BY uploaded_at ASC " +
+            common::db::limitClause(dbType, 1);
+
+        std::vector<std::string> params = {fingerprint};
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        if (!result.empty()) {
+            std::string uploadId = result[0].get("upload_id", "").asString();
+            spdlog::debug("[CertificateRepository] Found first upload_id={} for fingerprint={}",
+                         uploadId, fingerprint.substr(0, 16));
+            return uploadId;
+        }
+
+        return "";
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findFirstUploadIdByFingerprint failed: {}", e.what());
+        return "";
+    }
+}
+
+bool CertificateRepository::saveDuplicate(const std::string& uploadId,
+                                         const std::string& firstUploadId,
+                                         const std::string& fingerprint,
+                                         const std::string& certType,
+                                         const std::string& subjectDn,
+                                         const std::string& issuerDn,
+                                         const std::string& countryCode,
+                                         const std::string& serialNumber) {
+    try {
+        const char* query =
+            "INSERT INTO duplicate_certificate "
+            "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
+            "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, CURRENT_TIMESTAMP) "
+            "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) "
+            "DO NOTHING";
+
+        std::vector<std::string> params = {
+            uploadId,
+            firstUploadId,
+            fingerprint,
+            certType,
+            subjectDn,
+            issuerDn,
+            countryCode.empty() ? "" : countryCode,
+            serialNumber.empty() ? "" : serialNumber
+        };
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Saved duplicate: fingerprint={}, type={}, upload={}",
+                     fingerprint.substr(0, 16), certType, uploadId);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", e.what());
+        return false;
+    }
+}
+
+// --- Certificate Insert & Duplicate Tracking ---
+
+bool CertificateRepository::updateCertificateLdapStatus(
+    const std::string& certificateId,
+    const std::string& ldapDn
+)
+{
+    spdlog::debug("[CertificateRepository] Updating LDAP status: cert_id={}, ldap_dn={}",
+                  certificateId.substr(0, 8) + "...", ldapDn.substr(0, 40) + "...");
+
+    try {
+        const char* query =
+            "UPDATE certificate "
+            "SET stored_in_ldap = $1, ldap_dn = $2 "
+            "WHERE id = $3";
+
+        // Database-aware boolean formatting
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedValue = common::db::boolLiteral(dbType, true);
+
+        std::vector<std::string> params = {storedValue, ldapDn, certificateId};
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] LDAP status updated: cert_id={}",
+                     certificateId.substr(0, 8) + "...");
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] updateCertificateLdapStatus failed: {}", e.what());
+        return false;
+    }
+}
+
+bool CertificateRepository::incrementDuplicateCount(
+    const std::string& certificateId,
+    const std::string& uploadId
+)
+{
+    spdlog::debug("[CertificateRepository] Incrementing duplicate count: cert_id={}, upload={}",
+                  certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...");
+
+    try {
+        const char* query =
+            "UPDATE certificate "
+            "SET duplicate_count = duplicate_count + 1, "
+            "    last_seen_upload_id = $1, "
+            "    last_seen_at = CURRENT_TIMESTAMP "
+            "WHERE id = $2";
+
+        std::vector<std::string> params = {uploadId, certificateId};
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Duplicate count incremented: cert_id={}",
+                     certificateId.substr(0, 8) + "...");
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] incrementDuplicateCount failed: {}", e.what());
+        return false;
+    }
+}
+
+bool CertificateRepository::trackCertificateDuplicate(
+    const std::string& certificateId,
+    const std::string& uploadId,
+    const std::string& sourceType,
+    const std::string& sourceCountry,
+    const std::string& sourceEntryDn,
+    const std::string& sourceFileName
+)
+{
+    spdlog::debug("[CertificateRepository] Tracking duplicate: cert_id={}, upload={}, source_type={}",
+                  certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...", sourceType);
+
+    try {
+        const char* query =
+            "INSERT INTO certificate_duplicates ("
+            "certificate_id, upload_id, source_type, source_country, "
+            "source_entry_dn, source_file_name, detected_at"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP"
+            ") ON CONFLICT (certificate_id, upload_id, source_type) DO NOTHING";
+
+        std::vector<std::string> params = {
+            certificateId,
+            uploadId,
+            sourceType,
+            sourceCountry,
+            sourceEntryDn,
+            sourceFileName
+        };
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Duplicate tracked: cert_id={}, source_type={}",
+                     certificateId.substr(0, 8) + "...", sourceType);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] trackCertificateDuplicate failed: {}", e.what());
+        return false;
+    }
+}
+
+std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicateCheck(
+    const std::string& uploadId,
+    const std::string& certType,
+    const std::string& countryCode,
+    const std::string& subjectDn,
+    const std::string& issuerDn,
+    const std::string& serialNumber,
+    const std::string& fingerprint,
+    const std::string& notBefore,
+    const std::string& notAfter,
+    const std::vector<uint8_t>& certData,
+    const std::string& validationStatus,
+    const std::string& validationMessage,
+    const x509::CertificateMetadata* preExtractedMetadata,
+    const std::string& sourceType
+)
+{
+    spdlog::debug("[CertificateRepository] Saving certificate: type={}, country={}, fingerprint={}",
+                  certType, countryCode, fingerprint.substr(0, 16) + "...");
+
+    try {
+        // Step 0: Check fingerprint cache (O(1) hash lookup, skips X.509 parsing entirely)
+        if (fingerprintCacheLoaded_) {
+            auto it = fingerprintCache_.find(fingerprint);
+            if (it != fingerprintCache_.end()) {
+                spdlog::debug("[CertificateRepository] Cache hit (duplicate): id={}, fingerprint={}",
+                             it->second.id.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
+                return std::make_pair(it->second.id, true);
+            }
+            // Cache loaded but not found → new certificate, skip DB SELECT (Step 1)
+        } else {
+            // Step 1: Fallback — DB query if cache not loaded
+            const char* checkQuery =
+                "SELECT id, first_upload_id FROM certificate "
+                "WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
+
+            std::vector<std::string> checkParams = {certType, fingerprint};
+            Json::Value checkResult = queryExecutor_->executeQuery(checkQuery, checkParams);
+
+            if (!checkResult.empty()) {
+                std::string existingId = checkResult[0]["id"].asString();
+                spdlog::debug("[CertificateRepository] Duplicate certificate found: id={}, fingerprint={}",
+                             existingId.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
+                return std::make_pair(existingId, true);
+            }
+        }
+
+        // Step 2: Extract X.509 metadata from certificate
+        // If preExtractedMetadata is provided (from ldif_processor), skip d2i_X509 + extractMetadata
+        x509::CertificateMetadata x509meta;
+        if (preExtractedMetadata) {
+            x509meta = *preExtractedMetadata;
+        } else {
+            const unsigned char* certPtr = certData.data();
+            X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
+            if (x509cert) {
+                x509meta = x509::extractMetadata(x509cert);
+                X509_free(x509cert);
+            } else {
+                spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction (fallback)");
+            }
+        }
+
+        std::string versionStr, sigAlg, sigHashAlg, pubKeyAlg, pubKeySizeStr;
+        std::string pubKeyCurve, keyUsageStr, extKeyUsageStr, isCaStr;
+        std::string pathLenStr, ski, aki, crlDpStr, ocspUrl, isSelfSignedStr;
+
+        if (preExtractedMetadata || x509meta.version > 0) {
+
+            // Convert metadata to SQL strings
+            versionStr = std::to_string(x509meta.version);
+            sigAlg = x509meta.signatureAlgorithm;
+            sigHashAlg = x509meta.signatureHashAlgorithm;
+            pubKeyAlg = x509meta.publicKeyAlgorithm;
+            pubKeySizeStr = std::to_string(x509meta.publicKeySize);
+            pubKeyCurve = x509meta.publicKeyCurve.value_or("");
+
+            // Convert arrays to comma-separated strings (database-agnostic)
+            // PostgreSQL requires TEXT[] format: {element1,element2} or {} for empty
+            // Oracle uses VARCHAR2: element1,element2 or empty string
+            std::string dbType = queryExecutor_->getDatabaseType();
+
+            std::ostringstream kuStream, ekuStream, crlStream;
+            for (size_t i = 0; i < x509meta.keyUsage.size(); i++) {
+                kuStream << x509meta.keyUsage[i];
+                if (i < x509meta.keyUsage.size() - 1) kuStream << ",";
+            }
+            keyUsageStr = kuStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                keyUsageStr = keyUsageStr.empty() ? "{}" : "{" + keyUsageStr + "}";
+            }
+
+            for (size_t i = 0; i < x509meta.extendedKeyUsage.size(); i++) {
+                ekuStream << x509meta.extendedKeyUsage[i];
+                if (i < x509meta.extendedKeyUsage.size() - 1) ekuStream << ",";
+            }
+            extKeyUsageStr = ekuStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                extKeyUsageStr = extKeyUsageStr.empty() ? "{}" : "{" + extKeyUsageStr + "}";
+            }
+
+            for (size_t i = 0; i < x509meta.crlDistributionPoints.size(); i++) {
+                crlStream << x509meta.crlDistributionPoints[i];
+                if (i < x509meta.crlDistributionPoints.size() - 1) crlStream << ",";
+            }
+            crlDpStr = crlStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                crlDpStr = crlDpStr.empty() ? "{}" : "{" + crlDpStr + "}";
+            }
+
+            // Database-aware boolean formatting (dbType already retrieved above)
+            isCaStr = common::db::boolLiteral(dbType, x509meta.isCA);
+            isSelfSignedStr = common::db::boolLiteral(dbType, x509meta.isSelfSigned);
+
+            pathLenStr = x509meta.pathLenConstraint.has_value() ?
+                         std::to_string(x509meta.pathLenConstraint.value()) : "";
+            ski = x509meta.subjectKeyIdentifier.value_or("");
+            aki = x509meta.authorityKeyIdentifier.value_or("");
+            ocspUrl = x509meta.ocspResponderUrl.value_or("");
+        } else {
+            spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction");
+            versionStr = "2";  // Default to v3
+            std::string dbType = queryExecutor_->getDatabaseType();
+            isCaStr = common::db::boolLiteral(dbType, false);
+            isSelfSignedStr = common::db::boolLiteral(dbType, false);
+            keyUsageStr = "";
+            extKeyUsageStr = "";
+            crlDpStr = "";
+        }
+
+        // Step 3: Insert new certificate with X.509 metadata
+
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Convert DER bytes to hex string
+        std::ostringstream hexStream;
+        // PostgreSQL: \x prefix for hex bytea format (PQexecParams text mode)
+        // Oracle: \\x prefix as BLOB marker detected by OracleQueryExecutor
+        hexStream << common::db::hexPrefix(dbType);
+        for (size_t i = 0; i < certData.size(); i++) {
+            hexStream << std::hex << std::setw(2) << std::setfill('0')
+                     << static_cast<int>(certData[i]);
+        }
+        std::string certDataHex = hexStream.str();
+
+        std::string newId;
+
+        if (dbType == "oracle") {
+            // Oracle: Generate UUID in C++ (uuid_generate_v4 is PostgreSQL-only)
+            newId = generateUuid();
+
+            std::string insertQuery =
+                "INSERT INTO certificate ("
+                "id, upload_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, validation_message, "
+                "duplicate_count, first_upload_id, created_at, source_type, "
+                "version, signature_algorithm, signature_hash_algorithm, "
+                "public_key_algorithm, public_key_size, public_key_curve, "
+                "key_usage, extended_key_usage, "
+                "is_ca, path_len_constraint, "
+                "subject_key_identifier, authority_key_identifier, "
+                "crl_distribution_points, ocsp_responder_url, is_self_signed"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, "
+                "CASE WHEN $9 IS NULL OR $9 = '' THEN NULL ELSE TO_TIMESTAMP($9, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "CASE WHEN $10 IS NULL OR $10 = '' THEN NULL ELSE TO_TIMESTAMP($10, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "$11, $12, $13, 0, $2, SYSTIMESTAMP, $29, "
+                "TO_NUMBER(NULLIF($14, '')), $15, $16, "
+                "$17, TO_NUMBER(NULLIF($18, '')), $19, "
+                "$20, $21, "
+                "TO_NUMBER(NULLIF($22, '')), TO_NUMBER(NULLIF($23, '')), "
+                "$24, $25, "
+                "$26, $27, TO_NUMBER(NULLIF($28, ''))"
+                ")";
+
+            // Convert OpenSSL date format to ISO for Oracle TIMESTAMP columns
+            std::string notBeforeIso = convertDateToIso(notBefore);
+            std::string notAfterIso = convertDateToIso(notAfter);
+            spdlog::debug("[CertificateRepository] Oracle date conversion: '{}' → '{}', '{}' → '{}'",
+                notBefore, notBeforeIso, notAfter, notAfterIso);
+
+            std::vector<std::string> insertParams = {
+                newId,                                   // $1 (pre-generated id)
+                uploadId,                                // $2
+                certType,                                // $3
+                countryCode,                             // $4
+                subjectDn,                               // $5
+                issuerDn,                                // $6
+                serialNumber,                            // $7
+                fingerprint,                             // $8
+                notBeforeIso,                            // $9  (ISO format for Oracle)
+                notAfterIso,                             // $10 (ISO format for Oracle)
+                certDataHex,                             // $11
+                validationStatus,                        // $12
+                validationMessage,                       // $13
+                versionStr,                              // $14
+                sigAlg.empty() ? "" : sigAlg,            // $15
+                sigHashAlg.empty() ? "" : sigHashAlg,    // $16
+                pubKeyAlg.empty() ? "" : pubKeyAlg,      // $17
+                pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $18
+                pubKeyCurve,                             // $19
+                keyUsageStr,                             // $20
+                extKeyUsageStr,                          // $21
+                isCaStr,                                 // $22
+                pathLenStr,                              // $23
+                ski,                                     // $24
+                aki,                                     // $25
+                crlDpStr,                                // $26
+                ocspUrl,                                 // $27
+                isSelfSignedStr,                         // $28
+                sourceType                               // $29
+            };
+
+            queryExecutor_->executeCommand(insertQuery, insertParams);
+
+        } else {
+            // PostgreSQL: Use RETURNING id
+            const char* insertQuery =
+                "INSERT INTO certificate ("
+                "upload_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, validation_message, "
+                "duplicate_count, first_upload_id, created_at, source_type, "
+                "version, signature_algorithm, signature_hash_algorithm, "
+                "public_key_algorithm, public_key_size, public_key_curve, "
+                "key_usage, extended_key_usage, "
+                "is_ca, path_len_constraint, "
+                "subject_key_identifier, authority_key_identifier, "
+                "crl_distribution_points, ocsp_responder_url, is_self_signed"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, $28, "
+                "$13, $14, $15, "
+                "$16, NULLIF($17, '')::INTEGER, $18, "
+                "$19, $20, "
+                "$21, NULLIF($22, '')::INTEGER, "
+                "$23, $24, "
+                "$25, $26, $27"
+                ") RETURNING id";
+
+            std::vector<std::string> insertParams = {
+                uploadId,                                // $1
+                certType,                                // $2
+                countryCode,                             // $3
+                subjectDn,                               // $4
+                issuerDn,                                // $5
+                serialNumber,                            // $6
+                fingerprint,                             // $7
+                notBefore,                               // $8
+                notAfter,                                // $9
+                certDataHex,                             // $10
+                validationStatus,                        // $11
+                validationMessage,                       // $12
+                versionStr,                              // $13
+                sigAlg.empty() ? "" : sigAlg,            // $14
+                sigHashAlg.empty() ? "" : sigHashAlg,    // $15
+                pubKeyAlg.empty() ? "" : pubKeyAlg,      // $16
+                pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $17
+                pubKeyCurve,                             // $18
+                keyUsageStr,                             // $19
+                extKeyUsageStr,                          // $20
+                isCaStr,                                 // $21
+                pathLenStr,                              // $22
+                ski,                                     // $23
+                aki,                                     // $24
+                crlDpStr,                                // $25
+                ocspUrl,                                 // $26
+                isSelfSignedStr,                         // $27
+                sourceType                               // $28
+            };
+
+            Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+
+            if (insertResult.empty()) {
+                spdlog::error("[CertificateRepository] INSERT failed: no ID returned");
+                return std::make_pair(std::string(""), false);
+            }
+
+            newId = insertResult[0]["id"].asString();
+        }
+
+        // Add to fingerprint cache (prevents duplicate within same upload batch)
+        if (fingerprintCacheLoaded_) {
+            addToFingerprintCache(fingerprint, newId, uploadId);
+        }
+
+        spdlog::debug("[CertificateRepository] New certificate inserted: id={}, type={}, country={}, fingerprint={}",
+                     newId.substr(0, 8) + "...", certType, countryCode, fingerprint.substr(0, 16) + "...");
+
+        return std::make_pair(newId, false);
+
+    } catch (const std::exception& e) {
+        std::string errMsg = e.what();
+        // ORA-00001 (Oracle) or "23505" / "unique" (PostgreSQL): unique constraint violated
+        // Treat as duplicate — race condition between concurrent uploads
+        bool isUniqueViolation = errMsg.find("ORA-00001") != std::string::npos ||
+                                 errMsg.find("23505") != std::string::npos ||
+                                 (errMsg.find("unique") != std::string::npos &&
+                                  errMsg.find("certificate") != std::string::npos);
+        if (isUniqueViolation) {
+            spdlog::debug("[CertificateRepository] Concurrent duplicate detected: type={}, fingerprint={}",
+                         certType, fingerprint.substr(0, 16) + "...");
+            // Re-query to get the existing certificate ID
+            try {
+                const char* reCheckQuery =
+                    "SELECT id FROM certificate WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
+                Json::Value reResult = queryExecutor_->executeQuery(reCheckQuery, {certType, fingerprint});
+                if (!reResult.empty()) {
+                    return std::make_pair(reResult[0]["id"].asString(), true);
+                }
+            } catch (...) {
+                // Ignore re-query failure
+            }
+            return std::make_pair(std::string(""), true);  // isDuplicate=true
+        }
+        spdlog::error("[CertificateRepository] saveCertificateWithDuplicateCheck failed: {}", errMsg);
+        return std::make_pair(std::string(""), false);
+    }
+}
+
+// --- LDAP Status Count by Upload ID ---
+
+void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap) {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string boolTrue = common::db::boolLiteral(dbType, true);
+
+    std::string query = "SELECT COUNT(*) as total, "
+                        "COALESCE(SUM(CASE WHEN stored_in_ldap = " + boolTrue + " THEN 1 ELSE 0 END), 0) as in_ldap "
+                        "FROM certificate WHERE upload_id = $1";
+
+    auto rows = queryExecutor_->executeQuery(query, {uploadId});
+
+    if (!rows.empty()) {
+        outTotal = common::db::getInt(rows[0], "total");
+        outInLdap = common::db::getInt(rows[0], "in_ldap");
+    } else {
+        outTotal = 0;
+        outInLdap = 0;
+    }
+}
+
+// --- Distinct Countries ---
+
+Json::Value CertificateRepository::getDistinctCountries() {
+    std::string query = "SELECT DISTINCT country_code FROM certificate "
+                        "WHERE country_code IS NOT NULL "
+                        "ORDER BY country_code";
+
+    return queryExecutor_->executeQuery(query);
+}
+
+// --- Link Certificate Search ---
+
+Json::Value CertificateRepository::searchLinkCertificates(
+    const std::string& countryFilter,
+    const std::string& validFilter,
+    int limit, int offset)
+{
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string boolTrue = common::db::boolLiteral(dbType, true);
+
+    std::ostringstream sql;
+    sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+        << "old_csca_subject_dn, new_csca_subject_dn, "
+        << "trust_chain_valid, created_at, country_code "
+        << "FROM link_certificate WHERE 1=1";
+
+    std::vector<std::string> paramValues;
+    int paramIndex = 1;
+
+    if (!countryFilter.empty()) {
+        sql << " AND country_code = $" << paramIndex++;
+        paramValues.push_back(countryFilter);
+    }
+
+    if (validFilter == "true") {
+        sql << " AND trust_chain_valid = " << boolTrue;
+    }
+
+    if (dbType == "oracle") {
+        sql << " ORDER BY created_at DESC"
+            << " OFFSET $" << paramIndex << " ROWS";
+        paramIndex++;
+        sql << " FETCH NEXT $" << paramIndex << " ROWS ONLY";
+        paramIndex++;
+        paramValues.push_back(std::to_string(offset));
+        paramValues.push_back(std::to_string(limit));
+    } else {
+        sql << " ORDER BY created_at DESC LIMIT $" << paramIndex;
+        paramIndex++;
+        sql << " OFFSET $" << paramIndex;
+        paramIndex++;
+        paramValues.push_back(std::to_string(limit));
+        paramValues.push_back(std::to_string(offset));
+    }
+
+    return queryExecutor_->executeQuery(sql.str(), paramValues);
+}
+
+// --- Link Certificate Detail by ID ---
+
+Json::Value CertificateRepository::findLinkCertificateById(const std::string& id) {
+    std::string query =
+        "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+        "old_csca_subject_dn, old_csca_fingerprint, "
+        "new_csca_subject_dn, new_csca_fingerprint, "
+        "trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+        "validity_period_valid, not_before, not_after, "
+        "extensions_valid, basic_constraints_ca, basic_constraints_pathlen, "
+        "key_usage, extended_key_usage, "
+        "revocation_status, revocation_message, "
+        "ldap_dn_v2, stored_in_ldap, created_at, country_code "
+        "FROM link_certificate WHERE id = $1";
+
+    auto rows = queryExecutor_->executeQuery(query, {id});
+
+    if (rows.empty()) {
+        return Json::Value::null;
+    }
+    return rows[0];
+}
+
+// --- Bulk Export (All LDAP-stored certificates) ---
+
+Json::Value CertificateRepository::findAllForExport() {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string storedFlag = common::db::boolLiteral(dbType, true);
+
+    std::string query =
+        "SELECT certificate_type, country_code, subject_dn, serial_number, "
+        "fingerprint_sha256, certificate_data, is_self_signed "
+        "FROM certificate WHERE stored_in_ldap = " + storedFlag + " "
+        "ORDER BY country_code, certificate_type";
+
+    return queryExecutor_->executeQuery(query);
+}
+
+// --- Fingerprint Pre-Cache (v2.26.0) ---
+
+void CertificateRepository::preloadExistingFingerprints() {
+    try {
+        auto startTime = std::chrono::steady_clock::now();
+
+        const char* query = "SELECT fingerprint_sha256, id, first_upload_id FROM certificate";
+        Json::Value rows = queryExecutor_->executeQuery(query);
+
+        fingerprintCache_.clear();
+        fingerprintCache_.reserve(rows.size());
+
+        for (const auto& row : rows) {
+            std::string fp = row["fingerprint_sha256"].asString();
+            if (!fp.empty()) {
+                fingerprintCache_[fp] = CachedFingerprintInfo{
+                    row["id"].asString(),
+                    row["first_upload_id"].asString()
+                };
+            }
+        }
+
+        fingerprintCacheLoaded_ = true;
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime).count();
+
+        spdlog::info("[CertificateRepository] Preloaded {} fingerprints into cache ({}ms)",
+                     fingerprintCache_.size(), elapsed);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Failed to preload fingerprints: {}", e.what());
+        fingerprintCacheLoaded_ = false;
+    }
+}
+
+void CertificateRepository::addToFingerprintCache(
+    const std::string& fingerprint,
+    const std::string& id,
+    const std::string& firstUploadId)
+{
+    fingerprintCache_[fingerprint] = CachedFingerprintInfo{id, firstUploadId};
+}
+
+bool CertificateRepository::isFingerprintCached(const std::string& fingerprint) const {
+    return fingerprintCacheLoaded_ && fingerprintCache_.count(fingerprint) > 0;
+}
+
+std::optional<CachedFingerprintInfo> CertificateRepository::getCachedFingerprintInfo(const std::string& fingerprint) const {
+    if (!fingerprintCacheLoaded_) return std::nullopt;
+    auto it = fingerprintCache_.find(fingerprint);
+    if (it != fingerprintCache_.end()) return it->second;
+    return std::nullopt;
+}
+
+} // namespace repositories

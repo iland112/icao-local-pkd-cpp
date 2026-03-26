@@ -1,0 +1,232 @@
+/**
+ * @file certificate_repository.cpp
+ * @brief Certificate repository implementation
+ */
+#include "certificate_repository.h"
+#include "query_helpers.h"
+#include <spdlog/spdlog.h>
+#include <stdexcept>
+#include <sstream>
+
+namespace icao::relay::repositories {
+
+CertificateRepository::CertificateRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CertificateRepository: queryExecutor cannot be nullptr");
+    }
+
+    spdlog::debug("[CertificateRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
+}
+
+int CertificateRepository::countByType(const std::string& certificateType) {
+    try {
+        const char* query = "SELECT COUNT(*) FROM certificate WHERE certificate_type = $1";
+
+        std::vector<std::string> params = {certificateType};
+
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
+        return result.asInt();
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Exception in countByType(): {}", e.what());
+        return 0;
+    }
+}
+
+std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
+    const std::string& certificateType,
+    int limit
+) {
+    std::vector<domain::Certificate> results;
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+
+        std::string query =
+            "SELECT id, fingerprint_sha256, certificate_type, country_code, "
+            "subject_dn, issuer_dn, stored_in_ldap "
+            "FROM certificate "
+            "WHERE stored_in_ldap = " + falseVal;
+
+        std::vector<std::string> params;
+        int paramIndex = 1;
+
+        // Add certificate type filter if provided
+        if (!certificateType.empty()) {
+            query += " AND certificate_type = $" + std::to_string(paramIndex++);
+            params.push_back(certificateType);
+        }
+
+        // Add ORDER BY and LIMIT (database-agnostic)
+        query += " ORDER BY created_at ASC " + common::db::limitClause(dbType, limit);
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        for (const auto& row : result) {
+            results.push_back(jsonToCertificate(row));
+        }
+
+        spdlog::debug("[CertificateRepository] Found {} certificates not in LDAP", results.size());
+        return results;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Exception in findNotInLdap(): {}", e.what());
+        return results;
+    }
+}
+
+int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fingerprints) {
+    if (fingerprints.empty()) {
+        return 0;
+    }
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+
+        std::ostringstream queryBuilder;
+        queryBuilder << "UPDATE certificate SET stored_in_ldap = " << trueVal << " WHERE fingerprint_sha256 IN (";
+
+        for (size_t i = 0; i < fingerprints.size(); i++) {
+            if (i > 0) {
+                queryBuilder << ", ";
+            }
+            queryBuilder << "$" << (i + 1);
+        }
+        queryBuilder << ")";
+
+        std::string query = queryBuilder.str();
+
+        // Convert fingerprints to std::vector<std::string> for Query Executor
+        std::vector<std::string> params(fingerprints.begin(), fingerprints.end());
+
+        int count = queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Marked {} certificates as stored in LDAP", count);
+        return count;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Exception in markStoredInLdap(batch): {}", e.what());
+        return 0;
+    }
+}
+
+bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+        std::string query =
+            "UPDATE certificate SET stored_in_ldap = " + trueVal + " WHERE fingerprint_sha256 = $1";
+
+        std::vector<std::string> params = {fingerprint};
+
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
+        return (rowsAffected > 0);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Exception in markStoredInLdap(single): {}", e.what());
+        return false;
+    }
+}
+
+domain::Certificate CertificateRepository::jsonToCertificate(const Json::Value& row) {
+    // Parse fields from JSON row
+    std::string id = row["id"].asString();
+    std::string fingerprintSha256 = row["fingerprint_sha256"].asString();
+    std::string certificateType = row["certificate_type"].asString();
+    std::string countryCode = row["country_code"].asString();
+    std::string subjectDn = row["subject_dn"].asString();
+    std::string issuerDn = row["issuer_dn"].asString();
+
+    // Handle boolean field (Query Executor returns proper boolean)
+    bool storedInLdap = false;
+    if (row["stored_in_ldap"].isBool()) {
+        storedInLdap = row["stored_in_ldap"].asBool();
+    } else if (row["stored_in_ldap"].isString()) {
+        std::string val = row["stored_in_ldap"].asString();
+        storedInLdap = (val == "t" || val == "true" || val == "1");
+    }
+
+    // Construct and return domain object
+    return domain::Certificate(
+        id,
+        fingerprintSha256,
+        certificateType,
+        countryCode,
+        subjectDn,
+        issuerDn,
+        storedInLdap
+    );
+}
+
+std::vector<std::pair<std::string, std::vector<uint8_t>>> CertificateRepository::findAllCscas() {
+    spdlog::info("[CertificateRepository] Bulk loading all CSCA certificates for cache");
+
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> result;
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Oracle: RAWTOHEX+DBMS_LOB to avoid LOB truncation
+        std::string certDataExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(certificate_data, DBMS_LOB.GETLENGTH(certificate_data), 1)) as certificate_data"
+            : "certificate_data";
+
+        std::string query = "SELECT subject_dn, " + certDataExpr +
+                           " FROM certificate WHERE certificate_type = 'CSCA'";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, {});
+
+        auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
+            std::vector<uint8_t> bytes;
+            bytes.reserve((hex.size() - start) / 2);
+            for (size_t i = start; i + 1 < hex.size(); i += 2) {
+                char h[3] = {hex[i], hex[i + 1], 0};
+                bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+            }
+            return bytes;
+        };
+
+        for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+            std::string subjectDn = rows[i].get("subject_dn", "").asString();
+            std::string certDataHex = rows[i].get("certificate_data", "").asString();
+
+            if (subjectDn.empty() || certDataHex.empty()) continue;
+
+            std::vector<uint8_t> derBytes;
+            if (certDataHex.size() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
+                derBytes = decodeHex(certDataHex, 2);
+                // Handle double-encoded BYTEA
+                if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+                    std::string innerHex(derBytes.begin(), derBytes.end());
+                    derBytes = decodeHex(innerHex, 2);
+                }
+            } else if (!certDataHex.empty()) {
+                // Oracle returns plain hex from RAWTOHEX (no \x prefix)
+                derBytes = decodeHex(certDataHex, 0);
+            }
+
+            if (!derBytes.empty()) {
+                result.emplace_back(subjectDn, std::move(derBytes));
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Loaded {} CSCA certificates", result.size());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findAllCscas failed: {}", e.what());
+        return result;
+    }
+}
+
+} // namespace icao::relay::repositories
