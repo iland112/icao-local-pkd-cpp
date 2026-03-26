@@ -361,7 +361,7 @@ export default function IcaoLdapSync() {
               {status.lastSync ? (
                 <div className="flex items-center gap-3 mt-1">
                   <span className="text-sm font-bold">{status.lastSync.totalRemoteCount.toLocaleString()}</span>
-                  <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates}</span>
+                  <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates.toLocaleString()}</span>
                   {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()} {t('sync:icaoLdap.failSuffix')}</span>}
                 </div>
               ) : (
@@ -762,7 +762,7 @@ export default function IcaoLdapSync() {
                         ].filter(c => c.count > 0).map(c => (
                           <div key={c.label} className="flex items-center justify-between text-xs bg-white dark:bg-gray-800 rounded px-2 py-1">
                             <span className="text-gray-600 dark:text-gray-400">{c.label}</span>
-                            <span className={`font-bold ${c.color}`}>{c.count}</span>
+                            <span className={`font-bold ${c.color}`}>{c.count.toLocaleString()}</span>
                           </div>
                         ))}
                       </div>
@@ -827,7 +827,7 @@ export default function IcaoLdapSync() {
                       }`}>{h.triggeredBy}</span>
                     </td>
                     <td className="px-3 py-2 text-center font-mono">{h.totalRemoteCount.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates}</td>
+                    <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{h.existingSkipped.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-red-500">{h.failedCount.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{(h.durationMs / 1000).toFixed(1)}s</td>

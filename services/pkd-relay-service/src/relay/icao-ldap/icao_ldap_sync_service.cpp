@@ -1298,8 +1298,42 @@ void IcaoLdapSyncService::saveSyncLog(const IcaoLdapSyncResult& result) {
 }
 
 IcaoLdapSyncResult IcaoLdapSyncService::getLastSyncResult() const {
-    std::lock_guard<std::mutex> lock(resultMutex_);
-    return lastResult_;
+    {
+        std::lock_guard<std::mutex> lock(resultMutex_);
+        if (!lastResult_.status.empty()) return lastResult_;
+    }
+
+    // Fallback: load from DB (after service restart, in-memory lastResult_ is empty)
+    if (!queryExecutor_) return {};
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string sql = (dbType == "oracle")
+            ? "SELECT * FROM (SELECT sync_type, status, triggered_by, total_remote_count, "
+              "new_certificates, updated_certificates, failed_count, duration_ms, error_message "
+              "FROM icao_ldap_sync_log ORDER BY created_at DESC) WHERE ROWNUM = 1"
+            : "SELECT sync_type, status, triggered_by, total_remote_count, "
+              "new_certificates, updated_certificates, failed_count, duration_ms, error_message "
+              "FROM icao_ldap_sync_log ORDER BY created_at DESC LIMIT 1";
+
+        auto rows = queryExecutor_->executeQuery(sql);
+        if (!rows.empty()) {
+            IcaoLdapSyncResult result;
+            result.syncType = rows[0].get("sync_type", "").asString();
+            result.status = rows[0].get("status", "").asString();
+            result.triggeredBy = rows[0].get("triggered_by", "").asString();
+            result.totalRemoteCount = common::db::getInt(rows[0], "total_remote_count", 0);
+            result.newCertificates = common::db::getInt(rows[0], "new_certificates", 0);
+            result.existingSkipped = common::db::getInt(rows[0], "updated_certificates", 0);
+            result.failedCount = common::db::getInt(rows[0], "failed_count", 0);
+            result.durationMs = common::db::getInt(rows[0], "duration_ms", 0);
+            result.errorMessage = rows[0].get("error_message", "").asString();
+            return result;
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[IcaoLdapSync] Failed to load last sync from DB: {}", e.what());
+    }
+    return {};
 }
 
 IcaoLdapSyncConfig IcaoLdapSyncService::getConfig() const {
