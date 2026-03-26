@@ -377,6 +377,8 @@ export interface ReconciliationDetailsResponse {
 
 /**
  * DB-LDAP Sync Monitoring & Reconciliation APIs
+ * NOTE: As of v2.41.0, /api/sync/* is routed to pkd-management via nginx.
+ * Works transparently since baseURL is '/api'.
  */
 export const syncApi = {
   /**

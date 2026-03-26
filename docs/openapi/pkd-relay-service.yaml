@@ -2,11 +2,12 @@ openapi: 3.0.3
 info:
   title: PKD Relay Service API
   description: |
-    DB-LDAP Synchronization and Certificate Re-validation Service API.
-    Monitors synchronization between PostgreSQL/Oracle and OpenLDAP,
-    performs auto-reconciliation, and certificate expiration re-validation.
+    PKD Relay Service API — 외부 ICAO PKD 연계.
+    LDIF/ML import, ICAO PKD version detection, ICAO LDAP synchronization,
+    and certificate expiration re-validation.
 
     ## Changelog
+    - **v2.41.0** (2026-03-26): 서비스 기능 재배치 — LDIF/ML 업로드·ICAO 버전 감지 추가 (pkd-management에서 이동), DB↔LDAP Sync/Reconciliation pkd-management로 이동
     - **v2.36.0** (2026-03-18): 버전 동기화 (API 시그니처 변경 없음, reconciliation 후 sync check 자동 실행 내부 개선)
     - **v2.30.0** (2026-03-09): SSE heartbeat 30초 간격 추가 (HTTP/2 유휴 연결 에러 방지), 프론트엔드 SSE 재연결 최대 20회 제한
     - **v2.29.1** (2026-03-05): SSE HTTP/2 호환성 수정, 알림 스트림 chunked_transfer_encoding off
@@ -17,7 +18,7 @@ info:
     - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
     - **v1.1.0** (2026-01-06): Daily scheduler, certificate re-validation
     - **v1.0.0** (2026-01-03): Initial release
-  version: 2.36.0
+  version: 2.41.0
   contact:
     name: SMARTCORE Inc.
     email: support@smartcoreinc.com
@@ -43,6 +44,8 @@ tags:
     description: Service configuration
 
 paths:
+  # Note: /api/sync/* endpoints (except icao-ldap) moved to pkd-management (v2.41.0)
+  # Note: /api/upload/*, /api/icao/* endpoints added from pkd-management (v2.41.0)
   # ============================================
   # Health
   # ============================================

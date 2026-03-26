@@ -233,7 +233,9 @@ export const certificateApi = {
 
 /**
  * Upload history and statistics (read-only views)
- * Write operations (upload, trigger) are in relayApi.uploadApi
+ * NOTE: As of v2.41.0, all /api/upload/* endpoints are routed to pkd-relay via nginx.
+ * These calls still work transparently since both pkdApi and relayApi use baseURL '/api'.
+ * Write operations (upload, trigger) are in relayApi.uploadApi.
  */
 export const uploadHistoryApi = {
   /**
@@ -413,7 +415,8 @@ export const ldapApi = {
 
 /**
  * ICAO PKD version monitoring
- * Endpoints: /api/icao/*
+ * NOTE: As of v2.41.0, /api/icao/* is routed to pkd-relay via nginx.
+ * Works transparently since baseURL is '/api'.
  */
 export const icaoApi = {
   /**
