@@ -66,6 +66,9 @@ ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH
 
 COPY --from=builder /app/build/bin/pkd-relay-service /app/
+# Copy shared libraries built from common-lib and shared/
+COPY --from=builder /app/build/lib/libicao-common.so* /app/lib/
+ENV LD_LIBRARY_PATH=$ORACLE_HOME:/app/lib:$LD_LIBRARY_PATH
 
 WORKDIR /app
 

@@ -40,9 +40,15 @@
 #include "upload/handlers/icao_handler.h"
 #include "upload/common/upload_config.h"
 #include "upload/common/progress_manager.h"
+#include "upload/services/icao_sync_service.h"
+#include "upload/repositories/icao_version_repository.h"
+#include "upload/infrastructure/http/http_client.h"
 
 // Notification
 #include "common/notification_manager.h"
+
+// ICAO handler factory — defined in upload/icao_handler_factory.cpp (avoids namespace ambiguity)
+std::unique_ptr<handlers::IcaoHandler> createIcaoHandler(common::IQueryExecutor* qe);
 
 using namespace drogon;
 using namespace icao::relay;
@@ -389,7 +395,10 @@ int main() {
                 g_uploadSC->validationRepository(),
                 g_uploadSC->queryExecutor());
 
-            spdlog::info("Upload module initialized");
+            // ICAO Version Detection handler
+            g_icaoHandler = createIcaoHandler(g_uploadSC->queryExecutor());
+
+            spdlog::info("Upload module initialized (upload + stats + ICAO version)");
         }
     } catch (const std::exception& e) {
         spdlog::warn("Upload module initialization failed: {} (non-fatal)", e.what());

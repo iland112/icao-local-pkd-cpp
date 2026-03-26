@@ -137,6 +137,7 @@ set(SOURCE_FILES
     src/upload/common/db_crl_provider.cpp
     # Upload infrastructure
     src/upload/infrastructure/http/http_client.cpp
+    src/upload/icao_handler_factory.cpp
 )
 
 set(HEADER_FILES
