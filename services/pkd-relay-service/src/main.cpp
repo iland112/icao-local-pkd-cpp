@@ -31,6 +31,7 @@
 
 // Handlers
 #include "handlers/health_handler.h"
+#include "handlers/notification_handler.h"
 #include "handlers/icao_ldap_handler.h"
 
 // Upload module (moved from pkd-management)
@@ -61,6 +62,7 @@ std::unique_ptr<infrastructure::ServiceContainer> g_services;
 
 // Handler instances (must outlive Drogon server)
 std::unique_ptr<handlers::HealthHandler> g_healthHandler;
+std::unique_ptr<handlers::NotificationHandler> g_notificationHandler;
 std::unique_ptr<icao::relay::IcaoLdapHandler> g_icaoLdapHandler;
 
 // Upload module (moved from pkd-management)
@@ -105,6 +107,13 @@ void registerRoutes() {
     app().registerHandler("/api/sync/health",
         [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
             g_healthHandler->handle(req, std::move(cb));
+        }, {Get});
+
+    // Notification SSE stream (ICAO LDAP sync progress broadcasts)
+    g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
+    app().registerHandler("/api/sync/notifications/stream",
+        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
+            g_notificationHandler->handleStream(req, std::move(cb));
         }, {Get});
 
     // --- Upload Routes (moved from pkd-management) ---

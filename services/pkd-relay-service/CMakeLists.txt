@@ -81,6 +81,7 @@ set(SOURCE_FILES
     src/common/notification_manager.cpp
     # Handlers
     src/handlers/health_handler.cpp
+    src/handlers/notification_handler.cpp
     src/handlers/icao_ldap_handler.cpp
     # ICAO PKD LDAP Sync
     src/relay/icao-ldap/icao_ldap_client.cpp
