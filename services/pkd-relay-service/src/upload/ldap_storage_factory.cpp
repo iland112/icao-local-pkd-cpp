@@ -7,6 +7,7 @@
 #include "upload/common/upload_config.h"
 #include <memory>
 #include <string>
+#include <spdlog/spdlog.h>
 
 void initLdapStorageService(infrastructure::UploadServiceContainer* sc,
     const std::string& writeHost, int writePort,
@@ -22,5 +23,8 @@ void initLdapStorageService(infrastructure::UploadServiceContainer* sc,
     cfg.ldapBaseDn = baseDn;
     cfg.ldapDataContainer = dataContainer;
     cfg.ldapNcDataContainer = ncDataContainer;
+    // Load remaining settings from environment (TRUST_ANCHOR_PATH, ASN1_MAX_LINES, etc.)
+    cfg.loadFromEnv();
+    spdlog::info("LdapStorageService config: trustAnchor={}, asn1MaxLines={}", cfg.trustAnchorPath, cfg.asn1MaxLines);
     sc->setLdapStorageService(std::make_shared<services::LdapStorageService>(cfg));
 }

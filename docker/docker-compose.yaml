@@ -318,6 +318,19 @@ services:
       - ICAO_LDAP_TLS_CERT_FILE=${ICAO_LDAP_TLS_CERT_FILE:-}
       - ICAO_LDAP_TLS_KEY_FILE=${ICAO_LDAP_TLS_KEY_FILE:-}
       - ICAO_LDAP_TLS_CA_CERT_FILE=${ICAO_LDAP_TLS_CA_CERT_FILE:-}
+      # Upload Module (moved from pkd-management v2.41.0)
+      - MAX_CONCURRENT_UPLOADS=${MAX_CONCURRENT_UPLOADS:-3}
+      - MAX_BODY_SIZE_MB=${MAX_BODY_SIZE_MB:-100}
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+      - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}
+      - LDAP_WRITE_TIMEOUT=${LDAP_WRITE_TIMEOUT:-10}
+      # ICAO Version Detection (moved from pkd-management v2.41.0)
+      - ICAO_PORTAL_URL=${ICAO_PORTAL_URL:-https://pkddownloadsg.icao.int/}
+      - ICAO_NOTIFICATION_EMAIL=${ICAO_NOTIFICATION_EMAIL:-admin@localhost}
+      - ICAO_AUTO_NOTIFY=${ICAO_AUTO_NOTIFY:-true}
+      - ICAO_HTTP_TIMEOUT=${ICAO_HTTP_TIMEOUT:-10}
+      - ICAO_CHECK_SCHEDULE_HOUR=${ICAO_CHECK_SCHEDULE_HOUR:-9}
+      - ICAO_SCHEDULER_ENABLED=${ICAO_SCHEDULER_ENABLED:-true}
     depends_on:
       openldap1:
         condition: service_healthy
