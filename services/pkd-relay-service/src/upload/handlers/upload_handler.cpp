@@ -354,10 +354,10 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_activeProcessingCount.fetch_add(1);
     }
 
-    // Use shared_ptr to avoid duplicating 80MB+ LDIF content when spawning thread
-    auto contentPtr = std::make_shared<std::vector<uint8_t>>(content);
-    std::thread([uploadId, contentPtr, resumeMode]() {
-        const auto& content = *contentPtr;
+    // Convert to string once, then move into thread (avoid 80MB triple-copy)
+    auto contentStr = std::make_shared<std::string>(
+        reinterpret_cast<const char*>(content.data()), content.size());
+    std::thread([uploadId, contentStr, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -387,16 +387,14 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         }
 
         try {
-            std::string contentStr(content.begin(), content.end());
-
             // Send parsing started progress
             std::string parseMsg = resumeMode ? "LDIF 파일 파싱 중... (이어하기 모드)" : "LDIF 파일 파싱 중...";
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
                     0, 100, parseMsg));
 
-            // Parse LDIF content using LdifProcessor
-            std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(contentStr);
+            // Parse LDIF content using LdifProcessor (contentStr already converted, no extra copy)
+            std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(*contentStr);
             int totalEntries = static_cast<int>(entries.size());
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
