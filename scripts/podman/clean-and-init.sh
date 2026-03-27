@@ -98,7 +98,9 @@ mkdir -p .docker-data/postgres
 mkdir -p .docker-data/openldap1/data .docker-data/openldap1/config
 mkdir -p .docker-data/openldap2/data .docker-data/openldap2/config
 mkdir -p .docker-data/pkd-uploads .docker-data/pkd-logs
-mkdir -p .docker-data/pa-logs .docker-data/sync-logs
+mkdir -p .docker-data/pa-logs
+mkdir -p .docker-data/relay-logs && chmod 777 .docker-data/relay-logs
+mkdir -p .docker-data/relay-uploads && chmod 777 .docker-data/relay-uploads
 mkdir -p .docker-data/monitoring-logs .docker-data/gateway-logs
 mkdir -p .docker-data/ai-analysis-logs .docker-data/nginx .docker-data/ssl
 
