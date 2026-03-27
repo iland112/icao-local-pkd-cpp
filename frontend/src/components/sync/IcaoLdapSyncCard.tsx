@@ -281,7 +281,7 @@ export default function IcaoLdapSyncCard() {
               <span className="text-green-600 dark:text-green-400 font-semibold">+{progress.totalNew} 신규</span>
               <span className="text-gray-500">{progress.totalSkipped.toLocaleString()} 기존</span>
               {progress.totalFailed > 0 && <span className="text-red-500">{progress.totalFailed} 실패</span>}
-              {progress.totalRemoteCount > 0 && <span className="text-gray-400 ml-auto">전체 {progress.totalRemoteCount.toLocaleString()}</span>}
+              <span className="text-gray-400 ml-auto">합계 {(progress.totalNew + progress.totalSkipped + progress.totalFailed).toLocaleString()}</span>
             </div>
 
             {/* Phase message */}
@@ -323,8 +323,8 @@ export default function IcaoLdapSyncCard() {
               </span>
             </div>
             <div className="grid grid-cols-4 gap-2 text-xs">
-              <div><span className="text-gray-500 dark:text-gray-400">전체</span>
-                <div className="font-semibold">{status.lastSync.totalRemoteCount.toLocaleString()}</div></div>
+              <div><span className="text-gray-500 dark:text-gray-400">합계</span>
+                <div className="font-semibold">{(status.lastSync.newCertificates + status.lastSync.existingSkipped + status.lastSync.failedCount).toLocaleString()}</div></div>
               <div><span className="text-green-600 dark:text-green-400">신규</span>
                 <div className="font-semibold text-green-600 dark:text-green-400">+{status.lastSync.newCertificates}</div></div>
               <div><span className="text-gray-500 dark:text-gray-400">기존</span>
@@ -349,7 +349,7 @@ export default function IcaoLdapSyncCard() {
                   <span className="text-gray-500 dark:text-gray-400 w-16">{h.triggeredBy}</span>
                   <span className="text-green-600 dark:text-green-400 font-medium">+{h.newCertificates}</span>
                   <span className="text-gray-300">/</span>
-                  <span className="text-gray-400">{h.totalRemoteCount.toLocaleString()}</span>
+                  <span className="text-gray-400">{(h.newCertificates + h.existingSkipped + h.failedCount).toLocaleString()}</span>
                   {h.failedCount > 0 && <span className="text-red-400 text-[11px]">({h.failedCount} fail)</span>}
                   <span className="ml-auto text-gray-400 text-[11px]">{(h.durationMs / 1000).toFixed(1)}s</span>
                 </div>

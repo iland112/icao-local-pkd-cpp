@@ -378,7 +378,7 @@ export default function IcaoLdapSync() {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium"> {t('sync:icaoLdap.syncStats')}</p>
               {status.lastSync ? (
                 <div className="flex items-center gap-3 mt-1">
-                  <span className="text-sm font-bold">{status.lastSync.totalRemoteCount.toLocaleString()}</span>
+                  <span className="text-sm font-bold">{(status.lastSync.newCertificates + status.lastSync.existingSkipped + status.lastSync.failedCount).toLocaleString()}</span>
                   <span className="text-sm font-bold text-green-600">+{status.lastSync.newCertificates.toLocaleString()}</span>
                   {status.lastSync.failedCount > 0 && <span className="text-sm font-bold text-red-500">{status.lastSync.failedCount.toLocaleString()} {t('sync:icaoLdap.failSuffix')}</span>}
                 </div>
@@ -483,8 +483,8 @@ export default function IcaoLdapSync() {
           {/* Cumulative stats */}
           <div className="grid grid-cols-4 gap-3 mb-3">
             <div className="text-center bg-white/60 dark:bg-gray-800/60 rounded-lg py-2">
-              <div className="text-lg font-bold text-blue-600">{progress.totalRemoteCount.toLocaleString()}</div>
-              <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
+              <div className="text-lg font-bold text-blue-600">{(progress.totalNew + progress.totalSkipped + progress.totalFailed).toLocaleString()}</div>
+              <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.icaoPkdTotal')}</div>
             </div>
             <div className="text-center bg-white/60 dark:bg-gray-800/60 rounded-lg py-2">
               <div className="text-lg font-bold text-green-600">+{progress.totalNew.toLocaleString()}</div>
@@ -574,7 +574,7 @@ export default function IcaoLdapSync() {
             {/* Summary stats */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <div className="text-center p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20">
-                <div className="text-xl font-bold text-blue-600">{status.lastSync.totalRemoteCount.toLocaleString()}</div>
+                <div className="text-xl font-bold text-blue-600">{(status.lastSync.newCertificates + status.lastSync.existingSkipped + status.lastSync.failedCount).toLocaleString()}</div>
                 <div className="text-[10px] text-gray-500 font-medium">{t('sync:icaoLdap.icaoPkdTotal')}</div>
               </div>
               <div className="text-center p-3 rounded-xl bg-green-50 dark:bg-green-900/20">
@@ -848,7 +848,7 @@ export default function IcaoLdapSync() {
                         h.triggeredBy === 'MANUAL' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-gray-100 dark:bg-gray-700 text-gray-500'
                       }`}>{triggerLabel(h.triggeredBy)}</span>
                     </td>
-                    <td className="px-3 py-2 text-center font-mono">{h.totalRemoteCount.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-center font-mono">{(h.newCertificates + h.existingSkipped + h.failedCount).toLocaleString()}</td>
                     <td className="px-3 py-2 text-center font-semibold text-green-600 dark:text-green-400">+{h.newCertificates.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-gray-400">{h.existingSkipped.toLocaleString()}</td>
                     <td className="px-3 py-2 text-center text-red-500">{h.failedCount.toLocaleString()}</td>
@@ -963,8 +963,8 @@ export default function IcaoLdapSync() {
                         {/* Totals */}
                         <div className="grid grid-cols-4 gap-2">
                           <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg py-2">
-                            <div className="text-lg font-bold text-blue-600">{selectedHistory.totalRemoteCount.toLocaleString()}</div>
-                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.total')}</div>
+                            <div className="text-lg font-bold text-blue-600">{(selectedHistory.newCertificates + selectedHistory.existingSkipped + selectedHistory.failedCount).toLocaleString()}</div>
+                            <div className="text-[10px] text-gray-500">{t('sync:icaoLdap.icaoPkdTotal')}</div>
                           </div>
                           <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg py-2">
                             <div className="text-lg font-bold text-green-600">+{selectedHistory.newCertificates.toLocaleString()}</div>
