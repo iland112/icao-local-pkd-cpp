@@ -130,4 +130,7 @@ services::LdapStorageService* UploadServiceContainer::ldapStorageService() const
 handlers::UploadHandler* UploadServiceContainer::uploadHandler() const { return impl_->uploadHandler; }
 handlers::UploadStatsHandler* UploadServiceContainer::uploadStatsHandler() const { return impl_->uploadStatsHandler; }
 
+void UploadServiceContainer::setUploadHandler(handlers::UploadHandler* handler) { impl_->uploadHandler = handler; }
+void UploadServiceContainer::setLdapStorageService(std::shared_ptr<services::LdapStorageService> svc) { impl_->ldapStorageService = std::move(svc); }
+
 } // namespace infrastructure

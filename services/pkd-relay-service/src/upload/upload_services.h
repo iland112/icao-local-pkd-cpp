@@ -98,6 +98,10 @@ public:
     handlers::UploadHandler* uploadHandler() const;
     handlers::UploadStatsHandler* uploadStatsHandler() const;
 
+    // --- Post-init setters (called after handlers are created in main.cpp) ---
+    void setUploadHandler(handlers::UploadHandler* handler);
+    void setLdapStorageService(std::shared_ptr<services::LdapStorageService> svc);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

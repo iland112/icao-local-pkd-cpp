@@ -48,8 +48,13 @@
 // Notification
 #include "common/notification_manager.h"
 
-// ICAO handler factory — defined in upload/icao_handler_factory.cpp (avoids namespace ambiguity)
+// Factory functions — defined in upload/*.cpp (avoids namespace ambiguity with using namespace icao::relay)
 std::unique_ptr<handlers::IcaoHandler> createIcaoHandler(common::IQueryExecutor* qe);
+void initLdapStorageService(infrastructure::UploadServiceContainer* sc,
+    const std::string& writeHost, int writePort,
+    const std::string& bindDn, const std::string& bindPassword,
+    const std::string& baseDn,
+    const std::string& dataContainer, const std::string& ncDataContainer);
 
 using namespace drogon;
 using namespace icao::relay;
@@ -406,6 +411,16 @@ int main() {
                 g_uploadSC->certificateRepository(),
                 g_uploadSC->validationRepository(),
                 g_uploadSC->queryExecutor());
+
+            // Wire upload handler back to UploadServiceContainer (for processLdifAsync delegation)
+            g_uploadSC->setUploadHandler(g_uploadHandler.get());
+
+            // Create LdapStorageService with relay config
+            initLdapStorageService(g_uploadSC.get(),
+                g_config.ldapWriteHost, g_config.ldapWritePort,
+                g_config.ldapBindDn, g_config.ldapBindPassword,
+                g_config.ldapBaseDn, g_config.ldapDataContainer, g_config.ldapNcDataContainer);
+            spdlog::info("LdapStorageService initialized for upload module");
 
             // ICAO Version Detection handler
             g_icaoHandler = createIcaoHandler(g_uploadSC->queryExecutor());

@@ -139,6 +139,7 @@ set(SOURCE_FILES
     # Upload infrastructure
     src/upload/infrastructure/http/http_client.cpp
     src/upload/icao_handler_factory.cpp
+    src/upload/ldap_storage_factory.cpp
 )
 
 set(HEADER_FILES
