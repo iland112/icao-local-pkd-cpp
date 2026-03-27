@@ -110,6 +110,9 @@ void registerRoutes() {
         }, {Get});
 
     // Notification SSE stream (ICAO LDAP sync progress broadcasts)
+    // Start SSE heartbeat (30s interval to prevent HTTP/2 idle connection timeout)
+    notification::NotificationManager::getInstance().startHeartbeat();
+
     g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
     app().registerHandler("/api/sync/notifications/stream",
         [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
