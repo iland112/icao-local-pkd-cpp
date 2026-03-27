@@ -47,6 +47,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     // --- Certificate Preview & Upload Progress (Read-only, no data modification) ---
     "^/api/upload/certificate/preview$",   // Certificate preview (parse only, no save)
     "^/api/progress.*",            // Upload progress SSE stream (EventSource cannot send custom headers)
+    "^/api/sync/notifications/stream$",  // Sync SSE stream (EventSource cannot send custom headers)
 
     // --- Certificate Search (Public directory service) ---
     "^/api/certificates/countries$", // Country list for certificate search
@@ -72,10 +73,16 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/icao/history.*",        // Version check history
     "^/api/icao/check-updates$",   // Trigger ICAO version check
 
-    // --- Sync Dashboard (Read-only monitoring) ---
-    "^/api/sync/status$",          // DB-LDAP sync status
-    "^/api/sync/stats$",           // Sync statistics
-    "^/api/reconcile/history.*",   // Reconciliation history
+    // --- Sync Dashboard (Read-only monitoring, moved from pkd-relay v2.41.0) ---
+    "^/api/sync/status$",              // DB-LDAP sync status
+    "^/api/sync/stats$",              // Sync statistics
+    "^/api/sync/history.*",           // Sync check history
+    "^/api/sync/discrepancies$",      // Sync discrepancies
+    "^/api/sync/config$",             // Sync configuration (GET)
+    "^/api/sync/reconcile/history.*", // Reconciliation history
+    "^/api/sync/reconcile/stats$",    // Reconciliation statistics
+    "^/api/sync/reconcile/[a-f0-9\\-]+$", // Reconciliation detail
+    "^/api/sync/revalidation-history.*",  // Revalidation history
 
     // --- Audit Logs (Read-only monitoring) ---
     "^/api/audit/operations$",     // Operation audit logs
