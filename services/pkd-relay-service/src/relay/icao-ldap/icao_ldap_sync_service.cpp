@@ -17,6 +17,25 @@
 
 namespace {
 
+/// Extract country code from X.509 certificate subject DN (C= field)
+/// Falls back to provided default if C= not found
+std::string extractCountryFromCert(X509* cert, const std::string& fallback = "XX") {
+    X509_NAME* subject = X509_get_subject_name(cert);
+    if (!subject) return fallback;
+    int idx = X509_NAME_get_index_by_NID(subject, NID_countryName, -1);
+    if (idx < 0) return fallback;
+    X509_NAME_ENTRY* entry = X509_NAME_get_entry(subject, idx);
+    if (!entry) return fallback;
+    ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+    if (!data) return fallback;
+    unsigned char* utf8 = nullptr;
+    int len = ASN1_STRING_to_UTF8(&utf8, data);
+    if (len <= 0 || !utf8) return fallback;
+    std::string cc(reinterpret_cast<char*>(utf8), len);
+    OPENSSL_free(utf8);
+    return cc.empty() ? fallback : cc;
+}
+
 /// Read X.509 PEM file and extract subject, issuer, expiry
 struct CertInfo {
     std::string subject;
@@ -1523,7 +1542,8 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(
 
                         IcaoLdapCertEntry cscaEntry;
                         cscaEntry.dn = mlEntry.dn;
-                        cscaEntry.countryCode = mlEntry.countryCode;
+                        // Extract country from CSCA's own subject DN, not from ML entry
+                        cscaEntry.countryCode = extractCountryFromCert(cert, mlEntry.countryCode);
                         cscaEntry.certType = certType;
                         cscaEntry.binaryData = derData;
 
@@ -1566,7 +1586,8 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(
 
                 IcaoLdapCertEntry certEntry;
                 certEntry.dn = mlEntry.dn;
-                certEntry.countryCode = mlEntry.countryCode;
+                // Extract country from certificate's own subject DN
+                certEntry.countryCode = extractCountryFromCert(cert, mlEntry.countryCode);
                 certEntry.certType = isSelfSigned ? "CSCA" : "MLSC";
                 certEntry.binaryData = derData;
 
