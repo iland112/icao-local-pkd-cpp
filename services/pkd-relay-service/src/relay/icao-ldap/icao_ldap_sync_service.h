@@ -104,8 +104,8 @@ private:
     bool saveCertificateToLocalLdap(const IcaoLdapCertEntry& entry, const std::string& fingerprint);
 
     /// Process Master List: extract CSCAs from CMS SignedData
-    /// Returns number of new CSCAs extracted and saved
-    int processMasterListEntry(const IcaoLdapCertEntry& mlEntry);
+    /// Returns {newCscaCount, skippedCscaCount}
+    std::pair<int,int> processMasterListEntry(const IcaoLdapCertEntry& mlEntry);
 
     /// Record duplicate certificate (already exists in DB)
     void saveDuplicateRecord(const IcaoLdapCertEntry& entry, const std::string& fingerprint);

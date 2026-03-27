@@ -308,15 +308,13 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
             for (const auto& mlEntry : mlEntries) {
                 try {
-                    int newCscas = processMasterListEntry(mlEntry);
+                    auto [newCscas, skippedCscas] = processMasterListEntry(mlEntry);
                     result.newCertificates += newCscas;
                     currentProgress_.currentTypeNew += newCscas;
                     currentProgress_.totalNew += newCscas;
-                    if (newCscas == 0) {
-                        result.existingSkipped++;
-                        currentProgress_.currentTypeSkipped++;
-                        currentProgress_.totalSkipped++;
-                    }
+                    result.existingSkipped += skippedCscas;
+                    currentProgress_.currentTypeSkipped += skippedCscas;
+                    currentProgress_.totalSkipped += skippedCscas;
                 } catch (const std::exception& e) {
                     result.failedCount++;
                     currentProgress_.totalFailed++;
@@ -1440,21 +1438,22 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(
     return history;
 }
 
-int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry) {
-    if (mlEntry.binaryData.empty()) return 0;
+std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry) {
+    if (mlEntry.binaryData.empty()) return {0, 0};
 
     // Parse CMS SignedData from Master List binary (pkdMasterListContent)
     BIO* bio = BIO_new_mem_buf(mlEntry.binaryData.data(), static_cast<int>(mlEntry.binaryData.size()));
-    if (!bio) return 0;
+    if (!bio) return {0, 0};
 
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
     if (!cms) {
         spdlog::warn("[IcaoLdapSync] Failed to parse ML CMS for {}", mlEntry.dn);
-        return 0;
+        return {0, 0};
     }
 
     int newCscaCount = 0;
+    int skippedCscaCount = 0;
 
     // Extract embedded content (pkiData containing CSCA certificates)
     ASN1_OCTET_STRING** pContent = CMS_get0_content(cms);
@@ -1504,12 +1503,10 @@ int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry
                     std::string fingerprint = computeFingerprint(derData);
 
                     if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
-                        // Determine type: self-signed = CSCA, cross-signed = Link Certificate
                         bool isSelfSigned = (X509_NAME_cmp(
                             X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
-                        std::string certType = isSelfSigned ? "CSCA" : "CSCA";  // Both stored as CSCA
+                        std::string certType = isSelfSigned ? "CSCA" : "CSCA";
 
-                        // Extract country from ML entry
                         IcaoLdapCertEntry cscaEntry;
                         cscaEntry.dn = mlEntry.dn;
                         cscaEntry.countryCode = mlEntry.countryCode;
@@ -1520,6 +1517,8 @@ int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry
                             saveCertificateToLocalLdap(cscaEntry, fingerprint);
                             newCscaCount++;
                         }
+                    } else if (!fingerprint.empty()) {
+                        skippedCscaCount++;
                     }
 
                     X509_free(cert);
@@ -1543,7 +1542,6 @@ int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry
 
             std::string fingerprint = computeFingerprint(derData);
             if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
-                // CMS certificates field typically contains MLSC
                 bool isSelfSigned = (X509_NAME_cmp(
                     X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
 
@@ -1557,6 +1555,8 @@ int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry
                     saveCertificateToLocalLdap(certEntry, fingerprint);
                     newCscaCount++;
                 }
+            } else if (!fingerprint.empty()) {
+                skippedCscaCount++;
             }
         }
         // Free the stack (CMS_get1_certs returns a new stack)
@@ -1568,11 +1568,12 @@ int IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry
 
     CMS_ContentInfo_free(cms);
 
-    if (newCscaCount > 0) {
-        spdlog::info("[IcaoLdapSync] ML {} → {} new CSCAs extracted", mlEntry.countryCode, newCscaCount);
+    if (newCscaCount > 0 || skippedCscaCount > 0) {
+        spdlog::info("[IcaoLdapSync] ML {} → {} new CSCAs extracted, {} skipped",
+                     mlEntry.countryCode, newCscaCount, skippedCscaCount);
     }
 
-    return newCscaCount;
+    return {newCscaCount, skippedCscaCount};
 }
 
 void IcaoLdapSyncService::broadcastProgress(const IcaoLdapSyncProgress& progress) {
