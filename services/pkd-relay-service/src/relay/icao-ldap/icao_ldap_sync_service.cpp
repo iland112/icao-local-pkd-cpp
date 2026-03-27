@@ -334,10 +334,11 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
                 }
             }
 
-            // Collect ML→CSCA type stats
+            // Collect ML→CSCA type stats (display as CSCA — ML is intermediate, CSCA is the output)
             IcaoLdapTypeStat mlStat;
-            mlStat.type = "ML→CSCA";
-            mlStat.total = currentProgress_.currentTypeTotal;
+            mlStat.type = "CSCA";
+            // total = actual CSCA certificates processed (new + skipped), not ML entry count
+            mlStat.total = currentProgress_.currentTypeNew + currentProgress_.currentTypeSkipped;
             mlStat.newCount = currentProgress_.currentTypeNew;
             mlStat.skipped = currentProgress_.currentTypeSkipped;
             result.typeStats.push_back(mlStat);

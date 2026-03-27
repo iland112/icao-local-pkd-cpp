@@ -527,7 +527,7 @@ export interface IcaoLdapSyncStatus {
 }
 
 export interface IcaoLdapSyncTypeStat {
-  type: string;    // ML→CSCA, DSC, CRL, DSC_NC
+  type: string;    // CSCA, CRL, DSC, DSC_NC
   total: number;
   new: number;
   skipped: number;

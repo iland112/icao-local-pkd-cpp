@@ -619,10 +619,10 @@ export default function IcaoLdapSync() {
                           <tr key={i} className="border-t border-gray-100 dark:border-gray-700">
                             <td className="px-3 py-2 font-semibold">{ts.type}</td>
                             <td className="px-3 py-2 text-center font-mono">
-                              {ts.total.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">ML</span>}
+                              {ts.total.toLocaleString()}
                             </td>
                             <td className="px-3 py-2 text-center font-semibold text-green-600">
-                              +{ts.new.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">CSCA</span>}
+                              +{ts.new.toLocaleString()}
                             </td>
                             <td className="px-3 py-2 text-center text-gray-500">{ts.skipped.toLocaleString()}</td>
                             <td className="px-3 py-2 text-center text-red-500">{ts.failed.toLocaleString()}</td>
@@ -1001,16 +1001,16 @@ export default function IcaoLdapSync() {
                                   {selectedHistory.typeStats.map((ts, i) => (
                                     <tr key={i} className="border-t border-gray-100 dark:border-gray-700/50">
                                       <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                                        ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                        ts.type === 'CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                         ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                                         ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                         'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
                                       }`}>{ts.type}</span></td>
                                       <td className="px-3 py-2 text-right font-mono">
-                                        {ts.total.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">ML</span>}
+                                        {ts.total.toLocaleString()}
                                       </td>
                                       <td className="px-3 py-2 text-right font-mono text-green-600">
-                                        +{ts.new.toLocaleString()}{ts.type === 'ML→CSCA' && <span className="text-[10px] text-gray-400 ml-0.5">CSCA</span>}
+                                        +{ts.new.toLocaleString()}
                                       </td>
                                       <td className="px-3 py-2 text-right font-mono text-gray-400">{ts.skipped.toLocaleString()}</td>
                                       <td className="px-3 py-2 text-right font-mono text-red-500">{ts.failed.toLocaleString()}</td>
@@ -1169,7 +1169,7 @@ export default function IcaoLdapSync() {
                                     return (
                                       <div key={i} className="flex items-center gap-3 text-xs">
                                         <span className={`w-20 px-1.5 py-0.5 rounded text-center font-semibold ${
-                                          ts.type === 'ML→CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                          ts.type === 'CSCA' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
                                           ts.type === 'CRL' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
                                           ts.type === 'DSC' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
                                           'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
