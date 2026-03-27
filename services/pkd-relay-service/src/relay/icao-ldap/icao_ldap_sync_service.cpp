@@ -298,6 +298,11 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
             auto mlEntries = client.searchMasterLists(0);
             spdlog::info("[IcaoLdapSync] Found {} Master List entries, extracting CSCAs...", mlEntries.size());
 
+            // Track CSCA fingerprints seen during this ML batch to distinguish:
+            // - "existing from previous sync" → skip (counted)
+            // - "duplicate across MLs in same sync" → ignore (not counted)
+            std::unordered_set<std::string> mlSessionFingerprints;
+
             currentProgress_.phase = "PROCESSING";
             currentProgress_.currentTypeTotal = static_cast<int>(mlEntries.size());
             currentProgress_.currentTypeProcessed = 0;
@@ -308,7 +313,7 @@ IcaoLdapSyncResult IcaoLdapSyncService::performFullSync(const std::string& trigg
 
             for (const auto& mlEntry : mlEntries) {
                 try {
-                    auto [newCscas, skippedCscas] = processMasterListEntry(mlEntry);
+                    auto [newCscas, skippedCscas] = processMasterListEntry(mlEntry, mlSessionFingerprints);
                     result.newCertificates += newCscas;
                     currentProgress_.currentTypeNew += newCscas;
                     currentProgress_.totalNew += newCscas;
@@ -1439,7 +1444,9 @@ std::vector<IcaoLdapSyncResult> IcaoLdapSyncService::getSyncHistory(
     return history;
 }
 
-std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCertEntry& mlEntry) {
+std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(
+    const IcaoLdapCertEntry& mlEntry,
+    std::unordered_set<std::string>& sessionFingerprints) {
     if (mlEntry.binaryData.empty()) return {0, 0};
 
     // Parse CMS SignedData from Master List binary (pkdMasterListContent)
@@ -1503,7 +1510,13 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCer
 
                     std::string fingerprint = computeFingerprint(derData);
 
-                    if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
+                    if (fingerprint.empty()) { X509_free(cert); continue; }
+
+                    // ML-internal duplicate: same CSCA in multiple MLs within this sync → ignore
+                    if (sessionFingerprints.count(fingerprint)) { X509_free(cert); continue; }
+                    sessionFingerprints.insert(fingerprint);
+
+                    if (!fingerprintExists(fingerprint)) {
                         bool isSelfSigned = (X509_NAME_cmp(
                             X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
                         std::string certType = isSelfSigned ? "CSCA" : "CSCA";
@@ -1518,7 +1531,8 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCer
                             saveCertificateToLocalLdap(cscaEntry, fingerprint);
                             newCscaCount++;
                         }
-                    } else if (!fingerprint.empty()) {
+                    } else {
+                        // Existed from previous sync → skip
                         skippedCscaCount++;
                     }
 
@@ -1542,7 +1556,11 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCer
             i2d_X509(cert, &dPtr);
 
             std::string fingerprint = computeFingerprint(derData);
-            if (!fingerprint.empty() && !fingerprintExists(fingerprint)) {
+            if (fingerprint.empty()) continue;
+            if (sessionFingerprints.count(fingerprint)) continue; // ML-internal duplicate
+            sessionFingerprints.insert(fingerprint);
+
+            if (!fingerprintExists(fingerprint)) {
                 bool isSelfSigned = (X509_NAME_cmp(
                     X509_get_subject_name(cert), X509_get_issuer_name(cert)) == 0);
 
@@ -1556,7 +1574,7 @@ std::pair<int,int> IcaoLdapSyncService::processMasterListEntry(const IcaoLdapCer
                     saveCertificateToLocalLdap(certEntry, fingerprint);
                     newCscaCount++;
                 }
-            } else if (!fingerprint.empty()) {
+            } else {
                 skippedCscaCount++;
             }
         }
