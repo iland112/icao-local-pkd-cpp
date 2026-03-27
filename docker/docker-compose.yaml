@@ -346,7 +346,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 1G    # Increased: upload module moved from pkd-management (LDIF/ML processing needs memory)
+          memory: 2G    # LDIF 80MB + Oracle OCI + ICAO sync fingerprint cache
         reservations:
           memory: 256M
     healthcheck:
