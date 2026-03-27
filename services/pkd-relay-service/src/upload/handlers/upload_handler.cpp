@@ -1724,7 +1724,7 @@ void UploadHandler::handleUploadLdif(
             return;
         }
 
-        // Success - Start async processing (AUTO mode: all stages run automatically)
+        // Start async processing (handler owns the content, no extra copy)
         processLdifFileAsync(result.uploadId, contentBytes);
 
         // Return success response

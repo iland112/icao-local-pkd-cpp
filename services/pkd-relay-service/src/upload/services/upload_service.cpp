@@ -623,9 +623,8 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         std::string tempFilePath = saveToTempFile(result.uploadId, fileContent, ".ldif");
         spdlog::debug("Saved to temp file: {}", tempFilePath);
 
-        // Step 7: Trigger async processing
-        processLdifAsync(result.uploadId, fileContent);
-        spdlog::info("UploadService::uploadLdif - Async LDIF processing triggered for upload: {}", result.uploadId);
+        // Step 7: Async processing will be triggered by handler after this returns
+        spdlog::info("UploadService::uploadLdif - Upload record created, handler will start async processing");
 
         result.success = true;
         result.status = "PENDING";
