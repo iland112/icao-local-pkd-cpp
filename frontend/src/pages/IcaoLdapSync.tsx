@@ -16,6 +16,7 @@ import { uploadApi } from '@/services/api';
 import { IcaoViolationDetailDialog } from '@/components/IcaoViolationDetailDialog';
 import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
 import { uploadHistoryApi } from '@/services/pkdApi';
+import { formatNumbersInMessage } from '@/utils/numberFormat';
 
 const CERT_TYPES = ['CSCA', 'CRL', 'DSC', 'DSC_NC'] as const;
 
@@ -528,7 +529,7 @@ export default function IcaoLdapSync() {
               : 'text-blue-600 dark:text-blue-400 bg-white/40 dark:bg-gray-800/40'
           }`}>
             {progress.phase === 'FAILED' ? <AlertTriangle className="w-3 h-3 inline mr-1" /> : <Info className="w-3 h-3 inline mr-1" />}
-            {progress.message}
+            {formatNumbersInMessage(progress.message)}
           </div>
 
           {/* Retry button on failure */}
@@ -1121,7 +1122,7 @@ export default function IcaoLdapSync() {
                                       <div className={`h-full rounded-full ${c.count > 0 ? 'bg-red-500' : 'bg-green-500'}`}
                                         style={{ width: `${Math.min(100, (c.count / (certStats.validation.icao.total || 1)) * 100 * 10)}%` }} />
                                     </div>
-                                    <span className={`w-12 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count}{t('sync:icaoLdap.certCountSuffix')}</span>
+                                    <span className={`w-12 text-right font-bold ${c.count > 0 ? 'text-red-600' : 'text-green-600'}`}>{c.count.toLocaleString()}{t('sync:icaoLdap.certCountSuffix')}</span>
                                     {c.count > 0 && <ChevronRight className="w-3 h-3 text-gray-400" />}
                                   </button>
                                 ))}

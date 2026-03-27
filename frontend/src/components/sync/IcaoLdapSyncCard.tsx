@@ -3,6 +3,7 @@ import {
   Globe, RefreshCw, CheckCircle, XCircle, Clock, Wifi, WifiOff,
   Zap, Shield, ShieldCheck, Settings, Plug, Loader2, ArrowRight
 } from 'lucide-react';
+import { formatNumbersInMessage } from '@/utils/numberFormat';
 import {
   syncApi,
   type IcaoLdapSyncStatus,
@@ -285,7 +286,7 @@ export default function IcaoLdapSyncCard() {
 
             {/* Phase message */}
             <div className="mt-1.5 text-[11px] text-blue-600 dark:text-blue-400 truncate">
-              {progress.message}
+              {formatNumbersInMessage(progress.message)}
             </div>
 
             {/* Type pipeline visualization */}
