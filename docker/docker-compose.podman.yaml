@@ -290,8 +290,10 @@ services:
       - openldap1
       # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
-      - ../.docker-data/sync-logs:/app/logs
+      - ../.docker-data/relay-logs:/app/logs
+      - ../.docker-data/relay-uploads:/app/uploads
       - ../.docker-data/icao-pkd-tls:/app/icao-tls:ro
+      - ../data/cert:/app/data/cert:ro
     networks:
       - pkd-network
     restart: unless-stopped

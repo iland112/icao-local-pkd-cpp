@@ -323,8 +323,10 @@ services:
         condition: service_healthy
       # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
-      - ../.docker-data/sync-logs:/app/logs
-      - ../.docker-data/icao-pkd-tls:/app/icao-tls:ro   # ICAO PKD TLS client certs (production)
+      - ../.docker-data/relay-logs:/app/logs
+      - ../.docker-data/relay-uploads:/app/uploads          # LDIF/ML upload temp files (moved from pkd-management)
+      - ../.docker-data/icao-pkd-tls:/app/icao-tls:ro      # ICAO PKD TLS client certs (production)
+      - ../data/cert:/app/data/cert:ro                      # Trust anchor for ML CMS verification
     networks:
       - pkd-network
     restart: unless-stopped
