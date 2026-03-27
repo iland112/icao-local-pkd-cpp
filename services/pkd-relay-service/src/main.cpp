@@ -446,7 +446,8 @@ int main() {
         try { maxBodySizeMB = std::max(1, std::min(500, std::stoi(v))); } catch (...) {}
     }
     app().setClientMaxBodySize(static_cast<size_t>(maxBodySizeMB) * 1024 * 1024);
-    spdlog::info("Client max body size: {}MB", maxBodySizeMB);
+    app().setUploadPath("/app/uploads");
+    spdlog::info("Client max body size: {}MB, upload path: /app/uploads", maxBodySizeMB);
 
     app().addListener("0.0.0.0", g_config.serverPort)
         .setThreadNum(threadNum)

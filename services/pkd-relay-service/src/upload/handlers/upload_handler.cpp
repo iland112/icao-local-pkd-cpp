@@ -354,10 +354,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_activeProcessingCount.fetch_add(1);
     }
 
-    // Convert to string once, then move into thread (avoid 80MB triple-copy)
-    auto contentStr = std::make_shared<std::string>(
-        reinterpret_cast<const char*>(content.data()), content.size());
-    std::thread([uploadId, contentStr, resumeMode]() {
+    std::thread([uploadId, content, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -393,8 +390,10 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
                     0, 100, parseMsg));
 
-            // Parse LDIF content using LdifProcessor (contentStr already converted, no extra copy)
-            std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(*contentStr);
+            std::string contentStr(content.begin(), content.end());
+
+            // Parse LDIF content using LdifProcessor
+            std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(contentStr);
             int totalEntries = static_cast<int>(entries.size());
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
@@ -466,9 +465,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
-    auto contentPtr = std::make_shared<std::vector<uint8_t>>(content);
-    std::thread([uploadId, contentPtr, trustAnchorPath, resumeMode]() {
-        const auto& content = *contentPtr;
+    std::thread([uploadId, content, trustAnchorPath, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
