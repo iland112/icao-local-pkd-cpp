@@ -354,7 +354,10 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_activeProcessingCount.fetch_add(1);
     }
 
-    std::thread([uploadId, content, resumeMode]() {
+    // Use shared_ptr to avoid duplicating 80MB+ LDIF content when spawning thread
+    auto contentPtr = std::make_shared<std::vector<uint8_t>>(content);
+    std::thread([uploadId, contentPtr, resumeMode]() {
+        const auto& content = *contentPtr;
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -465,7 +468,9 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
-    std::thread([uploadId, content, trustAnchorPath, resumeMode]() {
+    auto contentPtr = std::make_shared<std::vector<uint8_t>>(content);
+    std::thread([uploadId, contentPtr, trustAnchorPath, resumeMode]() {
+        const auto& content = *contentPtr;
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
