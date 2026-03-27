@@ -425,6 +425,14 @@ int main() {
         try { threadNum = std::max(1, std::min(256, std::stoi(v))); } catch (...) { spdlog::warn("Invalid THREAD_NUM '{}', using default {}", v, threadNum); }
     }
     spdlog::info("Starting HTTP server on port {} with {} threads...", g_config.serverPort, threadNum);
+    // Set max body size for LDIF/ML uploads (default 1MB is too small)
+    int maxBodySizeMB = 100;
+    if (auto* v = std::getenv("MAX_BODY_SIZE_MB")) {
+        try { maxBodySizeMB = std::max(1, std::min(500, std::stoi(v))); } catch (...) {}
+    }
+    app().setClientMaxBodySize(static_cast<size_t>(maxBodySizeMB) * 1024 * 1024);
+    spdlog::info("Client max body size: {}MB", maxBodySizeMB);
+
     app().addListener("0.0.0.0", g_config.serverPort)
         .setThreadNum(threadNum)
         .run();
