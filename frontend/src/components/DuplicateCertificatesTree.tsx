@@ -97,10 +97,15 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
       .sort((a, b) => b.totalDuplicates - a.totalDuplicates);
   }, [duplicates]);
 
-  // Convert country groups to TreeNode format
+  // Convert country groups to TreeNode format (limit per country to avoid browser freeze)
+  const MAX_CERTS_PER_COUNTRY = 50;
+
   const treeData = useMemo((): TreeNode[] => {
     return countryGroups.map(group => {
-      const certificateNodes: TreeNode[] = group.certificates.map(cert => {
+      const displayCerts = group.certificates.slice(0, MAX_CERTS_PER_COUNTRY);
+      const remainingCount = group.certificates.length - displayCerts.length;
+
+      const certificateNodes: TreeNode[] = displayCerts.map(cert => {
         const duplicateNodes: TreeNode[] = cert.duplicates.map((dup, dupIdx) => ({
           id: `${group.countryCode}-${cert.certificateId}-dup-${dupIdx}`,
           name: `Duplicate #${dupIdx + 1}`,
@@ -116,6 +121,15 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
           children: duplicateNodes,
         };
       });
+
+      if (remainingCount > 0) {
+        certificateNodes.push({
+          id: `${group.countryCode}-more`,
+          name: `... +${remainingCount.toLocaleString()}`,
+          value: t('upload:duplicateTree.moreItems', { count: remainingCount }),
+          icon: 'file-text',
+        });
+      }
 
       return {
         id: `country-${group.countryCode}`,
