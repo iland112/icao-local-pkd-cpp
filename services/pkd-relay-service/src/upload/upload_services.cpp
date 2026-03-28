@@ -73,8 +73,17 @@ bool UploadServiceContainer::initialize(common::IQueryExecutor* queryExecutor,
 
     // Create dedicated DB pool + queryExecutor for upload module
     // (shared queryExecutor causes OCI thread-safety issues in async upload threads)
+    // Use minimal pool size to avoid Oracle XE session exhaustion
     try {
+        // Temporarily override pool size env vars for minimal pool
+        auto origMin = std::getenv("DB_POOL_MIN");
+        auto origMax = std::getenv("DB_POOL_MAX");
+        setenv("DB_POOL_MIN", "1", 1);
+        setenv("DB_POOL_MAX", "3", 1);
         impl_->ownDbPool = common::DbConnectionPoolFactory::createFromEnv();
+        // Restore original values
+        if (origMin) setenv("DB_POOL_MIN", origMin, 1); else unsetenv("DB_POOL_MIN");
+        if (origMax) setenv("DB_POOL_MAX", origMax, 1); else unsetenv("DB_POOL_MAX");
         if (impl_->ownDbPool && impl_->ownDbPool->initialize()) {
             impl_->ownQueryExecutor = common::createQueryExecutor(impl_->ownDbPool.get());
             if (impl_->ownQueryExecutor) {
