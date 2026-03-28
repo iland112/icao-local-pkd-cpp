@@ -283,6 +283,7 @@ std::string LdapStorageService::buildMasterListDn(const std::string& countryCode
 // --- LDAP OU Management ---
 
 bool LdapStorageService::ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcData) {
+    if (!ld) return false;
     std::string dataContainer = isNcData ? config_.ldapNcDataContainer : config_.ldapDataContainer;
 
     // Ensure data container exists before creating country entry
@@ -398,6 +399,7 @@ bool LdapStorageService::ensureCountryOuExists(LDAP* ld, const std::string& coun
 }
 
 bool LdapStorageService::ensureMasterListOuExists(LDAP* ld, const std::string& countryCode) {
+    if (!ld) return false;
     std::string countryDn = "c=" + ldap_utils::escapeDnComponent(countryCode) +
                            ",dc=data," + config_.ldapBaseDn;
 
@@ -469,6 +471,8 @@ std::string LdapStorageService::saveCertificateToLdap(LDAP* ld, const std::strin
                                                         const std::string& pkdConformanceText,
                                                         const std::string& pkdVersion,
                                                         bool useLegacyDn) {
+    if (!ld) return "";  // No LDAP connection — skip (DB-only mode)
+
     bool isNcData = (certType == "DSC_NC");
 
     if (!ensureCountryOuExists(ld, countryCode, isNcData)) {
@@ -628,6 +632,8 @@ std::string LdapStorageService::saveCertificateToLdap(LDAP* ld, const std::strin
 std::string LdapStorageService::saveCrlToLdap(LDAP* ld, const std::string& countryCode,
                                                 const std::string& /*issuerDn*/, const std::string& fingerprint,
                                                 const std::vector<uint8_t>& crlBinary) {
+    if (!ld) return "";  // No LDAP connection — skip (DB-only mode)
+
     if (!ensureCountryOuExists(ld, countryCode, false)) {
         spdlog::warn("Failed to ensure country OU exists for CRL {}", countryCode);
     }
@@ -687,6 +693,8 @@ std::string LdapStorageService::saveCrlToLdap(LDAP* ld, const std::string& count
 std::string LdapStorageService::saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
                                                        const std::string& /*signerDn*/, const std::string& fingerprint,
                                                        const std::vector<uint8_t>& mlBinary) {
+    if (!ld) return "";  // No LDAP connection — skip (DB-only mode)
+
     if (!ensureMasterListOuExists(ld, countryCode)) {
         spdlog::warn("Failed to ensure ML OU exists for {}", countryCode);
     }
