@@ -1,6 +1,7 @@
 # ICAO Local PKD — Deployment Guide
 
-**Version**: v2.37.0 | **Last Updated**: 2026-03-18
+**Version**: v2.41.0 | **Last Updated**: 2026-03-27
+> Updated for v2.41.0 서비스 기능 재배치 (Sync↔Upload 교차 이동)
 
 ---
 
@@ -20,9 +21,9 @@ This document describes deployment processes for all three target environments.
 
 | Service | Port | Technology | Notes |
 |---------|------|------------|-------|
-| PKD Management | :8081 | C++/Drogon | Core certificate management |
+| PKD Management | :8081 | C++/Drogon | 로컬 PKD 운영/관리 (DB-LDAP Sync, Reconciliation, Search, Auth) |
 | PA Service | :8082 | C++/Drogon | Passive Authentication (ICAO 9303) |
-| PKD Relay | :8083 | C++/Drogon | DB-LDAP sync, reconciliation |
+| PKD Relay | :8083 | C++/Drogon | 외부 ICAO PKD 연계 (LDIF/ML Import, ICAO Sync, Version Detection) |
 | Monitoring Service | :8084 | C++/Drogon | System metrics, DB-independent |
 | AI Analysis Service | :8085 | Python/FastAPI | ML anomaly detection |
 | EAC Service | :8086 | C++/Drogon | BSI TR-03110 CVC (experimental) |
@@ -832,11 +833,10 @@ sshpass -p luckfox ssh luckfox@192.168.100.11 "cd /home/luckfox/icao-local-pkd-c
 
 | Route | Backend |
 |-------|---------|
-| `/api/upload`, `/api/certificates`, `/api/progress` | PKD Management (:8081) |
-| `/api/auth`, `/api/audit`, `/api/icao` | PKD Management (:8081) |
-| `/api/health` | PKD Management (:8081) |
+| `/api/certificates`, `/api/progress`, `/api/sync/*` | PKD Management (:8081) |
+| `/api/auth`, `/api/audit`, `/api/health` | PKD Management (:8081) |
 | `/api/pa/*` | PA Service (:8082) |
-| `/api/sync/*` | PKD Relay (:8083) |
+| `/api/upload`, `/api/icao` | PKD Relay (:8083) |
 | `/api/monitoring/*` | Monitoring (:8084) |
 | `/api-docs/`, `/api/docs/` | Swagger UI (:8888) |
 

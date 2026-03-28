@@ -1,6 +1,7 @@
 # FASTpass(R) SPKD -- System Architecture & Design Principles
 
-**Version**: v2.39.0 | **Last Updated**: 2026-03-22
+**Version**: v2.41.0 | **Last Updated**: 2026-03-27
+> Updated for v2.41.0 서비스 기능 재배치 (Sync↔Upload 교차 이동)
 **Status**: Production Ready (Multi-DBMS: PostgreSQL + Oracle)
 
 ---
@@ -81,7 +82,7 @@ See [EAC_SERVICE_IMPLEMENTATION_PLAN.md](EAC_SERVICE_IMPLEMENTATION_PLAN.md) Sec
 
 ## Technical Architecture Diagram
 
-### System Overview (v2.37.0)
+### System Overview (v2.41.0)
 
 ```mermaid
 graph TB
@@ -113,9 +114,9 @@ graph TB
         L3Title["Layer 3: Application Services - C++ Microservices"]
         subgraph L3Nodes[" "]
             direction LR
-            PKD["PKD Management<br/>Upload & Validation<br/>Port 8081"]
+            PKD["PKD Management<br/>로컬 PKD 운영/관리<br/>Port 8081"]
             PA["PA Service<br/>Passive Auth Verify<br/>Port 8082"]
-            Relay["PKD Relay<br/>DB-LDAP Sync<br/>Port 8083"]
+            Relay["PKD Relay<br/>외부 ICAO PKD 연계<br/>Port 8083"]
             Monitoring["Monitoring<br/>System Metrics<br/>Port 8084"]
             AI["AI Analysis<br/>ML Forensics<br/>Port 8085"]
         end
@@ -226,10 +227,10 @@ User -> Frontend -> API Gateway -> Services (PKD/PA/Relay) -> Data (PostgreSQL/L
 
 ```
 services/
-+-- pkd-management/        # PKD Management Service (Port: 8081)
-|   +-- File Upload & Processing (LDIF, Master List)
++-- pkd-management/        # PKD Management Service (Port: 8081) — 로컬 PKD 운영/관리
+|   +-- DB-LDAP Synchronization & Reconciliation
+|   +-- Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
 |   +-- Certificate Search & Export
-|   +-- ICAO Auto Sync
 |   +-- API Client Authentication (X-API-Key)
 |
 +-- pa-service/            # Passive Authentication Service (Port: 8082)
@@ -237,10 +238,10 @@ services/
 |   +-- DG1/DG2 Parsing
 |   +-- CSCA LDAP Lookup
 |
-+-- pkd-relay-service/     # PKD Relay Service (Port: 8083)
-|   +-- DB-LDAP Synchronization
-|   +-- Auto Reconciliation
-|   +-- Sync Status Monitoring
++-- pkd-relay-service/     # PKD Relay Service (Port: 8083) — 외부 ICAO PKD 연계
+|   +-- LDIF/ML File Import & Processing
+|   +-- ICAO LDAP Sync & Version Detection
+|   +-- Upload Statistics & History
 |
 +-- monitoring-service/    # Monitoring Service (Port: 8084)
 |   +-- System Resource Monitoring (CPU, Memory, Disk, Network)
@@ -282,46 +283,33 @@ services/
                +------------------------+
 ```
 
-### 1. PKD Management Service (Port 8081)
+### 1. PKD Management Service (Port 8081) — 로컬 PKD 운영/관리
 
 ```mermaid
 flowchart LR
     subgraph API["API Layer"]
-        Upload["Upload API<br/>LDIF/ML"]
+        Upload["Upload API<br/>Individual Cert"]
         Cert["Certificate API<br/>Search/Export"]
         Health["Health API<br/>DB/LDAP"]
-        ICAO["ICAO Sync API<br/>Version"]
+        Sync["Sync API<br/>DB-LDAP"]
     end
 
     subgraph Domain["Domain Layer"]
         UploadDomain["Upload Domain<br/>Business Logic"]
         CertDomain["Certificate Domain<br/>Validation"]
-        IcaoDomain["ICAO Domain<br/>Version Tracking"]
+        SyncDomain["Sync Domain<br/>Reconciliation"]
     end
 
     subgraph Service["Service Layer"]
-        UploadService["Upload Service<br/>File Processing"]
+        UploadService["Upload Service<br/>Cert Processing"]
         CertService["Certificate Service<br/>LDAP Operations"]
-        IcaoService["ICAO Service<br/>HTML Parsing"]
+        SyncService["Sync Service<br/>DB-LDAP Sync"]
     end
 
     subgraph Repo["Repository Layer"]
         UploadRepo["Upload Repository<br/>PostgreSQL"]
         CertRepo["Certificate Repository<br/>LDAP"]
-        IcaoRepo["ICAO Repository<br/>PostgreSQL"]
-    end
-
-    subgraph Infra["Infrastructure"]
-        LDIF["LDIF Processor"]
-        CMS["CMS Parser"]
-        HTTP["HTTP Client"]
-        HTML["HTML Parser"]
-        Email["Email Sender"]
-    end
-
-    subgraph Strategy["Strategy"]
-        Auto["Auto Processing"]
-        Manual["Manual Processing"]
+        SyncRepo["Sync Repository<br/>PostgreSQL"]
     end
 
     subgraph Data["Data Store"]
@@ -331,48 +319,30 @@ flowchart LR
 
     Upload --> UploadDomain --> UploadService --> UploadRepo
     Cert --> CertDomain --> CertService --> CertRepo
-    ICAO --> IcaoDomain --> IcaoService --> IcaoRepo
+    Sync --> SyncDomain --> SyncService --> SyncRepo
     Health --> CertService
-
-    UploadService --> LDIF
-    UploadService --> CMS
-    UploadService --> Auto
-    UploadService --> Manual
-
-    IcaoService --> HTTP
-    IcaoService --> HTML
-    IcaoService --> Email
 
     UploadRepo --> DB
     CertRepo --> LDAPS
-    IcaoRepo --> DB
+    SyncRepo --> DB
 
     style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Strategy fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Data fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
-
-    style ICAO fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoRepo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style HTTP fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style HTML fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Email fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Key Features**:
 - Clean Architecture (6 Layers) with ServiceContainer (centralized DI, pimpl pattern)
-- Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler, CsrHandler (7), MiscHandler
-- Query Helpers (`common::db::`) -- database-agnostic utility functions across 16 repositories
+- Handler Pattern: SyncHandler, ReconciliationHandler, CertificateHandler, AuthHandler, CsrHandler, MiscHandler
+- Query Helpers (`common::db::`) -- database-agnostic utility functions across repositories
+- **DB-LDAP Synchronization**: Sync status monitoring, discrepancy detection, auto reconciliation
+- **Reconciliation**: stored_in_ldap=FALSE -> LDAP verification -> add -> TRUE (CSCA, DSC, CRL)
 - **CSR Management**: ICAO PKD CSR generation (RSA-2048 + SHA256withRSA), external CSR Import, ICAO-issued certificate registration
 - **DSC Pending Approval**: DSC extracted from PA verification -> auto-registration -> admin approval workflow
 - **PII Encryption**: AES-256-GCM authenticated encryption (Personal Information Protection Act Article 29 -- CSR private key, PII fields)
-- ICAO Auto Sync with Daily Scheduler
-- LDIF/Master List Parsing + Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
+- Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
 - Trust Chain Validation (icao::validation shared library)
 - Certificate Search & Export (DIT-structured ZIP)
 - API Client Authentication (X-API-Key, SHA-256 hash, per-client Rate Limiting)
@@ -470,31 +440,35 @@ flowchart LR
 
 ---
 
-### 3. PKD Relay Service (Port 8083)
+### 3. PKD Relay Service (Port 8083) — 외부 ICAO PKD 연계
 
 ```mermaid
 flowchart LR
     subgraph API["API Layer"]
+        Upload["Upload API<br/>LDIF/ML"]
+        IcaoCheck["ICAO Check<br/>Version/Sync"]
+        UploadStats["Upload Stats<br/>History"]
         RelayHealth["Relay Health<br/>Status"]
-        RelayStatus["Relay Status<br/>Statistics"]
-        IcaoCheck["ICAO Check<br/>Version"]
     end
 
     subgraph Domain["Domain Layer"]
+        UploadDomain["Upload Domain<br/>File Processing"]
         IcaoDomain["ICAO Domain<br/>Version Tracking"]
-        RelayDomain["Relay Domain<br/>External Integration"]
     end
 
     subgraph Service["Service Layer"]
+        UploadService["Upload Service<br/>LDIF/ML Processing"]
         IcaoService["ICAO Service<br/>HTML Parsing"]
-        RelayService["Relay Service<br/>Request Relay"]
     end
 
     subgraph Repo["Repository Layer"]
+        UploadRepo["Upload Repository<br/>PostgreSQL"]
         IcaoRepo["ICAO Repository<br/>PostgreSQL"]
     end
 
     subgraph Infra["Infrastructure"]
+        LDIF["LDIF Processor"]
+        CMS["CMS Parser"]
         HTTP["HTTP Client"]
         HTML["HTML Parser"]
         Email["Email Sender"]
@@ -506,20 +480,23 @@ flowchart LR
 
     subgraph DataStore["Data Store"]
         DB[("PostgreSQL")]
+        LDAPS[("LDAP")]
     end
 
-    RelayHealth --> RelayService
-    RelayStatus --> IcaoService
-    IcaoCheck --> IcaoDomain
+    Upload --> UploadDomain --> UploadService --> UploadRepo
+    IcaoCheck --> IcaoDomain --> IcaoService --> IcaoRepo
+    UploadStats --> UploadRepo
+    RelayHealth --> IcaoService
 
-    IcaoDomain --> IcaoService
-    RelayDomain --> RelayService
+    UploadService --> LDIF
+    UploadService --> CMS
 
     IcaoService --> HTTP
     IcaoService --> HTML
     IcaoService --> Email
-    IcaoService --> IcaoRepo
 
+    UploadRepo --> DB
+    UploadRepo --> LDAPS
     IcaoRepo --> DB
 
     CronJob --> IcaoCheck
@@ -531,21 +508,20 @@ flowchart LR
     style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Scheduler fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
     style DataStore fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
-
-    style IcaoCheck fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
 ```
 
 **Key Features**:
-- ICAO PKD external integration (Version Detection)
+- LDIF/Master List File Import & Processing (30k+ entries)
+- ICAO PKD external integration (Version Detection, ICAO LDAP Sync)
 - HTML Scraping (Table + Link Fallback)
-- DB-LDAP Reconciliation (CSCA, DSC, CRL)
+- Upload Statistics & History
 - Daily Auto Version Check Scheduler
-- ServiceContainer (pImpl DI), Handler Pattern: SyncHandler (10), ReconciliationHandler (4), HealthHandler (1)
-- SyncScheduler with callback-based DI
+- Dedicated DB pool for upload module (large LDIF processing)
+- ServiceContainer (pImpl DI), Handler Pattern: UploadHandler, UploadStatsHandler, IcaoHandler, HealthHandler
+- Memory limit: 2GB (LDIF processing requires significant memory)
 - Clean Architecture (4 Layers)
 - Multi-DBMS (PostgreSQL + Oracle)
+- 129 unit tests (GTest)
 
 ---
 
@@ -1132,8 +1108,8 @@ graph TB
     Gzip -.-> PA
     Gzip -.-> RelaySvc
 
-    SSE -.-> PKD
-    Upload -.-> PKD
+    SSE -.-> RelaySvc
+    Upload -.-> RelaySvc
 
     style Route1 fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style RateLimit fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
@@ -1190,14 +1166,14 @@ graph LR
 
 ---
 
-### ICAO Auto Sync Flow (v1.7.0)
+### ICAO Auto Sync Flow (v2.41.0)
 
 ```mermaid
 sequenceDiagram
     participant Cron as Cron Job<br/>(Daily 08:00)
     participant Script as Shell Script<br/>icao-version-check.sh
     participant API as API Gateway<br/>:8080
-    participant PKD as PKD Management<br/>:8081
+    participant Relay as PKD Relay<br/>:8083
     participant HTTP as HTTP Client<br/>ICAO Portal
     participant Parser as HTML Parser<br/>Version Extractor
     participant DB as PostgreSQL<br/>icao_pkd_versions
@@ -1205,33 +1181,33 @@ sequenceDiagram
 
     Cron->>Script: Execute daily
     Script->>API: POST /api/icao/check-updates
-    API->>PKD: Forward request
+    API->>Relay: Forward request
 
-    PKD->>HTTP: Fetch ICAO portal HTML
-    HTTP-->>PKD: HTML content
+    Relay->>HTTP: Fetch ICAO portal HTML
+    HTTP-->>Relay: HTML content
 
-    PKD->>Parser: Parse HTML tables
-    Parser-->>PKD: Version list<br/>(Collection 001/002/003)
+    Relay->>Parser: Parse HTML tables
+    Parser-->>Relay: Version list<br/>(Collection 001/002/003)
 
-    PKD->>DB: Query existing versions
-    DB-->>PKD: Current version records
+    Relay->>DB: Query existing versions
+    DB-->>Relay: Current version records
 
-    PKD->>PKD: Compare versions
+    Relay->>Relay: Compare versions
 
     alt New version detected
-        PKD->>DB: INSERT new version<br/>status=DETECTED
-        PKD->>Dashboard: Notify (SSE/Polling)
+        Relay->>DB: INSERT new version<br/>status=DETECTED
+        Relay->>Dashboard: Notify (SSE/Polling)
         Dashboard-->>Dashboard: Show UPDATE_NEEDED badge
     else No new version
-        PKD->>Dashboard: Notify (no change)
+        Relay->>Dashboard: Notify (no change)
         Dashboard-->>Dashboard: Show UP_TO_DATE badge
     end
 
     Script->>API: GET /api/icao/latest
-    API->>PKD: Forward request
-    PKD->>DB: Query latest versions
-    DB-->>PKD: Latest version list
-    PKD-->>API: JSON response
+    API->>Relay: Forward request
+    Relay->>DB: Query latest versions
+    DB-->>Relay: Latest version list
+    Relay-->>API: JSON response
     API-->>Script: Latest versions
     Script->>Script: Log to file
 ```
@@ -1247,30 +1223,30 @@ sequenceDiagram
     participant User
     participant Frontend
     participant Gateway as API Gateway
-    participant PKD as PKD Management
+    participant Relay as PKD Relay
     participant LDIF as LDIF Processor
     participant DB as PostgreSQL/Oracle
     participant LDAP as OpenLDAP
 
     User->>Frontend: Select LDIF file + AUTO mode
     Frontend->>Gateway: POST /api/upload/ldif<br/>(multipart/form-data)
-    Gateway->>PKD: Forward upload
+    Gateway->>Relay: Forward upload
 
-    PKD->>PKD: Generate UUID<br/>Save temp file
-    PKD->>DB: INSERT uploaded_file<br/>status=PROCESSING
-    PKD-->>Frontend: Upload ID + SSE URL
+    Relay->>Relay: Generate UUID<br/>Save temp file
+    Relay->>DB: INSERT uploaded_file<br/>status=PROCESSING
+    Relay-->>Frontend: Upload ID + SSE URL
 
     Frontend->>Gateway: GET /api/progress/stream/{id}<br/>(SSE)
 
-    PKD->>LDIF: Parse LDIF entries
+    Relay->>LDIF: Parse LDIF entries
     loop For each entry
         LDIF->>LDIF: Extract DN, attributes
         LDIF->>LDIF: Classify cert type
-        LDIF-->>PKD: SSE progress update
-        PKD-->>Frontend: PARSING_{percentage}
+        LDIF-->>Relay: SSE progress update
+        Relay-->>Frontend: PARSING_{percentage}
     end
 
-    LDIF-->>PKD: Parsed entries (30k+)
+    LDIF-->>Relay: Parsed entries (30k+)
 
     PKD->>DB: BEGIN TRANSACTION
     PKD->>DB: INSERT certificates (Batch 1000)
@@ -1388,9 +1364,9 @@ graph TB
     Frontend -->|proxy_pass| APIGateway
 
     %% Gateway to Application
-    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/auth<br/>/api/icao| PKD
+    APIGateway -->|/api/certificates<br/>/api/auth<br/>/api/sync| PKD
     APIGateway -->|/api/pa/*| PA
-    APIGateway -->|/api/sync/*| Relay
+    APIGateway -->|/api/upload<br/>/api/icao| Relay
     APIGateway -->|/api/monitoring/*| Mon
 
     %% Application to Data Layer
@@ -1463,7 +1439,7 @@ graph TB
 | api-gateway | nginx:1.25-alpine | 0.5 | 256MB | always |
 | pkd-management | Custom C++ (Debian) | 2.0 | 2GB | always |
 | pa-service | Custom C++ (Debian) | 2.0 | 2GB | always |
-| pkd-relay | Custom C++ (Debian) | 1.0 | 1GB | always |
+| pkd-relay | Custom C++ (Debian) | 2.0 | 2GB | always |
 | monitoring | Custom C++ (Debian) | 0.5 | 256MB | always |
 | postgres | postgres:15-alpine | 2.0 | 2GB | always |
 | openldap1 | osixia/openldap:1.5.0 | 1.0 | 1GB | always |
@@ -1845,12 +1821,11 @@ services/pkd-management/src/
 |   +-- http/http_client.h        # HTTP Client
 |   +-- notification/email_sender.h
 |
-+-- handlers/                     # Handler Layer (v2.12.0~v2.13.0 extracted from main.cpp)
-|   +-- upload_handler.h/.cpp     # Upload API (10 endpoints)
-|   +-- upload_stats_handler.h/.cpp # Statistics/History API (11 endpoints)
++-- handlers/                     # Handler Layer (v2.12.0~v2.41.0)
+|   +-- sync_handler.h/.cpp       # DB-LDAP Sync API (v2.41.0 — relay에서 이동)
+|   +-- reconciliation_handler.h/.cpp # Reconciliation API (v2.41.0 — relay에서 이동)
 |   +-- certificate_handler.h/.cpp  # Certificate API (20 endpoints)
 |   +-- auth_handler.h/.cpp       # Auth API
-|   +-- icao_handler.h/.cpp       # ICAO Sync API
 |   +-- code_master_handler.h/.cpp  # Code Master API (6 endpoints)
 |   +-- api_client_handler.h/.cpp   # API Client Management (7 endpoints)
 |   +-- api_client_request_handler.h/.cpp # API Client Request (5 endpoints)
@@ -1873,10 +1848,10 @@ services/pkd-management/src/
 |   +-- ...
 |
 +-- services/                     # Service Layer
-|   +-- upload_service.h/.cpp
+|   +-- sync_service.h/.cpp        # DB-LDAP Sync (v2.41.0 — relay에서 이동)
+|   +-- reconciliation_service.h/.cpp # Reconciliation (v2.41.0 — relay에서 이동)
 |   +-- validation_service.h/.cpp
 |   +-- certificate_service.h/.cpp
-|   +-- icao_sync_service.h/.cpp
 |   +-- ldap_storage_service.h/.cpp  # LDAP Storage (Certificates/CRL/ML)
 |   +-- csr_service.h/.cpp
 |
@@ -1890,10 +1865,7 @@ services/pkd-management/src/
 |   +-- personal_info_crypto.h/.cpp  # PII Encryption (AES-256-GCM)
 |   +-- password_hash.h/.cpp     # PBKDF2-HMAC-SHA256
 |
-+-- processing_strategy.h         # Strategy Pattern (AUTO)
-+-- ldif_processor.h/.cpp         # LDIF Processor
 +-- common/
-|   +-- masterlist_processor.h    # Master List Processor
 |   +-- progress_manager.h/.cpp   # SSE Progress Management
 |
 +-- main.cpp                      # Entry Point (minimized: ~430 lines, v2.13.0)
@@ -2060,9 +2032,9 @@ Handlers -> Services -> LDAP Providers -> Repositories -> QueryExecutor -> LDAP 
 
 | Service | ServiceContainer | Key Components |
 |--------|:----------------:|-----------|
-| PKD Management | O | 16 repos, 8 services, 9 handlers |
+| PKD Management | O | Sync, Reconciliation, Certificate, Auth, CSR handlers |
 | PA Service | O | 5 repos, 2 parsers, 4 services |
-| PKD Relay | O | 5 repos, 3 services, SyncScheduler |
+| PKD Relay | O | Upload, UploadStats, ICAO, Health handlers + dedicated DB pool |
 | Monitoring | - | DB-independent (direct HTTP/system calls) |
 
 ---
@@ -2877,6 +2849,6 @@ FASTpass(R) SPKD v2.39.0 provides high performance, scalability, and security th
 
 ## References
 
-- **[CLAUDE.md](../CLAUDE.md)** - Project overview and current version (v2.39.0)
+- **[CLAUDE.md](../CLAUDE.md)** - Project overview and current version (v2.41.0)
 - **[SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - Security audit report
 - **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)** - Development guide

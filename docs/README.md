@@ -1,7 +1,7 @@
 # FASTpass® SPKD — Documentation
 
-**Version**: v2.37.0
-**Last Updated**: 2026-03-18
+**Version**: v2.41.0
+**Last Updated**: 2026-03-27
 
 ---
 
@@ -110,6 +110,6 @@ These documents are for historical reference only. All current information is ca
 - **SSL setup**: [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md#39-ssl-인증서)
 
 ### Related
-- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.37.0)
+- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.41.0)
   - Architecture overview, API endpoints, version history
   - Helper scripts, common issues, key decisions

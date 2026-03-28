@@ -1,7 +1,8 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.37.0
-**Last Updated**: 2026-03-18
+**Version**: 2.41.0
+**Last Updated**: 2026-03-27
+> Updated for v2.41.0 서비스 기능 재배치 (Sync↔Upload 교차 이동)
 
 ---
 
@@ -36,9 +37,9 @@ LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 | Service | Port | Description |
 |---------|------|-------------|
-| PKD Management | 8081 | Upload, Certificate Search, ICAO Sync, Auth |
+| PKD Management | 8081 | 로컬 PKD 운영/관리: DB-LDAP Sync, Reconciliation, Individual Cert Upload, Search, Auth |
 | PA Service | 8082 | Passive Authentication (ICAO 9303) |
-| PKD Relay | 8083 | DB-LDAP Sync, Reconciliation |
+| PKD Relay | 8083 | 외부 ICAO PKD 연계: LDIF/ML Import, ICAO LDAP Sync, ICAO Version Detection, Upload Stats |
 | Monitoring Service | 8084 | System Metrics, Service Health |
 | AI Analysis Service | 8085 | ML Anomaly Detection, Forensic Analysis (Python/FastAPI) |
 | API Gateway (HTTP) | 80 | nginx reverse proxy (`/api` prefix) |
@@ -72,19 +73,19 @@ source scripts/helpers/db-helpers.sh && db_count_certs
 
 ## Architecture Overview
 
-### System Architecture (v2.30.0)
+### System Architecture (v2.41.0)
 
 ```
 Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services --> DB/LDAP
                                                         |
                                                         +-- PKD Management (:8081)
-                                                        |     Upload, Certificate Search, ICAO Sync, Auth
+                                                        |     로컬 PKD 운영/관리: DB-LDAP Sync, Reconciliation, Cert Upload, Search, Auth
                                                         |
                                                         +-- PA Service (:8082)
                                                         |     Passive Authentication (ICAO 9303)
                                                         |
                                                         +-- PKD Relay (:8083)
-                                                        |     DB-LDAP Sync, Reconciliation
+                                                        |     외부 ICAO PKD 연계: LDIF/ML Import, ICAO Sync, Version Detection
                                                         |
                                                         +-- Monitoring Service (:8084)
                                                         |     System Metrics, Service Health (DB-independent)
@@ -112,8 +113,8 @@ Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services 
 | Service | LDAP Pool | DB Pool | Notes |
 |---------|-----------|---------|-------|
 | PA Service | 2-10 | 5-20 | Verification-heavy |
-| PKD Management | 3-15 | 5-20 | Upload/search operations |
-| PKD Relay | 2-10 | 5-20 | Sync/reconciliation |
+| PKD Management | 3-15 | 5-20 | Sync/reconciliation, search, individual upload |
+| PKD Relay | 2-10 | 5-20 (+ dedicated upload pool) | LDIF/ML import, ICAO sync |
 | Monitoring | N/A | N/A | DB-independent (HTTP only) |
 
 ### Design Patterns
@@ -254,7 +255,7 @@ curl -X POST http://localhost:8080/api/pa/verify \
   -d '{"sod":"<base64>","dataGroups":{"1":"<base64>","2":"<base64>"}}' | jq .
 ```
 
-### Unit Tests (438 test cases)
+### Unit Tests (1975 test cases)
 
 ```bash
 # C++ certificate-parser tests (122 tests)
@@ -449,7 +450,7 @@ NGINX_CONF=../nginx/api-gateway.conf        # HTTP only
 
 ### Sync Dashboard Timeout
 
-Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-relay service.
+Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-management service (sync는 v2.41.0부터 management에서 처리).
 
 ---
 

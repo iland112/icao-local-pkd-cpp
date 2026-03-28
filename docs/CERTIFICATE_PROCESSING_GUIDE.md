@@ -1,6 +1,7 @@
 # FASTpass® SPKD — Certificate Processing Guide
 
-**Version**: v2.39.0 | **Last Updated**: 2026-03-22
+**Version**: v2.41.0 | **Last Updated**: 2026-03-27
+> Updated for v2.41.0 서비스 기능 재배치 (Sync↔Upload 교차 이동)
 
 ---
 
@@ -103,9 +104,9 @@ PA 검증 요청 (POST /api/pa/verify)
   │
   └─ PA 검증 결과 반환 (dscAutoRegistration 필드 포함)
 
-                    ↓ (비동기, PKD Relay Reconciliation)
+                    ↓ (비동기, PKD Management Reconciliation)
 
-PKD Relay Reconciliation
+PKD Management Reconciliation
   │
   ├─ stored_in_ldap=FALSE 인증서 조회
   │
@@ -173,10 +174,10 @@ GROUP BY source_type;
 
 | 처리 모듈 | 소스 파일 | source_type |
 |-----------|----------|-------------|
-| LDIF 파싱 | `ldif_processor.cpp` | `LDIF_PARSED` |
-| Master List 파싱 | `masterlist_processor.cpp` | `ML_PARSED` |
-| Master List (핸들러 직접 저장) | `upload_handler.cpp` | `ML_PARSED` |
-| 개별 인증서 업로드 | `upload_service.cpp` | `FILE_UPLOAD` |
+| LDIF 파싱 (PKD Relay) | `ldif_processor.cpp` | `LDIF_PARSED` |
+| Master List 파싱 (PKD Relay) | `masterlist_processor.cpp` | `ML_PARSED` |
+| Master List 핸들러 직접 저장 (PKD Relay) | `upload_handler.cpp` | `ML_PARSED` |
+| 개별 인증서 업로드 (PKD Management) | `upload_service.cpp` | `FILE_UPLOAD` |
 | PA 검증 DSC 추출 | `dsc_auto_registration_service.cpp` | `PA_EXTRACTED` |
 
 **구현 상세**: `saveCertificateWithDuplicateCheck()` 함수의 `sourceType` 파라미터 (기본값: `"FILE_UPLOAD"`)로 INSERT 시 `source_type` 컬럼에 저장된다.
@@ -432,10 +433,9 @@ static const std::regex countryRegex(R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))
 
 | Component | File | Lines |
 |-----------|------|-------|
-| **Master List Processor** | `services/pkd-management/src/common/masterlist_processor.cpp` | 97-665 |
-| **Header** | `services/pkd-management/src/common/masterlist_processor.h` | 56-62 |
-| **Country Code Extractor** | `services/pkd-management/src/main.cpp` | 1879 |
-| **Certificate Utils** | `services/pkd-management/src/common/certificate_utils.cpp` | - |
+| **Master List Processor** | `services/pkd-relay-service/src/common/masterlist_processor.cpp` | (v2.41.0 — relay로 이동) |
+| **Header** | `services/pkd-relay-service/src/common/masterlist_processor.h` | (v2.41.0 — relay로 이동) |
+| **Certificate Utils** | `services/pkd-relay-service/src/common/certificate_utils.cpp` | (v2.41.0 — relay로 이동) |
 
 #### Function Signatures
 
@@ -970,9 +970,8 @@ while (certPtr < certSetEnd) {
 
 #### Code References
 
-- [masterlist_processor.cpp](../services/pkd-management/src/common/masterlist_processor.cpp) - Main implementation
-- [certificate_utils.cpp](../services/pkd-management/src/common/certificate_utils.cpp) - Database operations
-- [main.cpp](../services/pkd-management/src/main.cpp#L1879) - Country code extraction
+- [masterlist_processor.cpp](../services/pkd-relay-service/src/common/masterlist_processor.cpp) - Main implementation (v2.41.0 — relay로 이동)
+- [certificate_utils.cpp](../services/pkd-relay-service/src/common/certificate_utils.cpp) - Database operations (v2.41.0 — relay로 이동)
 
 ---
 
@@ -1033,14 +1032,14 @@ Total: 537 certificates
 #### Development
 
 ```bash
-# Rebuild service
-docker compose -f docker/docker-compose.yaml build pkd-management
+# Rebuild service (LDIF/ML processing is now in PKD Relay, v2.41.0)
+docker compose -f docker/docker-compose.yaml build pkd-relay
 
 # Restart service
-docker compose -f docker/docker-compose.yaml restart pkd-management
+docker compose -f docker/docker-compose.yaml restart pkd-relay
 
 # View logs
-docker logs icao-local-pkd-management -f --tail 100 | grep "ML-FILE\|ML-LDIF"
+docker logs icao-local-pkd-relay -f --tail 100 | grep "ML-FILE\|ML-LDIF"
 ```
 
 #### Testing
