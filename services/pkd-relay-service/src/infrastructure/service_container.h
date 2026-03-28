@@ -26,10 +26,6 @@ namespace icao::relay::repositories {
     class ValidationRepository;
 }
 
-namespace icao::relay::services {
-    class ValidationService;
-}
-
 namespace icao::relay { class IcaoLdapSyncService; }
 
 namespace infrastructure {
@@ -54,8 +50,6 @@ public:
     icao::relay::repositories::CertificateRepository* certificateRepository() const;
     icao::relay::repositories::CrlRepository* crlRepository() const;
     icao::relay::repositories::ValidationRepository* validationRepository() const;
-    icao::relay::services::ValidationService* validationService() const;
-
     // --- ICAO LDAP Sync ---
     icao::relay::IcaoLdapSyncService* icaoLdapSyncService() const;
 

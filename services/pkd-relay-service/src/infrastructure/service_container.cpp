@@ -19,8 +19,6 @@
 #include "../repositories/certificate_repository.h"
 #include "../repositories/crl_repository.h"
 #include "../repositories/validation_repository.h"
-#include "../services/validation_service.h"
-
 // ICAO LDAP Sync
 #include "../relay/icao-ldap/icao_ldap_sync_service.h"
 
@@ -35,8 +33,6 @@ struct ServiceContainer::Impl {
     std::shared_ptr<icao::relay::repositories::CertificateRepository> certificateRepo;
     std::shared_ptr<icao::relay::repositories::CrlRepository> crlRepo;
     std::shared_ptr<icao::relay::repositories::ValidationRepository> validationRepo;
-    std::shared_ptr<icao::relay::services::ValidationService> validationService;
-
     // ICAO LDAP Sync
     std::shared_ptr<icao::relay::IcaoLdapSyncService> icaoLdapSyncService;
 };
@@ -91,9 +87,6 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
         impl_->certificateRepo = std::make_shared<icao::relay::repositories::CertificateRepository>(impl_->queryExecutor.get());
         impl_->crlRepo = std::make_shared<icao::relay::repositories::CrlRepository>(impl_->queryExecutor.get());
         impl_->validationRepo = std::make_shared<icao::relay::repositories::ValidationRepository>(impl_->queryExecutor.get());
-        impl_->validationService = std::make_shared<icao::relay::services::ValidationService>(
-            impl_->validationRepo.get(), impl_->certificateRepo.get(), impl_->crlRepo.get());
-
         // Step 5: ICAO LDAP Sync Service (optional)
         if (config.icaoLdapSyncEnabled) {
             impl_->icaoLdapSyncService = std::make_shared<icao::relay::IcaoLdapSyncService>(
@@ -115,7 +108,6 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
 void ServiceContainer::shutdown() {
     if (!impl_) return;
     impl_->icaoLdapSyncService.reset();
-    impl_->validationService.reset();
     impl_->validationRepo.reset();
     impl_->crlRepo.reset();
     impl_->certificateRepo.reset();
@@ -132,7 +124,6 @@ common::LdapConnectionPool* ServiceContainer::ldapPool() const { return impl_->l
 icao::relay::repositories::CertificateRepository* ServiceContainer::certificateRepository() const { return impl_->certificateRepo.get(); }
 icao::relay::repositories::CrlRepository* ServiceContainer::crlRepository() const { return impl_->crlRepo.get(); }
 icao::relay::repositories::ValidationRepository* ServiceContainer::validationRepository() const { return impl_->validationRepo.get(); }
-icao::relay::services::ValidationService* ServiceContainer::validationService() const { return impl_->validationService.get(); }
 icao::relay::IcaoLdapSyncService* ServiceContainer::icaoLdapSyncService() const { return impl_->icaoLdapSyncService.get(); }
 
 } // namespace infrastructure

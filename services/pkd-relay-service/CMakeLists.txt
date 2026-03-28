@@ -92,8 +92,6 @@ set(SOURCE_FILES
     src/repositories/certificate_repository.cpp
     src/repositories/crl_repository.cpp
     src/repositories/validation_repository.cpp
-    src/services/validation_service.cpp
-    # Adapters (used by ICAO LDAP sync for trust chain validation)
     # Adapters (used by ICAO LDAP sync for trust chain validation)
     src/adapters/relay_csca_provider.cpp
     src/adapters/relay_crl_provider.cpp
@@ -162,7 +160,6 @@ set(HEADER_FILES
     src/repositories/certificate_repository.h
     src/repositories/crl_repository.h
     src/repositories/validation_repository.h
-    src/services/validation_service.h
 )
 
 # =============================================================================
