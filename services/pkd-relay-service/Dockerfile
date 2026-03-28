@@ -15,6 +15,7 @@ RUN mkdir -p /opt/oracle/instantclient_21_13
 
 COPY services/pkd-relay-service/CMakeLists.txt ./
 COPY services/pkd-relay-service/src/ ./src/
+COPY services/pkd-relay-service/tests/ ./tests/
 # Copy shared libraries (required by CMakeLists.txt add_subdirectory)
 COPY shared/ ./shared/
 # Copy common-lib (required by upload module)

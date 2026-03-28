@@ -60,6 +60,11 @@ bool UploadServiceContainer::initialize(common::IQueryExecutor* queryExecutor,
                                          const std::string& ldapBaseDn) {
     spdlog::info("UploadServiceContainer initializing...");
 
+    if (!queryExecutor) {
+        spdlog::error("UploadServiceContainer::initialize: queryExecutor cannot be nullptr");
+        return false;
+    }
+
     impl_->queryExecutor = queryExecutor;
     impl_->ldapPool = ldapPool;
 

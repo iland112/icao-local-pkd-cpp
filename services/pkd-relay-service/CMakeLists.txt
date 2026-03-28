@@ -86,6 +86,7 @@ set(SOURCE_FILES
     # ICAO PKD LDAP Sync
     src/relay/icao-ldap/icao_ldap_client.cpp
     src/relay/icao-ldap/icao_ldap_sync_service.cpp
+    src/relay/icao-ldap/icao_ldap_cert_utils.cpp
     # Repositories (shared with ICAO LDAP sync + upload module)
     src/domain/models/validation_result.cpp
     src/repositories/certificate_repository.cpp
@@ -209,6 +210,134 @@ endif()
 if(UUID_LIBRARY)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${UUID_LIBRARY})
 endif()
+
+# =============================================================================
+# Unit Tests (GTest)
+# =============================================================================
+enable_testing()
+find_package(GTest CONFIG REQUIRED)
+
+# Common include directories reused by all test targets
+set(RELAY_TEST_INCLUDES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
+    ${PostgreSQL_INCLUDE_DIRS}
+)
+
+# Common link libraries reused by OpenSSL-dependent test targets
+set(RELAY_TEST_LIBS_BASE
+    GTest::gtest
+    GTest::gtest_main
+    spdlog::spdlog
+)
+
+# =============================================================================
+# test_upload_config
+# Tests AppConfig (upload_config.h) — pure header-only struct, no external deps.
+# =============================================================================
+add_executable(test_upload_config
+    tests/test_upload_config.cpp
+)
+
+target_include_directories(test_upload_config PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_upload_config PRIVATE
+    ${RELAY_TEST_LIBS_BASE}
+)
+
+add_test(NAME test_upload_config COMMAND test_upload_config)
+
+# =============================================================================
+# test_icao_ldap_cert_utils
+# Tests extractCountryFromCert() (promoted from anonymous namespace).
+# Requires OpenSSL to construct test certificates in-memory.
+# =============================================================================
+add_executable(test_icao_ldap_cert_utils
+    tests/test_icao_ldap_cert_utils.cpp
+    src/relay/icao-ldap/icao_ldap_cert_utils.cpp
+)
+
+target_include_directories(test_icao_ldap_cert_utils PRIVATE
+    ${RELAY_TEST_INCLUDES}
+)
+
+target_link_libraries(test_icao_ldap_cert_utils PRIVATE
+    ${RELAY_TEST_LIBS_BASE}
+    OpenSSL::SSL
+    OpenSSL::Crypto
+)
+
+add_test(NAME test_icao_ldap_cert_utils COMMAND test_icao_ldap_cert_utils)
+
+# =============================================================================
+# test_ldap_storage_service
+# Tests LdapStorageService DN-building and RFC 4514 escaping (no network).
+# Also tests getLdapReadConnection() with empty host list (returns nullptr).
+# Requires: ldap_storage_service.cpp, icao-common (DN parser), OpenSSL, LDAP.
+# =============================================================================
+add_executable(test_ldap_storage_service
+    tests/test_ldap_storage_service.cpp
+    src/upload/services/ldap_storage_service.cpp
+    tests/stubs/g_upload_services_stub.cpp
+)
+
+target_include_directories(test_ldap_storage_service PRIVATE
+    ${RELAY_TEST_INCLUDES}
+)
+
+target_link_libraries(test_ldap_storage_service PRIVATE
+    ${RELAY_TEST_LIBS_BASE}
+    icao::database
+    icao::ldap
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ${LDAP_LIBRARY}
+    ${LBER_LIBRARY}
+    spdlog::spdlog
+)
+
+if(TARGET icao-common)
+    target_link_libraries(test_ldap_storage_service PRIVATE icao-common)
+endif()
+
+add_test(NAME test_ldap_storage_service COMMAND test_ldap_storage_service)
+
+# =============================================================================
+# test_upload_services
+# Tests UploadServiceContainer initialization, accessor null-checks, and shutdown.
+# Uses upload_module_stubs.cpp so that real repository/service .cpp files are NOT
+# compiled — avoiding Drogon, JsonCpp, and PostgreSQL linker dependencies.
+# =============================================================================
+add_executable(test_upload_services
+    tests/test_upload_services.cpp
+    src/upload/upload_services.cpp
+    tests/stubs/upload_module_stubs.cpp
+)
+
+target_include_directories(test_upload_services PRIVATE
+    ${RELAY_TEST_INCLUDES}
+)
+
+target_link_libraries(test_upload_services PRIVATE
+    ${RELAY_TEST_LIBS_BASE}
+    icao::database
+    icao::ldap
+    icao::validation
+    icao::certificate-parser  # brings in dl_parser.h include path for deviation_list_repository.h
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    spdlog::spdlog
+)
+
+if(TARGET icao-common)
+    target_link_libraries(test_upload_services PRIVATE icao-common)
+endif()
+
+add_test(NAME test_upload_services COMMAND test_upload_services)
 
 # =============================================================================
 # Build Info
