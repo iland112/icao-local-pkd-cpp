@@ -34,7 +34,7 @@ class LdapStorageService {
 public:
     /**
      * @brief Construct LdapStorageService
-     * @param config Application configuration (non-owning reference, must outlive service)
+     * @param config Application configuration (copied by value — safe for factory/stack-local creation)
      */
     explicit LdapStorageService(const AppConfig& config);
 

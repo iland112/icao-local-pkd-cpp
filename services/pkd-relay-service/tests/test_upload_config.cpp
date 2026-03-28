@@ -158,11 +158,11 @@ TEST(AppConfigLoadFromEnv, OverrideLdapWritePort_InvalidString_KeepsDefault) {
 }
 
 TEST(AppConfigLoadFromEnv, OverrideLdapWritePort_NegativeValue) {
-    // std::stoi("-1") succeeds; the parsed value is stored as-is
+    // Negative port is rejected by validation — default is preserved
     EnvGuard g("LDAP_WRITE_PORT", "-1");
     AppConfig cfg;
     cfg.loadFromEnv();
-    EXPECT_EQ(cfg.ldapWritePort, -1);
+    EXPECT_EQ(cfg.ldapWritePort, 389);  // Default preserved (port range: 1-65535)
 }
 
 TEST(AppConfigLoadFromEnv, OverrideLdapBindDn) {

@@ -168,6 +168,7 @@ namespace handlers {
 std::mutex UploadHandler::s_processingMutex;
 std::set<std::string> UploadHandler::s_processingUploads;
 std::atomic<int> UploadHandler::s_activeProcessingCount{0};
+std::atomic<bool> UploadHandler::s_shuttingDown{false};
 int UploadHandler::MAX_CONCURRENT_PROCESSING = []() {
     if (auto* v = std::getenv("MAX_CONCURRENT_UPLOADS")) {
         try { return std::stoi(v); }
@@ -363,6 +364,11 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 
         spdlog::info("Starting async LDIF processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
+        if (s_shuttingDown.load()) {
+            spdlog::warn("Server shutting down — aborting LDIF upload {}", uploadId);
+            return;
+        }
+
         if (!g_uploadServices) {
             spdlog::error("ServiceContainer not initialized — cannot process LDIF upload {}", uploadId);
             return;
@@ -486,6 +492,11 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         ProcessingSlotGuard slotGuard(uploadId);
 
         spdlog::info("Starting async Master List processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
+
+        if (s_shuttingDown.load()) {
+            spdlog::warn("Server shutting down — aborting ML upload {}", uploadId);
+            return;
+        }
 
         if (!g_uploadServices) {
             spdlog::error("ServiceContainer not initialized — cannot process Master List upload {}", uploadId);
@@ -2000,6 +2011,11 @@ void UploadHandler::handleUploadMasterList(
         auto* ldapPool = g_uploadServices->ldapPool();
         std::thread([uploadId, contentBytes, uploadRepo, ldapPool]() {
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
+
+                if (UploadHandler::s_shuttingDown.load()) {
+                    spdlog::warn("Server shutting down — aborting ML upload {}", uploadId);
+                    return;
+                }
 
                 // LDAP connection from pool
                 LDAP* ld = nullptr;

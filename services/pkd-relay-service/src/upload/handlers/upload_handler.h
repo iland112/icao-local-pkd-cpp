@@ -167,6 +167,10 @@ private:
     static std::atomic<int> s_activeProcessingCount;
     static int MAX_CONCURRENT_PROCESSING;
 
+    // --- Shutdown guard: prevents use-after-free in detached threads ---
+public:
+    static std::atomic<bool> s_shuttingDown;
+
     /**
      * @brief RAII guard for processing slot management
      *

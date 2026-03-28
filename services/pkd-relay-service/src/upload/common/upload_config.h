@@ -33,15 +33,27 @@ struct AppConfig {
     // ASN.1 Parser Configuration
     int asn1MaxLines = 100;
 
-    /** @brief Load upload-specific settings from environment variables */
+    /** @brief Load upload-specific settings from environment variables with validation */
     void loadFromEnv() {
-        if (auto e = std::getenv("TRUST_ANCHOR_PATH")) trustAnchorPath = e;
-        if (auto e = std::getenv("ASN1_MAX_LINES")) {
-            try { asn1MaxLines = std::stoi(e); } catch (...) {}
+        if (auto e = std::getenv("TRUST_ANCHOR_PATH")) {
+            std::string path(e);
+            // Path traversal prevention: reject ".." and ensure absolute path
+            if (path.find("..") == std::string::npos && !path.empty() && path[0] == '/') {
+                trustAnchorPath = path;
+            }
         }
-        if (auto e = std::getenv("LDAP_WRITE_HOST")) ldapWriteHost = e;
+        if (auto e = std::getenv("ASN1_MAX_LINES")) {
+            try { asn1MaxLines = std::max(10, std::min(100000, std::stoi(e))); } catch (...) {}
+        }
+        if (auto e = std::getenv("LDAP_WRITE_HOST")) {
+            std::string host(e);
+            // Hostname validation: alphanumeric, dots, hyphens only
+            bool valid = !host.empty() && host.size() <= 253;
+            for (char c : host) { if (!std::isalnum(c) && c != '.' && c != '-') { valid = false; break; } }
+            if (valid) ldapWriteHost = host;
+        }
         if (auto e = std::getenv("LDAP_WRITE_PORT")) {
-            try { ldapWritePort = std::stoi(e); } catch (...) {}
+            try { int p = std::stoi(e); if (p >= 1 && p <= 65535) ldapWritePort = p; } catch (...) {}
         }
         if (auto e = std::getenv("LDAP_BIND_DN")) ldapBindDn = e;
         if (auto e = std::getenv("LDAP_BIND_PASSWORD")) ldapBindPassword = e;

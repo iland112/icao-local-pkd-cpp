@@ -35,6 +35,7 @@
 #include "handlers/icao_ldap_handler.h"
 
 // Upload module (moved from pkd-management)
+#include <thread>
 #include "upload/upload_services.h"
 #include "upload/handlers/upload_handler.h"
 #include "upload/handlers/upload_stats_handler.h"
@@ -452,6 +453,10 @@ int main() {
     app().addListener("0.0.0.0", g_config.serverPort)
         .setThreadNum(threadNum)
         .run();
+
+    // Signal detached threads to stop before destroying resources
+    handlers::UploadHandler::s_shuttingDown.store(true);
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));  // Allow in-flight threads to check flag
 
     // Cleanup
     g_healthHandler.reset();
