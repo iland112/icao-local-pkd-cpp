@@ -354,7 +354,9 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_activeProcessingCount.fetch_add(1);
     }
 
-    std::thread([uploadId, content, resumeMode]() {
+    // Read content from temp file in async thread (avoid 80MB memory copy in thread capture)
+    std::string tempFilePath = "/app/uploads/" + uploadId + ".ldif";
+    std::thread([uploadId, tempFilePath, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -390,7 +392,15 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
                     0, 100, parseMsg));
 
-            std::string contentStr(content.begin(), content.end());
+            // Read LDIF content from temp file (saved by uploadLdif() → saveToTempFile())
+            std::ifstream inFile(tempFilePath, std::ios::binary);
+            if (!inFile.is_open()) {
+                throw std::runtime_error("Failed to open temp file: " + tempFilePath);
+            }
+            std::string contentStr((std::istreambuf_iterator<char>(inFile)),
+                                    std::istreambuf_iterator<char>());
+            inFile.close();
+            spdlog::info("Read {} bytes from temp file for upload {}", contentStr.size(), uploadId);
 
             // Parse LDIF content using LdifProcessor
             std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(contentStr);
