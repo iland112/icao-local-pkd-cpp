@@ -16,6 +16,7 @@
 
 #include <fstream>
 #include <filesystem>
+#include <optional>
 #include <thread>
 #include <future>
 #include <cstdlib>
@@ -373,16 +374,21 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             return;
         }
 
-        // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-        LdapConnectionGuard ldapGuard(g_uploadServices->ldapStorageService()->getLdapWriteConnection());
-        LDAP* ld = ldapGuard.get();
+        // LDAP connection: use shared pool instead of LdapStorageService direct connection
+        LDAP* ld = nullptr;
+        std::optional<common::LdapConnection> ldapConn;
+        if (g_uploadServices->ldapPool()) {
+            try {
+                ldapConn.emplace(g_uploadServices->ldapPool()->acquire());
+                if (ldapConn->isValid()) ld = ldapConn->get();
+            } catch (const std::exception& e) {
+                spdlog::warn("LDAP pool acquire failed for upload {}: {}", uploadId, e.what());
+            }
+        }
         if (!ld) {
-            spdlog::warn("LDAP write connection unavailable for LDIF upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED,
-                    0, 0, "LDAP 연결 불가 - DB 전용 모드로 처리합니다 (추후 Reconciliation 동기화)"));
+            spdlog::warn("LDAP connection unavailable for LDIF upload {} - DB-only mode", uploadId);
         } else {
-            spdlog::info("LDAP write connection established for LDIF upload {}", uploadId);
+            spdlog::info("LDAP connection acquired from pool for LDIF upload {}", uploadId);
         }
 
         try {
