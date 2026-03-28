@@ -163,6 +163,10 @@ bool parseMasterListEntryV2(
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
+    // Release base64 string after decoding — frees memory for cert extraction
+    // (mlBytes is still needed for LDAP ML storage later)
+    { std::string().swap(base64Value); }
+
     if (!cms) {
         spdlog::error("[ML-LDIF] Failed to parse Master List as CMS SignedData: {}", entry.dn);
         if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
