@@ -1002,7 +1002,15 @@ bool processMasterListFile(
         while (certPtr < certSetEnd) {
             // Parse each certificate
             const unsigned char* certStart = certPtr;
-            X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+            spdlog::info("[ML-FILE] Parsing cert #{}, remaining {} bytes", totalCerts + 1, static_cast<long>(certSetEnd - certStart));
+            X509* cert = nullptr;
+            try {
+                cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+            } catch (const std::exception& e) {
+                spdlog::error("[ML-FILE] d2i_X509 threw exception for cert #{}: {}", totalCerts + 1, e.what());
+                break;
+            }
+            spdlog::info("[ML-FILE] d2i_X509 returned {} for cert #{}", cert ? "OK" : "NULL", totalCerts + 1);
 
             if (!cert) {
                 spdlog::warn("[ML-FILE] Failed to parse certificate in certList SET");
@@ -1013,6 +1021,7 @@ bool processMasterListFile(
 
             totalCerts++;
 
+          try {  // Per-cert try-catch: bad_alloc in DB/LDAP save skips cert, continues processing
             // Extract certificate metadata
             CertificateMetadata meta = extractCertificateMetadata(cert);
             if (meta.derData.empty() || meta.fingerprint.empty()) {
@@ -1214,6 +1223,14 @@ bool processMasterListFile(
                     );
                 }
             }
+          } catch (const std::exception& e) {
+            spdlog::warn("[ML-FILE] Exception processing cert #{}: {} — skipping", totalCerts, e.what());
+            if (enhancedStats) {
+                enhancedStats->totalErrorCount++;
+                common::addProcessingError(*enhancedStats, "ML_CERT_PROCESS_FAILED",
+                    "", "", "", "CSCA", "Exception processing cert #" + std::to_string(totalCerts) + ": " + e.what());
+            }
+          }
 
             X509_free(cert);
         }
