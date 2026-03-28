@@ -492,11 +492,19 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             return;
         }
 
-        // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-        LdapConnectionGuard ldapGuard(g_uploadServices->ldapStorageService()->getLdapWriteConnection());
-        LDAP* ld = ldapGuard.get();
+        // LDAP connection: use shared pool instead of LdapStorageService direct connection
+        LDAP* ld = nullptr;
+        std::optional<common::LdapConnection> ldapConn;
+        if (g_uploadServices->ldapPool()) {
+            try {
+                ldapConn.emplace(g_uploadServices->ldapPool()->acquire());
+                if (ldapConn->isValid()) ld = ldapConn->get();
+            } catch (const std::exception& e) {
+                spdlog::warn("LDAP pool acquire failed for ML upload {}: {}", uploadId, e.what());
+            }
+        }
         if (!ld) {
-            spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
+            spdlog::warn("LDAP connection unavailable for Master List upload {} - DB-only mode", uploadId);
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED,
                     0, 0, "LDAP 연결 불가 - DB 전용 모드로 처리합니다 (추후 Reconciliation 동기화)"));
