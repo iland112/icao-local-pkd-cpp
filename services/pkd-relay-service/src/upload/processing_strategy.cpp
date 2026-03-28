@@ -127,22 +127,26 @@ void AutoProcessingStrategy::processLdifEntries(
             }
 
             // Recalculate trust chain and ICAO compliance counts
+            auto dbType = g_uploadServices->queryExecutor()->getDatabaseType();
+            auto boolTrue = common::db::boolLiteral(dbType, true);
+            auto boolFalse = common::db::boolLiteral(dbType, false);
+
             auto tcValid = g_uploadServices->queryExecutor()->executeScalar(
-                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND trust_chain_valid = TRUE", {uploadId});
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND trust_chain_valid = " + boolTrue, {uploadId});
             enhancedStats.trustChainValidCount = common::db::scalarToInt(tcValid);
 
             auto cscaNotFound = g_uploadServices->queryExecutor()->executeScalar(
-                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND validation_status = 'PENDING' AND csca_found = FALSE", {uploadId});
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND validation_status = 'PENDING' AND csca_found = " + boolFalse, {uploadId});
             enhancedStats.cscaNotFoundCount = common::db::scalarToInt(cscaNotFound);
 
             enhancedStats.trustChainInvalidCount = enhancedStats.invalidCount;
 
             auto icaoCompliant = g_uploadServices->queryExecutor()->executeScalar(
-                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = TRUE", {uploadId});
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = " + boolTrue, {uploadId});
             enhancedStats.icaoCompliantCount = common::db::scalarToInt(icaoCompliant);
 
             auto icaoNonCompliant = g_uploadServices->queryExecutor()->executeScalar(
-                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = FALSE", {uploadId});
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = " + boolFalse, {uploadId});
             enhancedStats.icaoNonCompliantCount = common::db::scalarToInt(icaoNonCompliant);
 
             spdlog::info("Resume mode: Validation counts — valid={}, invalid={}, pending={}, expired_valid={}",
