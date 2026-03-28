@@ -480,7 +480,6 @@ std::string LdapStorageService::saveCertificateToLdap(LDAP* ld, const std::strin
     }
 
     auto [standardDn_extracted, nonStandardAttrs] = extractStandardAttributes(subjectDn);
-
     std::string dn;
     if (useLegacyDn) {
         dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);

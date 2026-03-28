@@ -16,7 +16,7 @@
 
 // Forward declarations
 typedef struct ldap LDAP;
-struct AppConfig;
+#include "upload/common/upload_config.h"  // AppConfig full definition (stored by value)
 
 namespace services {
 
@@ -132,7 +132,7 @@ public:
                                       const std::vector<uint8_t>& mlBinary);
 
 private:
-    const AppConfig& config_;
+    const AppConfig config_;  // Stored by value (not reference) to avoid dangling reference
     std::atomic<size_t> ldapReadRoundRobinIndex_{0};
 };
 

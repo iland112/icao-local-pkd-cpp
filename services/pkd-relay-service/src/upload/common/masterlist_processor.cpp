@@ -1005,15 +1005,12 @@ bool processMasterListFile(
         while (certPtr < certSetEnd) {
             // Parse each certificate
             const unsigned char* certStart = certPtr;
-            spdlog::info("[ML-FILE] Parsing cert #{}, remaining {} bytes", totalCerts + 1, static_cast<long>(certSetEnd - certStart));
             X509* cert = nullptr;
             try {
                 cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
             } catch (const std::exception& e) {
-                spdlog::error("[ML-FILE] d2i_X509 threw exception for cert #{}: {}", totalCerts + 1, e.what());
                 break;
             }
-            spdlog::info("[ML-FILE] d2i_X509 returned {} for cert #{}", cert ? "OK" : "NULL", totalCerts + 1);
 
             if (!cert) {
                 spdlog::warn("[ML-FILE] Failed to parse certificate in certList SET");
@@ -1083,7 +1080,7 @@ bool processMasterListFile(
                             certTypeLabel, totalCerts, certCountryCode, meta.fingerprint.substr(0, 16) + "...", certId);
 
                 // Save to LDAP
-                if (ld) {
+                if (ld && g_uploadServices && g_uploadServices->ldapStorageService()) {
                     try {
                         std::string ldapDn = g_uploadServices->ldapStorageService()->saveCertificateToLdap(
                             ld, ldapCertType, certCountryCode,
