@@ -849,8 +849,24 @@ bool processMasterListFile(
                         spdlog::info("[ML-FILE] MLSC {}/{} - NEW - fingerprint: {}, cert_id: {}",
                                     i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
 
-                        // LDAP save deferred to Reconciliation (avoids LDAP memory issues in async thread)
-                        // MLSC will be synced to LDAP by the next Reconciliation cycle
+                        // Save MLSC to LDAP (o=mlsc,c=UN)
+                        if (ld) {
+                            try {
+                                std::string ldapDn = g_uploadServices->ldapStorageService()->saveCertificateToLdap(
+                                    ld, "MLSC", countryCode,
+                                    meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                                    meta.fingerprint, meta.derData,
+                                    "", "", "",
+                                    false  // useLegacyDn=false
+                                );
+                                if (!ldapDn.empty()) {
+                                    certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
+                                    spdlog::info("[ML-FILE] MLSC {}/{} - Saved to LDAP: {}", i + 1, numSigners, ldapDn);
+                                }
+                            } catch (const std::exception& e) {
+                                spdlog::warn("[ML-FILE] MLSC {}/{} - LDAP save failed: {} (DB saved, Reconciliation will sync)", i + 1, numSigners, e.what());
+                            }
+                        }
                     } else {
                         spdlog::info("[ML-FILE] MLSC {}/{} - DUPLICATE - fingerprint: {}",
                                     i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...");
@@ -1066,8 +1082,24 @@ bool processMasterListFile(
                 spdlog::info("[ML-FILE] {} {} - NEW - Country: {}, fingerprint: {}, cert_id: {}",
                             certTypeLabel, totalCerts, certCountryCode, meta.fingerprint.substr(0, 16) + "...", certId);
 
-                // LDAP save deferred to Reconciliation (avoids memory issues in async thread)
-                // CSCA/LC will be synced to LDAP by the next Reconciliation cycle
+                // Save to LDAP
+                if (ld) {
+                    try {
+                        std::string ldapDn = g_uploadServices->ldapStorageService()->saveCertificateToLdap(
+                            ld, ldapCertType, certCountryCode,
+                            meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                            meta.fingerprint, meta.derData,
+                            "", "", "",
+                            false  // useLegacyDn=false
+                        );
+                        if (!ldapDn.empty()) {
+                            certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
+                            stats.ldapCscaStoredCount++;
+                        }
+                    } catch (const std::exception& e) {
+                        spdlog::warn("[ML-FILE] CSCA/LC {} - LDAP save failed: {} (DB saved, Reconciliation will sync)", totalCerts, e.what());
+                    }
+                }
             }
 
             // Per-certificate validation log and statistics for EventLog display
