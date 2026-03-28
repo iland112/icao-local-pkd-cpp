@@ -1997,22 +1997,25 @@ void UploadHandler::handleUploadMasterList(
 
         // Start async processing (AUTO mode: all stages run automatically)
         auto* uploadRepo = uploadRepository_;
-        auto* ldapStorageSvc = g_uploadServices->ldapStorageService();
-        std::thread([uploadId, contentBytes, uploadRepo, ldapStorageSvc]() {
+        auto* ldapPool = g_uploadServices->ldapPool();
+        std::thread([uploadId, contentBytes, uploadRepo, ldapPool]() {
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
-                if (!ldapStorageSvc) {
-                    spdlog::error("LdapStorageService not available for ML upload {}", uploadId);
-                    return;
+                // LDAP connection from pool
+                LDAP* ld = nullptr;
+                std::optional<common::LdapConnection> ldapConn;
+                if (ldapPool) {
+                    try {
+                        ldapConn.emplace(ldapPool->acquire());
+                        if (ldapConn->isValid()) ld = ldapConn->get();
+                    } catch (const std::exception& e) {
+                        spdlog::warn("LDAP pool acquire failed for ML upload {}: {}", uploadId, e.what());
+                    }
                 }
-
-                // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LdapConnectionGuard ldapGuard(ldapStorageSvc->getLdapWriteConnection());
-                LDAP* ld = ldapGuard.get();
                 if (!ld) {
-                    spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode", uploadId);
+                    spdlog::warn("LDAP connection unavailable for Master List upload {} - DB-only mode", uploadId);
                 } else {
-                    spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
+                    spdlog::info("LDAP connection acquired for Master List upload {}", uploadId);
                 }
 
                 try {
