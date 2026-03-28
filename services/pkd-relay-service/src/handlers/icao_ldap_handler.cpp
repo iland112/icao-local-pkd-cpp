@@ -4,8 +4,9 @@
  */
 #include "icao_ldap_handler.h"
 #include "../relay/icao-ldap/icao_ldap_sync_service.h"
+#include "upload/upload_services.h"
+#include "upload/common/thread_pool.h"
 #include <spdlog/spdlog.h>
-#include <thread>
 
 namespace icao {
 namespace relay {
@@ -65,11 +66,11 @@ void IcaoLdapHandler::handleTriggerSync(const drogon::HttpRequestPtr& req,
         return;
     }
 
-    // Run sync in background thread
+    // Run sync in thread pool
     auto svc = syncService_;
-    std::thread([svc]() {
+    g_uploadServices->threadPool()->submit([svc]() {
         svc->performFullSync("MANUAL");
-    }).detach();
+    });
 
     Json::Value json;
     json["status"] = "STARTED";

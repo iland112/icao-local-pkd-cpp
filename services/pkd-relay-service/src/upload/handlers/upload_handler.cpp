@@ -75,6 +75,7 @@
 // Handler utilities (sanitized error responses)
 #include "handler_utils.h"
 #include "upload/common/openssl_raii.h"
+#include "upload/common/thread_pool.h"
 
 // Bring in audit types for cleaner code
 using icao::audit::AuditLogEntry;
@@ -355,7 +356,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 
     // Read content from temp file in async thread (avoid 80MB memory copy in thread capture)
     std::string tempFilePath = "/app/uploads/" + uploadId + ".ldif";
-    std::thread([uploadId, tempFilePath, resumeMode]() {
+    g_uploadServices->threadPool()->submit([uploadId, tempFilePath, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -451,7 +452,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         ProgressManager::getInstance().clearProgress(uploadId);
 
         // ProcessingSlotGuard destructor handles cleanup automatically
-    }).detach();
+    });
 }
 
 // =============================================================================
@@ -484,7 +485,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
-    std::thread([uploadId, content, trustAnchorPath, resumeMode]() {
+    g_uploadServices->threadPool()->submit([uploadId, content, trustAnchorPath, resumeMode]() {
         // RAII guard ensures cleanup on any exit path (including exceptions)
         ProcessingSlotGuard slotGuard(uploadId);
 
@@ -1112,7 +1113,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         ProgressManager::getInstance().clearProgress(uploadId);
 
         // ProcessingSlotGuard destructor handles cleanup automatically
-    }).detach();
+    });
 }
 
 // =============================================================================
@@ -1197,7 +1198,7 @@ void UploadHandler::handleParse(
             processLdifFileAsync(uploadId, contentBytes);
         } else if (fileFormatStr == "ML") {
             // Use Strategy Pattern for Master List processing
-            std::thread([uploadId, contentBytes]() {
+            g_uploadServices->threadPool()->submit([uploadId, contentBytes]() {
                 spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
@@ -1223,7 +1224,7 @@ void UploadHandler::handleParse(
                             0, 0, "처리 실패", e.what()));
                 }
                 // LDAP connection auto-released by LdapConnectionGuard destructor
-            }).detach();
+            });
         } else {
             Json::Value error;
             error["success"] = false;
@@ -2002,7 +2003,7 @@ void UploadHandler::handleUploadMasterList(
         // Start async processing (AUTO mode: all stages run automatically)
         auto* uploadRepo = uploadRepository_;
         auto* ldapPool = g_uploadServices->ldapPool();
-        std::thread([uploadId, contentBytes, uploadRepo, ldapPool]() {
+        g_uploadServices->threadPool()->submit([uploadId, contentBytes, uploadRepo, ldapPool]() {
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
                 if (UploadHandler::s_shuttingDown.load()) {
@@ -2066,7 +2067,7 @@ void UploadHandler::handleUploadMasterList(
                             0, 0, "처리 실패", e.what()));
                 }
                 // LDAP connection auto-released by LdapConnectionGuard destructor
-        }).detach();
+        });
 
         // Return success response
         Json::Value result;

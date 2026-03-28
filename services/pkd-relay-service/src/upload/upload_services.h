@@ -18,6 +18,7 @@
 namespace common {
     class IQueryExecutor;
     class LdapConnectionPool;
+    class ThreadPool;
 }
 
 // Forward declarations - upload-module repositories (management types)
@@ -97,6 +98,9 @@ public:
     // --- Handler Accessors ---
     handlers::UploadHandler* uploadHandler() const;
     handlers::UploadStatsHandler* uploadStatsHandler() const;
+
+    // --- Thread Pool ---
+    common::ThreadPool* threadPool() const;
 
     // --- Post-init setters (called after handlers are created in main.cpp) ---
     void setUploadHandler(handlers::UploadHandler* handler);

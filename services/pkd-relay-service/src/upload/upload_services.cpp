@@ -3,6 +3,7 @@
  * @brief UploadServiceContainer implementation
  */
 #include "upload/upload_services.h"
+#include "upload/common/thread_pool.h"
 
 #include "i_query_executor.h"
 #include <ldap_connection_pool.h>
@@ -45,6 +46,9 @@ struct UploadServiceContainer::Impl {
     std::shared_ptr<services::ValidationService> validationService;
     std::shared_ptr<services::LdifStructureService> ldifStructureService;
     std::shared_ptr<services::LdapStorageService> ldapStorageService;
+
+    // Thread pool for async upload processing
+    std::unique_ptr<common::ThreadPool> threadPool;
 
     // Handler references (created in main.cpp, just stored here)
     handlers::UploadHandler* uploadHandler = nullptr;
@@ -94,14 +98,22 @@ bool UploadServiceContainer::initialize(common::IQueryExecutor* queryExecutor,
     impl_->ldifStructureService = std::make_shared<services::LdifStructureService>(
         impl_->ldifStructureRepo.get());
 
+    // Thread pool for async processing (LDIF/ML uploads, ICAO sync)
+    int poolSize = 3;
+    if (auto* v = std::getenv("UPLOAD_THREAD_POOL_SIZE")) {
+        try { poolSize = std::max(1, std::min(8, std::stoi(v))); } catch (...) {}
+    }
+    impl_->threadPool = std::make_unique<common::ThreadPool>(poolSize);
+
     // LdapStorageService needs config — will be initialized separately if needed
 
-    spdlog::info("UploadServiceContainer initialized (repos: 6, services: 3)");
+    spdlog::info("UploadServiceContainer initialized (repos: 6, services: 3, threadPool: {})", poolSize);
     return true;
 }
 
 void UploadServiceContainer::shutdown() {
     if (!impl_) return;
+    if (impl_->threadPool) impl_->threadPool->shutdown();
     impl_->ldapStorageService.reset();
     impl_->ldifStructureService.reset();
     impl_->validationService.reset();
@@ -133,6 +145,8 @@ services::LdapStorageService* UploadServiceContainer::ldapStorageService() const
 
 handlers::UploadHandler* UploadServiceContainer::uploadHandler() const { return impl_->uploadHandler; }
 handlers::UploadStatsHandler* UploadServiceContainer::uploadStatsHandler() const { return impl_->uploadStatsHandler; }
+
+common::ThreadPool* UploadServiceContainer::threadPool() const { return impl_->threadPool.get(); }
 
 void UploadServiceContainer::setUploadHandler(handlers::UploadHandler* handler) { impl_->uploadHandler = handler; }
 void UploadServiceContainer::setLdapStorageService(std::shared_ptr<services::LdapStorageService> svc) { impl_->ldapStorageService = std::move(svc); }
