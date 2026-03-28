@@ -3,6 +3,7 @@
  */
 
 #include "certificate_repository.h"
+#include "upload/common/openssl_raii.h"
 #include "upload/common/x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -1273,10 +1274,9 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             x509meta = *preExtractedMetadata;
         } else {
             const unsigned char* certPtr = certData.data();
-            X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
+            openssl::X509Ptr x509cert(d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size())));
             if (x509cert) {
-                x509meta = x509::extractMetadata(x509cert);
-                X509_free(x509cert);
+                x509meta = x509::extractMetadata(x509cert.get());
             } else {
                 spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction (fallback)");
             }

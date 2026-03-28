@@ -6,6 +6,7 @@
  */
 
 #include "lc_validator.h"
+#include "openssl_raii.h"
 #include <spdlog/spdlog.h>
 #include <openssl/bn.h>
 #include <openssl/bio.h>
@@ -48,7 +49,7 @@ LcValidationResult LcValidator::validateLinkCertificate(
 ) {
     // Parse DER binary to X509
     const unsigned char* p = linkCertBinary.data();
-    X509* linkCert = d2i_X509(nullptr, &p, linkCertBinary.size());
+    openssl::X509Ptr linkCert(d2i_X509(nullptr, &p, linkCertBinary.size()));
 
     if (!linkCert) {
         spdlog::error("[LcValidator] Failed to parse LC DER binary");
@@ -60,10 +61,7 @@ LcValidationResult LcValidator::validateLinkCertificate(
     }
 
     // Validate using X509 object
-    LcValidationResult result = validateLinkCertificate(linkCert);
-
-    X509_free(linkCert);
-    return result;
+    return validateLinkCertificate(linkCert.get());
 }
 
 LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
@@ -87,7 +85,7 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
                  subjectDn, issuerDn, serialNumber);
 
     // Step 2: Find old CSCA (issuer of LC)
-    X509* oldCsca = findCscaBySubjectDn(issuerDn);
+    openssl::X509Ptr oldCsca(findCscaBySubjectDn(issuerDn));
     if (!oldCsca) {
         result.validationMessage = "Old CSCA not found (issuer: " + issuerDn + ")";
         spdlog::warn("[LcValidator] {}", result.validationMessage);
@@ -98,15 +96,14 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
         return result;
     }
 
-    result.oldCscaSubjectDn = extractSubjectDn(oldCsca);
-    result.oldCscaFingerprint = extractFingerprint(oldCsca);
+    result.oldCscaSubjectDn = extractSubjectDn(oldCsca.get());
+    result.oldCscaFingerprint = extractFingerprint(oldCsca.get());
 
     spdlog::info("[LcValidator] Found old CSCA: {}", result.oldCscaSubjectDn);
 
     // Step 3: Verify LC signature by old CSCA
-    EVP_PKEY* oldCscaPubKey = X509_get_pubkey(oldCsca);
+    openssl::EvpPkeyPtr oldCscaPubKey(X509_get_pubkey(oldCsca.get()));
     if (!oldCscaPubKey) {
-        X509_free(oldCsca);
         result.validationMessage = "Failed to extract old CSCA public key";
         spdlog::error("[LcValidator] {}", result.validationMessage);
 
@@ -116,11 +113,9 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
         return result;
     }
 
-    result.oldCscaSignatureValid = verifyCertificateSignature(linkCert, oldCscaPubKey);
-    EVP_PKEY_free(oldCscaPubKey);
+    result.oldCscaSignatureValid = verifyCertificateSignature(linkCert, oldCscaPubKey.get());
 
     if (!result.oldCscaSignatureValid) {
-        X509_free(oldCsca);
         result.validationMessage = "LC signature verification failed (old CSCA)";
         spdlog::warn("[LcValidator] {}", result.validationMessage);
 
@@ -133,9 +128,8 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
     spdlog::info("[LcValidator] ✓ LC signature valid (verified by old CSCA)");
 
     // Step 4: Find new CSCA (certificate signed by LC)
-    X509* newCsca = findCscaByIssuerDn(subjectDn);
+    openssl::X509Ptr newCsca(findCscaByIssuerDn(subjectDn));
     if (!newCsca) {
-        X509_free(oldCsca);
         result.validationMessage = "New CSCA not found (issuer should be: " + subjectDn + ")";
         spdlog::warn("[LcValidator] {}", result.validationMessage);
 
@@ -145,16 +139,14 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
         return result;
     }
 
-    result.newCscaSubjectDn = extractSubjectDn(newCsca);
-    result.newCscaFingerprint = extractFingerprint(newCsca);
+    result.newCscaSubjectDn = extractSubjectDn(newCsca.get());
+    result.newCscaFingerprint = extractFingerprint(newCsca.get());
 
     spdlog::info("[LcValidator] Found new CSCA: {}", result.newCscaSubjectDn);
 
     // Step 5: Verify new CSCA signature by LC
-    EVP_PKEY* linkCertPubKey = X509_get_pubkey(linkCert);
+    openssl::EvpPkeyPtr linkCertPubKey(X509_get_pubkey(linkCert));
     if (!linkCertPubKey) {
-        X509_free(oldCsca);
-        X509_free(newCsca);
         result.validationMessage = "Failed to extract LC public key";
         spdlog::error("[LcValidator] {}", result.validationMessage);
 
@@ -164,12 +156,9 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
         return result;
     }
 
-    result.newCscaSignatureValid = verifyCertificateSignature(newCsca, linkCertPubKey);
-    EVP_PKEY_free(linkCertPubKey);
+    result.newCscaSignatureValid = verifyCertificateSignature(newCsca.get(), linkCertPubKey.get());
 
     if (!result.newCscaSignatureValid) {
-        X509_free(oldCsca);
-        X509_free(newCsca);
         result.validationMessage = "New CSCA signature verification failed (LC)";
         spdlog::warn("[LcValidator] {}", result.validationMessage);
 
@@ -180,9 +169,6 @@ LcValidationResult LcValidator::validateLinkCertificate(X509* linkCert) {
     }
 
     spdlog::info("[LcValidator] ✓ New CSCA signature valid (verified by LC)");
-
-    X509_free(oldCsca);
-    X509_free(newCsca);
 
     // Step 6: Check validity period
     result.validityPeriodValid = checkValidityPeriod(linkCert);
@@ -658,32 +644,26 @@ std::string LcValidator::extractSubjectDn(X509* cert) {
     X509_NAME* name = X509_get_subject_name(cert);
     if (!name) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
-    X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
+    X509_NAME_print_ex(bio.get(), name, 0, XN_FLAG_RFC2253);
 
     char* data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string dn(data, len);
-
-    BIO_free(bio);
-    return dn;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 std::string LcValidator::extractIssuerDn(X509* cert) {
     X509_NAME* name = X509_get_issuer_name(cert);
     if (!name) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
-    X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
+    X509_NAME_print_ex(bio.get(), name, 0, XN_FLAG_RFC2253);
 
     char* data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string dn(data, len);
-
-    BIO_free(bio);
-    return dn;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 std::string LcValidator::extractSerialNumber(X509* cert) {
@@ -736,20 +716,15 @@ std::string LcValidator::extractCountryCode(const std::string& subjectDn) {
 std::string LcValidator::asn1TimeToIso8601(const ASN1_TIME* asn1Time) {
     if (!asn1Time) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
-    ASN1_TIME_print(bio, asn1Time);
+    ASN1_TIME_print(bio.get(), asn1Time);
 
     char* data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string timeStr(data, len);
-
-    BIO_free(bio);
+    long len = BIO_get_mem_data(bio.get(), &data);
 
     // OpenSSL format: "Jan  1 00:00:00 2025 GMT"
-    // TODO: Convert to ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
-    // For now, return OpenSSL format
-    return timeStr;
+    return std::string(data, len);
 }
 
 std::vector<uint8_t> LcValidator::getCertificateDer(X509* cert) {

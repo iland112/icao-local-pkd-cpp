@@ -6,6 +6,7 @@
  */
 
 #include "crl_validator.h"
+#include "openssl_raii.h"
 #include <spdlog/spdlog.h>
 #include <openssl/bn.h>
 #include <openssl/bio.h>
@@ -388,18 +389,17 @@ std::string CrlValidator::asn1TimeToString(const ASN1_TIME* asn1Time) {
         return "";
     }
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) {
         return "";
     }
 
-    ASN1_TIME_print(bio, asn1Time);
+    ASN1_TIME_print(bio.get(), asn1Time);
 
     char* data;
-    long len = BIO_get_mem_data(bio, &data);
+    long len = BIO_get_mem_data(bio.get(), &data);
 
     std::string result(data, len);
-    BIO_free(bio);
 
     // Convert "Jan  1 00:00:00 2025 GMT" to ISO 8601
     // Simple approach: just return the OpenSSL format for now

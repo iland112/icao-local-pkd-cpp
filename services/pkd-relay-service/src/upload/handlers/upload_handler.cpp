@@ -74,6 +74,7 @@
 
 // Handler utilities (sanitized error responses)
 #include "handler_utils.h"
+#include "upload/common/openssl_raii.h"
 
 // Bring in audit types for cleaner code
 using icao::audit::AuditLogEntry;
@@ -98,14 +99,13 @@ namespace {
  * @param trustAnchorPath Path to PEM file
  */
 X509* loadTrustAnchor(const std::string& trustAnchorPath) {
-    FILE* fp = fopen(trustAnchorPath.c_str(), "r");
+    openssl::FilePtr fp(fopen(trustAnchorPath.c_str(), "r"));
     if (!fp) {
         spdlog::error("Failed to open trust anchor file: {}", trustAnchorPath);
         return nullptr;
     }
 
-    X509* cert = PEM_read_X509(fp, nullptr, nullptr, nullptr);
-    fclose(fp);
+    X509* cert = PEM_read_X509(fp.get(), nullptr, nullptr, nullptr);
 
     if (!cert) {
         spdlog::error("Failed to parse trust anchor certificate");
@@ -123,30 +123,27 @@ bool verifyCmsSignature(CMS_ContentInfo* cms, X509* trustAnchor) {
     if (!cms || !trustAnchor) return false;
 
     // Create certificate store with trust anchor
-    X509_STORE* store = X509_STORE_new();
+    openssl::X509StorePtr store(X509_STORE_new());
     if (!store) {
         spdlog::error("Failed to create X509 store");
         return false;
     }
 
-    X509_STORE_add_cert(store, trustAnchor);
+    X509_STORE_add_cert(store.get(), trustAnchor);
 
     // Get signer certificates from CMS
     STACK_OF(X509)* signerCerts = CMS_get1_certs(cms);
 
     // Verify CMS signature
-    BIO* contentBio = BIO_new(BIO_s_mem());
+    openssl::BioPtr contentBio(BIO_new(BIO_s_mem()));
     if (!contentBio) {
         if (signerCerts) sk_X509_pop_free(signerCerts, X509_free);
-        X509_STORE_free(store);
         spdlog::error("Failed to create content BIO for CMS verification");
         return false;
     }
-    int result = CMS_verify(cms, signerCerts, store, nullptr, contentBio, CMS_NO_SIGNER_CERT_VERIFY);
+    int result = CMS_verify(cms, signerCerts, store.get(), nullptr, contentBio.get(), CMS_NO_SIGNER_CERT_VERIFY);
 
-    BIO_free(contentBio);
     if (signerCerts) sk_X509_pop_free(signerCerts, X509_free);
-    X509_STORE_free(store);
 
     if (result != 1) {
         unsigned long err = ERR_get_error();
@@ -562,18 +559,16 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                 spdlog::error("Master List file too large for BIO: {} bytes", content.size());
                 throw std::runtime_error("Master List file exceeds maximum size");
             }
-            BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
+            openssl::BioPtr bio(BIO_new_mem_buf(content.data(), static_cast<int>(content.size())));
             if (bio) {
-                cms = d2i_CMS_bio(bio, nullptr);
-                BIO_free(bio);
+                cms = d2i_CMS_bio(bio.get(), nullptr);
             }
 
             // Verify CMS signature with UN_CSCA trust anchor
             if (cms) {
-                X509* trustAnchor = loadTrustAnchor(trustAnchorPath);
+                openssl::X509Ptr trustAnchor(loadTrustAnchor(trustAnchorPath));
                 if (trustAnchor) {
-                    bool signatureValid = verifyCmsSignature(cms, trustAnchor);
-                    X509_free(trustAnchor);
+                    bool signatureValid = verifyCmsSignature(cms, trustAnchor.get());
 
                     if (!signatureValid) {
                         spdlog::warn("Master List CMS signature verification failed - continuing with parsing");
@@ -785,10 +780,9 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                                 const unsigned char* scanEnd = certSetStart + certSetLen;
                                 while (scanPtr < scanEnd) {
                                     const unsigned char* scanStart = scanPtr;
-                                    X509* scanCert = d2i_X509(nullptr, &scanPtr, scanEnd - scanStart);
+                                    openssl::X509Ptr scanCert(d2i_X509(nullptr, &scanPtr, scanEnd - scanStart));
                                     if (scanCert) {
                                         totalCertsInML++;
-                                        X509_free(scanCert);
                                     } else {
                                         break;
                                     }
@@ -803,25 +797,25 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                             while (certPtr < certSetEnd) {
                                 // Parse each certificate
                                 const unsigned char* certStart = certPtr;
-                                X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+                                openssl::X509Ptr cert(d2i_X509(nullptr, &certPtr, certSetEnd - certStart));
 
                                 if (cert) {
-                                    int derLen = i2d_X509(cert, nullptr);
+                                    int derLen = i2d_X509(cert.get(), nullptr);
                                     if (derLen > 0) {
                                         std::vector<uint8_t> derBytes(derLen);
                                         uint8_t* derPtr = derBytes.data();
-                                        i2d_X509(cert, &derPtr);
+                                        i2d_X509(cert.get(), &derPtr);
 
-                                        std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
-                                        std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
-                                        std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
-                                        std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
-                                        std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                                        std::string subjectDn = x509NameToString(X509_get_subject_name(cert.get()));
+                                        std::string issuerDn = x509NameToString(X509_get_issuer_name(cert.get()));
+                                        std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert.get()));
+                                        std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert.get()));
+                                        std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert.get()));
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
                                         // Extract comprehensive certificate metadata for progress tracking
-                                        common::CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                                        common::CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert.get(), false);
 
                                         // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                                         std::string certType = "CSCA";
@@ -830,7 +824,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
                                         if (subjectDn == issuerDn) {
                                             // Self-signed CSCA - verify self-signature using icao::validation
-                                            bool sigValid = icao::validation::verifyCertificateSignature(cert, cert);
+                                            bool sigValid = icao::validation::verifyCertificateSignature(cert.get(), cert.get());
                                             if (sigValid) {
                                                 validationStatus = "VALID";
                                                 spdlog::debug("CSCA self-signature verified: {}", subjectDn.substr(0, 50));
@@ -850,7 +844,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                                         else if (validationStatus == "INVALID") invalidCount++;
 
                                         // Check ICAO 9303 compliance
-                                        common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                                        common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert.get(), certType);
                                         if (icaoCompliance.isCompliant) {
                                             icaoCompliantCount++;
                                         } else {
@@ -859,8 +853,8 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
                                         // Check validity period
                                         {
-                                            const ASN1_TIME* naTime = X509_get0_notAfter(cert);
-                                            const ASN1_TIME* nbTime = X509_get0_notBefore(cert);
+                                            const ASN1_TIME* naTime = X509_get0_notAfter(cert.get());
+                                            const ASN1_TIME* nbTime = X509_get0_notBefore(cert.get());
                                             if (naTime && X509_cmp_current_time(naTime) < 0) {
                                                 expiredCount++;
                                             } else if (nbTime && X509_cmp_current_time(nbTime) > 0) {
@@ -918,7 +912,6 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                                             }
                                         }
                                     }
-                                    X509_free(cert);
                                 } else {
                                     // Failed to parse certificate, skip to end
                                     spdlog::warn("Failed to parse certificate in Master List SET");

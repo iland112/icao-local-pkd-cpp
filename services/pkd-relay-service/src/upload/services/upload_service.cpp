@@ -18,6 +18,7 @@
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
+#include "upload/common/openssl_raii.h"
 
 // Certificate parsing libraries
 #include "file_detector.h"
@@ -280,10 +281,9 @@ UploadService::CertificatePreviewResult UploadService::previewCertificate(
             const uint8_t* data = fileContent.data();
             X509_CRL* crl = d2i_X509_CRL(nullptr, &data, static_cast<long>(fileContent.size()));
             if (!crl) {
-                BIO* bio = BIO_new_mem_buf(fileContent.data(), static_cast<int>(fileContent.size()));
+                openssl::BioPtr bio(BIO_new_mem_buf(fileContent.data(), static_cast<int>(fileContent.size())));
                 if (bio) {
-                    crl = PEM_read_bio_X509_CRL(bio, nullptr, nullptr, nullptr);
-                    BIO_free(bio);
+                    crl = PEM_read_bio_X509_CRL(bio.get(), nullptr, nullptr, nullptr);
                 }
             }
             if (!crl) {
@@ -1108,10 +1108,9 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
 
     // If DER fails, try PEM format
     if (!crl) {
-        BIO* bio = BIO_new_mem_buf(fileContent.data(), static_cast<int>(fileContent.size()));
+        openssl::BioPtr bio(BIO_new_mem_buf(fileContent.data(), static_cast<int>(fileContent.size())));
         if (bio) {
-            crl = PEM_read_bio_X509_CRL(bio, nullptr, nullptr, nullptr);
-            BIO_free(bio);
+            crl = PEM_read_bio_X509_CRL(bio.get(), nullptr, nullptr, nullptr);
         }
     }
 
@@ -1120,7 +1119,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
     }
 
     // RAII guard: ensure X509_CRL is freed on all paths (including exceptions)
-    auto crlGuard = std::unique_ptr<X509_CRL, decltype(&X509_CRL_free)>(crl, X509_CRL_free);
+    openssl::X509CrlPtr crlGuard(crl);
 
     // Extract CRL metadata
     std::string issuerDn = x509NameToString(X509_CRL_get_issuer(crl));

@@ -4,6 +4,7 @@
  */
 
 #include "asn1_parser.h"
+#include "openssl_raii.h"
 #include <spdlog/spdlog.h>
 #include <cstdio>
 #include <memory>
@@ -37,21 +38,20 @@ std::string executeAsn1Parse(const std::string& filePath, int maxLines) {
     }
 
     // Use OpenSSL ASN1_parse_dump to generate same output as "openssl asn1parse -i"
-    BIO* out = BIO_new(BIO_s_mem());
+    openssl::BioPtr out(BIO_new(BIO_s_mem()));
     if (!out) {
         throw std::runtime_error("Failed to create BIO for ASN.1 parsing");
     }
 
-    int rc = ASN1_parse_dump(out, derData.data(), static_cast<long>(derData.size()), 1, 0);
+    int rc = ASN1_parse_dump(out.get(), derData.data(), static_cast<long>(derData.size()), 1, 0);
 
     BUF_MEM* bptr = nullptr;
-    BIO_get_mem_ptr(out, &bptr);
+    BIO_get_mem_ptr(out.get(), &bptr);
 
     std::string result;
     if (rc == 1 && bptr && bptr->length > 0) {
         result.assign(bptr->data, bptr->length);
     }
-    BIO_free(out);
 
     if (result.empty()) {
         throw std::runtime_error("ASN.1 parsing produced empty output for: " + filePath);

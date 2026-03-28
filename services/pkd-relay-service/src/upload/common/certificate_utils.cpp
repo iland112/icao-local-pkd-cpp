@@ -4,6 +4,7 @@
  */
 
 #include "certificate_utils.h"
+#include "openssl_raii.h"
 #include "x509_metadata_extractor.h"
 #include "upload/upload_services.h"
 #include "upload/repositories/certificate_repository.h"
@@ -139,18 +140,15 @@ std::string getSourceType(const std::string& fileFormat) {
 std::string x509NameToString(X509_NAME* name) {
     if (!name) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
 
     // Use RFC 2253 format (CN=Test,O=Org,C=US)
-    X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
+    X509_NAME_print_ex(bio.get(), name, 0, XN_FLAG_RFC2253);
 
     char* data = nullptr;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string result(data, len);
-    BIO_free(bio);
-
-    return result;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 std::string asn1IntegerToHex(const ASN1_INTEGER* asn1Int) {
@@ -302,19 +300,15 @@ bool isLinkCertificate(X509* cert) {
 std::string extractAsn1Text(X509* cert) {
     if (!cert) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
 
     // Print certificate in human-readable format
-    // This includes all fields, extensions, signature, etc.
-    X509_print_ex(bio, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
+    X509_print_ex(bio.get(), cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
 
     char* data = nullptr;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string result(data, len);
-    BIO_free(bio);
-
-    return result;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 std::string extractAsn1TextFromPem(const std::vector<uint8_t>& pemData) {
@@ -323,14 +317,13 @@ std::string extractAsn1TextFromPem(const std::vector<uint8_t>& pemData) {
     }
 
     // Create BIO from memory buffer
-    BIO* bio = BIO_new_mem_buf(pemData.data(), static_cast<int>(pemData.size()));
+    openssl::BioPtr bio(BIO_new_mem_buf(pemData.data(), static_cast<int>(pemData.size())));
     if (!bio) {
         return "Error: Failed to create BIO from PEM data";
     }
 
     // Read PEM-encoded certificate
-    X509* cert = PEM_read_bio_X509(bio, nullptr, nullptr, nullptr);
-    BIO_free(bio);
+    openssl::X509Ptr cert(PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr));
 
     if (!cert) {
         unsigned long err = ERR_get_error();
@@ -340,10 +333,7 @@ std::string extractAsn1TextFromPem(const std::vector<uint8_t>& pemData) {
     }
 
     // Extract ASN.1 text using existing function
-    std::string result = extractAsn1Text(cert);
-    X509_free(cert);
-
-    return result;
+    return extractAsn1Text(cert.get());
 }
 
 std::string extractAsn1TextFromDer(const std::vector<uint8_t>& derData) {
@@ -375,20 +365,24 @@ std::string extractCmsAsn1Text(const std::vector<uint8_t>& cmsData) {
     }
 
     // Create BIO from memory buffer
-    BIO* bio = BIO_new_mem_buf(cmsData.data(), static_cast<int>(cmsData.size()));
+    openssl::BioPtr bio(BIO_new_mem_buf(cmsData.data(), static_cast<int>(cmsData.size())));
     if (!bio) {
         return "Error: Failed to create BIO from CMS data";
     }
 
     // Try to parse as CMS ContentInfo (DER format)
-    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-    BIO_free(bio);
+    openssl::CmsPtr cms(d2i_CMS_bio(bio.get(), nullptr));
 
     if (!cms) {
-        // Try parsing as PEM-encoded CMS
-        bio = BIO_new_mem_buf(cmsData.data(), static_cast<int>(cmsData.size()));
-        cms = PEM_read_bio_CMS(bio, nullptr, nullptr, nullptr);
-        BIO_free(bio);
+        // Try parsing as PEM-encoded CMS (use PEM_read_bio + d2i)
+        bio.reset(BIO_new_mem_buf(cmsData.data(), static_cast<int>(cmsData.size())));
+        if (bio) {
+            // PEM_read_bio_CMS may not be available; use generic PEM→DER→CMS fallback
+            BIO* pemBio = bio.get();
+            cms.reset(static_cast<CMS_ContentInfo*>(
+                PEM_ASN1_read_bio(reinterpret_cast<d2i_of_void*>(d2i_CMS_ContentInfo),
+                                  "CMS", pemBio, nullptr, nullptr, nullptr)));
+        }
 
         if (!cms) {
             unsigned long err = ERR_get_error();
@@ -399,26 +393,25 @@ std::string extractCmsAsn1Text(const std::vector<uint8_t>& cmsData) {
     }
 
     // Create output BIO for CMS structure
-    BIO* outBio = BIO_new(BIO_s_mem());
+    openssl::BioPtr outBio(BIO_new(BIO_s_mem()));
     if (!outBio) {
-        CMS_ContentInfo_free(cms);
         return "Error: Failed to create output BIO";
     }
 
     // Print CMS structure in human-readable format
-    CMS_ContentInfo_print_ctx(outBio, cms, 0, nullptr);
+    CMS_ContentInfo_print_ctx(outBio.get(), cms.get(), 0, nullptr);
 
     // Also print embedded certificates
-    STACK_OF(X509)* certs = CMS_get1_certs(cms);
+    STACK_OF(X509)* certs = CMS_get1_certs(cms.get());
     if (certs && sk_X509_num(certs) > 0) {
-        BIO_printf(outBio, "\n\n=== Embedded Certificates (%d) ===\n\n", sk_X509_num(certs));
+        BIO_printf(outBio.get(), "\n\n=== Embedded Certificates (%d) ===\n\n", sk_X509_num(certs));
 
         for (int i = 0; i < sk_X509_num(certs); i++) {
             X509* cert = sk_X509_value(certs, i);
             if (cert) {
-                BIO_printf(outBio, "--- Certificate %d ---\n", i + 1);
-                X509_print_ex(outBio, cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
-                BIO_printf(outBio, "\n");
+                BIO_printf(outBio.get(), "--- Certificate %d ---\n", i + 1);
+                X509_print_ex(outBio.get(), cert, XN_FLAG_COMPAT, X509_FLAG_COMPAT);
+                BIO_printf(outBio.get(), "\n");
             }
         }
         sk_X509_pop_free(certs, X509_free);
@@ -426,13 +419,8 @@ std::string extractCmsAsn1Text(const std::vector<uint8_t>& cmsData) {
 
     // Extract result
     char* data = nullptr;
-    long len = BIO_get_mem_data(outBio, &data);
-    std::string result(data, len);
-
-    BIO_free(outBio);
-    CMS_ContentInfo_free(cms);
-
-    return result;
+    long len = BIO_get_mem_data(outBio.get(), &data);
+    return std::string(data, len);
 }
 
 std::string extractAsn1TextAuto(const std::vector<uint8_t>& fileData) {

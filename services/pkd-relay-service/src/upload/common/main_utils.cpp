@@ -7,6 +7,7 @@
  */
 
 #include "main_utils.h"
+#include "openssl_raii.h"
 
 #include <openssl/sha.h>
 #include <openssl/evp.h>
@@ -206,14 +207,12 @@ std::vector<uint8_t> base64Decode(const std::string& encoded) {
  */
 std::string x509NameToString(X509_NAME* name) {
     if (!name) return "";
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
-    X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
+    X509_NAME_print_ex(bio.get(), name, 0, XN_FLAG_RFC2253);
     char* data = nullptr;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string result(data, len);
-    BIO_free(bio);
-    return result;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 /**

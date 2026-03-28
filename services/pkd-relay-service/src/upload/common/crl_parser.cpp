@@ -5,6 +5,7 @@
  */
 
 #include "crl_parser.h"
+#include "openssl_raii.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -32,14 +33,12 @@ static std::vector<uint8_t> hexToBytes(const std::string& hex) {
 
 static std::string asn1TimeToString(const ASN1_TIME* asn1Time) {
     if (!asn1Time) return "";
-    BIO* bio = BIO_new(BIO_s_mem());
+    openssl::BioPtr bio(BIO_new(BIO_s_mem()));
     if (!bio) return "";
-    ASN1_TIME_print(bio, asn1Time);
+    ASN1_TIME_print(bio.get(), asn1Time);
     char* data;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string result(data, len);
-    BIO_free(bio);
-    return result;
+    long len = BIO_get_mem_data(bio.get(), &data);
+    return std::string(data, len);
 }
 
 static std::string reasonCodeToString(int reason) {

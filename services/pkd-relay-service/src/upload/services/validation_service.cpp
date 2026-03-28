@@ -6,6 +6,7 @@
  */
 
 #include "validation_service.h"
+#include "upload/common/openssl_raii.h"
 #include <icao/validation/cert_ops.h>
 #include <icao/validation/types.h>
 #include <spdlog/spdlog.h>
@@ -102,14 +103,14 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
                     continue;
                 }
 
-                X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
+                openssl::X509Ptr cert(certRepo_->parseCertificateDataFromHex(certDataHex));
                 if (!cert) {
                     spdlog::error("Failed to parse X509 certificate for ID: {}", certId);
                     result.errorCount++;
                     continue;
                 }
 
-                ValidationResult valResult = validateCertificate(cert, "DSC");
+                ValidationResult valResult = validateCertificate(cert.get(), "DSC");
 
                 if (valResult.validationStatus == "VALID") {
                     result.validCount++;
@@ -133,8 +134,6 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
                     valResult.trustChainPath.empty() ? valResult.errorMessage : valResult.trustChainPath,
                     valResult.cscaSubjectDn
                 );
-
-                X509_free(cert);
 
                 spdlog::debug("Validated DSC {}: {}", certId, valResult.validationStatus);
 
@@ -217,13 +216,13 @@ ValidationService::RevalidateResult ValidationService::revalidatePendingDscForCo
                     continue;
                 }
 
-                X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
+                openssl::X509Ptr cert(certRepo_->parseCertificateDataFromHex(certDataHex));
                 if (!cert) {
                     result.errorCount++;
                     continue;
                 }
 
-                ValidationResult valResult = validateCertificate(cert, "DSC");
+                ValidationResult valResult = validateCertificate(cert.get(), "DSC");
 
                 if (valResult.validationStatus == "VALID") {
                     result.validCount++;
@@ -247,8 +246,6 @@ ValidationService::RevalidateResult ValidationService::revalidatePendingDscForCo
                     valResult.trustChainPath.empty() ? valResult.errorMessage : valResult.trustChainPath,
                     valResult.cscaSubjectDn
                 );
-
-                X509_free(cert);
 
             } catch (const std::exception& e) {
                 spdlog::error("Error re-validating PENDING DSC: {}", e.what());
@@ -585,7 +582,7 @@ Json::Value ValidationService::validateDscRealTime(
         }
 
         // Step 2: Parse X509 certificate from hex data
-        X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
+        openssl::X509Ptr cert(certRepo_->parseCertificateDataFromHex(certDataHex));
         if (!cert) {
             response["success"] = false;
             response["error"] = "Failed to parse DSC certificate binary";
@@ -593,7 +590,7 @@ Json::Value ValidationService::validateDscRealTime(
         }
 
         // Step 3: Build trust chain via LDAP CSCA lookup
-        icao::validation::TrustChainResult chainResult = ldapTrustChainBuilder_->build(cert, 5);
+        icao::validation::TrustChainResult chainResult = ldapTrustChainBuilder_->build(cert.get(), 5);
 
         // Step 4: Check CRL via LDAP (if available)
         bool crlChecked = false;
@@ -605,11 +602,11 @@ Json::Value ValidationService::validateDscRealTime(
             std::string countryCode = dscInfo.get("country_code", "").asString();
             if (countryCode.empty()) {
                 countryCode = icao::validation::extractDnAttribute(
-                    icao::validation::getIssuerDn(cert), "C");
+                    icao::validation::getIssuerDn(cert.get()), "C");
             }
 
             if (!countryCode.empty()) {
-                icao::validation::CrlCheckResult crlResult = ldapCrlChecker_->check(cert, countryCode);
+                icao::validation::CrlCheckResult crlResult = ldapCrlChecker_->check(cert.get(), countryCode);
                 crlChecked = true;
                 revoked = (crlResult.status == icao::validation::CrlCheckStatus::REVOKED);
                 crlMessage = crlResult.message;
@@ -629,7 +626,7 @@ Json::Value ValidationService::validateDscRealTime(
         }
 
         // Step 5: Determine validation status
-        bool dscExpired = icao::validation::isCertificateExpired(cert);
+        bool dscExpired = icao::validation::isCertificateExpired(cert.get());
         std::string validationStatus;
 
         if (!chainResult.valid) {
@@ -673,8 +670,6 @@ Json::Value ValidationService::validateDscRealTime(
         if (!chainResult.valid) {
             validation["errorMessage"] = chainResult.message;
         }
-
-        X509_free(cert);
 
         response["success"] = true;
         response["validation"] = validation;

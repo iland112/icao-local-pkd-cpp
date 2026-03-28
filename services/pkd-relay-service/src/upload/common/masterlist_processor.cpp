@@ -4,6 +4,7 @@
  */
 
 #include "masterlist_processor.h"
+#include "openssl_raii.h"
 #include "certificate_utils.h"
 #include "main_utils.h"
 #include "progress_manager.h"
@@ -73,30 +74,28 @@ static CertificateMetadata extractCertificateMetadata(X509* cert) {
     const ASN1_TIME* notAfter = X509_get0_notAfter(cert);
 
     if (notBefore) {
-        BIO* bio = BIO_new(BIO_s_mem());
+        openssl::BioPtr bio(BIO_new(BIO_s_mem()));
         if (bio) {
-            ASN1_TIME_print(bio, notBefore);
+            ASN1_TIME_print(bio.get(), notBefore);
             char timeBuf[64];
-            int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
+            int len = BIO_read(bio.get(), timeBuf, sizeof(timeBuf) - 1);
             if (len > 0) {
                 timeBuf[len] = '\0';
                 meta.notBefore = timeBuf;
             }
-            BIO_free(bio);
         }
     }
 
     if (notAfter) {
-        BIO* bio = BIO_new(BIO_s_mem());
+        openssl::BioPtr bio(BIO_new(BIO_s_mem()));
         if (bio) {
-            ASN1_TIME_print(bio, notAfter);
+            ASN1_TIME_print(bio.get(), notAfter);
             char timeBuf[64];
-            int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
+            int len = BIO_read(bio.get(), timeBuf, sizeof(timeBuf) - 1);
             if (len > 0) {
                 timeBuf[len] = '\0';
                 meta.notAfter = timeBuf;
             }
-            BIO_free(bio);
         }
     }
 
@@ -152,7 +151,7 @@ bool parseMasterListEntryV2(
     std::string mlFingerprint = computeFileHash(mlBytes);
 
     // Step 2: Parse CMS SignedData structure
-    BIO* bio = BIO_new_mem_buf(mlBytes.data(), static_cast<int>(mlBytes.size()));
+    openssl::BioPtr bio(BIO_new_mem_buf(mlBytes.data(), static_cast<int>(mlBytes.size())));
     if (!bio) {
         spdlog::error("[ML-LDIF] Failed to create BIO for Master List: {}", entry.dn);
         if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
@@ -160,8 +159,7 @@ bool parseMasterListEntryV2(
         return false;
     }
 
-    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-    BIO_free(bio);
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio.get(), nullptr);
 
     // Release base64 string after decoding — frees memory for cert extraction
     // (mlBytes is still needed for LDAP ML storage later)
@@ -727,16 +725,15 @@ bool processMasterListFile(
     }
 
     // Parse as CMS SignedData
-    BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
-    if (!bio) {
+    openssl::BioPtr bio2(BIO_new_mem_buf(content.data(), static_cast<int>(content.size())));
+    if (!bio2) {
         spdlog::error("[ML-FILE] Failed to create BIO");
         if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
             "", "", "", "ML", "Failed to create BIO for Master List file");
         return false;
     }
 
-    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-    BIO_free(bio);
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio2.get(), nullptr);
 
     if (!cms) {
         spdlog::error("[ML-FILE] Failed to parse Master List as CMS SignedData");
