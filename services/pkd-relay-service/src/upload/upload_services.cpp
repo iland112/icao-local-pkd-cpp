@@ -5,6 +5,8 @@
 #include "upload/upload_services.h"
 
 #include "i_query_executor.h"
+#include "db_connection_pool.h"
+#include "db_connection_pool_factory.h"
 #include <ldap_connection_pool.h>
 #include <spdlog/spdlog.h>
 
@@ -28,7 +30,11 @@ infrastructure::UploadServiceContainer* g_uploadServices = nullptr;
 namespace infrastructure {
 
 struct UploadServiceContainer::Impl {
-    // Borrowed (non-owning) from relay ServiceContainer
+    // Own DB pool + queryExecutor (thread-safe, dedicated for upload module)
+    std::shared_ptr<common::IDbConnectionPool> ownDbPool;
+    std::unique_ptr<common::IQueryExecutor> ownQueryExecutor;
+
+    // Active queryExecutor (own or shared from relay ServiceContainer)
     common::IQueryExecutor* queryExecutor = nullptr;
     common::LdapConnectionPool* ldapPool = nullptr;
 
@@ -65,16 +71,39 @@ bool UploadServiceContainer::initialize(common::IQueryExecutor* queryExecutor,
         return false;
     }
 
-    impl_->queryExecutor = queryExecutor;
+    // Create dedicated DB pool + queryExecutor for upload module
+    // (shared queryExecutor causes OCI thread-safety issues in async upload threads)
+    try {
+        impl_->ownDbPool = common::DbConnectionPoolFactory::createFromEnv();
+        if (impl_->ownDbPool && impl_->ownDbPool->initialize()) {
+            impl_->ownQueryExecutor = common::createQueryExecutor(impl_->ownDbPool.get());
+            if (impl_->ownQueryExecutor) {
+                impl_->queryExecutor = impl_->ownQueryExecutor.get();
+                spdlog::info("UploadServiceContainer: dedicated DB pool created (type={})",
+                             impl_->ownDbPool->getDatabaseType());
+            } else {
+                spdlog::warn("UploadServiceContainer: failed to create own queryExecutor, using shared");
+                impl_->queryExecutor = queryExecutor;
+            }
+        } else {
+            spdlog::warn("UploadServiceContainer: failed to create own DB pool, using shared");
+            impl_->queryExecutor = queryExecutor;
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("UploadServiceContainer: own DB pool creation failed: {}, using shared", e.what());
+        impl_->queryExecutor = queryExecutor;
+    }
+
     impl_->ldapPool = ldapPool;
 
+    auto* qe = impl_->queryExecutor;
     // Repositories
-    impl_->uploadRepo = std::make_shared<repositories::UploadRepository>(queryExecutor);
-    impl_->certificateRepo = std::make_shared<repositories::CertificateRepository>(queryExecutor);
-    impl_->crlRepo = std::make_shared<repositories::CrlRepository>(queryExecutor);
+    impl_->uploadRepo = std::make_shared<repositories::UploadRepository>(qe);
+    impl_->certificateRepo = std::make_shared<repositories::CertificateRepository>(qe);
+    impl_->crlRepo = std::make_shared<repositories::CrlRepository>(qe);
     impl_->validationRepo = std::make_shared<repositories::ValidationRepository>(
-        queryExecutor, std::shared_ptr<common::LdapConnectionPool>(ldapPool, [](auto*){}), ldapBaseDn);
-    impl_->deviationListRepo = std::make_shared<repositories::DeviationListRepository>(queryExecutor);
+        qe, std::shared_ptr<common::LdapConnectionPool>(ldapPool, [](auto*){}), ldapBaseDn);
+    impl_->deviationListRepo = std::make_shared<repositories::DeviationListRepository>(qe);
     impl_->ldifStructureRepo = std::make_shared<repositories::LdifStructureRepository>(impl_->uploadRepo.get());
 
     // Services
