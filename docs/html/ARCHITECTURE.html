@@ -409,7 +409,7 @@ pre.mermaid .edgeLabel {
   </button>
   <div class="sidebar-brand">
     <h1>FASTpass® SPKD</h1>
-    <div class="version">Documentation v2.37.0</div>
+    <div class="version">Documentation v2.41.0</div>
   </div>
   <div class="nav-category">Getting Started</div>
 <a href="README.html">Documentation Index</a>
@@ -449,7 +449,7 @@ pre.mermaid .edgeLabel {
   <div class="content-wrapper">
     <article class="content">
       <h1 id="fastpass-r-spkd-system-architecture-design-principles">FASTpass(R) SPKD -- System Architecture &amp; Design Principles</h1>
-<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18
+<p><strong>Version</strong>: v2.41.0 | <strong>Last Updated</strong>: 2026-03-27
 <strong>Status</strong>: Production Ready (Multi-DBMS: PostgreSQL + Oracle)</p>
 <hr>
 <h2 id="table-of-contents">Table of Contents</h2>
@@ -546,7 +546,7 @@ No certificate sharing between the two systems; authentication flows are indepen
 See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PLAN.md</a> Section 1.4 for details.</p>
 <hr>
 <h2 id="technical-architecture-diagram">Technical Architecture Diagram</h2>
-<h3 id="system-overview-v2-37-0">System Overview (v2.37.0)</h3>
+<h3 id="system-overview-v2-37-0">System Overview (v2.41.0)</h3>
 <pre class="mermaid">graph TB
     %% Layer 1: External Access
     subgraph L1[" "]
@@ -576,9 +576,9 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
         L3Title["Layer 3: Application Services - C++ Microservices"]
         subgraph L3Nodes[" "]
             direction LR
-            PKD["PKD Management<br/>Upload & Validation<br/>Port 8081"]
+            PKD["PKD Management<br/>로컬 PKD 운영/관리<br/>Port 8081"]
             PA["PA Service<br/>Passive Auth Verify<br/>Port 8082"]
-            Relay["PKD Relay<br/>DB-LDAP Sync<br/>Port 8083"]
+            Relay["PKD Relay<br/>외부 ICAO PKD 연계<br/>Port 8083"]
             Monitoring["Monitoring<br/>System Metrics<br/>Port 8084"]
             AI["AI Analysis<br/>ML Forensics<br/>Port 8085"]
         end
@@ -711,10 +711,10 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 <h2 id="microservices-architecture">Microservices Architecture</h2>
 <h3 id="service-layout">Service Layout</h3>
 <pre><code>services/
-+-- pkd-management/        # PKD Management Service (Port: 8081)
-|   +-- File Upload &amp; Processing (LDIF, Master List)
++-- pkd-management/        # PKD Management Service (Port: 8081) — 로컬 PKD 운영/관리
+|   +-- DB-LDAP Synchronization &amp; Reconciliation
+|   +-- Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
 |   +-- Certificate Search &amp; Export
-|   +-- ICAO Auto Sync
 |   +-- API Client Authentication (X-API-Key)
 |
 +-- pa-service/            # Passive Authentication Service (Port: 8082)
@@ -722,10 +722,10 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 |   +-- DG1/DG2 Parsing
 |   +-- CSCA LDAP Lookup
 |
-+-- pkd-relay-service/     # PKD Relay Service (Port: 8083)
-|   +-- DB-LDAP Synchronization
-|   +-- Auto Reconciliation
-|   +-- Sync Status Monitoring
++-- pkd-relay-service/     # PKD Relay Service (Port: 8083) — 외부 ICAO PKD 연계
+|   +-- LDIF/ML File Import &amp; Processing
+|   +-- ICAO LDAP Sync &amp; Version Detection
+|   +-- Upload Statistics &amp; History
 |
 +-- monitoring-service/    # Monitoring Service (Port: 8084)
 |   +-- System Resource Monitoring (CPU, Memory, Disk, Network)
@@ -761,44 +761,31 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
                |    PostgreSQL DB       |
                |    OpenLDAP Cluster    |
                +------------------------+</code></pre>
-<h3 id="1-pkd-management-service-port-8081">1. PKD Management Service (Port 8081)</h3>
+<h3 id="1-pkd-management-service-port-8081">1. PKD Management Service (Port 8081) — 로컬 PKD 운영/관리</h3>
 <pre class="mermaid">flowchart LR
     subgraph API["API Layer"]
-        Upload["Upload API<br/>LDIF/ML"]
+        Upload["Upload API<br/>Individual Cert"]
         Cert["Certificate API<br/>Search/Export"]
         Health["Health API<br/>DB/LDAP"]
-        ICAO["ICAO Sync API<br/>Version"]
+        Sync["Sync API<br/>DB-LDAP"]
     end
 
     subgraph Domain["Domain Layer"]
         UploadDomain["Upload Domain<br/>Business Logic"]
         CertDomain["Certificate Domain<br/>Validation"]
-        IcaoDomain["ICAO Domain<br/>Version Tracking"]
+        SyncDomain["Sync Domain<br/>Reconciliation"]
     end
 
     subgraph Service["Service Layer"]
-        UploadService["Upload Service<br/>File Processing"]
+        UploadService["Upload Service<br/>Cert Processing"]
         CertService["Certificate Service<br/>LDAP Operations"]
-        IcaoService["ICAO Service<br/>HTML Parsing"]
+        SyncService["Sync Service<br/>DB-LDAP Sync"]
     end
 
     subgraph Repo["Repository Layer"]
         UploadRepo["Upload Repository<br/>PostgreSQL"]
         CertRepo["Certificate Repository<br/>LDAP"]
-        IcaoRepo["ICAO Repository<br/>PostgreSQL"]
-    end
-
-    subgraph Infra["Infrastructure"]
-        LDIF["LDIF Processor"]
-        CMS["CMS Parser"]
-        HTTP["HTTP Client"]
-        HTML["HTML Parser"]
-        Email["Email Sender"]
-    end
-
-    subgraph Strategy["Strategy"]
-        Auto["Auto Processing"]
-        Manual["Manual Processing"]
+        SyncRepo["Sync Repository<br/>PostgreSQL"]
     end
 
     subgraph Data["Data Store"]
@@ -808,47 +795,29 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 
     Upload --> UploadDomain --> UploadService --> UploadRepo
     Cert --> CertDomain --> CertService --> CertRepo
-    ICAO --> IcaoDomain --> IcaoService --> IcaoRepo
+    Sync --> SyncDomain --> SyncService --> SyncRepo
     Health --> CertService
-
-    UploadService --> LDIF
-    UploadService --> CMS
-    UploadService --> Auto
-    UploadService --> Manual
-
-    IcaoService --> HTTP
-    IcaoService --> HTML
-    IcaoService --> Email
 
     UploadRepo --> DB
     CertRepo --> LDAPS
-    IcaoRepo --> DB
+    SyncRepo --> DB
 
     style API fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Domain fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Service fill:#312e81,stroke:#818cf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Strategy fill:#3f3f46,stroke:#a1a1aa,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Data fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
-
-    style ICAO fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoRepo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style HTTP fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style HTML fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style Email fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+    style Data fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
 <p><strong>Key Features</strong>:</p>
 <ul>
 <li>Clean Architecture (6 Layers) with ServiceContainer (centralized DI, pimpl pattern)</li>
-<li>Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler, CsrHandler (7), MiscHandler</li>
-<li>Query Helpers (<code>common::db::</code>) -- database-agnostic utility functions across 16 repositories</li>
+<li>Handler Pattern: SyncHandler, ReconciliationHandler, CertificateHandler, AuthHandler, CsrHandler, MiscHandler</li>
+<li>Query Helpers (<code>common::db::</code>) -- database-agnostic utility functions across repositories</li>
+<li><strong>DB-LDAP Synchronization</strong>: Sync status monitoring, discrepancy detection, auto reconciliation</li>
+<li><strong>Reconciliation</strong>: stored_in_ldap=FALSE -&gt; LDAP verification -&gt; add -&gt; TRUE (CSCA, DSC, CRL)</li>
 <li><strong>CSR Management</strong>: ICAO PKD CSR generation (RSA-2048 + SHA256withRSA), external CSR Import, ICAO-issued certificate registration</li>
 <li><strong>DSC Pending Approval</strong>: DSC extracted from PA verification -&gt; auto-registration -&gt; admin approval workflow</li>
 <li><strong>PII Encryption</strong>: AES-256-GCM authenticated encryption (Personal Information Protection Act Article 29 -- CSR private key, PII fields)</li>
-<li>ICAO Auto Sync with Daily Scheduler</li>
-<li>LDIF/Master List Parsing + Individual Certificate Upload (PEM/DER/P7B/DL/CRL)</li>
+<li>Individual Certificate Upload (PEM/DER/P7B/DL/CRL)</li>
 <li>Trust Chain Validation (icao::validation shared library)</li>
 <li>Certificate Search &amp; Export (DIT-structured ZIP)</li>
 <li>API Client Authentication (X-API-Key, SHA-256 hash, per-client Rate Limiting)</li>
@@ -928,29 +897,33 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 <li>Multi-DBMS (PostgreSQL + Oracle)</li>
 </ul>
 <hr>
-<h3 id="3-pkd-relay-service-port-8083">3. PKD Relay Service (Port 8083)</h3>
+<h3 id="3-pkd-relay-service-port-8083">3. PKD Relay Service (Port 8083) — 외부 ICAO PKD 연계</h3>
 <pre class="mermaid">flowchart LR
     subgraph API["API Layer"]
+        Upload["Upload API<br/>LDIF/ML"]
+        IcaoCheck["ICAO Check<br/>Version/Sync"]
+        UploadStats["Upload Stats<br/>History"]
         RelayHealth["Relay Health<br/>Status"]
-        RelayStatus["Relay Status<br/>Statistics"]
-        IcaoCheck["ICAO Check<br/>Version"]
     end
 
     subgraph Domain["Domain Layer"]
+        UploadDomain["Upload Domain<br/>File Processing"]
         IcaoDomain["ICAO Domain<br/>Version Tracking"]
-        RelayDomain["Relay Domain<br/>External Integration"]
     end
 
     subgraph Service["Service Layer"]
+        UploadService["Upload Service<br/>LDIF/ML Processing"]
         IcaoService["ICAO Service<br/>HTML Parsing"]
-        RelayService["Relay Service<br/>Request Relay"]
     end
 
     subgraph Repo["Repository Layer"]
+        UploadRepo["Upload Repository<br/>PostgreSQL"]
         IcaoRepo["ICAO Repository<br/>PostgreSQL"]
     end
 
     subgraph Infra["Infrastructure"]
+        LDIF["LDIF Processor"]
+        CMS["CMS Parser"]
         HTTP["HTTP Client"]
         HTML["HTML Parser"]
         Email["Email Sender"]
@@ -962,20 +935,23 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 
     subgraph DataStore["Data Store"]
         DB[("PostgreSQL")]
+        LDAPS[("LDAP")]
     end
 
-    RelayHealth --> RelayService
-    RelayStatus --> IcaoService
-    IcaoCheck --> IcaoDomain
+    Upload --> UploadDomain --> UploadService --> UploadRepo
+    IcaoCheck --> IcaoDomain --> IcaoService --> IcaoRepo
+    UploadStats --> UploadRepo
+    RelayHealth --> IcaoService
 
-    IcaoDomain --> IcaoService
-    RelayDomain --> RelayService
+    UploadService --> LDIF
+    UploadService --> CMS
 
     IcaoService --> HTTP
     IcaoService --> HTML
     IcaoService --> Email
-    IcaoService --> IcaoRepo
 
+    UploadRepo --> DB
+    UploadRepo --> LDAPS
     IcaoRepo --> DB
 
     CronJob --> IcaoCheck
@@ -986,21 +962,20 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     style Repo fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Infra fill:#164e63,stroke:#22d3ee,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Scheduler fill:#0f4c75,stroke:#0ea5e9,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style DataStore fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
-
-    style IcaoCheck fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoDomain fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
-    style IcaoService fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
+    style DataStore fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
 <p><strong>Key Features</strong>:</p>
 <ul>
-<li>ICAO PKD external integration (Version Detection)</li>
+<li>LDIF/Master List File Import &amp; Processing (30k+ entries)</li>
+<li>ICAO PKD external integration (Version Detection, ICAO LDAP Sync)</li>
 <li>HTML Scraping (Table + Link Fallback)</li>
-<li>DB-LDAP Reconciliation (CSCA, DSC, CRL)</li>
+<li>Upload Statistics &amp; History</li>
 <li>Daily Auto Version Check Scheduler</li>
-<li>ServiceContainer (pImpl DI), Handler Pattern: SyncHandler (10), ReconciliationHandler (4), HealthHandler (1)</li>
-<li>SyncScheduler with callback-based DI</li>
+<li>Dedicated DB pool for upload module (large LDIF processing)</li>
+<li>ServiceContainer (pImpl DI), Handler Pattern: UploadHandler, UploadStatsHandler, IcaoHandler, HealthHandler</li>
+<li>Memory limit: 2GB (LDIF processing requires significant memory)</li>
 <li>Clean Architecture (4 Layers)</li>
 <li>Multi-DBMS (PostgreSQL + Oracle)</li>
+<li>129 unit tests (GTest)</li>
 </ul>
 <hr>
 <h3 id="4-monitoring-service-port-8084">4. Monitoring Service (Port 8084)</h3>
@@ -2158,8 +2133,8 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     Gzip -.-> PA
     Gzip -.-> RelaySvc
 
-    SSE -.-> PKD
-    Upload -.-> PKD
+    SSE -.-> RelaySvc
+    Upload -.-> RelaySvc
 
     style Route1 fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style RateLimit fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px
@@ -2208,12 +2183,12 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     style Detect fill:#78350f,stroke:#fbbf24,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Output fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
 <hr>
-<h3 id="icao-auto-sync-flow-v1-7-0">ICAO Auto Sync Flow (v1.7.0)</h3>
+<h3 id="icao-auto-sync-flow-v1-7-0">ICAO Auto Sync Flow (v2.41.0)</h3>
 <pre class="mermaid">sequenceDiagram
     participant Cron as Cron Job<br/>(Daily 08:00)
     participant Script as Shell Script<br/>icao-version-check.sh
     participant API as API Gateway<br/>:8080
-    participant PKD as PKD Management<br/>:8081
+    participant Relay as PKD Relay<br/>:8083
     participant HTTP as HTTP Client<br/>ICAO Portal
     participant Parser as HTML Parser<br/>Version Extractor
     participant DB as PostgreSQL<br/>icao_pkd_versions
@@ -2221,33 +2196,33 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 
     Cron->>Script: Execute daily
     Script->>API: POST /api/icao/check-updates
-    API->>PKD: Forward request
+    API->>Relay: Forward request
 
-    PKD->>HTTP: Fetch ICAO portal HTML
-    HTTP-->>PKD: HTML content
+    Relay->>HTTP: Fetch ICAO portal HTML
+    HTTP-->>Relay: HTML content
 
-    PKD->>Parser: Parse HTML tables
-    Parser-->>PKD: Version list<br/>(Collection 001/002/003)
+    Relay->>Parser: Parse HTML tables
+    Parser-->>Relay: Version list<br/>(Collection 001/002/003)
 
-    PKD->>DB: Query existing versions
-    DB-->>PKD: Current version records
+    Relay->>DB: Query existing versions
+    DB-->>Relay: Current version records
 
-    PKD->>PKD: Compare versions
+    Relay->>Relay: Compare versions
 
     alt New version detected
-        PKD->>DB: INSERT new version<br/>status=DETECTED
-        PKD->>Dashboard: Notify (SSE/Polling)
+        Relay->>DB: INSERT new version<br/>status=DETECTED
+        Relay->>Dashboard: Notify (SSE/Polling)
         Dashboard-->>Dashboard: Show UPDATE_NEEDED badge
     else No new version
-        PKD->>Dashboard: Notify (no change)
+        Relay->>Dashboard: Notify (no change)
         Dashboard-->>Dashboard: Show UP_TO_DATE badge
     end
 
     Script->>API: GET /api/icao/latest
-    API->>PKD: Forward request
-    PKD->>DB: Query latest versions
-    DB-->>PKD: Latest version list
-    PKD-->>API: JSON response
+    API->>Relay: Forward request
+    Relay->>DB: Query latest versions
+    DB-->>Relay: Latest version list
+    Relay-->>API: JSON response
     API-->>Script: Latest versions
     Script->>Script: Log to file</pre>
 <hr>
@@ -2257,47 +2232,47 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     participant User
     participant Frontend
     participant Gateway as API Gateway
-    participant PKD as PKD Management
+    participant Relay as PKD Relay
     participant LDIF as LDIF Processor
     participant DB as PostgreSQL/Oracle
     participant LDAP as OpenLDAP
 
     User->>Frontend: Select LDIF file + AUTO mode
     Frontend->>Gateway: POST /api/upload/ldif<br/>(multipart/form-data)
-    Gateway->>PKD: Forward upload
+    Gateway->>Relay: Forward upload
 
-    PKD->>PKD: Generate UUID<br/>Save temp file
-    PKD->>DB: INSERT uploaded_file<br/>status=PROCESSING
-    PKD-->>Frontend: Upload ID + SSE URL
+    Relay->>Relay: Generate UUID<br/>Save temp file
+    Relay->>DB: INSERT uploaded_file<br/>status=PROCESSING
+    Relay-->>Frontend: Upload ID + SSE URL
 
     Frontend->>Gateway: GET /api/progress/stream/{id}<br/>(SSE)
 
-    PKD->>LDIF: Parse LDIF entries
+    Relay->>LDIF: Parse LDIF entries
     loop For each entry
         LDIF->>LDIF: Extract DN, attributes
         LDIF->>LDIF: Classify cert type
-        LDIF-->>PKD: SSE progress update
-        PKD-->>Frontend: PARSING_{percentage}
+        LDIF-->>Relay: SSE progress update
+        Relay-->>Frontend: PARSING_{percentage}
     end
 
-    LDIF-->>PKD: Parsed entries (30k+)
+    LDIF-->>Relay: Parsed entries (30k+)
 
-    PKD->>DB: BEGIN TRANSACTION
-    PKD->>DB: INSERT certificates (Batch 1000)
-    PKD->>DB: INSERT crls
-    PKD->>DB: INSERT master_lists
+    Relay->>DB: BEGIN TRANSACTION
+    Relay->>DB: INSERT certificates (Batch 1000)
+    Relay->>DB: INSERT crls
+    Relay->>DB: INSERT master_lists
 
-    PKD->>LDAP: LDAP BIND (write to primary)
-    PKD->>LDAP: ADD entries (Batch 100)
-    PKD->>DB: UPDATE stored_in_ldap=true
+    Relay->>LDAP: LDAP BIND (write to primary)
+    Relay->>LDAP: ADD entries (Batch 100)
+    Relay->>DB: UPDATE stored_in_ldap=true
 
-    PKD->>DB: Trust Chain Validation
-    PKD->>DB: INSERT validation_result
+    Relay->>DB: Trust Chain Validation
+    Relay->>DB: INSERT validation_result
 
-    PKD->>DB: UPDATE uploaded_file<br/>status=COMPLETED
-    PKD->>DB: COMMIT TRANSACTION
+    Relay->>DB: UPDATE uploaded_file<br/>status=COMPLETED
+    Relay->>DB: COMMIT TRANSACTION
 
-    PKD-->>Frontend: COMPLETED<br/>SSE close
+    Relay-->>Frontend: COMPLETED<br/>SSE close
     Frontend-->>User: Show success + stats</pre>
 <hr>
 <h3 id="pa-verification-flow">PA Verification Flow</h3>
@@ -2387,9 +2362,9 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     Frontend -->|proxy_pass| APIGateway
 
     %% Gateway to Application
-    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/auth<br/>/api/icao| PKD
+    APIGateway -->|/api/certificates<br/>/api/auth<br/>/api/sync| PKD
     APIGateway -->|/api/pa/*| PA
-    APIGateway -->|/api/sync/*| Relay
+    APIGateway -->|/api/upload<br/>/api/icao| Relay
     APIGateway -->|/api/monitoring/*| Mon
 
     %% Application to Data Layer
@@ -2494,8 +2469,8 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 <tr>
 <td>pkd-relay</td>
 <td>Custom C++ (Debian)</td>
-<td>1.0</td>
-<td>1GB</td>
+<td>2.0</td>
+<td>2GB</td>
 <td>always</td>
 </tr>
 <tr>
@@ -2676,7 +2651,7 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 <h2 id="security-architecture">Security Architecture</h2>
 <h3 id="authentication-authorization">Authentication &amp; Authorization</h3>
 <pre class="mermaid">graph TB
-    subgraph "Security Layers (v2.37.0)"
+    subgraph "Security Layers (v2.41.0)"
         subgraph "Auth Layer"
             JWT["JWT Authentication<br/>HS256, 32+ byte secret"]
             RBAC["RBAC<br/>admin / user roles"]
@@ -2742,7 +2717,7 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
     style Encryption fill:#14532d,stroke:#4ade80,stroke-width:2px,color:#f1f5f9,font-size:13px
     style Parameterized fill:#1e3a5f,stroke:#38bdf8,stroke-width:2px,color:#f1f5f9,font-size:13px
     style NoSystemCall fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#f1f5f9,font-size:13px</pre>
-<p><strong>Security Checklist (v2.37.0)</strong>:</p>
+<p><strong>Security Checklist (v2.41.0)</strong>:</p>
 <ul>
 <li>JWT Authentication (HS256) + RBAC (admin/user)</li>
 <li>API Client Authentication (X-API-Key, SHA-256 hash, per-client Rate Limiting, IP/Endpoint restriction)</li>
@@ -3131,12 +3106,11 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 |   +-- http/http_client.h        # HTTP Client
 |   +-- notification/email_sender.h
 |
-+-- handlers/                     # Handler Layer (v2.12.0~v2.13.0 extracted from main.cpp)
-|   +-- upload_handler.h/.cpp     # Upload API (10 endpoints)
-|   +-- upload_stats_handler.h/.cpp # Statistics/History API (11 endpoints)
++-- handlers/                     # Handler Layer (v2.12.0~v2.41.0)
+|   +-- sync_handler.h/.cpp       # DB-LDAP Sync API (v2.41.0 — relay에서 이동)
+|   +-- reconciliation_handler.h/.cpp # Reconciliation API (v2.41.0 — relay에서 이동)
 |   +-- certificate_handler.h/.cpp  # Certificate API (20 endpoints)
 |   +-- auth_handler.h/.cpp       # Auth API
-|   +-- icao_handler.h/.cpp       # ICAO Sync API
 |   +-- code_master_handler.h/.cpp  # Code Master API (6 endpoints)
 |   +-- api_client_handler.h/.cpp   # API Client Management (7 endpoints)
 |   +-- api_client_request_handler.h/.cpp # API Client Request (5 endpoints)
@@ -3159,10 +3133,10 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 |   +-- ...
 |
 +-- services/                     # Service Layer
-|   +-- upload_service.h/.cpp
+|   +-- sync_service.h/.cpp        # DB-LDAP Sync (v2.41.0 — relay에서 이동)
+|   +-- reconciliation_service.h/.cpp # Reconciliation (v2.41.0 — relay에서 이동)
 |   +-- validation_service.h/.cpp
 |   +-- certificate_service.h/.cpp
-|   +-- icao_sync_service.h/.cpp
 |   +-- ldap_storage_service.h/.cpp  # LDAP Storage (Certificates/CRL/ML)
 |   +-- csr_service.h/.cpp
 |
@@ -3176,10 +3150,7 @@ See <a href="EAC_SERVICE_IMPLEMENTATION_PLAN.html">EAC_SERVICE_IMPLEMENTATION_PL
 |   +-- personal_info_crypto.h/.cpp  # PII Encryption (AES-256-GCM)
 |   +-- password_hash.h/.cpp     # PBKDF2-HMAC-SHA256
 |
-+-- processing_strategy.h         # Strategy Pattern (AUTO)
-+-- ldif_processor.h/.cpp         # LDIF Processor
 +-- common/
-|   +-- masterlist_processor.h    # Master List Processor
 |   +-- progress_manager.h/.cpp   # SSE Progress Management
 |
 +-- main.cpp                      # Entry Point (minimized: ~430 lines, v2.13.0)</code></pre>
@@ -3324,7 +3295,7 @@ Phase 8: Ensure Admin User</code></pre>
 <tbody><tr>
 <td>PKD Management</td>
 <td align="center">O</td>
-<td>16 repos, 8 services, 9 handlers</td>
+<td>Sync, Reconciliation, Certificate, Auth, CSR handlers</td>
 </tr>
 <tr>
 <td>PA Service</td>
@@ -3334,7 +3305,7 @@ Phase 8: Ensure Admin User</code></pre>
 <tr>
 <td>PKD Relay</td>
 <td align="center">O</td>
-<td>5 repos, 3 services, SyncScheduler</td>
+<td>Upload, UploadStats, ICAO, Health handlers + dedicated DB pool</td>
 </tr>
 <tr>
 <td>Monitoring</td>
@@ -4135,7 +4106,7 @@ sql += common::db::paginationClause(dbType, limit, offset);</code></pre>
 </ul>
 <hr>
 <h2 id="conclusion">Conclusion</h2>
-<p>FASTpass(R) SPKD v2.37.0 provides high performance, scalability, and security through <strong>microservices architecture</strong>, <strong>Multi-DBMS</strong>, <strong>full ICAO 9303 compliance</strong>, and <strong>CSR-based PKD integration</strong>.</p>
+<p>FASTpass(R) SPKD v2.41.0 provides high performance, scalability, and security through <strong>microservices architecture</strong>, <strong>Multi-DBMS</strong>, <strong>full ICAO 9303 compliance</strong>, and <strong>CSR-based PKD integration</strong>.</p>
 <p><strong>Key Strengths</strong>:</p>
 <ul>
 <li>5 independent microservices (PKD Management, PA, Relay, Monitoring, AI Analysis)</li>
@@ -4153,19 +4124,19 @@ sql += common::db::paginationClause(dbType, limit, offset);</code></pre>
 <li>Docker / Podman flexible deployment (local, Production RHEL 9, ARM64)</li>
 </ul>
 <hr>
-<p><strong>Document Created</strong>: 2026-03-18
+<p><strong>Document Created</strong>: 2026-03-27
 <strong>Author</strong>: ICAO Local PKD Development Team
 <strong>Organization</strong>: SMARTCORE Inc.</p>
 <hr>
 <h2 id="references">References</h2>
 <ul>
-<li><strong><a href="../CLAUDE.md">CLAUDE.md</a></strong> - Project overview and current version (v2.37.0)</li>
+<li><strong><a href="../CLAUDE.md">CLAUDE.md</a></strong> - Project overview and current version (v2.41.0)</li>
 <li><strong><a href="SECURITY_AUDIT_REPORT.html">SECURITY_AUDIT_REPORT.md</a></strong> - Security audit report</li>
 <li><strong><a href="DEVELOPMENT_GUIDE.html">DEVELOPMENT_GUIDE.md</a></strong> - Development guide</li>
 </ul>
 
     </article>
-    <div class="toc"><div class="toc-title">Contents</div><a href="#table-of-contents">Table of Contents</a><a href="#part-1-system-architecture" style="padding-left:1rem">Part 1: System Architecture</a><a href="#part-2-design-principles-patterns" style="padding-left:1rem">Part 2: Design Principles &amp; Patterns</a><a href="#appendix" style="padding-left:1rem">Appendix</a><a href="#system-overview">System Overview</a><a href="#core-principles" style="padding-left:1rem">Core Principles</a><a href="#pkd-and-eac-pki-role-separation" style="padding-left:1rem">PKD and EAC PKI Role Separation</a><a href="#technical-architecture-diagram">Technical Architecture Diagram</a><a href="#system-overview-v2-37-0" style="padding-left:1rem">System Overview (v2.37.0)</a><a href="#layer-description" style="padding-left:1rem">Layer Description</a><a href="#data-flow-summary" style="padding-left:1rem">Data Flow Summary</a><a href="#microservices-architecture">Microservices Architecture</a><a href="#service-layout" style="padding-left:1rem">Service Layout</a><a href="#service-communication" style="padding-left:1rem">Service Communication</a><a href="#1-pkd-management-service-port-8081" style="padding-left:1rem">1. PKD Management Service (Port 8081)</a><a href="#2-pa-service-port-8082" style="padding-left:1rem">2. PA Service (Port 8082)</a><a href="#3-pkd-relay-service-port-8083" style="padding-left:1rem">3. PKD Relay Service (Port 8083)</a><a href="#4-monitoring-service-port-8084" style="padding-left:1rem">4. Monitoring Service (Port 8084)</a><a href="#data-layer-architecture">Data Layer Architecture</a><a href="#database-schema" style="padding-left:1rem">Database Schema</a><a href="#ldap-directory-structure" style="padding-left:1rem">LDAP Directory Structure</a><a href="#frontend-architecture">Frontend Architecture</a><a href="#api-gateway-architecture">API Gateway Architecture</a><a href="#component-details">Component Details</a><a href="#ldif-processor" style="padding-left:1rem">LDIF Processor</a><a href="#icao-auto-sync-flow-v1-7-0" style="padding-left:1rem">ICAO Auto Sync Flow (v1.7.0)</a><a href="#data-flow-diagrams">Data Flow Diagrams</a><a href="#upload-flow-auto-mode" style="padding-left:1rem">Upload Flow (AUTO Mode)</a><a href="#pa-verification-flow" style="padding-left:1rem">PA Verification Flow</a><a href="#deployment-architecture">Deployment Architecture</a><a href="#docker-compose-architecture" style="padding-left:1rem">Docker Compose Architecture</a><a href="#luckfox-arm64-deployment" style="padding-left:1rem">Luckfox ARM64 Deployment</a><a href="#security-architecture">Security Architecture</a><a href="#authentication-authorization" style="padding-left:1rem">Authentication &amp; Authorization</a><a href="#technology-stack-summary">Technology Stack Summary</a><a href="#backend" style="padding-left:1rem">Backend</a><a href="#frontend" style="padding-left:1rem">Frontend</a><a href="#infrastructure" style="padding-left:1rem">Infrastructure</a><a href="#performance-metrics">Performance Metrics</a><a href="#throughput" style="padding-left:1rem">Throughput</a><a href="#scalability" style="padding-left:1rem">Scalability</a><a href="#monitoring-observability">Monitoring &amp; Observability</a><a href="#health-checks" style="padding-left:1rem">Health Checks</a><a href="#logging-strategy" style="padding-left:1rem">Logging Strategy</a><a href="#core-design-principles">Core Design Principles</a><a href="#1-domain-driven-design-ddd" style="padding-left:1rem">1. Domain-Driven Design (DDD)</a><a href="#2-microservice-architecture" style="padding-left:1rem">2. Microservice Architecture</a><a href="#3-strategy-pattern" style="padding-left:1rem">3. Strategy Pattern</a><a href="#4-single-responsibility-principle-srp" style="padding-left:1rem">4. Single Responsibility Principle (SRP)</a><a href="#5-servicecontainer-pimpl-pattern-v2-12-0" style="padding-left:1rem">5. ServiceContainer + Pimpl Pattern (v2.12.0+)</a><a href="#6-handler-extraction-pattern-v2-13-0" style="padding-left:1rem">6. Handler Extraction Pattern (v2.13.0+)</a><a href="#ddd-domain-driven-design-structure">DDD (Domain-Driven Design) Structure</a><a href="#pkd-management-service-layer-structure" style="padding-left:1rem">PKD Management Service Layer Structure</a><a href="#ddd-layer-responsibilities" style="padding-left:1rem">DDD Layer Responsibilities</a><a href="#servicecontainer-pattern-centralized-di">ServiceContainer Pattern (Centralized DI)</a><a href="#design-principles-v2-12-0" style="padding-left:1rem">Design Principles (v2.12.0+)</a><a href="#pimpl-pattern" style="padding-left:1rem">Pimpl Pattern</a><a href="#initialization-order" style="padding-left:1rem">Initialization Order</a><a href="#resource-release" style="padding-left:1rem">Resource Release</a><a href="#servicecontainer-adoption-across-services" style="padding-left:1rem">ServiceContainer Adoption Across Services</a><a href="#main-cpp-minimization-pattern">main.cpp Minimization Pattern</a><a href="#principles-v2-13-0" style="padding-left:1rem">Principles (v2.13.0+)</a><a href="#structure-pkd-management-430-lines" style="padding-left:1rem">Structure (PKD Management, ~430 lines)</a><a href="#handler-extraction-pattern" style="padding-left:1rem">Handler Extraction Pattern</a><a href="#main-cpp-size-across-services" style="padding-left:1rem">main.cpp Size Across Services</a><a href="#strategy-pattern">Strategy Pattern</a><a href="#1-processing-strategy-file-processing-mode" style="padding-left:1rem">1. Processing Strategy - File Processing Mode</a><a href="#2-certificate-type-strategy-per-type-validation" style="padding-left:1rem">2. Certificate Type Strategy - Per-Type Validation</a><a href="#3-file-type-strategy-per-file-type-processing" style="padding-left:1rem">3. File Type Strategy - Per-File-Type Processing</a><a href="#single-responsibility-principle-srp">Single Responsibility Principle (SRP)</a><a href="#good-example-responsibility-separation" style="padding-left:1rem">Good Example: Responsibility Separation</a><a href="#bad-example-mixed-responsibilities" style="padding-left:1rem">Bad Example: Mixed Responsibilities</a><a href="#class-responsibility-definitions" style="padding-left:1rem">Class Responsibility Definitions</a><a href="#query-executor-pattern-database-abstraction">Query Executor Pattern (Database Abstraction)</a><a href="#iqueryexecutor-interface" style="padding-left:1rem">IQueryExecutor Interface</a><a href="#implementations" style="padding-left:1rem">Implementations</a><a href="#runtime-selection" style="padding-left:1rem">Runtime Selection</a><a href="#query-helpers-pattern">Query Helpers Pattern</a><a href="#common-db-utility-functions" style="padding-left:1rem">common::db:: Utility Functions</a><a href="#usage-example" style="padding-left:1rem">Usage Example</a><a href="#impact" style="padding-left:1rem">Impact</a><a href="#provider-adapter-pattern-validation-infrastructure">Provider/Adapter Pattern (Validation Infrastructure)</a><a href="#provider-interface" style="padding-left:1rem">Provider Interface</a><a href="#adapter-implementations" style="padding-left:1rem">Adapter Implementations</a><a href="#shared-libraries">Shared Libraries</a><a href="#library-structure-shared-lib" style="padding-left:1rem">Library Structure (shared/lib/)</a><a href="#shared-validation-library-icao-validation-v2-11-0" style="padding-left:1rem">Shared Validation Library (icao::validation, v2.11.0+)</a><a href="#shared-database-library-icao-database" style="padding-left:1rem">Shared Database Library (icao::database)</a><a href="#code-structure-rules">Code Structure Rules</a><a href="#1-file-organization-rules" style="padding-left:1rem">1. File Organization Rules</a><a href="#2-naming-conventions" style="padding-left:1rem">2. Naming Conventions</a><a href="#3-dependency-direction" style="padding-left:1rem">3. Dependency Direction</a><a href="#extension-guidelines">Extension Guidelines</a><a href="#1-adding-a-new-file-type" style="padding-left:1rem">1. Adding a New File Type</a><a href="#2-adding-a-new-certificate-type" style="padding-left:1rem">2. Adding a New Certificate Type</a><a href="#3-adding-a-new-handler-v2-12-0-pattern" style="padding-left:1rem">3. Adding a New Handler (v2.12.0+ Pattern)</a><a href="#4-adding-a-new-microservice" style="padding-left:1rem">4. Adding a New Microservice</a><a href="#anti-patterns">Anti-Patterns</a><a href="#god-class" style="padding-left:1rem">God Class</a><a href="#fat-main-cpp" style="padding-left:1rem">Fat main.cpp</a><a href="#global-variables" style="padding-left:1rem">Global Variables</a><a href="#anemic-domain-model" style="padding-left:1rem">Anemic Domain Model</a><a href="#tight-coupling" style="padding-left:1rem">Tight Coupling</a><a href="#inline-db-branching" style="padding-left:1rem">Inline DB Branching</a><a href="#code-review-checklist">Code Review Checklist</a><a href="#ddd-compliance" style="padding-left:1rem">DDD Compliance</a><a href="#servicecontainer-pattern-compliance" style="padding-left:1rem">ServiceContainer Pattern Compliance</a><a href="#handler-extraction-compliance" style="padding-left:1rem">Handler Extraction Compliance</a><a href="#strategy-pattern-compliance" style="padding-left:1rem">Strategy Pattern Compliance</a><a href="#srp-compliance" style="padding-left:1rem">SRP Compliance</a><a href="#multi-dbms-compliance" style="padding-left:1rem">Multi-DBMS Compliance</a><a href="#microservice-compliance" style="padding-left:1rem">Microservice Compliance</a><a href="#dependency-direction" style="padding-left:1rem">Dependency Direction</a><a href="#future-enhancements">Future Enhancements</a><a href="#completed-previously-planned" style="padding-left:1rem">Completed (Previously Planned)</a><a href="#phase-1-planned" style="padding-left:1rem">Phase 1 (Planned)</a><a href="#phase-2-research-in-progress" style="padding-left:1rem">Phase 2 (Research / In Progress)</a><a href="#conclusion">Conclusion</a><a href="#references">References</a></div>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#table-of-contents">Table of Contents</a><a href="#part-1-system-architecture" style="padding-left:1rem">Part 1: System Architecture</a><a href="#part-2-design-principles-patterns" style="padding-left:1rem">Part 2: Design Principles &amp; Patterns</a><a href="#appendix" style="padding-left:1rem">Appendix</a><a href="#system-overview">System Overview</a><a href="#core-principles" style="padding-left:1rem">Core Principles</a><a href="#pkd-and-eac-pki-role-separation" style="padding-left:1rem">PKD and EAC PKI Role Separation</a><a href="#technical-architecture-diagram">Technical Architecture Diagram</a><a href="#system-overview-v2-37-0" style="padding-left:1rem">System Overview (v2.41.0)</a><a href="#layer-description" style="padding-left:1rem">Layer Description</a><a href="#data-flow-summary" style="padding-left:1rem">Data Flow Summary</a><a href="#microservices-architecture">Microservices Architecture</a><a href="#service-layout" style="padding-left:1rem">Service Layout</a><a href="#service-communication" style="padding-left:1rem">Service Communication</a><a href="#1-pkd-management-service-port-8081" style="padding-left:1rem">1. PKD Management Service (Port 8081)</a><a href="#2-pa-service-port-8082" style="padding-left:1rem">2. PA Service (Port 8082)</a><a href="#3-pkd-relay-service-port-8083" style="padding-left:1rem">3. PKD Relay Service (Port 8083)</a><a href="#4-monitoring-service-port-8084" style="padding-left:1rem">4. Monitoring Service (Port 8084)</a><a href="#data-layer-architecture">Data Layer Architecture</a><a href="#database-schema" style="padding-left:1rem">Database Schema</a><a href="#ldap-directory-structure" style="padding-left:1rem">LDAP Directory Structure</a><a href="#frontend-architecture">Frontend Architecture</a><a href="#api-gateway-architecture">API Gateway Architecture</a><a href="#component-details">Component Details</a><a href="#ldif-processor" style="padding-left:1rem">LDIF Processor</a><a href="#icao-auto-sync-flow-v1-7-0" style="padding-left:1rem">ICAO Auto Sync Flow (v1.7.0)</a><a href="#data-flow-diagrams">Data Flow Diagrams</a><a href="#upload-flow-auto-mode" style="padding-left:1rem">Upload Flow (AUTO Mode)</a><a href="#pa-verification-flow" style="padding-left:1rem">PA Verification Flow</a><a href="#deployment-architecture">Deployment Architecture</a><a href="#docker-compose-architecture" style="padding-left:1rem">Docker Compose Architecture</a><a href="#luckfox-arm64-deployment" style="padding-left:1rem">Luckfox ARM64 Deployment</a><a href="#security-architecture">Security Architecture</a><a href="#authentication-authorization" style="padding-left:1rem">Authentication &amp; Authorization</a><a href="#technology-stack-summary">Technology Stack Summary</a><a href="#backend" style="padding-left:1rem">Backend</a><a href="#frontend" style="padding-left:1rem">Frontend</a><a href="#infrastructure" style="padding-left:1rem">Infrastructure</a><a href="#performance-metrics">Performance Metrics</a><a href="#throughput" style="padding-left:1rem">Throughput</a><a href="#scalability" style="padding-left:1rem">Scalability</a><a href="#monitoring-observability">Monitoring &amp; Observability</a><a href="#health-checks" style="padding-left:1rem">Health Checks</a><a href="#logging-strategy" style="padding-left:1rem">Logging Strategy</a><a href="#core-design-principles">Core Design Principles</a><a href="#1-domain-driven-design-ddd" style="padding-left:1rem">1. Domain-Driven Design (DDD)</a><a href="#2-microservice-architecture" style="padding-left:1rem">2. Microservice Architecture</a><a href="#3-strategy-pattern" style="padding-left:1rem">3. Strategy Pattern</a><a href="#4-single-responsibility-principle-srp" style="padding-left:1rem">4. Single Responsibility Principle (SRP)</a><a href="#5-servicecontainer-pimpl-pattern-v2-12-0" style="padding-left:1rem">5. ServiceContainer + Pimpl Pattern (v2.12.0+)</a><a href="#6-handler-extraction-pattern-v2-13-0" style="padding-left:1rem">6. Handler Extraction Pattern (v2.13.0+)</a><a href="#ddd-domain-driven-design-structure">DDD (Domain-Driven Design) Structure</a><a href="#pkd-management-service-layer-structure" style="padding-left:1rem">PKD Management Service Layer Structure</a><a href="#ddd-layer-responsibilities" style="padding-left:1rem">DDD Layer Responsibilities</a><a href="#servicecontainer-pattern-centralized-di">ServiceContainer Pattern (Centralized DI)</a><a href="#design-principles-v2-12-0" style="padding-left:1rem">Design Principles (v2.12.0+)</a><a href="#pimpl-pattern" style="padding-left:1rem">Pimpl Pattern</a><a href="#initialization-order" style="padding-left:1rem">Initialization Order</a><a href="#resource-release" style="padding-left:1rem">Resource Release</a><a href="#servicecontainer-adoption-across-services" style="padding-left:1rem">ServiceContainer Adoption Across Services</a><a href="#main-cpp-minimization-pattern">main.cpp Minimization Pattern</a><a href="#principles-v2-13-0" style="padding-left:1rem">Principles (v2.13.0+)</a><a href="#structure-pkd-management-430-lines" style="padding-left:1rem">Structure (PKD Management, ~430 lines)</a><a href="#handler-extraction-pattern" style="padding-left:1rem">Handler Extraction Pattern</a><a href="#main-cpp-size-across-services" style="padding-left:1rem">main.cpp Size Across Services</a><a href="#strategy-pattern">Strategy Pattern</a><a href="#1-processing-strategy-file-processing-mode" style="padding-left:1rem">1. Processing Strategy - File Processing Mode</a><a href="#2-certificate-type-strategy-per-type-validation" style="padding-left:1rem">2. Certificate Type Strategy - Per-Type Validation</a><a href="#3-file-type-strategy-per-file-type-processing" style="padding-left:1rem">3. File Type Strategy - Per-File-Type Processing</a><a href="#single-responsibility-principle-srp">Single Responsibility Principle (SRP)</a><a href="#good-example-responsibility-separation" style="padding-left:1rem">Good Example: Responsibility Separation</a><a href="#bad-example-mixed-responsibilities" style="padding-left:1rem">Bad Example: Mixed Responsibilities</a><a href="#class-responsibility-definitions" style="padding-left:1rem">Class Responsibility Definitions</a><a href="#query-executor-pattern-database-abstraction">Query Executor Pattern (Database Abstraction)</a><a href="#iqueryexecutor-interface" style="padding-left:1rem">IQueryExecutor Interface</a><a href="#implementations" style="padding-left:1rem">Implementations</a><a href="#runtime-selection" style="padding-left:1rem">Runtime Selection</a><a href="#query-helpers-pattern">Query Helpers Pattern</a><a href="#common-db-utility-functions" style="padding-left:1rem">common::db:: Utility Functions</a><a href="#usage-example" style="padding-left:1rem">Usage Example</a><a href="#impact" style="padding-left:1rem">Impact</a><a href="#provider-adapter-pattern-validation-infrastructure">Provider/Adapter Pattern (Validation Infrastructure)</a><a href="#provider-interface" style="padding-left:1rem">Provider Interface</a><a href="#adapter-implementations" style="padding-left:1rem">Adapter Implementations</a><a href="#shared-libraries">Shared Libraries</a><a href="#library-structure-shared-lib" style="padding-left:1rem">Library Structure (shared/lib/)</a><a href="#shared-validation-library-icao-validation-v2-11-0" style="padding-left:1rem">Shared Validation Library (icao::validation, v2.11.0+)</a><a href="#shared-database-library-icao-database" style="padding-left:1rem">Shared Database Library (icao::database)</a><a href="#code-structure-rules">Code Structure Rules</a><a href="#1-file-organization-rules" style="padding-left:1rem">1. File Organization Rules</a><a href="#2-naming-conventions" style="padding-left:1rem">2. Naming Conventions</a><a href="#3-dependency-direction" style="padding-left:1rem">3. Dependency Direction</a><a href="#extension-guidelines">Extension Guidelines</a><a href="#1-adding-a-new-file-type" style="padding-left:1rem">1. Adding a New File Type</a><a href="#2-adding-a-new-certificate-type" style="padding-left:1rem">2. Adding a New Certificate Type</a><a href="#3-adding-a-new-handler-v2-12-0-pattern" style="padding-left:1rem">3. Adding a New Handler (v2.12.0+ Pattern)</a><a href="#4-adding-a-new-microservice" style="padding-left:1rem">4. Adding a New Microservice</a><a href="#anti-patterns">Anti-Patterns</a><a href="#god-class" style="padding-left:1rem">God Class</a><a href="#fat-main-cpp" style="padding-left:1rem">Fat main.cpp</a><a href="#global-variables" style="padding-left:1rem">Global Variables</a><a href="#anemic-domain-model" style="padding-left:1rem">Anemic Domain Model</a><a href="#tight-coupling" style="padding-left:1rem">Tight Coupling</a><a href="#inline-db-branching" style="padding-left:1rem">Inline DB Branching</a><a href="#code-review-checklist">Code Review Checklist</a><a href="#ddd-compliance" style="padding-left:1rem">DDD Compliance</a><a href="#servicecontainer-pattern-compliance" style="padding-left:1rem">ServiceContainer Pattern Compliance</a><a href="#handler-extraction-compliance" style="padding-left:1rem">Handler Extraction Compliance</a><a href="#strategy-pattern-compliance" style="padding-left:1rem">Strategy Pattern Compliance</a><a href="#srp-compliance" style="padding-left:1rem">SRP Compliance</a><a href="#multi-dbms-compliance" style="padding-left:1rem">Multi-DBMS Compliance</a><a href="#microservice-compliance" style="padding-left:1rem">Microservice Compliance</a><a href="#dependency-direction" style="padding-left:1rem">Dependency Direction</a><a href="#future-enhancements">Future Enhancements</a><a href="#completed-previously-planned" style="padding-left:1rem">Completed (Previously Planned)</a><a href="#phase-1-planned" style="padding-left:1rem">Phase 1 (Planned)</a><a href="#phase-2-research-in-progress" style="padding-left:1rem">Phase 2 (Research / In Progress)</a><a href="#conclusion">Conclusion</a><a href="#references">References</a></div>
   </div>
 </div>
 <script src="mermaid.min.js"></script>

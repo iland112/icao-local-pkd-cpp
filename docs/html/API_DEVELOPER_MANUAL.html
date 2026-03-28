@@ -409,7 +409,7 @@ pre.mermaid .edgeLabel {
   </button>
   <div class="sidebar-brand">
     <h1>FASTpass® SPKD</h1>
-    <div class="version">Documentation v2.37.0</div>
+    <div class="version">Documentation v2.41.0</div>
   </div>
   <div class="nav-category">Getting Started</div>
 <a href="README.html">Documentation Index</a>
@@ -449,8 +449,8 @@ pre.mermaid .edgeLabel {
   <div class="content-wrapper">
     <article class="content">
       <h1 id="icao-local-pkd-rest-api-개발자-메뉴얼">ICAO Local PKD — REST API 개발자 메뉴얼</h1>
-<p><strong>Version</strong>: 2.35.0
-<strong>Last Updated</strong>: 2026-03-16
+<p><strong>Version</strong>: 2.41.0
+<strong>Last Updated</strong>: 2026-03-27
 <strong>대상</strong>: 외부 클라이언트 애플리케이션 개발자
 <strong>Copyright</strong>: SMARTCORE Inc.</p>
 <hr>
@@ -2296,8 +2296,8 @@ curl -s "https://pkd.smartcoreinc.com/api/sync/status" | jq .</code></pre>
 </tr>
 <tr>
 <td><code>GET /api/sync/health</code></td>
-<td>PKD Relay</td>
-<td>Relay 서비스 상태</td>
+<td>PKD Management</td>
+<td>Sync 서비스 상태 (v2.41.0 — management로 이동)</td>
 </tr>
 <tr>
 <td><code>GET /api/ai/health</code></td>
@@ -3327,7 +3327,7 @@ def call_with_retry(client, func, *args, max_retries=3):
 <td><code>/api/sync/health</code></td>
 <td>Public</td>
 <td>-</td>
-<td>PKD Relay 상태</td>
+<td>PKD Management 상태 (Sync)</td>
 </tr>
 <tr>
 <td><code>GET</code></td>
@@ -3357,6 +3357,11 @@ def call_with_retry(client, func, *args, max_retries=3):
 </tr>
 </thead>
 <tbody><tr>
+<td>2.41.0</td>
+<td>2026-03-27</td>
+<td>서비스 기능 재배치: /api/sync/* → PKD Management, /api/upload/* + /api/icao/* → PKD Relay</td>
+</tr>
+<tr>
 <td>2.35.0</td>
 <td>2026-03-16</td>
 <td>CSR 관리 API 7개 엔드포인트 추가 (§14)</td>

@@ -409,7 +409,7 @@ pre.mermaid .edgeLabel {
   </button>
   <div class="sidebar-brand">
     <h1>FASTpass® SPKD</h1>
-    <div class="version">Documentation v2.37.0</div>
+    <div class="version">Documentation v2.41.0</div>
   </div>
   <div class="nav-category">Getting Started</div>
 <a href="README.html">Documentation Index</a>
@@ -449,7 +449,7 @@ pre.mermaid .edgeLabel {
   <div class="content-wrapper">
     <article class="content">
       <h1 id="fastpass-spkd-certificate-processing-guide">FASTpass® SPKD — Certificate Processing Guide</h1>
-<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<p><strong>Version</strong>: v2.41.0 | <strong>Last Updated</strong>: 2026-03-27</p>
 <hr>
 <h2 id="part-1-certificate-source-management">Part 1: Certificate Source Management</h2>
 <hr>
@@ -587,9 +587,9 @@ pre.mermaid .edgeLabel {
   │
   └─ PA 검증 결과 반환 (dscAutoRegistration 필드 포함)
 
-                    ↓ (비동기, PKD Relay Reconciliation)
+                    ↓ (비동기, PKD Management Reconciliation)
 
-PKD Relay Reconciliation
+PKD Management Reconciliation
   │
   ├─ stored_in_ldap=FALSE 인증서 조회
   │
@@ -704,22 +704,22 @@ GROUP BY source_type;</code></pre>
 </tr>
 </thead>
 <tbody><tr>
-<td>LDIF 파싱</td>
+<td>LDIF 파싱 (PKD Relay)</td>
 <td><code>ldif_processor.cpp</code></td>
 <td><code>LDIF_PARSED</code></td>
 </tr>
 <tr>
-<td>Master List 파싱</td>
+<td>Master List 파싱 (PKD Relay)</td>
 <td><code>masterlist_processor.cpp</code></td>
 <td><code>ML_PARSED</code></td>
 </tr>
 <tr>
-<td>Master List (핸들러 직접 저장)</td>
+<td>Master List 핸들러 직접 저장 (PKD Relay)</td>
 <td><code>upload_handler.cpp</code></td>
 <td><code>ML_PARSED</code></td>
 </tr>
 <tr>
-<td>개별 인증서 업로드</td>
+<td>개별 인증서 업로드 (PKD Management)</td>
 <td><code>upload_service.cpp</code></td>
 <td><code>FILE_UPLOAD</code></td>
 </tr>
@@ -982,23 +982,18 @@ static const std::regex countryRegex(R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))
 </thead>
 <tbody><tr>
 <td><strong>Master List Processor</strong></td>
-<td><code>services/pkd-management/src/common/masterlist_processor.cpp</code></td>
-<td>97-665</td>
+<td><code>services/pkd-relay-service/src/common/masterlist_processor.cpp</code></td>
+<td>(v2.41.0 — relay로 이동)</td>
 </tr>
 <tr>
 <td><strong>Header</strong></td>
-<td><code>services/pkd-management/src/common/masterlist_processor.h</code></td>
-<td>56-62</td>
-</tr>
-<tr>
-<td><strong>Country Code Extractor</strong></td>
-<td><code>services/pkd-management/src/main.cpp</code></td>
-<td>1879</td>
+<td><code>services/pkd-relay-service/src/common/masterlist_processor.h</code></td>
+<td>(v2.41.0 — relay로 이동)</td>
 </tr>
 <tr>
 <td><strong>Certificate Utils</strong></td>
-<td><code>services/pkd-management/src/common/certificate_utils.cpp</code></td>
-<td>-</td>
+<td><code>services/pkd-relay-service/src/common/certificate_utils.cpp</code></td>
+<td>(v2.41.0 — relay로 이동)</td>
 </tr>
 </tbody></table></div>
 <h4 id="function-signatures">Function Signatures</h4>
@@ -1458,9 +1453,8 @@ sk_X509_pop_free(certs, X509_free);</code></pre>
 </ul>
 <h4 id="code-references">Code References</h4>
 <ul>
-<li><a href="../services/pkd-management/src/common/masterlist_processor.cpp">masterlist_processor.cpp</a> - Main implementation</li>
-<li><a href="../services/pkd-management/src/common/certificate_utils.cpp">certificate_utils.cpp</a> - Database operations</li>
-<li><a href="../services/pkd-management/src/main.cpp#L1879">main.cpp</a> - Country code extraction</li>
+<li><a href="../services/pkd-relay-service/src/common/masterlist_processor.cpp">masterlist_processor.cpp</a> - Main implementation (v2.41.0 — relay로 이동)</li>
+<li><a href="../services/pkd-relay-service/src/common/certificate_utils.cpp">certificate_utils.cpp</a> - Database operations (v2.41.0 — relay로 이동)</li>
 </ul>
 <hr>
 <h3 id="appendix-a-test-master-list-structure">Appendix A: Test Master List Structure</h3>
@@ -1507,14 +1501,14 @@ CMS_ContentInfo:
 <hr>
 <h3 id="appendix-b-quick-reference-commands">Appendix B: Quick Reference Commands</h3>
 <h4 id="development">Development</h4>
-<pre><code class="language-bash"># Rebuild service
-docker compose -f docker/docker-compose.yaml build pkd-management
+<pre><code class="language-bash"># Rebuild service (LDIF/ML processing is now in PKD Relay, v2.41.0)
+docker compose -f docker/docker-compose.yaml build pkd-relay
 
 # Restart service
-docker compose -f docker/docker-compose.yaml restart pkd-management
+docker compose -f docker/docker-compose.yaml restart pkd-relay
 
 # View logs
-docker logs icao-local-pkd-management -f --tail 100 | grep "ML-FILE\|ML-LDIF"</code></pre>
+docker logs icao-local-pkd-relay -f --tail 100 | grep "ML-FILE\|ML-LDIF"</code></pre>
 <h4 id="testing">Testing</h4>
 <pre><code class="language-bash"># Upload Master List file
 curl -X POST http://localhost:8080/api/upload/masterlist \

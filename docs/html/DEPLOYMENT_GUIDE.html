@@ -409,7 +409,7 @@ pre.mermaid .edgeLabel {
   </button>
   <div class="sidebar-brand">
     <h1>FASTpass® SPKD</h1>
-    <div class="version">Documentation v2.37.0</div>
+    <div class="version">Documentation v2.41.0</div>
   </div>
   <div class="nav-category">Getting Started</div>
 <a href="README.html">Documentation Index</a>
@@ -449,7 +449,7 @@ pre.mermaid .edgeLabel {
   <div class="content-wrapper">
     <article class="content">
       <h1 id="icao-local-pkd-deployment-guide">ICAO Local PKD — Deployment Guide</h1>
-<p><strong>Version</strong>: v2.37.0 | <strong>Last Updated</strong>: 2026-03-18</p>
+<p><strong>Version</strong>: v2.41.0 | <strong>Last Updated</strong>: 2026-03-27</p>
 <hr>
 <h2 id="1-overview">1. Overview</h2>
 <p>This document describes deployment processes for all three target environments.</p>
@@ -496,7 +496,7 @@ pre.mermaid .edgeLabel {
 <td>PKD Management</td>
 <td>:8081</td>
 <td>C++/Drogon</td>
-<td>Core certificate management</td>
+<td>로컬 PKD 운영/관리 (DB-LDAP Sync, Reconciliation, Search, Auth)</td>
 </tr>
 <tr>
 <td>PA Service</td>
@@ -508,7 +508,7 @@ pre.mermaid .edgeLabel {
 <td>PKD Relay</td>
 <td>:8083</td>
 <td>C++/Drogon</td>
-<td>DB-LDAP sync, reconciliation</td>
+<td>외부 ICAO PKD 연계 (LDIF/ML Import, ICAO Sync, Version Detection)</td>
 </tr>
 <tr>
 <td>Monitoring Service</td>
@@ -1710,15 +1710,11 @@ sshpass -p luckfox ssh luckfox@192.168.100.11 "cd /home/luckfox/icao-local-pkd-c
 </tr>
 </thead>
 <tbody><tr>
-<td><code>/api/upload</code>, <code>/api/certificates</code>, <code>/api/progress</code></td>
+<td><code>/api/certificates</code>, <code>/api/progress</code>, <code>/api/sync/*</code></td>
 <td>PKD Management (:8081)</td>
 </tr>
 <tr>
-<td><code>/api/auth</code>, <code>/api/audit</code>, <code>/api/icao</code></td>
-<td>PKD Management (:8081)</td>
-</tr>
-<tr>
-<td><code>/api/health</code></td>
+<td><code>/api/auth</code>, <code>/api/audit</code>, <code>/api/health</code></td>
 <td>PKD Management (:8081)</td>
 </tr>
 <tr>
@@ -1726,7 +1722,7 @@ sshpass -p luckfox ssh luckfox@192.168.100.11 "cd /home/luckfox/icao-local-pkd-c
 <td>PA Service (:8082)</td>
 </tr>
 <tr>
-<td><code>/api/sync/*</code></td>
+<td><code>/api/upload</code>, <code>/api/icao</code></td>
 <td>PKD Relay (:8083)</td>
 </tr>
 <tr>

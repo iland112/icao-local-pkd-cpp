@@ -409,7 +409,7 @@ pre.mermaid .edgeLabel {
   </button>
   <div class="sidebar-brand">
     <h1>FASTpass® SPKD</h1>
-    <div class="version">Documentation v2.37.0</div>
+    <div class="version">Documentation v2.41.0</div>
   </div>
   <div class="nav-category">Getting Started</div>
 <a href="README.html">Documentation Index</a>
@@ -449,8 +449,8 @@ pre.mermaid .edgeLabel {
   <div class="content-wrapper">
     <article class="content">
       <h1 id="development-guide-icao-local-pkd">Development Guide - ICAO Local PKD</h1>
-<p><strong>Version</strong>: 2.37.0
-<strong>Last Updated</strong>: 2026-03-18</p>
+<p><strong>Version</strong>: 2.41.0
+<strong>Last Updated</strong>: 2026-03-27</p>
 <hr>
 <h2 id="quick-reference">Quick Reference</h2>
 <h3 id="essential-credentials">Essential Credentials</h3>
@@ -486,7 +486,7 @@ LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com</code></p
 <tbody><tr>
 <td>PKD Management</td>
 <td>8081</td>
-<td>Upload, Certificate Search, ICAO Sync, Auth</td>
+<td>로컬 PKD 운영/관리: DB-LDAP Sync, Reconciliation, Individual Cert Upload, Search, Auth</td>
 </tr>
 <tr>
 <td>PA Service</td>
@@ -496,7 +496,7 @@ LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com</code></p
 <tr>
 <td>PKD Relay</td>
 <td>8083</td>
-<td>DB-LDAP Sync, Reconciliation</td>
+<td>외부 ICAO PKD 연계: LDIF/ML Import, ICAO LDAP Sync, ICAO Version Detection, Upload Stats</td>
 </tr>
 <tr>
 <td>Monitoring Service</td>
@@ -552,17 +552,17 @@ source scripts/helpers/ldap-helpers.sh &amp;&amp; ldap_count_all
 source scripts/helpers/db-helpers.sh &amp;&amp; db_count_certs</code></pre>
 <hr>
 <h2 id="architecture-overview">Architecture Overview</h2>
-<h3 id="system-architecture-v2-30-0">System Architecture (v2.30.0)</h3>
+<h3 id="system-architecture-v2-30-0">System Architecture (v2.41.0)</h3>
 <pre><code>Frontend (React 19) --&gt; API Gateway (nginx :80/:443/:8080) --&gt; Backend Services --&gt; DB/LDAP
                                                         |
                                                         +-- PKD Management (:8081)
-                                                        |     Upload, Certificate Search, ICAO Sync, Auth
+                                                        |     로컬 PKD 운영/관리: DB-LDAP Sync, Reconciliation, Cert Upload, Search, Auth
                                                         |
                                                         +-- PA Service (:8082)
                                                         |     Passive Authentication (ICAO 9303)
                                                         |
                                                         +-- PKD Relay (:8083)
-                                                        |     DB-LDAP Sync, Reconciliation
+                                                        |     외부 ICAO PKD 연계: LDIF/ML Import, ICAO Sync, Version Detection
                                                         |
                                                         +-- Monitoring Service (:8084)
                                                         |     System Metrics, Service Health (DB-independent)
@@ -634,13 +634,13 @@ source scripts/helpers/db-helpers.sh &amp;&amp; db_count_certs</code></pre>
 <td>PKD Management</td>
 <td>3-15</td>
 <td>5-20</td>
-<td>Upload/search operations</td>
+<td>Sync/reconciliation, search, individual upload</td>
 </tr>
 <tr>
 <td>PKD Relay</td>
 <td>2-10</td>
-<td>5-20</td>
-<td>Sync/reconciliation</td>
+<td>5-20 (+ dedicated upload pool)</td>
+<td>LDIF/ML import, ICAO sync</td>
 </tr>
 <tr>
 <td>Monitoring</td>
@@ -841,7 +841,7 @@ curl -X POST http://localhost:8080/api/sync/reconcile \
 curl -X POST http://localhost:8080/api/pa/verify \
   -H "Content-Type: application/json" \
   -d '{"sod":"&lt;base64&gt;","dataGroups":{"1":"&lt;base64&gt;","2":"&lt;base64&gt;"}}' | jq .</code></pre>
-<h3 id="unit-tests-438-test-cases">Unit Tests (438 test cases)</h3>
+<h3 id="unit-tests-438-test-cases">Unit Tests (1975 test cases)</h3>
 <pre><code class="language-bash"># C++ certificate-parser tests (122 tests)
 docker build -f shared/lib/certificate-parser/tests/Dockerfile.test \
   --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
@@ -985,7 +985,7 @@ docker exec icao-local-pkd-openldap1 \
 NGINX_CONF=../nginx/api-gateway-ssl.conf    # HTTPS
 NGINX_CONF=../nginx/api-gateway.conf        # HTTP only</code></pre>
 <h3 id="sync-dashboard-timeout">Sync Dashboard Timeout</h3>
-<p>Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-relay service.</p>
+<p>Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-management service (sync는 v2.41.0부터 management에서 처리).</p>
 <hr>
 <h2 id="production-data-summary">Production Data Summary</h2>
 <div class="table-wrapper"><table>
@@ -1036,7 +1036,7 @@ NGINX_CONF=../nginx/api-gateway.conf        # HTTP only</code></pre>
 </tbody></table></div>
 
     </article>
-    <div class="toc"><div class="toc-title">Contents</div><a href="#quick-reference">Quick Reference</a><a href="#essential-credentials" style="padding-left:1rem">Essential Credentials</a><a href="#service-ports" style="padding-left:1rem">Service Ports</a><a href="#daily-commands" style="padding-left:1rem">Daily Commands</a><a href="#architecture-overview">Architecture Overview</a><a href="#system-architecture-v2-30-0" style="padding-left:1rem">System Architecture (v2.30.0)</a><a href="#shared-libraries-shared-lib" style="padding-left:1rem">Shared Libraries (shared/lib/)</a><a href="#connection-pool-configuration" style="padding-left:1rem">Connection Pool Configuration</a><a href="#design-patterns" style="padding-left:1rem">Design Patterns</a><a href="#multi-dbms-support">Multi-DBMS Support</a><a href="#switching-databases" style="padding-left:1rem">Switching Databases</a><a href="#oracle-compatibility-notes" style="padding-left:1rem">Oracle Compatibility Notes</a><a href="#raii-pattern-example" style="padding-left:1rem">RAII Pattern Example</a><a href="#development-workflow">Development Workflow</a><a href="#1-code-modification" style="padding-left:1rem">1. Code Modification</a><a href="#2-build-and-deploy" style="padding-left:1rem">2. Build and Deploy</a><a href="#3-testing" style="padding-left:1rem">3. Testing</a><a href="#unit-tests-438-test-cases" style="padding-left:1rem">Unit Tests (438 test cases)</a><a href="#helper-scripts">Helper Scripts</a><a href="#directory-structure" style="padding-left:1rem">Directory Structure</a><a href="#ldap-helpers" style="padding-left:1rem">LDAP Helpers</a><a href="#database-helpers" style="padding-left:1rem">Database Helpers</a><a href="#common-ldap-operations">Common LDAP Operations</a><a href="#correct-ldap-search-commands" style="padding-left:1rem">Correct LDAP Search Commands</a><a href="#common-database-operations">Common Database Operations</a><a href="#postgresql-commands" style="padding-left:1rem">PostgreSQL Commands</a><a href="#oracle-commands" style="padding-left:1rem">Oracle Commands</a><a href="#troubleshooting">Troubleshooting</a><a href="#build-issues" style="padding-left:1rem">Build Issues</a><a href="#ldap-connection-issues" style="padding-left:1rem">LDAP Connection Issues</a><a href="#oracle-issues" style="padding-left:1rem">Oracle Issues</a><a href="#502-bad-gateway-after-container-restart" style="padding-left:1rem">502 Bad Gateway after container restart</a><a href="#https-ssl" style="padding-left:1rem">HTTPS / SSL</a><a href="#sync-dashboard-timeout" style="padding-left:1rem">Sync Dashboard Timeout</a><a href="#production-data-summary">Production Data Summary</a></div>
+    <div class="toc"><div class="toc-title">Contents</div><a href="#quick-reference">Quick Reference</a><a href="#essential-credentials" style="padding-left:1rem">Essential Credentials</a><a href="#service-ports" style="padding-left:1rem">Service Ports</a><a href="#daily-commands" style="padding-left:1rem">Daily Commands</a><a href="#architecture-overview">Architecture Overview</a><a href="#system-architecture-v2-30-0" style="padding-left:1rem">System Architecture (v2.41.0)</a><a href="#shared-libraries-shared-lib" style="padding-left:1rem">Shared Libraries (shared/lib/)</a><a href="#connection-pool-configuration" style="padding-left:1rem">Connection Pool Configuration</a><a href="#design-patterns" style="padding-left:1rem">Design Patterns</a><a href="#multi-dbms-support">Multi-DBMS Support</a><a href="#switching-databases" style="padding-left:1rem">Switching Databases</a><a href="#oracle-compatibility-notes" style="padding-left:1rem">Oracle Compatibility Notes</a><a href="#raii-pattern-example" style="padding-left:1rem">RAII Pattern Example</a><a href="#development-workflow">Development Workflow</a><a href="#1-code-modification" style="padding-left:1rem">1. Code Modification</a><a href="#2-build-and-deploy" style="padding-left:1rem">2. Build and Deploy</a><a href="#3-testing" style="padding-left:1rem">3. Testing</a><a href="#unit-tests-438-test-cases" style="padding-left:1rem">Unit Tests (1975 test cases)</a><a href="#helper-scripts">Helper Scripts</a><a href="#directory-structure" style="padding-left:1rem">Directory Structure</a><a href="#ldap-helpers" style="padding-left:1rem">LDAP Helpers</a><a href="#database-helpers" style="padding-left:1rem">Database Helpers</a><a href="#common-ldap-operations">Common LDAP Operations</a><a href="#correct-ldap-search-commands" style="padding-left:1rem">Correct LDAP Search Commands</a><a href="#common-database-operations">Common Database Operations</a><a href="#postgresql-commands" style="padding-left:1rem">PostgreSQL Commands</a><a href="#oracle-commands" style="padding-left:1rem">Oracle Commands</a><a href="#troubleshooting">Troubleshooting</a><a href="#build-issues" style="padding-left:1rem">Build Issues</a><a href="#ldap-connection-issues" style="padding-left:1rem">LDAP Connection Issues</a><a href="#oracle-issues" style="padding-left:1rem">Oracle Issues</a><a href="#502-bad-gateway-after-container-restart" style="padding-left:1rem">502 Bad Gateway after container restart</a><a href="#https-ssl" style="padding-left:1rem">HTTPS / SSL</a><a href="#sync-dashboard-timeout" style="padding-left:1rem">Sync Dashboard Timeout</a><a href="#production-data-summary">Production Data Summary</a></div>
   </div>
 </div>
 <script src="mermaid.min.js"></script>
